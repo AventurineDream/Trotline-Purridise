@@ -1,0 +1,327 @@
+"""Bot, the tin deckhand. He rides the bow until you send him out.
+
+He does not change bite rates, prices, or the boat. B launches him toward
+the nearest line, or a short way ahead, and B calls him back.
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+
+from .world import Face
+
+_PHASES = ("home", "go", "out", "back")
+# Feet position in the level boat frame: starboard, up, forward of the eye.
+_PERCH = {
+    "jon": (0.34, -0.49, 2.24),
+    "sail": (0.28, -0.45, 2.02),
+    "pontoon": (0.58, -0.84, 1.48),
+}
+_SPEED = 7.5  # metres per real second
+
+
+def reset(state) -> None:
+    state.bot_phase = "home"
+    state.bot_x = state.bot_z = 0.0
+    state.bot_yaw = 0.0
+    state.bot_tx = state.bot_tz = 0.0
+
+
+def status(state) -> str:
+    return {
+        "home": "BOT  aboard",
+        "go": "BOT  running",
+        "out": "BOT  on the line" if state.lines else "BOT  scouting",
+        "back": "BOT  returning",
+    }.get(state.bot_phase, "BOT  aboard")
+
+
+def summon(state, world) -> str | None:
+    """Launch or recall. Returns a sound name, or None."""
+    if state.bot_phase in ("go", "out"):
+        state.bot_phase = "back"
+        state.toast("Bot, come on home.")
+        return "bot"
+    if state.bot_phase == "back":
+        state.toast("Bot is already on his way.")
+        return None
+    target = _target(state, world)
+    if target is None:
+        state.toast("Bot won't run up on the bank.")
+        return "error"
+    fx, fz = math.sin(state.yaw), math.cos(state.yaw)
+    state.bot_x = state.x + fx * 2.4
+    state.bot_z = state.z + fz * 2.4
+    if not _afloat(world, state.bot_x, state.bot_z):
+        state.bot_x, state.bot_z = state.x, state.z
+    state.bot_tx, state.bot_tz = target
+    state.bot_phase = "go"
+    state.bot_yaw = math.atan2(target[0] - state.bot_x, target[1] - state.bot_z)
+    if state.bot_hooks < 0:
+        state.bot_hooks = state.hooked_total
+    where = "the nearest line" if state.lines else "open water"
+    state.toast(f"Bot shoves off toward {where}.")
+    return "bot"
+
+
+def tick(state, world, dt: float) -> str | None:
+    """Move Bot. Returns a sound when he arrives or spots a bite."""
+    if dt <= 0.0 or state.bot_phase == "home":
+        if state.bot_hooks < 0:
+            state.bot_hooks = state.hooked_total
+        return None
+    sound = None
+    if state.hooked_total > state.bot_hooks and state.bot_phase == "out":
+        state.toast("Bot: Fish on. I'm staying with it.")
+        sound = "bot"
+    state.bot_hooks = state.hooked_total
+    if state.bot_phase == "back":
+        fx, fz = math.sin(state.yaw), math.cos(state.yaw)
+        state.bot_tx = state.x + fx * 2.3
+        state.bot_tz = state.z + fz * 2.3
+    if state.bot_phase == "out":
+        ang = state.anim * 0.55
+        ox = state.bot_tx + math.cos(ang) * 1.3
+        oz = state.bot_tz + math.sin(ang) * 1.3
+        if _afloat(world, ox, oz):
+            state.bot_x, state.bot_z = ox, oz
+            state.bot_yaw = ang + math.pi * 0.5
+        return sound
+    dist = _step(state, world, min(_SPEED * dt, 2.5))
+    leash = math.hypot(state.bot_x - state.x, state.bot_z - state.z)
+    if state.bot_phase == "go" and leash > 170.0:
+        state.bot_phase = "back"
+        state.toast("Bot is turning around. That's far enough.")
+    if dist < 0.45:
+        if state.bot_phase == "back":
+            reset(state)
+            state.toast("Bot climbs aboard, wet and pleased.")
+            return "bot"
+        if state.bot_phase == "go":
+            state.bot_phase = "out"
+            state.bot_x, state.bot_z = state.bot_tx, state.bot_tz
+            state.toast(_report(state, world))
+            return "bot"
+    return sound
+
+
+def faces(state) -> list[Face]:
+    if state.bot_phase == "home":
+        eye, right, up, forward = _boat_basis(state)
+        lx, ly, lz = _PERCH.get(state.boat_id, _PERCH["jon"])
+        origin = eye + right * lx + up * ly + forward * lz
+        # Look back at the skipper so the lamp is in view.
+        return _mesh(origin, -right, up, -forward, bob=0.0)
+    y = 0.05 + math.sin(state.anim * 5.0) * 0.018
+    origin = np.array([state.bot_x, y, state.bot_z], np.float32)
+    facing = np.array([math.sin(state.bot_yaw), 0.0, math.cos(state.bot_yaw)], np.float32)
+    right = np.array([math.cos(state.bot_yaw), 0.0, -math.sin(state.bot_yaw)], np.float32)
+    up = np.array([0.0, 1.0, 0.0], np.float32)
+    mesh = _mesh(origin, right, up, facing, bob=0.0, scale=1.7)
+    try:
+        from .life import extra_faces
+        mesh.extend(extra_faces(state))
+    except Exception:
+        pass
+    return mesh
+
+
+def checks(world) -> None:
+    """Headless: he launches, reports, returns, and the deck pose does not breathe."""
+    from .sim import State
+
+    state = State.new(world, seed=3)
+    state.anim = 0.0
+    home = _points(faces(state))
+    state.anim = 37.0
+    if not np.array_equal(home, _points(faces(state))):
+        raise AssertionError("Bot moved on the deck while the boat was still")
+    eye = np.array([state.x, state.boat.eye_height, state.z], np.float32)
+    amber = [f for f in faces(state) if float(f.color[0]) > 0.9 and float(f.color[2]) < 0.3]
+    if not amber:
+        raise AssertionError("Bot has no lamp")
+    center = amber[0].pts.mean(axis=0)
+    if float(np.dot(amber[0].normal, eye - center)) <= 0.2:
+        raise AssertionError("Bot's lamp faces away from the skipper")
+    money = state.money
+    sound = summon(state, world)
+    if sound != "bot" or state.bot_phase != "go" or state.money != money:
+        raise AssertionError("Bot did not launch cleanly")
+    arrived = False
+    for _ in range(40):
+        state.anim += 0.5
+        tick(state, world, 0.5)
+        if state.bot_phase == "out":
+            arrived = True
+            break
+    if not arrived:
+        raise AssertionError("Bot never reached his scout point")
+    if not any(t[0].startswith("Bot:") for t in state.toasts):
+        raise AssertionError("Bot arrived without a report")
+    if summon(state, world) != "bot" or state.bot_phase != "back":
+        raise AssertionError("Bot ignored the recall")
+    home_again = False
+    for _ in range(80):
+        tick(state, world, 0.5)
+        if state.bot_phase == "home":
+            home_again = True
+            break
+    if not home_again:
+        raise AssertionError("Bot did not climb back aboard")
+    if state.money != money:
+        raise AssertionError("Bot changed the player's money")
+    from pathlib import Path
+    from .game import Keys, Session
+    session = Session(world, Path("/tmp/briar-bot-key.json"), state, False)
+    session.ui.mode = "play"
+    session.tick(Keys(pressed={"b"}), 0.1)
+    if state.bot_phase != "go":
+        raise AssertionError("B did not send Bot")
+
+
+def _points(mesh: list[Face]) -> np.ndarray:
+    return np.concatenate([face.pts.reshape(-1) for face in mesh])
+
+
+def _boat_basis(state):
+    yaw = float(state.yaw)
+    forward = np.array([math.sin(yaw), 0.0, math.cos(yaw)], np.float32)
+    right = np.array([math.cos(yaw), 0.0, -math.sin(yaw)], np.float32)
+    up = np.array([0.0, 1.0, 0.0], np.float32)
+    eye = np.array([state.x, state.boat.eye_height, state.z], np.float32)
+    return eye, right, up, forward
+
+
+def _afloat(world, x: float, z: float) -> bool:
+    if bool(world.slip.contains(x, z)):
+        return True
+    return float(world.shore_sd(x, z)) < -0.6
+
+
+def _target(state, world):
+    best = None
+    best_d = 1.0e9
+    for line in state.lines:
+        mx = (line.x0 + line.x1) * 0.5
+        mz = (line.z0 + line.z1) * 0.5
+        dist = math.hypot(mx - state.x, mz - state.z)
+        if dist < best_d and dist < 140.0 and _afloat(world, mx, mz):
+            best = (mx, mz)
+            best_d = dist
+    if best is not None:
+        return best
+    fx, fz = math.sin(state.yaw), math.cos(state.yaw)
+    for dist in (18.0, 12.0, 8.0, 5.0):
+        x = state.x + fx * dist
+        z = state.z + fz * dist
+        if _afloat(world, x, z):
+            return (x, z)
+    return None
+
+
+def _step(state, world, step: float) -> float:
+    dx = state.bot_tx - state.bot_x
+    dz = state.bot_tz - state.bot_z
+    dist = math.hypot(dx, dz)
+    if dist < 1.0e-4:
+        return 0.0
+    ux, uz = dx / dist, dz / dist
+    move = min(step, dist)
+    if _try(state, world, ux * move, uz * move):
+        state.bot_yaw = math.atan2(ux, uz)
+        return dist - move
+    # The straight line crosses the bank. Sidestep and keep looking for water.
+    for sign in (1.0, -1.0):
+        if _try(state, world, -uz * sign * move, ux * sign * move):
+            state.bot_yaw = math.atan2(-uz * sign, ux * sign)
+            return dist
+    return dist
+
+
+def _try(state, world, dx: float, dz: float) -> bool:
+    x = state.bot_x + dx
+    z = state.bot_z + dz
+    if not _afloat(world, x, z):
+        return False
+    state.bot_x, state.bot_z = x, z
+    return True
+
+
+def _report(state, world) -> str:
+    from .data import BAIT_BY_ID, SPECIES_BY_ID, hour_of_day, weather_at
+    from .sim import species_rates
+    from .world import zone_label
+
+    x, z = float(state.bot_x), float(state.bot_z)
+    zone = world.zone_at(x, z)
+    if zone == "landing":
+        return "Bot: The landing. Too close to set a line."
+    depth = float(world.depth(x, z))
+    if state.finder:
+        where = f"{depth * 3.28084:.0f} ft"
+    elif depth < 2.2:
+        where = "skinny water"
+    elif depth > 8.0:
+        where = "deep water"
+    else:
+        where = "middling water"
+    hour = hour_of_day(state.game_minutes)
+    weather = weather_at(state.game_minutes)
+    best_bait, best_sp, best = "worm", "bluegill", -1.0
+    for bait in BAIT_BY_ID:
+        rates = species_rates(zone, bait, hour, weather, depth, state.lake_id)
+        sp = max(rates, key=rates.get)
+        if rates[sp] > best:
+            best, best_bait, best_sp = rates[sp], bait, sp
+    place = zone_label(zone).lower()
+    if best < 0.004:
+        return f"Bot: {where}, the {place}. Quiet for a trotline."
+    bait = BAIT_BY_ID[best_bait].name.lower()
+    fish = SPECIES_BY_ID[best_sp].name.lower()
+    return f"Bot: {where}, the {place}. {bait.capitalize()} for {fish}."
+
+
+def _mesh(origin, right, up, facing, bob: float, scale: float = 1.0) -> list[Face]:
+    basis = np.stack([
+        np.asarray(right, np.float32),
+        np.asarray(up, np.float32),
+        np.asarray(facing, np.float32),
+    ], axis=1)
+    origin = np.asarray(origin, np.float32) + np.array([0.0, bob, 0.0], np.float32)
+    tin = (0.78, 0.82, 0.84)
+    dark = (0.16, 0.18, 0.20)
+    lamp = (1.0, 0.62, 0.16)
+    rubber = (0.10, 0.12, 0.13)
+    out: list[Face] = []
+
+    def put(local_pts, color):
+        pts = np.stack([origin + basis @ (np.array(p, np.float32) * np.float32(scale)) for p in local_pts])
+        normal = basis @ np.cross(
+            np.array(local_pts[1], np.float32) - np.array(local_pts[0], np.float32),
+            np.array(local_pts[2], np.float32) - np.array(local_pts[0], np.float32),
+        )
+        normal = normal / (np.linalg.norm(normal) + 1e-8)
+        out.append(Face(pts.astype(np.float32), normal.astype(np.float32), np.array(color, np.float32), "world"))
+
+    def box(center, size, color):
+        x, y, z = center
+        a, b, d = (np.array(size, np.float32) * 0.5).tolist()
+        put([(x - a, y + b, z - d), (x + a, y + b, z - d), (x + a, y + b, z + d), (x - a, y + b, z + d)], color)
+        put([(x - a, y - b, z - d), (x - a, y - b, z + d), (x + a, y - b, z + d), (x + a, y - b, z - d)], color)
+        put([(x - a, y - b, z - d), (x + a, y - b, z - d), (x + a, y + b, z - d), (x - a, y + b, z - d)], color)
+        put([(x - a, y - b, z + d), (x - a, y + b, z + d), (x + a, y + b, z + d), (x + a, y - b, z + d)], color)
+        put([(x - a, y - b, z - d), (x - a, y + b, z - d), (x - a, y + b, z + d), (x - a, y - b, z + d)], color)
+        put([(x + a, y - b, z - d), (x + a, y - b, z + d), (x + a, y + b, z + d), (x + a, y + b, z - d)], color)
+
+    # Body, lamp face, antenna and bobber, skids, and a little propeller.
+    box((0.0, 0.11, 0.0), (0.16, 0.14, 0.18), tin)
+    box((0.0, 0.22, 0.02), (0.11, 0.09, 0.11), tin)
+    put([(-0.028, 0.19, 0.08), (0.028, 0.19, 0.08), (0.028, 0.25, 0.08), (-0.028, 0.25, 0.08)], lamp)
+    box((0.0, 0.36, 0.0), (0.012, 0.16, 0.012), dark)
+    box((0.0, 0.45, 0.0), (0.04, 0.04, 0.04), lamp)
+    box((-0.06, 0.03, 0.01), (0.045, 0.03, 0.12), rubber)
+    box((0.06, 0.03, 0.01), (0.045, 0.03, 0.12), rubber)
+    box((0.0, 0.07, -0.11), (0.05, 0.05, 0.03), dark)
+    return out

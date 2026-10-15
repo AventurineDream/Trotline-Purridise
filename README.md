@@ -1,0 +1,112 @@
+# Little Briar
+
+A first-person trotline game with two lakes, 36 catchable fish, and three boat models. Start in a 12-foot jon boat, set lines, let them soak, and sell the catch at the landing. Earn a wind-powered daysailer or a 15-foot pontoon and take your gear to Cedar Creek Lake. There is no rod and reel.
+
+The lake now uses a 16:9 OpenGL renderer: fixed terrain, a dense procedural forest, reflected trees and sky, gentle water ripples, warm dawn and sunset light, night lighting, and mist in rain. The boat and landing have individual boards and hardware, and the HUD uses a quiet lake-journal style.
+
+The shore stays fixed. Terrain is baked once, the water boundary follows the same lake and landing-slip functions used by the simulation, and the camera no longer bobs or rolls while you look at the bank.
+
+A moving boat leaves a wake, and fish rise on the open water. When a hook takes a fish, a ring spreads on that spot and a flagged cork stands up on the line. The chart and the corner list show which lines are soaking, which have fish, and which are getting tired. With the depth finder, idling tells you what you would bait there. The lake has a voice: lapping water, the motor, wind when you sail or it rains, birds at the edge of the day, frogs after dark, and a splash with the strike. M mutes it.
+
+Weather blends over an hour on the lake, including changes at midnight. Cloud
+cover, rain, mist, water chop, and lighting fade together; the sun and moon
+follow continuous orbits across midnight and fade at the horizon. The sky uses
+the fractional lake clock so lighting moves smoothly between game minutes.
+
+Graphics are designed for a **3 GB RAM budget**. Rendering is capped at 1440×810 with up to 4× antialiasing on a GPU; reflections use half that resolution in each direction. Mesa software graphics uses at most 640×360. There is one small shared foliage atlas, fixed geometry and buoy buffers, and an 8 MiB text cache. There are no large downloaded texture packs or retained frame histories.
+
+## Run
+
+SDL2 and SDL2_ttf have to be on the system. The launcher installs NumPy and ModernGL in the local virtual environment. OpenGL 3.3 is required for the full scenery; a CPU renderer is available when graphics initialization fails.
+
+```sh
+./play.sh
+```
+
+That makes a `.venv` if you don't have one, installs the dependencies, and starts the game. A save is written to `saves/briar.json` (autosave about every 45 seconds, and on quit).
+
+```sh
+./play.sh --selftest          # gameplay and graphics regressions. No window.
+./play.sh --shots shots       # PNG frames of the lake and the menus
+./play.sh --chart shots/chart.png
+./play.sh --benchmark 1200    # both lakes, three boats, menus, weather, and 15 buoys
+./play.sh --software          # use the simpler CPU fallback
+./play.sh --selftest --software
+./play.sh --smoke             # real window, sailing, purchases, weather, and lake changes
+```
+
+The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. It exercises both lakes, all three boats, six shop tabs, four help pages, the 36-entry journal, weather fades, fuel gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry is also checked for stability. Results depend on the graphics driver and the other applications running on the computer.
+
+During play the window and lake share one OpenGL context. The window check reads the pixels submitted to the actual window and verifies that presenting a frame does not corrupt subsequent lake frames. Headless screenshots use a separate standalone context.
+
+The original source is preserved in `backups/original-2026-10-13.tar.gz`; the version before the two-lake expansion is in `backups/before-two-lakes-2026-10-13.tar.gz`. Older saves keep their money, fish, lines, gear, and records. They start with the owned jon boat and a full starter fuel tank; the new boats must be purchased. The active lake, owned boats, and each boat's fuel tank are saved. Engines resume at idle and sails resume lowered.
+
+## Two lakes
+
+**Little Briar** retains its familiar shoreline, landing, and fishing grounds. All 36 fish in the game collection can be found here.
+
+**Cedar Creek Lake** recreates the Texas reservoir's branching shoreline, islands, and depth contours from the [Texas Water Development Board's 2017 survey](https://www.twdb.texas.gov/surfacewater/surveys/completed/index.asp). Horizontal distances are compressed tenfold for play; depth stays in metres and is capped at about 53 feet. The landing is placed near the County Public Ramp on Caney Creek. The shoreline and depth grids are shared by graphics, the chart, fishing, and collisions.
+
+Cedar Creek's stronger blue catfish, white bass, hybrid striped bass, and crappie fishing is informed by [TPWD's Cedar Creek profile](https://tpwd.texas.gov/fishboat/fish/recreational/lakes/cedar_creek/) and [2023 fisheries survey](https://tpwd.texas.gov/publications/pwdpubs/media/lake_survey/pwd_rp_t3200_1267_2023.pdf). The broader fish community, catch rates, prices, scenery, and boat handling are game design. Six Little Briar specialties are absent from Cedar Creek, giving the lakes different fishing profiles.
+
+At a landing, press **E**, choose the **Lakes** tab with **A/D**, choose a destination with **W/S**, then press **Enter**. Pick up your deployed lines before towing to another lake. Money, livewell catches, held lines, bait, upgrades, owned boats, fuel, and journal records travel with you.
+
+The game loads only the bundled `fishing/assets/cedar.npz` and `cedar.json`, about 4 MB. It needs no map downloads during play. The asset records its source and checksum. `scripts/build_cedar.py` rebuilds it from the public TWDB survey using build-only GIS libraries; those libraries are not game dependencies.
+
+## Boats and fuel
+
+The **Boats** tab at either landing sells boats and fuel. New boats include a full tank, and switching to a boat you already own is free. Each boat keeps its own fuel; switching cannot refill a tank.
+
+| Boat | Purchase | Tank | Character |
+| --- | ---: | ---: | --- |
+| 12 ft Jon boat | Starting boat | 12 L | Nimble tiller boat with the original handling |
+| 12 ft Daysailer | $650 | 6 L | Wind power, a small auxiliary motor, and a wider cockpit |
+| 15 ft Pontoon | $1,450 | 36 L | Broad deck, bimini canopy, helm console, slower turns, and 40 lb extra livewell space |
+
+All three models have their own complete hull collision footprint and draft. A wider boat needs more clearance. Motor and livewell upgrades stay with your equipment; motor upgrades improve the jon boat and pontoon, while the daysailer's auxiliary remains small. Sell enough fish before changing to a boat with a smaller livewell.
+
+**Q** raises or lowers the daysailer's sail. Raising it lifts the anchor. **A/D** steers, while the sail trims to the wind. A reach across the wind is fastest; the boat cannot sail straight into the wind, so tack or use the auxiliary. The HUD shows wind direction, wind speed, and sail status. **Space** anchors and lowers the sail. **Shift** idles the auxiliary; a raised sail keeps providing wind power.
+
+**Sailing burns no fuel.** Powered travel uses fuel according to the engine, boat, throttle, and lake clock. A lowered throttle uses less fuel, and idling or anchoring does not consume it. Fuel costs **$1.40 per litre**, sold in up-to-five-litre fills, limited by tank space and available cash. Empty tanks stop motor thrust, but the daysailer can keep sailing.
+
+If stranded, lower the sail and idle, then press **R** for a tow to the current landing. A tow takes one game hour and costs up to $10, limited by available cash; a small emergency fuel reserve prevents an empty wallet from trapping the player. Deployed lines keep soaking in their original positions.
+
+## On the water
+
+One real second is one minute on the lake. A day is 24 minutes. `T` cycles 1×, 3×, 6×, and 12× while the boat is idling or anchored. At 12× a whole day takes two real minutes. Lines keep fishing for up to six real hours while the game is closed. A hook holds one fish, and a fish spoils after 13 game hours, so a long absence is one soak.
+
+**Bot** is the tin deckhand on the bow. `B` sends him to the nearest trotline, or a short way ahead if nothing is set. He calls back the depth (a range, unless you own the finder), the ground, and what he would bait. `B` again brings him home. He does not change what bites or what fish are worth. A tow or a change of lake puts him back on deck.
+
+| Key | Action |
+| --- | --- |
+| W / S | Raise / lower the throttle lever; S past idle selects reverse |
+| Shift (either key) | Return the throttle to idle; the boat coasts |
+| A D, arrows | Steer. Arrows also look up and down |
+| Space | Drop or raise the anchor |
+| F | Set a trotline |
+| E | Check a line, or open the current landing |
+| Q | Raise / lower the daysailer's sail |
+| R | Call a tow while idling, with the sail lowered |
+| B | Send Bot ahead or out to a line. Press again to call him back |
+| Tab | Chart |
+| J / I | Journal / livewell |
+| T | Time scale, while you are still |
+| H / M / Esc | Help / mute / pause |
+
+Menus accept **W/S** to move through items and **A/D** to change tabs, lines, or
+pages. Arrow keys also work, including held-key repeat. Enter or Space selects;
+Esc closes. The field guide accepts all four WASD keys to turn pages. Release a
+direction used in a menu before using it to drive the boat again.
+
+Release W or S and the throttle stays where you set it. The HUD shows forward,
+reverse, or idle and the lever percentage. Dropping the anchor resets the lever
+to idle, and existing saves resume at idle.
+
+The full 12-foot hull has collision barriers against the bank, dock piers,
+the dock crossbeam, and solid rocks and stumps. Turns and movement are checked
+in short steps, so the bow and corners stay out of obstacles. The hull sides
+and rails continue back past the camera and fill the bottom of the view.
+
+Five baits: nightcrawlers, chicken liver, cut shad, live minnows, crawfish. The 36 fish each have their own size range, value, bait preferences, habitat, activity period, and journal record. The journal scrolls through the full collection and shows fishing notes before the first catch. Sell fish at the landing and spend it on bait, lines, boats, fuel, motors, livewells, a bait box, a depth finder, a spotlight, and paint. A color you own can be worn again for free.
+
+The collection includes bluegill; yellow, black, and brown bullhead; black and white crappie; common carp; freshwater drum; channel, blue, and flathead catfish; largemouth, smallmouth, and spotted bass; white and yellow bass; hybrid striped and striped bass; longnose, spotted, shortnose, and alligator gar; smallmouth, bigmouth, and black buffalo; redear, green, redbreast, and longear sunfish; warmouth; bowfin; blue sucker; golden shiner; gizzard and threadfin shad; and chain pickerel.

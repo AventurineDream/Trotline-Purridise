@@ -1,0 +1,30 @@
+uniform sampler2D scene;
+in vec2 uv;
+out vec4 frag;
+void main() {
+    vec2 px = 1.0/vec2(textureSize(scene,0));
+    vec3 c = texture(scene,uv).rgb;
+    vec3 a = texture(scene,uv+vec2(px.x,0)).rgb;
+    vec3 b = texture(scene,uv-vec2(px.x,0)).rgb;
+    vec3 d = texture(scene,uv+vec2(0,px.y)).rgb;
+    vec3 e = texture(scene,uv-vec2(0,px.y)).rgb;
+    float contrast = length(max(max(a,b),max(d,e))-min(min(a,b),min(d,e)));
+    c = mix(c,(a+b+d+e+c*2.0)/6.0,smoothstep(0.16,0.6,contrast)*0.25);
+    vec3 bloom = max(texture(scene,uv+px*vec2(3,2)).rgb-0.78,0.0)
+               +max(texture(scene,uv+px*vec2(-3,2)).rgb-0.78,0.0)
+               +max(texture(scene,uv+px*vec2(3,-2)).rgb-0.78,0.0)
+               +max(texture(scene,uv-px*vec2(3,2)).rgb-0.78,0.0);
+    c += bloom*0.05;
+    c = pow(max(c,0.0),vec3(0.95));
+    c *= vec3(1.025,1.005,0.97);
+    float vignette = smoothstep(0.35,0.83,length((uv-0.5)*vec2(1.0,0.8)));
+    c *= 1.0-vignette*0.12;
+    // Rain lives in the foreground. Neither terrain nor camera moves.
+    if (rain>0.0) {
+        vec2 p = vec2(uv.x*130.0+uv.y*12.0,uv.y*24.0+anim*10.0);
+        float streak = step(0.988,hash(vec2(floor(p.x),floor(p.y))))*
+                       (1.0-smoothstep(0.02,0.07,fract(p.x)))*smoothstep(0.15,0.8,fract(p.y));
+        c = mix(c,vec3(0.64,0.71,0.73),streak*0.25*rain);
+    }
+    frag = vec4(clamp(c,0.0,1.0),1);
+}
