@@ -168,14 +168,26 @@ These are quest-observation events over existing game state. They are not new fi
 | bot.scout_complete | lake_id, target line_id when applicable, scout-point zone_id, depth_class, exact_depth_m only when available, report-delivered flag | q01, q04, q11 |
 | fish.enter_livewell | species_id, source_line_id, lake_id, source zone_id, bait_id, catch_game_minute, entry_game_minute | q06 |
 | zone.enter | lake_id, zone_id, game_minute | q10, q12 |
-| boat.move | lake_id, current zone_id, actual distance_m, player_controlled, propulsion type | q08 |
+| boat.move | lake_id, segment zone_id, in-zone distance_m, player_controlled, propulsion type | q08 |
 | anchor.sample | lake_id, zone_id, anchored, engine_idle, elapsed game minutes | q03, q07 |
 
 Use IDs from the live game state: bait IDs worm, liver, shad, minnow, craw; line tiers std (12 hooks), prem (18 hooks), heavy (24 hooks); species ID `golden_shiner`. The current `Catch` model exposes a species identifier and has no per-catch instance identifier, so do not add or require a separate `fish_id`. A new adapter may observe or persist existing state transitions, but it must not alter bite rates, fish values, line limits, movement, or gear.
 
+### 5.1 Persistent deployed-line identity
+
+The current `SetLine` has no identifier. The later implementation must assign an immutable `line_id` (a UUID string) to each deployment before emitting `line.set`, and persist it as an optional field on that deployed line's serialized record. Restore the same ID on load and retain it through checks, rebaiting, list reordering, and lake switches. Never derive identity from the mutable `State.lines` index, coordinates, bait, or tier. Pulling a line ends that deployment; deploying the coiled gear again receives a new ID, even in the same place. IDs must be unique across both lakes and must not be reused for saved quest references.
+
+When loading a legacy deployed-line record without an ID, assign one once and persist it on the next save without changing its fishing state. This migration does not emit a `line.set` event, invent a set time, or grant retroactive quest progress. Keep existing quest references and qualifying set properties tied to the deployment ID; removing another line must not redirect them. Capture `source_line_id` from the source deployment before transferring fish or removing that line, including a pull that transfers fish into the livewell.
+
+### 5.2 Distance within a zone
+
+Each `boat.move` event describes only the traversed portion in its named zone: `zone_id` is the segment's zone, and `distance_m` is the non-negative path length in that zone. Split the actual accepted movement path at zone boundaries using the live world's zone classification, including its boundary precedence. Use the movement substeps that actually occurred; do not substitute the update's start-to-end displacement, count rejected movement, or classify the whole update by its final position. Emit separate portions when a move crosses a boundary, and count each portion once.
+
+For q08, accumulate only portions with lake `cedar`, zone `open`, player control, and motor or sail propulsion after acceptance. For example, an update traveling 8 metres outside Cedar open water followed by 2 metres inside contributes 2 metres, regardless of its event cadence. Reversing across that boundary does not make the outside portion eligible. Tow movement and repositioning on load or lake travel contribute zero.
+
 ## 6. Persistence and journal
 
-Add an optional narrative_v1 object inside the existing saves/briar.json state. Do not rename the save, discard current fields, or change fishing progress. A missing narrative_v1 object in an existing save means all twelve quests are available, zero Ripples are collected, and no Guardian sighting is recorded. Maintain a persistent, monotonic `active_play_game_minutes` counter for actual game-clock minutes advanced by foreground simulation and player-triggered online actions. Increase it by the actual positive `State.game_minutes` delta rather than the selected `time_scale`; this preserves the effective rate when faster ticking is unavailable. Menus and dialogue count only while the clock advances; frozen updates and offline time added by `State.catch_up` do not count. Record its value on qualifying line-set and line-check progress so active soak survives save/load without counting time the game was closed.
+Add an optional narrative_v1 object inside the existing saves/briar.json state and the optional deployed-line `line_id` field defined in §5.1. Do not rename the save, discard current fields, or change fishing progress. A missing narrative_v1 object in an existing save means all twelve quests are available, zero Ripples are collected, and no Guardian sighting is recorded. Maintain a persistent, monotonic `active_play_game_minutes` counter for actual game-clock minutes advanced by foreground simulation and player-triggered online actions. Increase it by the actual positive `State.game_minutes` delta rather than the selected `time_scale`; this preserves the effective rate when faster ticking is unavailable. Menus and dialogue count only while the clock advances; frozen updates and offline time added by `State.catch_up` do not count. Record its value on qualifying line-set and line-check progress so active soak survives save/load without counting time the game was closed.
 
 Suggested stable shape:
 
@@ -213,6 +225,8 @@ A later implementation is contract-compatible when it can demonstrate all of the
 - Daily selections persist across switching and reload; Cinder occupies only 20:00–04:00; the named anchors resolve to their canonical lakes, zones, and chart positions.
 - Each of the twelve quest IDs can reach active, ready, and completed using only its specified events; all progress survives save/load.
 - Legacy saves without narrative_v1 still load with their fishing progress intact.
+- Deployed-line IDs survive save/load and lake switches; pulling another line cannot change a quest's target, and redeployment cannot inherit the old deployment's progress. Legacy ID migration emits no retroactive set event.
+- q08 counts only actual path portions within cedar:open, including updates that cross its boundary; outside portions, tow movement, and repositioning contribute zero.
 - Exactly ten unique Ripple IDs can be earned; the optional Guardian can be seen after eight and is retryable on later windows.
 - Dialogue, journal counters, event fields, reward values, units, and zones match this contract.
 - Fishing and lake travel remain playable without opening the quest journal or accepting any quest.
