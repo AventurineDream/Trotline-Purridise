@@ -129,12 +129,12 @@ Quest IDs and Ripple IDs are permanent save identifiers. Reward amounts are game
 
 | # / Quest ID | Canonical title and giver | Start/turn-in anchor | Testable objective | Reward |
 | --- | --- | --- | --- | --- |
-| q01_tea_leaves_deep_holes | Tea Leaves & Deep Holes — Grandmother Whiskers | briar:landing | After acceptance, set a 12-hook std line with worm bait in briar:lilies. Make it the nearest deployed line as the nearest deployed line at less than 140 game metres from the boat, send him with B, and receive his ordinary report for that line. An exact depth is not required. | $60; no Ripple |
+| q01_tea_leaves_deep_holes | Tea Leaves & Deep Holes — Grandmother Whiskers | briar:landing | After acceptance, set a 12-hook std line with worm bait in briar:lilies. Make it the nearest deployed line within 140 game metres of the boat, send Bot with B, and receive his ordinary report for that line. An exact depth is not required. | $60; no Ripple |
 | q02_lonely_star_current | The Lonely Star Current — Doc Barnaby | cedar:docs_marina_dock | After acceptance, set a 12-hook std line with minnow bait in cedar:rocks; wait at least 60 game minutes from set time; check that same line. | $90; no Ripple |
 | q03_unstrung_line | The Unstrung Line — Elder Moss | briar:cypress | Anchor in briar:cypress with engine idle for 120 continuous game minutes. Any interruption resets this objective's timer. | $45 and ripple_01 |
 | q04_great_contour_chart | The Great Contour Chart — Pip & Pebble | briar:flats | Complete a Bot scout report whose scout point is in briar:flats. Accept the standard depth class, or the exact depth if the player owns a finder; neither requires a new tool. | $45 and ripple_02 |
 | q05_moonlight_trotlines | Moonlight Trotlines — Master Cinder | briar:deep | Set a 12-hook std line with shad bait in briar:deep during 20:00–04:00; wait at least 60 game minutes and check that line. The boat spotlight is optional. | $50 and ripple_03 |
-| q06_unrepeatable_sunrise | The Unrepeatable Sunrise — Willow | briar:lilies | After acceptance, a golden_shiner must enter the livewell during 05:00–08:00 from a worm-bait line set in briar:lilies. The line may be set earlier. The fish stays in the livewell. | $55 and ripple_04 |
+| q06_unrepeatable_sunrise | The Unrepeatable Sunrise — Willow | briar:lilies | After acceptance, a fish whose `species_id` is `golden_shiner` must enter the livewell during 05:00–08:00 from a worm-bait line set in briar:lilies. The line may be set earlier. The fish stays in the livewell. | $55 and ripple_04 |
 | q07_art_of_the_nap | The Art of the Nap — Silas | briar:inlet | Anchor in briar:inlet with engine idle for 120 continuous game minutes. Fishing continues normally. | $40 and ripple_05 |
 | q08_channel_run | The Channel Run — Captain Maeve | cedar:open | Travel at least 300 game metres within cedar:open under player control by motor or sail. Accumulate actual path distance; tow movement does not count. | $65 and ripple_06 |
 | q09_quiet_channel | The Quiet Channel — Sparky | cedar:inlet | Set a 12-hook std line with liver bait in cedar:inlet; wait at least 60 game minutes; check that same line. | $50 and ripple_07 |
@@ -148,7 +148,7 @@ For q06, qualify the event by `entry_game_minute`, the game time when the fish i
 
 For both anchoring quests, the 120-minute counter advances only while the boat is anchored, the engine is idle, and the player's boat remains in the target zone. Any unanchor, non-idle engine, or zone exit resets the current continuous timer. At 1x, 120 game minutes take two real minutes; at 12x they take ten real seconds.
 
-For q02, q05, q09, and q11, the line must accumulate at least 60 active-play game minutes between its `line.set` and later `line.check` events. Compare the events' `active_game_minute` values; do not use the wall-clock game-minute difference. The counter advances at the selected game-speed scale while the game simulation is running, including menus and dialogue, but excludes offline time added by `State.catch_up` when the game is reopened. At 1x this takes one real minute; at 12x it takes five real seconds. Do not require a catch or consume the line. The line's night-window condition for q05 still uses `game_minute` at set time.
+For q02, q05, q09, and q11, the line must accumulate at least 60 active-play game minutes between its `line.set` and later `line.check` events. Compare the events' `active_game_minute` values; do not use the wall-clock game-minute difference. Increment the persistent counter by the actual positive change to `State.game_minutes` from foreground simulation and player-triggered online actions that advance the clock. Do not infer elapsed game minutes from the selected `time_scale`: when 12x is selected but the simulation is limited to 1x, count the actual 1x clock change. Menus and dialogue count only while the game clock advances. Frozen time and offline time added by `State.catch_up` when the game is reopened do not count. At 1x this takes one real minute; at an effective 12x it takes five real seconds. Do not require a catch or consume the line. The line's night-window condition for q05 still uses `game_minute` at set time.
 
 ### 4.3 Ripples and Guardian
 
@@ -166,16 +166,16 @@ These are quest-observation events over existing game state. They are not new fi
 | line.set | line_id, lake_id, midpoint zone_id, tier_id, hook_count, bait_id, game_minute, active_game_minute | q01, q02, q05, q06 line source, q09, q11 |
 | line.check | line_id, lake_id, zone_id, game_minute, active_game_minute, eligible catch records | q02, q05, q09, q11 |
 | bot.scout_complete | lake_id, target line_id when applicable, scout-point zone_id, depth_class, exact_depth_m only when available, report-delivered flag | q01, q04, q11 |
-| fish.enter_livewell | fish_id, species_id, source_line_id, lake_id, source zone_id, bait_id, catch_game_minute, entry_game_minute | q06 |
+| fish.enter_livewell | species_id, source_line_id, lake_id, source zone_id, bait_id, catch_game_minute, entry_game_minute | q06 |
 | zone.enter | lake_id, zone_id, game_minute | q10, q12 |
 | boat.move | lake_id, current zone_id, actual distance_m, player_controlled, propulsion type | q08 |
 | anchor.sample | lake_id, zone_id, anchored, engine_idle, elapsed game minutes | q03, q07 |
 
-Use IDs from the live game state: bait IDs worm, liver, shad, minnow, craw; line tiers std (12 hooks), prem (18 hooks), heavy (24 hooks); fish ID golden_shiner. A new adapter may observe or persist existing state transitions, but it must not alter bite rates, fish values, line limits, movement, or gear.
+Use IDs from the live game state: bait IDs worm, liver, shad, minnow, craw; line tiers std (12 hooks), prem (18 hooks), heavy (24 hooks); species ID `golden_shiner`. The current `Catch` model exposes a species identifier and has no per-catch instance identifier, so do not add or require a separate `fish_id`. A new adapter may observe or persist existing state transitions, but it must not alter bite rates, fish values, line limits, movement, or gear.
 
 ## 6. Persistence and journal
 
-Add an optional narrative_v1 object inside the existing saves/briar.json state. Do not rename the save, discard current fields, or change fishing progress. A missing narrative_v1 object in an existing save means all twelve quests are available, zero Ripples are collected, and no Guardian sighting is recorded. Maintain a persistent, monotonic `active_play_game_minutes` counter for game minutes advanced while the simulation is running. Advance it at the selected speed, including menus and dialogue; do not advance it for offline time added by `State.catch_up`. Record its value on qualifying line-set and line-check progress so active soak survives save/load without counting time the game was closed.
+Add an optional narrative_v1 object inside the existing saves/briar.json state. Do not rename the save, discard current fields, or change fishing progress. A missing narrative_v1 object in an existing save means all twelve quests are available, zero Ripples are collected, and no Guardian sighting is recorded. Maintain a persistent, monotonic `active_play_game_minutes` counter for actual game-clock minutes advanced by foreground simulation and player-triggered online actions. Increase it by the actual positive `State.game_minutes` delta rather than the selected `time_scale`; this preserves the effective rate when faster ticking is unavailable. Menus and dialogue count only while the clock advances; frozen updates and offline time added by `State.catch_up` do not count. Record its value on qualifying line-set and line-check progress so active soak survives save/load without counting time the game was closed.
 
 Suggested stable shape:
 
