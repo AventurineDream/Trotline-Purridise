@@ -80,7 +80,7 @@ There are twelve quest givers: two permanent lake hosts and ten rotating NPCs. A
 
 - Grandmother Whiskers is always present at briar:landing while Little Briar is loaded.
 - Doc Barnaby is the permanent Cedar host at cedar:docs_marina_dock while Cedar is loaded. His narrative NPC anchor does not relocate the existing Cedar landing menu.
-- At 06:00 game time on each lake day, choose and save one daytime NPC for that lake. Use a stable per-save schedule seed. Define selection_day = max(0, floor((game_minutes - 360) / 1440)); select pool[(schedule_seed + selection_day) mod pool_length]. Pool order is the order listed above. Save the selected ID and selection_day. On a new save, initialize the current interval on first load. If time advances while a lake is offscreen, compute its current scheduled NPC on return without granting offscreen quest progress.
+- At 06:00 game time on each lake day, choose and save one daytime NPC for that lake. `game_minutes == 0` is 06:00, so define `selection_day = max(0, floor(game_minutes / 1440))`; select `pool[(schedule_seed + selection_day) mod pool_length]`. Pool order is the order listed above. Save the selected ID and `selection_day`. On a new save, initialize the current interval on first load. If time advances while a lake is offscreen, compute its current scheduled NPC on return without granting offscreen quest progress. The selection day advances at `game_minutes` 1440, 2880, and so on, each corresponding to 06:00.
 - Little Briar daytime pool: Elder Moss, Pip & Pebble, Willow, Silas. The selected daytime NPC is active from 06:00 to 20:00 and again from 04:00 to 06:00 the following morning.
 - Master Cinder occupies the Little Briar rotating slot from 20:00 to 04:00. His quest requires the night window, not a spotlight upgrade.
 - Cedar daytime pool: Captain Maeve, Sparky, Quill, Dr. Alder, Patch. The selected Cedar NPC remains active until the next 06:00 selection.
@@ -121,7 +121,7 @@ Every quest has one of four saved states: available, active, ready, completed.
 - A completed quest cannot be replayed and cannot pay a second reward. The ten Ripple quests each add their unique Ripple once. The two host quests award cash only.
 - Progress is evaluated from the event and source data defined in §5. Events that occurred before accepting a quest do not count.
 - Fish are not removed from the livewell. A catch objective records a qualifying fish after it enters the livewell.
-- Time conditions use the current game minute, not real time. Intervals are half-open: start included, end excluded. A window spanning midnight wraps over the day boundary.
+- Time windows use the current game minute, not real time. Intervals are half-open: start included, end excluded. A window spanning midnight wraps over the day boundary. The four line-soak objectives measure their 60-minute duration with the active-play counter defined below; offline catch-up does not count.
 
 ### 4.2 The twelve canonical quests
 
@@ -144,9 +144,11 @@ Quest IDs and Ripple IDs are permanent save identifiers. Reward amounts are game
 
 Record each line's set zone and bait. The Willow catch event must occur after acceptance and within 05:00–08:00, and its source line must be a worm-bait line set in briar:lilies. The line may have been set before accepting. If the dawn window is missed, try the next sunrise.
 
+For q06, qualify the event by `entry_game_minute`, the game time when the fish is transferred into the livewell. `catch_game_minute` records when the fish took the hook and does not determine the sunrise window. This distinction allows a fish hooked before 05:00 to qualify if it enters the livewell during the window after acceptance.
+
 For both anchoring quests, the 120-minute counter advances only while the boat is anchored, the engine is idle, and the player's boat remains in the target zone. Any unanchor, non-idle engine, or zone exit resets the current continuous timer. At 1x, 120 game minutes take two real minutes; at 12x they take ten real seconds.
 
-For the line-soak quests, the 60-minute counter is the game-clock difference between that line's set event and a later check of that same line. At 1x this is one real minute; at 12x it is five real seconds. Do not require a catch or consume the line.
+For q02, q05, q09, and q11, the line must accumulate at least 60 active-play game minutes between its `line.set` and later `line.check` events. Compare the events' `active_game_minute` values; do not use the wall-clock game-minute difference. The counter advances at the selected game-speed scale while the game simulation is running, including menus and dialogue, but excludes offline time added by `State.catch_up` when the game is reopened. At 1x this takes one real minute; at 12x it takes five real seconds. Do not require a catch or consume the line. The line's night-window condition for q05 still uses `game_minute` at set time.
 
 ### 4.3 Ripples and Guardian
 
@@ -161,10 +163,10 @@ These are quest-observation events over existing game state. They are not new fi
 
 | Event | Required fields | Used by |
 | --- | --- | --- |
-| line.set | line_id, lake_id, midpoint zone_id, tier_id, hook_count, bait_id, game_minute | q01, q02, q05, q06 line source, q09, q11 |
-| line.check | line_id, lake_id, zone_id, game_minute, eligible catch records | q02, q05, q09, q11 |
+| line.set | line_id, lake_id, midpoint zone_id, tier_id, hook_count, bait_id, game_minute, active_game_minute | q01, q02, q05, q06 line source, q09, q11 |
+| line.check | line_id, lake_id, zone_id, game_minute, active_game_minute, eligible catch records | q02, q05, q09, q11 |
 | bot.scout_complete | lake_id, target line_id when applicable, scout-point zone_id, depth_class, exact_depth_m only when available, report-delivered flag | q01, q04, q11 |
-| fish.enter_livewell | fish_id, species_id, source_line_id, lake_id, source zone_id, bait_id, catch game_minute | q06 |
+| fish.enter_livewell | fish_id, species_id, source_line_id, lake_id, source zone_id, bait_id, catch_game_minute, entry_game_minute | q06 |
 | zone.enter | lake_id, zone_id, game_minute | q10, q12 |
 | boat.move | lake_id, current zone_id, actual distance_m, player_controlled, propulsion type | q08 |
 | anchor.sample | lake_id, zone_id, anchored, engine_idle, elapsed game minutes | q03, q07 |
@@ -173,7 +175,7 @@ Use IDs from the live game state: bait IDs worm, liver, shad, minnow, craw; line
 
 ## 6. Persistence and journal
 
-Add an optional narrative_v1 object inside the existing saves/briar.json state. Do not rename the save, discard current fields, or change fishing progress. A missing narrative_v1 object in an existing save means all twelve quests are available, zero Ripples are collected, and no Guardian sighting is recorded.
+Add an optional narrative_v1 object inside the existing saves/briar.json state. Do not rename the save, discard current fields, or change fishing progress. A missing narrative_v1 object in an existing save means all twelve quests are available, zero Ripples are collected, and no Guardian sighting is recorded. Maintain a persistent, monotonic `active_play_game_minutes` counter for game minutes advanced while the simulation is running. Advance it at the selected speed, including menus and dialogue; do not advance it for offline time added by `State.catch_up`. Record its value on qualifying line-set and line-check progress so active soak survives save/load without counting time the game was closed.
 
 Suggested stable shape:
 
@@ -187,12 +189,13 @@ Suggested stable shape:
     "schedule_seed": 0,
     "day_npc_by_lake": {"briar": null, "cedar": null},
     "schedule_day_by_lake": {"briar": null, "cedar": null},
-    "guardian_seen": false
+    "guardian_seen": false,
+    "active_play_game_minutes": 0
   }
 }
 ~~~
 
-Persist quest status and counters, accepted game minute, qualifying line IDs and their set properties, the day-NPC choice and selection day for each lake, collected Ripple IDs, and guardian_seen. Derive display labels from IDs; do not save drifting prose as identifiers.
+Persist quest status and counters, accepted game minute, qualifying line IDs and their set properties including their `active_game_minute` at set time, the day-NPC choice and selection day for each lake, collected Ripple IDs, `active_play_game_minutes`, and `guardian_seen`. Derive display labels from IDs; do not save drifting prose as identifiers.
 
 The V3 Journal page is titled Lake Whispers & Ripples. It shows quest state and explicit counters, qualifying conditions and remaining game minutes, the 0/10 unique Ripple count, and the Guardian availability state. Keep the existing fish journal and livewell pages. Bot logs only the existing depth/ground/bait report; no temperature or ambient-sound log is added.
 
