@@ -80,6 +80,7 @@ There are twelve quest givers: two permanent lake hosts and ten rotating NPCs. A
 
 - Grandmother Whiskers is always present at briar:landing while Little Briar is loaded.
 - Doc Barnaby is the permanent Cedar host at cedar:docs_marina_dock while Cedar is loaded. His narrative NPC anchor does not relocate the existing Cedar landing menu.
+- Initialize `schedule_seed` to the integer `0` for every new save and for any legacy save missing that field, including saves without `narrative_v1`. Persist it before selecting NPCs, preserve an existing saved integer value, and never randomize or reroll it on load or lake travel. This is the normative default, including for the suggested save shape in §6.
 - At 06:00 game time on each lake day, choose and save one daytime NPC for that lake. `game_minutes == 0` is 06:00, so define `selection_day = max(0, floor(game_minutes / 1440))`; select `pool[(schedule_seed + selection_day) mod pool_length]`. Pool order is the order listed above. Save the selected ID and `selection_day`. On a new save, initialize the current interval on first load. If time advances while a lake is offscreen, compute its current scheduled NPC on return without granting offscreen quest progress. The selection day advances at `game_minutes` 1440, 2880, and so on, each corresponding to 06:00.
 - Little Briar daytime pool: Elder Moss, Pip & Pebble, Willow, Silas. The selected daytime NPC is active from 06:00 to 20:00 and again from 04:00 to 06:00 the following morning.
 - Master Cinder occupies the Little Briar rotating slot from 20:00 to 04:00. His quest requires the night window, not a spotlight upgrade.
@@ -129,7 +130,7 @@ Quest IDs and Ripple IDs are permanent save identifiers. Reward amounts are game
 
 | # / Quest ID | Canonical title and giver | Start/turn-in anchor | Testable objective | Reward |
 | --- | --- | --- | --- | --- |
-| q01_tea_leaves_deep_holes | Tea Leaves & Deep Holes — Grandmother Whiskers | briar:landing | After acceptance, set a 12-hook std line with worm bait in briar:lilies. Make it the nearest deployed line within 140 game metres of the boat, send Bot with B, and receive his ordinary report for that line. An exact depth is not required. | $60; no Ripple |
+| q01_tea_leaves_deep_holes | Tea Leaves & Deep Holes — Grandmother Whiskers | briar:landing | After acceptance, set a 12-hook std line with worm bait in briar:lilies. Make it the nearest eligible deployed line with its midpoint strictly less than 140 game metres from the boat, send Bot with B, and receive his ordinary report for that line. An exact depth is not required. | $60; no Ripple |
 | q02_lonely_star_current | The Lonely Star Current — Doc Barnaby | cedar:docs_marina_dock | After acceptance, set a 12-hook std line with minnow bait in cedar:rocks; wait at least 60 game minutes from set time; check that same line. | $90; no Ripple |
 | q03_unstrung_line | The Unstrung Line — Elder Moss | briar:cypress | Anchor in briar:cypress with engine idle for 120 continuous game minutes. Any interruption resets this objective's timer. | $45 and ripple_01 |
 | q04_great_contour_chart | The Great Contour Chart — Pip & Pebble | briar:flats | Complete a Bot scout report whose scout point is in briar:flats. Accept the standard depth class, or the exact depth if the player owns a finder; neither requires a new tool. | $45 and ripple_02 |
@@ -140,7 +141,7 @@ Quest IDs and Ripple IDs are permanent save identifiers. Reward amounts are game
 | q09_quiet_channel | The Quiet Channel — Sparky | cedar:inlet | Set a 12-hook std line with liver bait in cedar:inlet; wait at least 60 game minutes; check that same line. | $50 and ripple_07 |
 | q10_ballad_lonely_star | Ballad of the Lonely Star — Quill | Quill at cedar:flats | After acceptance, enter cedar:rocks, cedar:lilies, and cedar:open in any order. Then hail Quill to turn in. No sound recording is required. | $45 and ripple_08 |
 | q11_deep_water_drift | The Deep-Water Drift — Dr. Alder | cedar:deep | Set an 18-hook prem line with shad bait in cedar:deep; make it the nearest deployed line within Bot's current scout range, receive his ordinary report for it, wait at least 60 game minutes from set time, and check that same line. | $60 and ripple_09 |
-| q12_first_voyage | The First Voyage — Patch | Patch at cedar:lilies | After acceptance, enter cedar:landing, then cedar:lilies, then return to cedar:landing, in that order. Any player boat and available propulsion work. | $50 and ripple_10 |
+| q12_first_voyage | The First Voyage — Patch | Patch at cedar:lilies | After acceptance, enter cedar:landing, then cedar:lilies, then return to cedar:landing, in that order, through player-controlled boat movement. Any player boat and available propulsion work; tow and other repositioning transitions do not count. | $50 and ripple_10 |
 
 Record each line's set zone and bait. The Willow catch event must occur after acceptance and within 05:00–08:00, and its source line must be a worm-bait line set in briar:lilies. The line may have been set before accepting. If the dawn window is missed, try the next sunrise.
 
@@ -167,7 +168,7 @@ These are quest-observation events over existing game state. They are not new fi
 | line.check | line_id, lake_id, zone_id, game_minute, active_game_minute, eligible catch records | q02, q05, q09, q11 |
 | bot.scout_complete | lake_id, target line_id when applicable, scout-point zone_id, depth_class, exact_depth_m only when available, report-delivered flag | q01, q04, q11 |
 | fish.enter_livewell | species_id, source_line_id, lake_id, source zone_id, bait_id, catch_game_minute, entry_game_minute | q06 |
-| zone.enter | lake_id, zone_id, game_minute | q10, q12 |
+| zone.enter | lake_id, zone_id, game_minute, movement_cause, player_controlled | q10, q12 |
 | boat.move | lake_id, segment zone_id, in-zone distance_m, player_controlled, propulsion type | q08 |
 | anchor.sample | lake_id, zone_id, anchored, engine_idle, elapsed game minutes | q03, q07 |
 
@@ -175,9 +176,11 @@ Use IDs from the live game state: bait IDs worm, liver, shad, minnow, craw; line
 
 ### 5.1 Persistent deployed-line identity
 
-The current `SetLine` has no identifier. The later implementation must assign an immutable `line_id` (a UUID string) to each deployment before emitting `line.set`, and persist it as an optional field on that deployed line's serialized record. Restore the same ID on load and retain it through checks, rebaiting, list reordering, and lake switches. Never derive identity from the mutable `State.lines` index, coordinates, bait, or tier. Pulling a line ends that deployment; deploying the coiled gear again receives a new ID, even in the same place. IDs must be unique across both lakes and must not be reused for saved quest references.
+The current `SetLine` has no identifier. The later implementation must assign an immutable `line_id` (a UUID string) to each deployment before emitting `line.set`, and persist it as an optional field on that deployed line's serialized record. Restore the same ID on load and retain it through checks, rebaiting, and list reordering. Lake travel still requires pulling every deployed line first; no deployment or live line ID crosses a lake switch. Saved quest references to ended deployments remain historical references across travel and must never bind to a new deployment. Never derive identity from the mutable `State.lines` index, coordinates, bait, or tier. Pulling a line ends that deployment; deploying the coiled gear again receives a new ID, even in the same place. IDs must be unique across both lakes and must not be reused for saved quest references.
 
 When loading a legacy deployed-line record without an ID, assign one once and persist it on the next save without changing its fishing state. This migration does not emit a `line.set` event, invent a set time, or grant retroactive quest progress. Keep existing quest references and qualifying set properties tied to the deployment ID; removing another line must not redirect them. Capture `source_line_id` from the source deployment before transferring fish or removing that line, including a pull that transfers fish into the livewell.
+
+For line-directed Bot scouts, capture the chosen deployment's `line_id` as `target_line_id` at launch, alongside the existing target coordinates. Persist that optional field in the existing saved `bot` object with its phase and target coordinates, restore it unchanged for an in-flight scout, and use it for the eventual `bot.scout_complete` event. Do not recompute it from the boat's new position, line-list order, or coordinates after launch or load. Free-water scouts have a null target ID. Clear the association when the scout is recalled, reset, or its target deployment is pulled; an ended deployment cannot produce a qualifying line-specific report. For legacy in-flight scouts without a saved target ID, preserve ordinary Bot movement and reports but emit no line-specific quest credit; a fresh launch can capture an identity. This migration grants no retroactive progress.
 
 ### 5.2 Distance within a zone
 
@@ -185,9 +188,13 @@ Each `boat.move` event describes only the traversed portion in its named zone: `
 
 For q08, accumulate only portions with lake `cedar`, zone `open`, player control, and motor or sail propulsion after acceptance. For example, an update traveling 8 metres outside Cedar open water followed by 2 metres inside contributes 2 metres, regardless of its event cadence. Reversing across that boundary does not make the outside portion eligible. Tow movement and repositioning on load or lake travel contribute zero.
 
+### 5.3 Zone-entry provenance
+
+Set `zone.enter.movement_cause` to `boat`, `tow`, `load`, or `lake_travel` according to the transition's source. Set `player_controlled` true only for ordinary movement of the player's boat under the existing controls; calling a tow action is not player-controlled boat movement. For q12, advance the ordered sequence only on events with `movement_cause == boat` and `player_controlled == true` after acceptance. Tow, save/load repositioning, and lake-travel placement cannot advance any leg; they do not reset already recorded legs. Merely loading or being placed in a target zone is not an eligible entry; a subsequent qualifying boat entry is required. These fields do not change q10's existing any-order entry objective.
+
 ## 6. Persistence and journal
 
-Add an optional narrative_v1 object inside the existing saves/briar.json state and the optional deployed-line `line_id` field defined in §5.1. Do not rename the save, discard current fields, or change fishing progress. A missing narrative_v1 object in an existing save means all twelve quests are available, zero Ripples are collected, and no Guardian sighting is recorded. Maintain a persistent, monotonic `active_play_game_minutes` counter for actual game-clock minutes advanced by foreground simulation and player-triggered online actions. Increase it by the actual positive `State.game_minutes` delta rather than the selected `time_scale`; this preserves the effective rate when faster ticking is unavailable. Menus and dialogue count only while the clock advances; frozen updates and offline time added by `State.catch_up` do not count. Record its value on qualifying line-set and line-check progress so active soak survives save/load without counting time the game was closed.
+Add an optional narrative_v1 object inside the existing saves/briar.json state, the optional deployed-line `line_id` field, and the optional `bot.target_line_id` field defined in §5.1. Do not rename the save, discard current fields, or change fishing progress. A missing narrative_v1 object in an existing save means all twelve quests are available, zero Ripples are collected, and no Guardian sighting is recorded. Initialize and persist `schedule_seed` as specified in §3. Maintain a persistent, monotonic `active_play_game_minutes` counter for actual game-clock minutes advanced by foreground simulation and player-triggered online actions. Increase it by the actual positive `State.game_minutes` delta rather than the selected `time_scale`; this preserves the effective rate when faster ticking is unavailable. Menus and dialogue count only while the clock advances; frozen updates and offline time added by `State.catch_up` do not count. Record its value on qualifying line-set and line-check progress so active soak survives save/load without counting time the game was closed.
 
 Suggested stable shape:
 
@@ -222,11 +229,13 @@ Do not promise or require thermal readings, ambient audio recordings, a buoy cou
 A later implementation is contract-compatible when it can demonstrate all of the following:
 
 - Hail range and speed use metres and knots as defined; C does not conflict with H Help.
-- Daily selections persist across switching and reload; Cinder occupies only 20:00–04:00; the named anchors resolve to their canonical lakes, zones, and chart positions.
+- New and legacy saves missing `schedule_seed` initialize and persist integer 0; existing saved seeds are retained. Daily selections persist across switching and reload; Cinder occupies only 20:00–04:00; the named anchors resolve to their canonical lakes, zones, and chart positions.
 - Each of the twelve quest IDs can reach active, ready, and completed using only its specified events; all progress survives save/load.
 - Legacy saves without narrative_v1 still load with their fishing progress intact.
-- Deployed-line IDs survive save/load and lake switches; pulling another line cannot change a quest's target, and redeployment cannot inherit the old deployment's progress. Legacy ID migration emits no retroactive set event.
+- Deployed-line IDs survive save/load; pulling another line cannot change a quest's target, and redeployment cannot inherit the old deployment's progress. Lake travel requires pulling all lines and preserves only historical quest references to those ended deployments. Legacy ID migration emits no retroactive set event.
+- q01 uses Bot's strict midpoint distance cutoff: a line exactly 140 game metres away is ineligible. An in-flight line scout retains its launch-time target ID across save/load even if the boat moves closer to another line; legacy scouts without that ID cannot receive line-specific quest credit.
 - q08 counts only actual path portions within cedar:open, including updates that cross its boundary; outside portions, tow movement, and repositioning contribute zero.
+- q12 advances landing → lilies → landing only through qualifying player-controlled boat entries; tow calls and load/travel placement cannot satisfy any leg.
 - Exactly ten unique Ripple IDs can be earned; the optional Guardian can be seen after eight and is retryable on later windows.
 - Dialogue, journal counters, event fields, reward values, units, and zones match this contract.
 - Fishing and lake travel remain playable without opening the quest journal or accepting any quest.
