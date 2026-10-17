@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "repository": "AventurineDream/TrotLineSim",
+  "review_wait_seconds": 3600,
+  "required_checks": [
+    {
+      "name": "gameplay-tests",
+      "workflow_path": ".github/workflows/validation.yml",
+      "app_slug": "github-actions",
+      "event": "push",
+      "conclusion": "success"
+    }
+  ],
+  "merge_method": "merge",
+  "required_reviewers": [
+    "Amaranth",
+    "Jules"
+  ],
+  "review_identity": "named_agent_not_github_account",
+  "shared_github_accounts_allowed": true,
+  "accepted_review": "head_bound_agent_verdict",
+  "required_verdict": "GREEN",
+  "supplementary_reviewers": [
+    "Codex"
+  ],
+  "excluded_review_signals": [
+    "second-review-pass",
+    "implementing_agent_self_review"
+  ]
+}

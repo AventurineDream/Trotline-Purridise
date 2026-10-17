@@ -17,6 +17,8 @@ Graphics are designed for a **3 GB RAM budget**. Rendering is capped at 1440×81
 
 ## Run
 
+Pull requests follow the [review and CI policy](docs/PR-REVIEW-POLICY.md).
+
 SDL2 and SDL2_ttf have to be on the system. The launcher installs NumPy and ModernGL in the local virtual environment. OpenGL 3.3 is required for the full scenery; a CPU renderer is available when graphics initialization fails.
 
 ```sh
