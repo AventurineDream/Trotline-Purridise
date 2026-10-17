@@ -12,6 +12,7 @@ import math
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from uuid import uuid4
 
 from .data import (
     BAIT_BY_ID,
@@ -49,6 +50,7 @@ from .world import World
 from .boat import BOATS, FUEL_PRICE, THROTTLE_RATE, REVERSE_LIMIT, sailing_speed
 from .weather import wind_at
 from .lakes import LAKES
+from .narrative import NarrativeState, deployment_id
 
 MASK = (1 << 64) - 1
 SAVE_VERSION = 1
@@ -153,6 +155,7 @@ class SetLine:
     zone: str
     hooks: list[Hook]
     snag_minute: float = -999.0
+    line_id: str = field(default_factory=lambda: str(uuid4()))
 
     def fish_on(self) -> int:
         return sum(1 for h in self.hooks if h.catch is not None)
@@ -179,6 +182,7 @@ class SetLine:
             "zone": self.zone,
             "hooks": [h.to_json() for h in self.hooks],
             "snag_minute": self.snag_minute,
+            "line_id": self.line_id,
         }
 
     @classmethod
@@ -188,6 +192,7 @@ class SetLine:
             float(raw["x1"]), float(raw["z1"]), raw["zone"],
             [Hook.from_json(h) for h in raw["hooks"]],
             float(raw.get("snag_minute", -999)),
+            deployment_id(raw.get("line_id")) or str(uuid4()),
         )
 
 
@@ -302,6 +307,7 @@ class State:
     owned: dict = field(default_factory=dict)
     look_paint: dict = field(default_factory=dict)
     journal: dict = field(default_factory=dict)
+    narrative: NarrativeState = field(default_factory=NarrativeState)
     tutorial: int = 0
     traveled: float = 0.0
     time_scale: int = 1
@@ -317,6 +323,7 @@ class State:
     bot_tx: float = 0.0
     bot_tz: float = 0.0
     bot_hooks: int = -1
+    bot_target_line_id: str | None = None
     # A momentary rise where the last fish took. Not saved. Age is real time.
     splash_x: float = 0.0
     splash_z: float = 0.0
@@ -455,7 +462,9 @@ class State:
         self._park(world)
         if self.fuel<0.75:
             self.fuel = 0.75
+        before = self.game_minutes
         self._advance_hours(1,toast=False)
+        self.narrative.active_play_game_minutes += max(0.0, self.game_minutes - before)
         self.toast(f"Tow to {world.landing}: {dollars(fee)}. Lines kept soaking.")
         return None
 
@@ -469,6 +478,7 @@ class State:
         self.minute_acc -= n
         if n <= 0:
             return
+        before = self.game_minutes
         if n > 180:
             hours, n = divmod(n, 60)
             self._advance_hours(hours, toast=False)
@@ -481,6 +491,7 @@ class State:
                 notes.setdefault(line_i, []).append((sp, weight))
                 self.splash_x, self.splash_z = float(x), float(z)
                 self.splash_anim = self.anim
+        self.narrative.active_play_game_minutes += max(0.0, self.game_minutes - before)
         for line_i, items in notes.items():
             zone = self.lines[line_i].zone if line_i < len(self.lines) else "open"
             from .world import zone_label
@@ -894,6 +905,8 @@ class State:
         for catch in fish:
             self.well.append(catch)
         self.lines.pop(line_index)
+        if self.bot_target_line_id == line.line_id:
+            self.bot_target_line_id = None
         self.held.append(HeldLine(line.tier))
         self.toast("Line coiled in the boat.")
         return None
@@ -1071,6 +1084,7 @@ class State:
             "finder": self.finder, "light": self.light,
             "owned": self.owned, "look": self.look_paint,
             "journal": self.journal,
+            "narrative_v1": self.narrative.to_json(),
             "tutorial": self.tutorial, "traveled": round(self.traveled, 1),
             "time_scale": self.time_scale, "muted": self.muted,
             "preferred_bait": self.preferred_bait,
@@ -1081,6 +1095,7 @@ class State:
                 "x": round(self.bot_x, 2), "z": round(self.bot_z, 2),
                 "yaw": round(self.bot_yaw, 4),
                 "tx": round(self.bot_tx, 2), "tz": round(self.bot_tz, 2),
+                "target_line_id": self.bot_target_line_id,
             },
         }
 
@@ -1113,6 +1128,12 @@ class State:
         st.bait = {k: int(v) for k, v in raw["bait"].items()}
         st.held = [HeldLine(t) for t in raw["held"]]
         st.lines = [SetLine.from_json(ln) for ln in raw["lines"]]
+        # Duplicate saved IDs are ambiguous: replace every affected identity so
+        # a historical quest reference can never bind to the wrong deployment.
+        ids = [line.line_id for line in st.lines]
+        for line in st.lines:
+            if ids.count(line.line_id) > 1:
+                line.line_id = str(uuid4())
         st.well = [Catch.from_json(c) for c in raw["well"]]
         st.x, st.z, st.yaw = float(raw["x"]), float(raw["z"]), float(raw["yaw"])
         st.anchored = bool(raw.get("anchored", False))
@@ -1124,6 +1145,7 @@ class State:
         st.owned = raw["owned"]
         st.look_paint = raw["look"]
         st.journal = raw["journal"]
+        st.narrative = NarrativeState.from_json(raw.get("narrative_v1"))
         for sp in SPECIES:
             st.journal.setdefault(sp.id, {"count": 0, "best": 0.0, "zone": "", "bait": "", "band": ""})
         st.tutorial = int(raw.get("tutorial", 4))
@@ -1144,6 +1166,9 @@ class State:
             st.bot_hooks = st.hooked_total
             if not all(math.isfinite(v) for v in (st.bot_x, st.bot_z, st.bot_yaw, st.bot_tx, st.bot_tz)):
                 st.bot_phase = "home"
+            target_id = deployment_id(raw_bot.get("target_line_id"))
+            if st.bot_phase in ("go", "out") and any(line.line_id == target_id for line in st.lines):
+                st.bot_target_line_id = target_id
         st.bind(world)
         safe_x,safe_z,safe_yaw = world.clear_boat_position(st.x,st.z,st.yaw,st.boat_id)
         if (safe_x,safe_z,safe_yaw)!=(st.x,st.z,st.yaw):

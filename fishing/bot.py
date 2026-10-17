@@ -27,6 +27,7 @@ def reset(state) -> None:
     state.bot_x = state.bot_z = 0.0
     state.bot_yaw = 0.0
     state.bot_tx = state.bot_tz = 0.0
+    state.bot_target_line_id = None
 
 
 def status(state) -> str:
@@ -42,6 +43,7 @@ def summon(state, world) -> str | None:
     """Launch or recall. Returns a sound name, or None."""
     if state.bot_phase in ("go", "out"):
         state.bot_phase = "back"
+        state.bot_target_line_id = None
         state.toast("Bot, come on home.")
         return "bot"
     if state.bot_phase == "back":
@@ -56,7 +58,7 @@ def summon(state, world) -> str | None:
     state.bot_z = state.z + fz * 2.4
     if not _afloat(world, state.bot_x, state.bot_z):
         state.bot_x, state.bot_z = state.x, state.z
-    state.bot_tx, state.bot_tz = target
+    state.bot_tx, state.bot_tz, state.bot_target_line_id = target
     state.bot_phase = "go"
     state.bot_yaw = math.atan2(target[0] - state.bot_x, target[1] - state.bot_z)
     if state.bot_hooks < 0:
@@ -93,6 +95,7 @@ def tick(state, world, dt: float) -> str | None:
     leash = math.hypot(state.bot_x - state.x, state.bot_z - state.z)
     if state.bot_phase == "go" and leash > 170.0:
         state.bot_phase = "back"
+        state.bot_target_line_id = None
         state.toast("Bot is turning around. That's far enough.")
     if dist < 0.45:
         if state.bot_phase == "back":
@@ -208,7 +211,7 @@ def _target(state, world):
         mz = (line.z0 + line.z1) * 0.5
         dist = math.hypot(mx - state.x, mz - state.z)
         if dist < best_d and dist < 140.0 and _afloat(world, mx, mz):
-            best = (mx, mz)
+            best = (mx, mz, line.line_id)
             best_d = dist
     if best is not None:
         return best
@@ -217,7 +220,7 @@ def _target(state, world):
         x = state.x + fx * dist
         z = state.z + fz * dist
         if _afloat(world, x, z):
-            return (x, z)
+            return (x, z, None)
     return None
 
 
