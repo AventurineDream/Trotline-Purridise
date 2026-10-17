@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "repository": "AventurineDream/TrotLineSim",
   "review_wait_seconds": 3600,
   "required_checks": [
@@ -13,8 +13,7 @@
   ],
   "merge_method": "merge",
   "required_reviewers": [
-    "Amaranth",
-    "Jules"
+    "Amaranth"
   ],
   "review_identity": "named_agent_not_github_account",
   "shared_github_accounts_allowed": true,
@@ -26,5 +25,8 @@
   "excluded_review_signals": [
     "second-review-pass",
     "implementing_agent_self_review"
+  ],
+  "temporarily_suspended_reviewers": [
+    "Jules"
   ]
 }
