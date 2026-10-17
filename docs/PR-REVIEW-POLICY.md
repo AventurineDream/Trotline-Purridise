@@ -1,14 +1,20 @@
 # PR review and merge policy
 
-The two required reviewers are **Amaranth** and **Jules**. The owner confirmed on
-17 October 2026 that they are separate agents with automations using the owner's
-GitHub account. Their agent identity and review evidence determine which review
-they supplied; separate GitHub logins and formal GitHub approvals are not
-required. The implementing/merging agent cannot supply either review itself.
+The sole required reviewer is **Amaranth**, until the owner changes this policy.
+On 17 October 2026 the owner instructed: "ignore jules. Single reviewer for now
+until i figure something else out". This explicit temporary decision supersedes
+the earlier requirement for both Amaranth and Jules. Do not require, request, or
+escalate missing Jules reviews or Jules authentication while this decision is
+in effect. Preserve previous Jules evidence and notifications as history.
+
+Amaranth may use the owner's GitHub account. Agent identity and review evidence
+determine the review's provenance; a separate GitHub login and a formal GitHub
+approval are not required. The implementing/merging agent cannot supply the
+required review itself.
 
 Codex connector reviews remain useful supplementary evidence. The scheduled
 `second-review-pass` Python script performs syntax and text checks and posts a
-comment. Neither is a substitute for Amaranth's or Jules' substantive review.
+comment. Neither is a substitute for Amaranth's substantive review.
 
 The machine-readable settings are in `.github/merge-policy.json`. The automation
 must enforce all of the following:
@@ -17,12 +23,11 @@ must enforce all of the following:
    and one hour after first observing its current head have elapsed before
    reading its review feedback. Every changed head starts a new review round.
    CI may be inspected immediately so execution failures can be fixed promptly.
-2. Both Amaranth and Jules reviewed the same current head and reported
-   `VERDICT: GREEN`, with no outstanding actionable findings. Record each
-   agent's verdict, full resolved SHA, source comment URL, and known automation
-   provenance separately. A shared GitHub login, including the PR author's,
-   does not disqualify these agent reviews. A login alone does not identify an
-   agent. Missing, ambiguous, stale, failed or incomplete reviews block merge.
+2. Amaranth reviewed the exact current head and reported `VERDICT: GREEN`,
+   with no outstanding actionable findings. Record Amaranth's verdict, full
+   resolved SHA, source comment URL, and known automation provenance. A shared
+   GitHub login, including the PR author's, does not disqualify the review. A login alone does not identify an agent.
+   A missing, ambiguous, stale, failed or incomplete Amaranth review blocks merge.
 3. No actionable review findings, outstanding substantive requests for changes,
    or unresolved blocking review threads remain. Inspect all pages of reviews,
    comments and threads. A green summary alone does not dismiss another
@@ -35,13 +40,13 @@ must enforce all of the following:
    the full headless gameplay/software-rendering self-test. Any additional
    GitHub-required checks must also pass if protection becomes available.
 5. Immediately before merging, re-fetch the open PR and verify the same head,
-   mergeability, both agent verdicts, threads and latest required run. Supply the
+   mergeability, Amaranth's verdict, threads and latest required run. Supply the
    expected head SHA to GitHub's merge API and use the configured normal merge
    commit method. A changed head restarts the one-hour wait.
 
 ## Reviewer comment format
 
-Each reviewer should post its own substantive review, using this header and
+Amaranth should post its own substantive review, using this header and
 actual values, followed by findings and executed/inspection-only validation:
 
 ```text
@@ -51,8 +56,8 @@ VERDICT: GREEN
 <!-- agent-review:v1 {"reviewer":"Amaranth","head_sha":"<full SHA>","verdict":"GREEN"} -->
 ```
 
-Jules uses `Reviewer: Jules` and `"reviewer":"Jules"`. Findings use
-`VERDICT: CHANGES NEEDED` and the matching marker value. These are review results,
+Findings use `VERDICT: CHANGES NEEDED` and the matching marker value. These are
+review results,
 not merge instructions. Reject copied/quoted review text, review requests,
 implementer-written verdicts, and deterministic workflow summaries. Existing
 Amaranth comments may use `Amaranth review of head ...` or the observed
@@ -60,12 +65,10 @@ Amaranth comments may use `Amaranth review of head ...` or the observed
 as Amaranth. A legacy abbreviated SHA must resolve uniquely to the current full
 head; otherwise the result is stale or ambiguous. Record that provenance.
 
-Jules' substantive review runs through its configured reviewer task, which reads
-the actual diff and verifies Amaranth's current-head review. Its native schedule
-is a daily fallback. The hourly follow-through may request one Jules execution
-per head after Amaranth has reviewed it, using the existing authenticated Jules
-UI. Record the session URL and avoid duplicate/running sessions for the same
-head. Do not replace this with a generated script or another scope-summary job.
+The hourly follow-through does not trigger or monitor Jules while its review
+requirement is suspended. The native Jules fallback schedule is paused. Restoring
+a second reviewer requires a new owner decision; the controller cannot invent a
+replacement or restore the requirement on its own.
 
 ## Check-policy verification and follow-through
 
@@ -86,6 +89,7 @@ blocker notices, and starts the next documented ticket only when no PRs,
 including drafts, are open.
 
 Future runs must not weaken this policy to clear a failure. Policy changes
-require owner authorization. The owner's 17 October clarification supersedes
-the earlier assumption that two distinct GitHub accounts and formal approvals
-were required. Both substantive agent reviews remain mandatory.
+require owner authorization. The owner's temporary single-reviewer instruction
+is the authorization for this revision. Amaranth's substantive current-head
+GREEN review, the per-head delay, all actionable findings, required CI, and final
+merge checks remain mandatory.
