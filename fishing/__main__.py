@@ -61,6 +61,8 @@ def selftest(*,software=False) -> int:
     bot_checks(world)
     from .updatechecks import interface_checks, weather_checks
     interface_checks(world)
+    from .test_narrative import narrative_checks
+    narrative_checks()
     renderer = Renderer(world,software=software)
     low = renderer.render(State.new(world, seed=1))
     if low.shape != (renderer.h, renderer.w, 3) or low.dtype != np.uint8:
