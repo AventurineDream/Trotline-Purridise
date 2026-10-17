@@ -1,0 +1,1561 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "name": "V3 Quest Implementation Contract v1",
+      "url": "https://drive.google.com/file/d/1Ahwiz4FDU4BktsPS2KvH9p7dpkh4pSEA/view",
+      "sha256": "4a49f12040f15f1f7cfe25da6ee924e35e5085d4d229a49016e95698b6a767e2"
+    },
+    {
+      "name": "Script-v3.md",
+      "url": "https://drive.google.com/file/d/19XoBsm0SbYQ2Bj6_hc3_qHt7xfs6iu0T/view",
+      "sha256": "3b465861b15919a364ba57b8786e3bee4c3a822e3c927cafbcf3faa64e971694"
+    },
+    {
+      "name": "RelationshipAndQuestFlowmap-v3.md",
+      "url": "https://drive.google.com/file/d/10Pfo5MRg0eR88GDghT3R-ZVSWliyrWi0/view"
+    }
+  ],
+  "adaptations": [
+    "Contract takes precedence over older script wording: q06 uses livewell entry time, q11 uses strict less-than-140-metre range, line soaks use active-play game minutes, and q12 requires player-controlled boat entries.",
+    "Accept, active-progress, ready-wait, and completed-return connective lines are authored for Ticket 3; source greeting, ready, completion, and decline branches are retained."
+  ],
+  "npcs": [
+    {
+      "id": "grandmother_whiskers",
+      "name": "Grandmother Whiskers",
+      "lake_id": "briar",
+      "anchor_id": "briar:landing",
+      "presence": "permanent",
+      "quest_id": "q01_tea_leaves_deep_holes"
+    },
+    {
+      "id": "doc_barnaby",
+      "name": "Doc Barnaby",
+      "lake_id": "cedar",
+      "anchor_id": "cedar:docs_marina_dock",
+      "presence": "permanent",
+      "quest_id": "q02_lonely_star_current"
+    },
+    {
+      "id": "elder_moss",
+      "name": "Elder Moss",
+      "lake_id": "briar",
+      "anchor_id": "briar:cypress",
+      "presence": "day",
+      "quest_id": "q03_unstrung_line"
+    },
+    {
+      "id": "pip_pebble",
+      "name": "Pip & Pebble",
+      "lake_id": "briar",
+      "anchor_id": "briar:flats",
+      "presence": "day",
+      "quest_id": "q04_great_contour_chart"
+    },
+    {
+      "id": "master_cinder",
+      "name": "Master Cinder",
+      "lake_id": "briar",
+      "anchor_id": "briar:deep",
+      "presence": "night",
+      "quest_id": "q05_moonlight_trotlines"
+    },
+    {
+      "id": "willow",
+      "name": "Willow",
+      "lake_id": "briar",
+      "anchor_id": "briar:lilies",
+      "presence": "day",
+      "quest_id": "q06_unrepeatable_sunrise"
+    },
+    {
+      "id": "silas",
+      "name": "Silas",
+      "lake_id": "briar",
+      "anchor_id": "briar:inlet",
+      "presence": "day",
+      "quest_id": "q07_art_of_the_nap"
+    },
+    {
+      "id": "captain_maeve",
+      "name": "Captain Maeve",
+      "lake_id": "cedar",
+      "anchor_id": "cedar:open",
+      "presence": "day",
+      "quest_id": "q08_channel_run"
+    },
+    {
+      "id": "sparky",
+      "name": "Sparky",
+      "lake_id": "cedar",
+      "anchor_id": "cedar:inlet",
+      "presence": "day",
+      "quest_id": "q09_quiet_channel"
+    },
+    {
+      "id": "quill",
+      "name": "Quill",
+      "lake_id": "cedar",
+      "anchor_id": "cedar:flats",
+      "presence": "day",
+      "quest_id": "q10_ballad_lonely_star"
+    },
+    {
+      "id": "dr_alder",
+      "name": "Dr. Alder",
+      "lake_id": "cedar",
+      "anchor_id": "cedar:deep",
+      "presence": "day",
+      "quest_id": "q11_deep_water_drift"
+    },
+    {
+      "id": "patch",
+      "name": "Patch",
+      "lake_id": "cedar",
+      "anchor_id": "cedar:lilies",
+      "presence": "day",
+      "quest_id": "q12_first_voyage"
+    }
+  ],
+  "quests": [
+    {
+      "id": "q01_tea_leaves_deep_holes",
+      "title": "Tea Leaves & Deep Holes",
+      "giver_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q01_tea_leaves_deep_holes:objective",
+        "after_acceptance": true,
+        "type": "line_scout",
+        "zone_id": "briar:lilies",
+        "tier_id": "std",
+        "hook_count": 12,
+        "bait_id": "worm",
+        "set_after_acceptance": true,
+        "scout_range_lt_m": 140
+      },
+      "reward_id": "q01_tea_leaves_deep_holes:reward",
+      "dialogue": {
+        "available": "q01_tea_leaves_deep_holes:dialogue:greeting",
+        "active": "q01_tea_leaves_deep_holes:dialogue:progress",
+        "ready": "q01_tea_leaves_deep_holes:dialogue:ready",
+        "completed": "q01_tea_leaves_deep_holes:dialogue:return"
+      }
+    },
+    {
+      "id": "q02_lonely_star_current",
+      "title": "The Lonely Star Current",
+      "giver_id": "doc_barnaby",
+      "lake_id": "cedar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q02_lonely_star_current:objective",
+        "after_acceptance": true,
+        "type": "line_check",
+        "zone_id": "cedar:rocks",
+        "tier_id": "std",
+        "hook_count": 12,
+        "bait_id": "minnow",
+        "set_after_acceptance": true,
+        "active_soak_game_minutes": 60
+      },
+      "reward_id": "q02_lonely_star_current:reward",
+      "dialogue": {
+        "available": "q02_lonely_star_current:dialogue:greeting",
+        "active": "q02_lonely_star_current:dialogue:progress",
+        "ready": "q02_lonely_star_current:dialogue:ready",
+        "completed": "q02_lonely_star_current:dialogue:return"
+      }
+    },
+    {
+      "id": "q03_unstrung_line",
+      "title": "The Unstrung Line",
+      "giver_id": "elder_moss",
+      "lake_id": "briar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q03_unstrung_line:objective",
+        "after_acceptance": true,
+        "type": "anchor_idle",
+        "zone_id": "briar:cypress",
+        "continuous_game_minutes": 120,
+        "reset_on_interruption": true
+      },
+      "reward_id": "q03_unstrung_line:reward",
+      "dialogue": {
+        "available": "q03_unstrung_line:dialogue:greeting",
+        "active": "q03_unstrung_line:dialogue:progress",
+        "ready": "q03_unstrung_line:dialogue:ready",
+        "completed": "q03_unstrung_line:dialogue:return"
+      }
+    },
+    {
+      "id": "q04_great_contour_chart",
+      "title": "The Great Contour Chart",
+      "giver_id": "pip_pebble",
+      "lake_id": "briar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q04_great_contour_chart:objective",
+        "after_acceptance": true,
+        "type": "scout_report",
+        "zone_id": "briar:flats",
+        "report_delivered": true,
+        "exact_depth_required": false
+      },
+      "reward_id": "q04_great_contour_chart:reward",
+      "dialogue": {
+        "available": "q04_great_contour_chart:dialogue:greeting",
+        "active": "q04_great_contour_chart:dialogue:progress",
+        "ready": "q04_great_contour_chart:dialogue:ready",
+        "completed": "q04_great_contour_chart:dialogue:return"
+      }
+    },
+    {
+      "id": "q05_moonlight_trotlines",
+      "title": "Moonlight Trotlines",
+      "giver_id": "master_cinder",
+      "lake_id": "briar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q05_moonlight_trotlines:objective",
+        "after_acceptance": true,
+        "type": "line_check",
+        "zone_id": "briar:deep",
+        "tier_id": "std",
+        "hook_count": 12,
+        "bait_id": "shad",
+        "set_after_acceptance": true,
+        "active_soak_game_minutes": 60,
+        "set_window": [
+          1200,
+          240
+        ]
+      },
+      "reward_id": "q05_moonlight_trotlines:reward",
+      "dialogue": {
+        "available": "q05_moonlight_trotlines:dialogue:greeting",
+        "active": "q05_moonlight_trotlines:dialogue:progress",
+        "ready": "q05_moonlight_trotlines:dialogue:ready",
+        "completed": "q05_moonlight_trotlines:dialogue:return"
+      }
+    },
+    {
+      "id": "q06_unrepeatable_sunrise",
+      "title": "The Unrepeatable Sunrise",
+      "giver_id": "willow",
+      "lake_id": "briar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q06_unrepeatable_sunrise:objective",
+        "after_acceptance": true,
+        "type": "fish_livewell",
+        "zone_id": "briar:lilies",
+        "bait_id": "worm",
+        "species_id": "golden_shiner",
+        "entry_window": [
+          300,
+          480
+        ],
+        "window_field": "entry_game_minute",
+        "set_after_acceptance": false,
+        "consume_fish": false
+      },
+      "reward_id": "q06_unrepeatable_sunrise:reward",
+      "dialogue": {
+        "available": "q06_unrepeatable_sunrise:dialogue:greeting",
+        "active": "q06_unrepeatable_sunrise:dialogue:progress",
+        "ready": "q06_unrepeatable_sunrise:dialogue:ready",
+        "completed": "q06_unrepeatable_sunrise:dialogue:return"
+      }
+    },
+    {
+      "id": "q07_art_of_the_nap",
+      "title": "The Art of the Nap",
+      "giver_id": "silas",
+      "lake_id": "briar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q07_art_of_the_nap:objective",
+        "after_acceptance": true,
+        "type": "anchor_idle",
+        "zone_id": "briar:inlet",
+        "continuous_game_minutes": 120,
+        "reset_on_interruption": true
+      },
+      "reward_id": "q07_art_of_the_nap:reward",
+      "dialogue": {
+        "available": "q07_art_of_the_nap:dialogue:greeting",
+        "active": "q07_art_of_the_nap:dialogue:progress",
+        "ready": "q07_art_of_the_nap:dialogue:ready",
+        "completed": "q07_art_of_the_nap:dialogue:return"
+      }
+    },
+    {
+      "id": "q08_channel_run",
+      "title": "The Channel Run",
+      "giver_id": "captain_maeve",
+      "lake_id": "cedar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q08_channel_run:objective",
+        "after_acceptance": true,
+        "type": "travel_distance",
+        "zone_id": "cedar:open",
+        "distance_m": 300,
+        "player_controlled": true,
+        "propulsion": [
+          "motor",
+          "sail"
+        ],
+        "count_tow": false,
+        "measurement": "in_zone_path"
+      },
+      "reward_id": "q08_channel_run:reward",
+      "dialogue": {
+        "available": "q08_channel_run:dialogue:greeting",
+        "active": "q08_channel_run:dialogue:progress",
+        "ready": "q08_channel_run:dialogue:ready",
+        "completed": "q08_channel_run:dialogue:return"
+      }
+    },
+    {
+      "id": "q09_quiet_channel",
+      "title": "The Quiet Channel",
+      "giver_id": "sparky",
+      "lake_id": "cedar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q09_quiet_channel:objective",
+        "after_acceptance": true,
+        "type": "line_check",
+        "zone_id": "cedar:inlet",
+        "tier_id": "std",
+        "hook_count": 12,
+        "bait_id": "liver",
+        "set_after_acceptance": true,
+        "active_soak_game_minutes": 60
+      },
+      "reward_id": "q09_quiet_channel:reward",
+      "dialogue": {
+        "available": "q09_quiet_channel:dialogue:greeting",
+        "active": "q09_quiet_channel:dialogue:progress",
+        "ready": "q09_quiet_channel:dialogue:ready",
+        "completed": "q09_quiet_channel:dialogue:return"
+      }
+    },
+    {
+      "id": "q10_ballad_lonely_star",
+      "title": "Ballad of the Lonely Star",
+      "giver_id": "quill",
+      "lake_id": "cedar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q10_ballad_lonely_star:objective",
+        "after_acceptance": true,
+        "type": "visit_zones",
+        "zone_ids": [
+          "cedar:rocks",
+          "cedar:lilies",
+          "cedar:open"
+        ],
+        "ordered": false
+      },
+      "reward_id": "q10_ballad_lonely_star:reward",
+      "dialogue": {
+        "available": "q10_ballad_lonely_star:dialogue:greeting",
+        "active": "q10_ballad_lonely_star:dialogue:progress",
+        "ready": "q10_ballad_lonely_star:dialogue:ready",
+        "completed": "q10_ballad_lonely_star:dialogue:return"
+      }
+    },
+    {
+      "id": "q11_deep_water_drift",
+      "title": "The Deep-Water Drift",
+      "giver_id": "dr_alder",
+      "lake_id": "cedar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q11_deep_water_drift:objective",
+        "after_acceptance": true,
+        "type": "line_scout_check",
+        "zone_id": "cedar:deep",
+        "tier_id": "prem",
+        "hook_count": 18,
+        "bait_id": "shad",
+        "set_after_acceptance": true,
+        "scout_range_lt_m": 140,
+        "active_soak_game_minutes": 60,
+        "scout_before_check": true
+      },
+      "reward_id": "q11_deep_water_drift:reward",
+      "dialogue": {
+        "available": "q11_deep_water_drift:dialogue:greeting",
+        "active": "q11_deep_water_drift:dialogue:progress",
+        "ready": "q11_deep_water_drift:dialogue:ready",
+        "completed": "q11_deep_water_drift:dialogue:return"
+      }
+    },
+    {
+      "id": "q12_first_voyage",
+      "title": "The First Voyage",
+      "giver_id": "patch",
+      "lake_id": "cedar",
+      "prerequisites": [],
+      "objective": {
+        "id": "q12_first_voyage:objective",
+        "after_acceptance": true,
+        "type": "visit_sequence",
+        "zone_ids": [
+          "cedar:landing",
+          "cedar:lilies",
+          "cedar:landing"
+        ],
+        "ordered": true,
+        "movement_cause": "boat",
+        "player_controlled": true
+      },
+      "reward_id": "q12_first_voyage:reward",
+      "dialogue": {
+        "available": "q12_first_voyage:dialogue:greeting",
+        "active": "q12_first_voyage:dialogue:progress",
+        "ready": "q12_first_voyage:dialogue:ready",
+        "completed": "q12_first_voyage:dialogue:return"
+      }
+    }
+  ],
+  "rewards": [
+    {
+      "id": "q01_tea_leaves_deep_holes:reward",
+      "cash": 60,
+      "ripple_id": null
+    },
+    {
+      "id": "q02_lonely_star_current:reward",
+      "cash": 90,
+      "ripple_id": null
+    },
+    {
+      "id": "q03_unstrung_line:reward",
+      "cash": 45,
+      "ripple_id": "ripple_01"
+    },
+    {
+      "id": "q04_great_contour_chart:reward",
+      "cash": 45,
+      "ripple_id": "ripple_02"
+    },
+    {
+      "id": "q05_moonlight_trotlines:reward",
+      "cash": 50,
+      "ripple_id": "ripple_03"
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:reward",
+      "cash": 55,
+      "ripple_id": "ripple_04"
+    },
+    {
+      "id": "q07_art_of_the_nap:reward",
+      "cash": 40,
+      "ripple_id": "ripple_05"
+    },
+    {
+      "id": "q08_channel_run:reward",
+      "cash": 65,
+      "ripple_id": "ripple_06"
+    },
+    {
+      "id": "q09_quiet_channel:reward",
+      "cash": 50,
+      "ripple_id": "ripple_07"
+    },
+    {
+      "id": "q10_ballad_lonely_star:reward",
+      "cash": 45,
+      "ripple_id": "ripple_08"
+    },
+    {
+      "id": "q11_deep_water_drift:reward",
+      "cash": 60,
+      "ripple_id": "ripple_09"
+    },
+    {
+      "id": "q12_first_voyage:reward",
+      "cash": 50,
+      "ripple_id": "ripple_10"
+    }
+  ],
+  "dialogue": [
+    {
+      "id": "q01_tea_leaves_deep_holes:dialogue:greeting",
+      "quest_id": "q01_tea_leaves_deep_holes",
+      "speaker_id": "grandmother_whiskers",
+      "text": "Ah, welcome back, dear. The lilies are holding the morning very gently.",
+      "next": "q01_tea_leaves_deep_holes:dialogue:offer"
+    },
+    {
+      "id": "q01_tea_leaves_deep_holes:dialogue:offer",
+      "quest_id": "q01_tea_leaves_deep_holes",
+      "speaker_id": "grandmother_whiskers",
+      "text": "Set a 12-hook line with nightcrawlers in Lily cove. Get close enough that it is Bot’s nearest line less than 140 game metres from the boat, send him with B, and receive his ordinary depth and ground report. The lake has no need to be measured twice.",
+      "choices": [
+        {
+          "id": "q01_tea_leaves_deep_holes:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q01_tea_leaves_deep_holes:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q01_tea_leaves_deep_holes:choice:decline",
+          "text": "Maybe later.",
+          "target": "q01_tea_leaves_deep_holes:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q01_tea_leaves_deep_holes:dialogue:accept",
+      "quest_id": "q01_tea_leaves_deep_holes",
+      "speaker_id": "grandmother_whiskers",
+      "text": "Then take your time, dear. Bot and the lilies will be good company.",
+      "next": null
+    },
+    {
+      "id": "q01_tea_leaves_deep_holes:dialogue:decline",
+      "quest_id": "q01_tea_leaves_deep_holes",
+      "speaker_id": "grandmother_whiskers",
+      "text": "Of course. The tea will be warm when you’re ready.",
+      "next": null
+    },
+    {
+      "id": "q01_tea_leaves_deep_holes:dialogue:progress",
+      "quest_id": "q01_tea_leaves_deep_holes",
+      "speaker_id": "grandmother_whiskers",
+      "text": "Set a new 12-hook nightcrawler line in Lily cove, then receive Bot’s report for that same line. It must be his nearest line, strictly less than 140 game metres away at launch.",
+      "next": null
+    },
+    {
+      "id": "q01_tea_leaves_deep_holes:dialogue:ready",
+      "quest_id": "q01_tea_leaves_deep_holes",
+      "speaker_id": "grandmother_whiskers",
+      "text": "You let old ways and a useful little helper share the same water.",
+      "choices": [
+        {
+          "id": "q01_tea_leaves_deep_holes:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q01_tea_leaves_deep_holes:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q01_tea_leaves_deep_holes:choice:later",
+          "text": "I’ll come back.",
+          "target": "q01_tea_leaves_deep_holes:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q01_tea_leaves_deep_holes:dialogue:ready_wait",
+      "quest_id": "q01_tea_leaves_deep_holes",
+      "speaker_id": "grandmother_whiskers",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q01_tea_leaves_deep_holes:dialogue:completion",
+      "quest_id": "q01_tea_leaves_deep_holes",
+      "speaker_id": "grandmother_whiskers",
+      "text": "Here is $60 for the careful work. I’ll remember how kindly you listened.",
+      "next": null
+    },
+    {
+      "id": "q01_tea_leaves_deep_holes:dialogue:return",
+      "quest_id": "q01_tea_leaves_deep_holes",
+      "speaker_id": "grandmother_whiskers",
+      "text": "You let old ways and a useful little helper share the same water. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q02_lonely_star_current:dialogue:greeting",
+      "quest_id": "q02_lonely_star_current",
+      "speaker_id": "doc_barnaby",
+      "text": "Welcome to Doc’s Lonely Star Marina, Skipper. Tie her easy; that current likes to tug.",
+      "next": "q02_lonely_star_current:dialogue:offer"
+    },
+    {
+      "id": "q02_lonely_star_current:dialogue:offer",
+      "quest_id": "q02_lonely_star_current",
+      "speaker_id": "doc_barnaby",
+      "text": "Set a 12-hook line with live minnows at Dam riprap. Give it 60 game minutes of active play, check that same line, and come tell me how the water treated it. Time while the game is closed does not count.",
+      "choices": [
+        {
+          "id": "q02_lonely_star_current:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q02_lonely_star_current:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q02_lonely_star_current:choice:decline",
+          "text": "Maybe later.",
+          "target": "q02_lonely_star_current:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q02_lonely_star_current:dialogue:accept",
+      "quest_id": "q02_lonely_star_current",
+      "speaker_id": "doc_barnaby",
+      "text": "Good. Mind that same line, Skipper. I will be here at the marina.",
+      "next": null
+    },
+    {
+      "id": "q02_lonely_star_current:dialogue:decline",
+      "quest_id": "q02_lonely_star_current",
+      "speaker_id": "doc_barnaby",
+      "text": "No rush. The dock isn’t going anywhere.",
+      "next": null
+    },
+    {
+      "id": "q02_lonely_star_current:dialogue:progress",
+      "quest_id": "q02_lonely_star_current",
+      "speaker_id": "doc_barnaby",
+      "text": "Your new 12-hook minnow line at Dam riprap needs 60 game minutes of active play before you check that same deployment. Time while the game is closed does not count.",
+      "next": null
+    },
+    {
+      "id": "q02_lonely_star_current:dialogue:ready",
+      "quest_id": "q02_lonely_star_current",
+      "speaker_id": "doc_barnaby",
+      "text": "A line, a little patience, and a proper check. That’s good seamanship.",
+      "choices": [
+        {
+          "id": "q02_lonely_star_current:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q02_lonely_star_current:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q02_lonely_star_current:choice:later",
+          "text": "I’ll come back.",
+          "target": "q02_lonely_star_current:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q02_lonely_star_current:dialogue:ready_wait",
+      "quest_id": "q02_lonely_star_current",
+      "speaker_id": "doc_barnaby",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q02_lonely_star_current:dialogue:completion",
+      "quest_id": "q02_lonely_star_current",
+      "speaker_id": "doc_barnaby",
+      "text": "You earned $90, Skipper. The Cedar current will teach you something new every trip.",
+      "next": null
+    },
+    {
+      "id": "q02_lonely_star_current:dialogue:return",
+      "quest_id": "q02_lonely_star_current",
+      "speaker_id": "doc_barnaby",
+      "text": "A line, a little patience, and a proper check. That’s good seamanship. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q03_unstrung_line:dialogue:greeting",
+      "quest_id": "q03_unstrung_line",
+      "speaker_id": "elder_moss",
+      "text": "The water has been waiting all morning. It is very good at that.",
+      "next": "q03_unstrung_line:dialogue:offer"
+    },
+    {
+      "id": "q03_unstrung_line:dialogue:offer",
+      "quest_id": "q03_unstrung_line",
+      "speaker_id": "elder_moss",
+      "text": "Anchor in Cypress shore with your engine idle for 120 continuous game minutes. Let the water set the pace.",
+      "choices": [
+        {
+          "id": "q03_unstrung_line:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q03_unstrung_line:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q03_unstrung_line:choice:decline",
+          "text": "Maybe later.",
+          "target": "q03_unstrung_line:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q03_unstrung_line:dialogue:accept",
+      "quest_id": "q03_unstrung_line",
+      "speaker_id": "elder_moss",
+      "text": "Let the engine rest, and let the water have its say.",
+      "next": null
+    },
+    {
+      "id": "q03_unstrung_line:dialogue:decline",
+      "quest_id": "q03_unstrung_line",
+      "speaker_id": "elder_moss",
+      "text": "The lake keeps time without a clock. Return whenever you wish.",
+      "next": null
+    },
+    {
+      "id": "q03_unstrung_line:dialogue:progress",
+      "quest_id": "q03_unstrung_line",
+      "speaker_id": "elder_moss",
+      "text": "Stay anchored in Cypress shore with the engine idle for 120 continuous game minutes. Moving away, unanchoring, or running the engine starts the count over.",
+      "next": null
+    },
+    {
+      "id": "q03_unstrung_line:dialogue:ready",
+      "quest_id": "q03_unstrung_line",
+      "speaker_id": "elder_moss",
+      "text": "The stillness did not ask you to stop being a skipper. It only gave you room to notice.",
+      "choices": [
+        {
+          "id": "q03_unstrung_line:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q03_unstrung_line:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q03_unstrung_line:choice:later",
+          "text": "I’ll come back.",
+          "target": "q03_unstrung_line:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q03_unstrung_line:dialogue:ready_wait",
+      "quest_id": "q03_unstrung_line",
+      "speaker_id": "elder_moss",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q03_unstrung_line:dialogue:completion",
+      "quest_id": "q03_unstrung_line",
+      "speaker_id": "elder_moss",
+      "text": "Your $45 is ready, and the first Ripple is yours.",
+      "next": null
+    },
+    {
+      "id": "q03_unstrung_line:dialogue:return",
+      "quest_id": "q03_unstrung_line",
+      "speaker_id": "elder_moss",
+      "text": "The stillness did not ask you to stop being a skipper. It only gave you room to notice. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q04_great_contour_chart:dialogue:greeting",
+      "quest_id": "q04_great_contour_chart",
+      "speaker_id": "pip_pebble",
+      "text": "Pip: “We’ve drawn every bend in the North flats!” Pebble: “And we still have room for one more!”",
+      "next": "q04_great_contour_chart:dialogue:offer"
+    },
+    {
+      "id": "q04_great_contour_chart:dialogue:offer",
+      "quest_id": "q04_great_contour_chart",
+      "speaker_id": "pip_pebble",
+      "text": "Pip: “Ask Bot to scout in the North flats and bring back his depth report.” Pebble: “A depth range is fine. Maps are about paying attention!”",
+      "choices": [
+        {
+          "id": "q04_great_contour_chart:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q04_great_contour_chart:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q04_great_contour_chart:choice:decline",
+          "text": "Maybe later.",
+          "target": "q04_great_contour_chart:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q04_great_contour_chart:dialogue:accept",
+      "quest_id": "q04_great_contour_chart",
+      "speaker_id": "pip_pebble",
+      "text": "Pip: We will save a space! Pebble: Bring back what Bot notices!",
+      "next": null
+    },
+    {
+      "id": "q04_great_contour_chart:dialogue:decline",
+      "quest_id": "q04_great_contour_chart",
+      "speaker_id": "pip_pebble",
+      "text": "Pip: Maybe later! Pebble: We’ll keep the pencil sharp!",
+      "next": null
+    },
+    {
+      "id": "q04_great_contour_chart:dialogue:progress",
+      "quest_id": "q04_great_contour_chart",
+      "speaker_id": "pip_pebble",
+      "text": "Receive Bot’s scout report from the North flats. His ordinary depth class is enough; a finder is optional.",
+      "next": null
+    },
+    {
+      "id": "q04_great_contour_chart:dialogue:ready",
+      "quest_id": "q04_great_contour_chart",
+      "speaker_id": "pip_pebble",
+      "text": "Pebble: “Our sketch and Bot’s report can both be useful!” Pip: “We’re keeping the whole map!”",
+      "choices": [
+        {
+          "id": "q04_great_contour_chart:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q04_great_contour_chart:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q04_great_contour_chart:choice:later",
+          "text": "I’ll come back.",
+          "target": "q04_great_contour_chart:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q04_great_contour_chart:dialogue:ready_wait",
+      "quest_id": "q04_great_contour_chart",
+      "speaker_id": "pip_pebble",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q04_great_contour_chart:dialogue:completion",
+      "quest_id": "q04_great_contour_chart",
+      "speaker_id": "pip_pebble",
+      "text": "Here’s $45 and Ripple two. We’re adding a new mark to our chart!",
+      "next": null
+    },
+    {
+      "id": "q04_great_contour_chart:dialogue:return",
+      "quest_id": "q04_great_contour_chart",
+      "speaker_id": "pip_pebble",
+      "text": "Pebble: “Our sketch and Bot’s report can both be useful!” Pip: “We’re keeping the whole map!” Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q05_moonlight_trotlines:dialogue:greeting",
+      "quest_id": "q05_moonlight_trotlines",
+      "speaker_id": "master_cinder",
+      "text": "Shh. The dark is only the lake resting its eyes.",
+      "next": "q05_moonlight_trotlines:dialogue:offer"
+    },
+    {
+      "id": "q05_moonlight_trotlines:dialogue:offer",
+      "quest_id": "q05_moonlight_trotlines",
+      "speaker_id": "master_cinder",
+      "text": "Set a 12-hook line with cut shad in the Deep hole between 20:00 and 04:00. Let it soak for 60 game minutes of active play, then check it. Your spotlight is optional.",
+      "choices": [
+        {
+          "id": "q05_moonlight_trotlines:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q05_moonlight_trotlines:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q05_moonlight_trotlines:choice:decline",
+          "text": "Maybe later.",
+          "target": "q05_moonlight_trotlines:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q05_moonlight_trotlines:dialogue:accept",
+      "quest_id": "q05_moonlight_trotlines",
+      "speaker_id": "master_cinder",
+      "text": "Then meet the Deep hole while the night window is open.",
+      "next": null
+    },
+    {
+      "id": "q05_moonlight_trotlines:dialogue:decline",
+      "quest_id": "q05_moonlight_trotlines",
+      "speaker_id": "master_cinder",
+      "text": "I’ll be here when the moon returns to this part of the sky.",
+      "next": null
+    },
+    {
+      "id": "q05_moonlight_trotlines:dialogue:progress",
+      "quest_id": "q05_moonlight_trotlines",
+      "speaker_id": "master_cinder",
+      "text": "Set a new 12-hook cut-shad line in the Deep hole between 20:00 and 04:00. Give that deployment 60 game minutes of active play, then check it. No spotlight is required.",
+      "next": null
+    },
+    {
+      "id": "q05_moonlight_trotlines:dialogue:ready",
+      "quest_id": "q05_moonlight_trotlines",
+      "speaker_id": "master_cinder",
+      "text": "You met the deep water on its own quiet terms.",
+      "choices": [
+        {
+          "id": "q05_moonlight_trotlines:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q05_moonlight_trotlines:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q05_moonlight_trotlines:choice:later",
+          "text": "I’ll come back.",
+          "target": "q05_moonlight_trotlines:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q05_moonlight_trotlines:dialogue:ready_wait",
+      "quest_id": "q05_moonlight_trotlines",
+      "speaker_id": "master_cinder",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q05_moonlight_trotlines:dialogue:completion",
+      "quest_id": "q05_moonlight_trotlines",
+      "speaker_id": "master_cinder",
+      "text": "Take $50 and the third Ripple. Night is a place to know, not a thing to fear.",
+      "next": null
+    },
+    {
+      "id": "q05_moonlight_trotlines:dialogue:return",
+      "quest_id": "q05_moonlight_trotlines",
+      "speaker_id": "master_cinder",
+      "text": "You met the deep water on its own quiet terms. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:dialogue:greeting",
+      "quest_id": "q06_unrepeatable_sunrise",
+      "speaker_id": "willow",
+      "text": "The lily pads catch a different color every morning.",
+      "next": "q06_unrepeatable_sunrise:dialogue:offer"
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:dialogue:offer",
+      "quest_id": "q06_unrepeatable_sunrise",
+      "speaker_id": "willow",
+      "text": "Bring a golden shiner into your livewell from a nightcrawler line set in Lily cove. Transfer it into the livewell between 05:00 and 08:00 game time after accepting; when it took the hook does not matter. You can keep the fish.",
+      "choices": [
+        {
+          "id": "q06_unrepeatable_sunrise:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q06_unrepeatable_sunrise:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q06_unrepeatable_sunrise:choice:decline",
+          "text": "Maybe later.",
+          "target": "q06_unrepeatable_sunrise:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:dialogue:accept",
+      "quest_id": "q06_unrepeatable_sunrise",
+      "speaker_id": "willow",
+      "text": "I will be watching for the next dawn. Keep the fish when you find it.",
+      "next": null
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:dialogue:decline",
+      "quest_id": "q06_unrepeatable_sunrise",
+      "speaker_id": "willow",
+      "text": "The next dawn will have its own colors.",
+      "next": null
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:dialogue:progress",
+      "quest_id": "q06_unrepeatable_sunrise",
+      "speaker_id": "willow",
+      "text": "Transfer a golden shiner into the livewell from a nightcrawler line set in Lily cove, between 05:00 and 08:00. The hook time does not matter; the livewell entry must follow acceptance. Keep your fish.",
+      "next": null
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:dialogue:ready",
+      "quest_id": "q06_unrepeatable_sunrise",
+      "speaker_id": "willow",
+      "text": "Bot may have the depth and bait right. You noticed the light.",
+      "choices": [
+        {
+          "id": "q06_unrepeatable_sunrise:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q06_unrepeatable_sunrise:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q06_unrepeatable_sunrise:choice:later",
+          "text": "I’ll come back.",
+          "target": "q06_unrepeatable_sunrise:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:dialogue:ready_wait",
+      "quest_id": "q06_unrepeatable_sunrise",
+      "speaker_id": "willow",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:dialogue:completion",
+      "quest_id": "q06_unrepeatable_sunrise",
+      "speaker_id": "willow",
+      "text": "Here’s $55 and Ripple four. I’ll remember this sunrise in my own way.",
+      "next": null
+    },
+    {
+      "id": "q06_unrepeatable_sunrise:dialogue:return",
+      "quest_id": "q06_unrepeatable_sunrise",
+      "speaker_id": "willow",
+      "text": "Bot may have the depth and bait right. You noticed the light. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q07_art_of_the_nap:dialogue:greeting",
+      "quest_id": "q07_art_of_the_nap",
+      "speaker_id": "silas",
+      "text": "Mmm. You look like you could use a quiet hour.",
+      "next": "q07_art_of_the_nap:dialogue:offer"
+    },
+    {
+      "id": "q07_art_of_the_nap:dialogue:offer",
+      "quest_id": "q07_art_of_the_nap",
+      "speaker_id": "silas",
+      "text": "Anchor in Creek inlet with the engine idle for 120 continuous game minutes. Lines can keep soaking while we rest.",
+      "choices": [
+        {
+          "id": "q07_art_of_the_nap:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q07_art_of_the_nap:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q07_art_of_the_nap:choice:decline",
+          "text": "Maybe later.",
+          "target": "q07_art_of_the_nap:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q07_art_of_the_nap:dialogue:accept",
+      "quest_id": "q07_art_of_the_nap",
+      "speaker_id": "silas",
+      "text": "You have time. Settle your anchor, and let the lines keep soaking.",
+      "next": null
+    },
+    {
+      "id": "q07_art_of_the_nap:dialogue:decline",
+      "quest_id": "q07_art_of_the_nap",
+      "speaker_id": "silas",
+      "text": "Anytime. I’ll be right around here, drifting.",
+      "next": null
+    },
+    {
+      "id": "q07_art_of_the_nap:dialogue:progress",
+      "quest_id": "q07_art_of_the_nap",
+      "speaker_id": "silas",
+      "text": "Stay anchored in Creek inlet with the engine idle for 120 continuous game minutes. An interruption restarts the count. Your fishing can continue.",
+      "next": null
+    },
+    {
+      "id": "q07_art_of_the_nap:dialogue:ready",
+      "quest_id": "q07_art_of_the_nap",
+      "speaker_id": "silas",
+      "text": "There. Nothing hurried away while you were still.",
+      "choices": [
+        {
+          "id": "q07_art_of_the_nap:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q07_art_of_the_nap:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q07_art_of_the_nap:choice:later",
+          "text": "I’ll come back.",
+          "target": "q07_art_of_the_nap:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q07_art_of_the_nap:dialogue:ready_wait",
+      "quest_id": "q07_art_of_the_nap",
+      "speaker_id": "silas",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q07_art_of_the_nap:dialogue:completion",
+      "quest_id": "q07_art_of_the_nap",
+      "speaker_id": "silas",
+      "text": "That earns $40 and the fifth Ripple. Now, if you’ll excuse me, I’ve got a nap to finish.",
+      "next": null
+    },
+    {
+      "id": "q07_art_of_the_nap:dialogue:return",
+      "quest_id": "q07_art_of_the_nap",
+      "speaker_id": "silas",
+      "text": "There. Nothing hurried away while you were still. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q08_channel_run:dialogue:greeting",
+      "quest_id": "q08_channel_run",
+      "speaker_id": "captain_maeve",
+      "text": "Good to see you, Skipper. Give Cedar open water a little respect and she’ll give it back.",
+      "next": "q08_channel_run:dialogue:offer"
+    },
+    {
+      "id": "q08_channel_run:dialogue:offer",
+      "quest_id": "q08_channel_run",
+      "speaker_id": "captain_maeve",
+      "text": "Travel 300 game metres under your own power within Cedar open water. Your motor or sail will do; a tow won’t count.",
+      "choices": [
+        {
+          "id": "q08_channel_run:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q08_channel_run:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q08_channel_run:choice:decline",
+          "text": "Maybe later.",
+          "target": "q08_channel_run:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q08_channel_run:dialogue:accept",
+      "quest_id": "q08_channel_run",
+      "speaker_id": "captain_maeve",
+      "text": "Choose your course, Skipper. Every metre in open water counts.",
+      "next": null
+    },
+    {
+      "id": "q08_channel_run:dialogue:decline",
+      "quest_id": "q08_channel_run",
+      "speaker_id": "captain_maeve",
+      "text": "A captain chooses her moment. I’ll see you out there.",
+      "next": null
+    },
+    {
+      "id": "q08_channel_run:dialogue:progress",
+      "quest_id": "q08_channel_run",
+      "speaker_id": "captain_maeve",
+      "text": "Accumulate 300 game metres of actual travel inside Cedar open water using your motor or sail. Outside portions and tow movement do not count.",
+      "next": null
+    },
+    {
+      "id": "q08_channel_run:dialogue:ready",
+      "quest_id": "q08_channel_run",
+      "speaker_id": "captain_maeve",
+      "text": "You kept the boat moving and chose your own line. That’s seamanship.",
+      "choices": [
+        {
+          "id": "q08_channel_run:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q08_channel_run:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q08_channel_run:choice:later",
+          "text": "I’ll come back.",
+          "target": "q08_channel_run:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q08_channel_run:dialogue:ready_wait",
+      "quest_id": "q08_channel_run",
+      "speaker_id": "captain_maeve",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q08_channel_run:dialogue:completion",
+      "quest_id": "q08_channel_run",
+      "speaker_id": "captain_maeve",
+      "text": "$65 and Ripple six. Bot may read the water, but you steered the course.",
+      "next": null
+    },
+    {
+      "id": "q08_channel_run:dialogue:return",
+      "quest_id": "q08_channel_run",
+      "speaker_id": "captain_maeve",
+      "text": "You kept the boat moving and chose your own line. That’s seamanship. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q09_quiet_channel:dialogue:greeting",
+      "quest_id": "q09_quiet_channel",
+      "speaker_id": "sparky",
+      "text": "I had three plans for this channel. Then the water asked for quiet.",
+      "next": "q09_quiet_channel:dialogue:offer"
+    },
+    {
+      "id": "q09_quiet_channel:dialogue:offer",
+      "quest_id": "q09_quiet_channel",
+      "speaker_id": "sparky",
+      "text": "Set a 12-hook chicken-liver line in Creek channels. Leave it for 60 game minutes of active play, then check that line. No extra machinery needed.",
+      "choices": [
+        {
+          "id": "q09_quiet_channel:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q09_quiet_channel:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q09_quiet_channel:choice:decline",
+          "text": "Maybe later.",
+          "target": "q09_quiet_channel:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q09_quiet_channel:dialogue:accept",
+      "quest_id": "q09_quiet_channel",
+      "speaker_id": "sparky",
+      "text": "One line, one quiet plan. I will wait here in the channel.",
+      "next": null
+    },
+    {
+      "id": "q09_quiet_channel:dialogue:decline",
+      "quest_id": "q09_quiet_channel",
+      "speaker_id": "sparky",
+      "text": "All good. I’ll keep the tools put away.",
+      "next": null
+    },
+    {
+      "id": "q09_quiet_channel:dialogue:progress",
+      "quest_id": "q09_quiet_channel",
+      "speaker_id": "sparky",
+      "text": "Check the same new 12-hook chicken-liver line in Creek channels after 60 game minutes of active play. Time while the game is closed does not count.",
+      "next": null
+    },
+    {
+      "id": "q09_quiet_channel:dialogue:ready",
+      "quest_id": "q09_quiet_channel",
+      "speaker_id": "sparky",
+      "text": "One steady plan, one quiet channel. I think I finally heard the point.",
+      "choices": [
+        {
+          "id": "q09_quiet_channel:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q09_quiet_channel:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q09_quiet_channel:choice:later",
+          "text": "I’ll come back.",
+          "target": "q09_quiet_channel:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q09_quiet_channel:dialogue:ready_wait",
+      "quest_id": "q09_quiet_channel",
+      "speaker_id": "sparky",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q09_quiet_channel:dialogue:completion",
+      "quest_id": "q09_quiet_channel",
+      "speaker_id": "sparky",
+      "text": "Take $50 and Ripple seven. Turns out balance can be beautifully simple.",
+      "next": null
+    },
+    {
+      "id": "q09_quiet_channel:dialogue:return",
+      "quest_id": "q09_quiet_channel",
+      "speaker_id": "sparky",
+      "text": "One steady plan, one quiet channel. I think I finally heard the point. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q10_ballad_lonely_star:dialogue:greeting",
+      "quest_id": "q10_ballad_lonely_star",
+      "speaker_id": "quill",
+      "text": "The water carries a tune, even when no one is recording it.",
+      "next": "q10_ballad_lonely_star:dialogue:offer"
+    },
+    {
+      "id": "q10_ballad_lonely_star:dialogue:offer",
+      "quest_id": "q10_ballad_lonely_star",
+      "speaker_id": "quill",
+      "text": "Visit Dam riprap, Clear Creek coves, and Cedar open water in any order. Just let your own ears and eyes do the traveling.",
+      "choices": [
+        {
+          "id": "q10_ballad_lonely_star:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q10_ballad_lonely_star:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q10_ballad_lonely_star:choice:decline",
+          "text": "Maybe later.",
+          "target": "q10_ballad_lonely_star:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q10_ballad_lonely_star:dialogue:accept",
+      "quest_id": "q10_ballad_lonely_star",
+      "speaker_id": "quill",
+      "text": "Take the verses in whatever order the water offers them.",
+      "next": null
+    },
+    {
+      "id": "q10_ballad_lonely_star:dialogue:decline",
+      "quest_id": "q10_ballad_lonely_star",
+      "speaker_id": "quill",
+      "text": "No verse is lost by waiting.",
+      "next": null
+    },
+    {
+      "id": "q10_ballad_lonely_star:dialogue:progress",
+      "quest_id": "q10_ballad_lonely_star",
+      "speaker_id": "quill",
+      "text": "Enter Dam riprap, Clear Creek coves, and Cedar open water after accepting, in any order. I will be at the Upper lake flats for the hand-in.",
+      "next": null
+    },
+    {
+      "id": "q10_ballad_lonely_star:dialogue:ready",
+      "quest_id": "q10_ballad_lonely_star",
+      "speaker_id": "quill",
+      "text": "Three places, three verses. I can already hear how they belong together.",
+      "choices": [
+        {
+          "id": "q10_ballad_lonely_star:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q10_ballad_lonely_star:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q10_ballad_lonely_star:choice:later",
+          "text": "I’ll come back.",
+          "target": "q10_ballad_lonely_star:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q10_ballad_lonely_star:dialogue:ready_wait",
+      "quest_id": "q10_ballad_lonely_star",
+      "speaker_id": "quill",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q10_ballad_lonely_star:dialogue:completion",
+      "quest_id": "q10_ballad_lonely_star",
+      "speaker_id": "quill",
+      "text": "Here’s $45 and Ripple eight. The song stays in our memories.",
+      "next": null
+    },
+    {
+      "id": "q10_ballad_lonely_star:dialogue:return",
+      "quest_id": "q10_ballad_lonely_star",
+      "speaker_id": "quill",
+      "text": "Three places, three verses. I can already hear how they belong together. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q11_deep_water_drift:dialogue:greeting",
+      "quest_id": "q11_deep_water_drift",
+      "speaker_id": "dr_alder",
+      "text": "Good day, Skipper. Let us ask the deep water one patient question.",
+      "next": "q11_deep_water_drift:dialogue:offer"
+    },
+    {
+      "id": "q11_deep_water_drift:dialogue:offer",
+      "quest_id": "q11_deep_water_drift",
+      "speaker_id": "dr_alder",
+      "text": "Set an 18-hook line with cut shad in the Southern basin. Make it Bot’s nearest line strictly less than 140 game metres away, send him with B for his usual report, wait 60 game minutes of active play, then check that same line. A depth class is enough.",
+      "choices": [
+        {
+          "id": "q11_deep_water_drift:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q11_deep_water_drift:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q11_deep_water_drift:choice:decline",
+          "text": "Maybe later.",
+          "target": "q11_deep_water_drift:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q11_deep_water_drift:dialogue:accept",
+      "quest_id": "q11_deep_water_drift",
+      "speaker_id": "dr_alder",
+      "text": "Let us keep the line, the report, and the patient check together.",
+      "next": null
+    },
+    {
+      "id": "q11_deep_water_drift:dialogue:decline",
+      "quest_id": "q11_deep_water_drift",
+      "speaker_id": "dr_alder",
+      "text": "Of course. There is no deadline in the lake’s calendar.",
+      "next": null
+    },
+    {
+      "id": "q11_deep_water_drift:dialogue:progress",
+      "quest_id": "q11_deep_water_drift",
+      "speaker_id": "dr_alder",
+      "text": "Set a new 18-hook cut-shad line in the Southern basin. Receive Bot’s report for that same deployment, then check it after 60 game minutes of active play. At launch it must be his nearest line, strictly less than 140 game metres away.",
+      "next": null
+    },
+    {
+      "id": "q11_deep_water_drift:dialogue:ready",
+      "quest_id": "q11_deep_water_drift",
+      "speaker_id": "dr_alder",
+      "text": "The observation and the waiting both belong in the record.",
+      "choices": [
+        {
+          "id": "q11_deep_water_drift:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q11_deep_water_drift:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q11_deep_water_drift:choice:later",
+          "text": "I’ll come back.",
+          "target": "q11_deep_water_drift:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q11_deep_water_drift:dialogue:ready_wait",
+      "quest_id": "q11_deep_water_drift",
+      "speaker_id": "dr_alder",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q11_deep_water_drift:dialogue:completion",
+      "quest_id": "q11_deep_water_drift",
+      "speaker_id": "dr_alder",
+      "text": "You’ve earned $60 and Ripple nine. Data can be modest and still be useful.",
+      "next": null
+    },
+    {
+      "id": "q11_deep_water_drift:dialogue:return",
+      "quest_id": "q11_deep_water_drift",
+      "speaker_id": "dr_alder",
+      "text": "The observation and the waiting both belong in the record. Thank you for coming by again, Skipper.",
+      "next": null
+    },
+    {
+      "id": "q12_first_voyage:dialogue:greeting",
+      "quest_id": "q12_first_voyage",
+      "speaker_id": "patch",
+      "text": "I made a little route on my map! Want to see if you can follow it?",
+      "next": "q12_first_voyage:dialogue:offer"
+    },
+    {
+      "id": "q12_first_voyage:dialogue:offer",
+      "quest_id": "q12_first_voyage",
+      "speaker_id": "patch",
+      "text": "After accepting, enter Cedar Landing, travel to Clear Creek coves, then return to Cedar Landing under your own boat controls. Tows and placement on loading or lake travel do not count. Any of your boats can make the trip.",
+      "choices": [
+        {
+          "id": "q12_first_voyage:choice:accept",
+          "text": "I’ll give it a try.",
+          "target": "q12_first_voyage:dialogue:accept",
+          "action": "accept"
+        },
+        {
+          "id": "q12_first_voyage:choice:decline",
+          "text": "Maybe later.",
+          "target": "q12_first_voyage:dialogue:decline",
+          "action": "decline"
+        }
+      ]
+    },
+    {
+      "id": "q12_first_voyage:dialogue:accept",
+      "quest_id": "q12_first_voyage",
+      "speaker_id": "patch",
+      "text": "Start with a fresh entry into Cedar Landing. I will be here by the coves!",
+      "next": null
+    },
+    {
+      "id": "q12_first_voyage:dialogue:decline",
+      "quest_id": "q12_first_voyage",
+      "speaker_id": "patch",
+      "text": "That’s okay. We can sail the route another time.",
+      "next": null
+    },
+    {
+      "id": "q12_first_voyage:dialogue:progress",
+      "quest_id": "q12_first_voyage",
+      "speaker_id": "patch",
+      "text": "Enter Cedar Landing, then Clear Creek coves, then Cedar Landing again under your own boat controls. Tows, loading, and lake-travel placement do not count as entries.",
+      "next": null
+    },
+    {
+      "id": "q12_first_voyage:dialogue:ready",
+      "quest_id": "q12_first_voyage",
+      "speaker_id": "patch",
+      "text": "You found the cove and came safely back. That feels like a first voyage to me.",
+      "choices": [
+        {
+          "id": "q12_first_voyage:choice:turn_in",
+          "text": "Here’s how it went.",
+          "target": "q12_first_voyage:dialogue:completion",
+          "action": "turn_in"
+        },
+        {
+          "id": "q12_first_voyage:choice:later",
+          "text": "I’ll come back.",
+          "target": "q12_first_voyage:dialogue:ready_wait",
+          "action": "close"
+        }
+      ]
+    },
+    {
+      "id": "q12_first_voyage:dialogue:ready_wait",
+      "quest_id": "q12_first_voyage",
+      "speaker_id": "patch",
+      "text": "Your work is remembered. Come back when you are ready to talk.",
+      "next": null
+    },
+    {
+      "id": "q12_first_voyage:dialogue:completion",
+      "quest_id": "q12_first_voyage",
+      "speaker_id": "patch",
+      "text": "Here’s $50 and Ripple ten. I’ll draw your route beside mine!",
+      "next": null
+    },
+    {
+      "id": "q12_first_voyage:dialogue:return",
+      "quest_id": "q12_first_voyage",
+      "speaker_id": "patch",
+      "text": "You found the cove and came safely back. That feels like a first voyage to me. Thank you for coming by again, Skipper.",
+      "next": null
+    }
+  ]
+}
