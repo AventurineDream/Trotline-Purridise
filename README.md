@@ -93,6 +93,7 @@ One real second is one minute on the lake. A day is 24 minutes. `T` cycles 1×, 
 | Tab | Chart |
 | J / I | Journal / livewell |
 | T | Time scale, while you are still |
+| C | Hail a nearby NPC (within 20 m, below 3 knots) |
 | H / M / Esc | Help / mute / pause |
 
 Menus accept **W/S** to move through items and **A/D** to change tabs, lines, or
