@@ -197,6 +197,10 @@ class NarrativeChecks(unittest.TestCase):
         self.assertIsNone(session.change_lake("cedar"))
         loaded = State.load(self.path, session.world)
         loaded.catch_up(loaded.stamp + 2 * 1440)
+        # Session scheduling now updates only each loaded lake's selection.
+        # The rest of the shared ledger remains untouched by travel/offline time.
+        expected["day_npc_by_lake"] = {"briar": "silas", "cedar": "dr_alder"}
+        expected["schedule_day_by_lake"] = {"briar": 0, "cedar": 0}
         self.assertEqual(loaded.narrative.to_json(), expected)
         loaded.save(self.path)
         self.assertEqual(State.load(self.path, session.world).narrative.to_json(), expected)

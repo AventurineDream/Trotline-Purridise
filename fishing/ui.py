@@ -433,6 +433,7 @@ class UI:
         frame[y:y + mh, x:x + mw] = scaled
         for line in state.lines:
             self._seg(frame, line.x0, line.z0, line.x1, line.z1, x, y, mw, mh, self._line_color(line))
+        self._plot_npcs(frame, state, x, y, mw, mh)
         self._plot_boat(frame, state, x, y, mw, mh, radius=3)
         self._plot_bot(frame, state, x, y, mw, mh)
         return mh + 35
@@ -500,12 +501,28 @@ class UI:
                     dot = (90, 104, 98)
                 u, v = self.world.map_pixel(hx, hz, mw, mh)
                 self._dot(frame, x + u, y + v, 2 if hook.catch is not None else 1, dot)
+        self._plot_npcs(frame, state, x, y, mw, mh, labels=True)
         self._plot_boat(frame, state, x, y, mw, mh, radius=4)
         self._plot_bot(frame, state, x, y, mw, mh)
         size = self._size(frame, "small")
         self._text(frame, self.world.name, x, y - self.cell(size)[1] - 14, size, INK)
-        self._text(frame, "Fish gold     soak green     tired red", x, y + mh + 12, size, DIM, shadow=False)
+        self._text(frame, "Fish gold   soak green   tired red   NPC blue", x, y + mh + 12, size, DIM, shadow=False)
         self._text(frame, "Tab closes the chart", x + mw - 20 * self.cell(size)[0], y + mh + 14 + self.cell(size)[1], size, DIM, shadow=False)
+
+    def _plot_npcs(self, frame, state, x, y, mw, mh, labels=False):
+        color = (128, 206, 240)
+        for npc in state.npcs:
+            if npc.anchor.lake_id != self.world.id:
+                continue
+            u, v = self.world.map_pixel(npc.anchor.x, npc.anchor.z, mw, mh)
+            self._dot(frame, x + u, y + v, 3 if labels else 2, color)
+            if labels:
+                size = self._size(frame, "small")
+                label = self._trim(npc.name, size, mw)
+                width = len(label) * self.cell(size)[0]
+                tx = max(x, min(x + u + 6, x + mw - width))
+                ty = max(y, min(y + v + 6, y + mh - self.cell(size)[1]))
+                self._text(frame, label, tx, ty, size, color)
 
     def _plot_boat(self, frame, state, x, y, mw, mh, radius):
         u, v = self.world.map_pixel(state.x, state.z, mw, mh)
@@ -602,7 +619,8 @@ class UI:
         ch = self.cell(body)[1]
         m = 16
         self._text(frame, self.world.landing.upper(), x + m, y + 12, head, INK)
-        meta = f"{dollars(state.money)}    well {state.well_load():.0f}/{state.well_cap():.0f} lb    bait {state.bait_count()}/{state.box_cap()}"
+        host = next((npc.name for npc in state.npcs if npc.permanent), "")
+        meta = f"{host}    {dollars(state.money)}    well {state.well_load():.0f}/{state.well_cap():.0f} lb    bait {state.bait_count()}/{state.box_cap()}"
         self._text(frame, meta, x + m, y + 12 + self.cell(head)[1], small, GOLD, shadow=False)
         tab_y = y + 18 + self.cell(head)[1] + self.cell(small)[1]
         tx = x + m
