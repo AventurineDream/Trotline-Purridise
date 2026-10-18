@@ -777,6 +777,7 @@ class State:
             "type": "fish.enter_livewell",
             "species_id": catch.species,
             "source_line_id": line.line_id,
+            "lake_id": self.lake_id,
             "source_zone_id": f"{self.lake_id}:{line.zone}",
             "bait_id": line.bait,
             "catch_game_minute": catch.catch_game_minute,

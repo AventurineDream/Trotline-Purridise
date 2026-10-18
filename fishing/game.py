@@ -393,9 +393,21 @@ class Session:
             self.state.emit_quest_event({
                 "type": "line.check",
                 "lake_id": self.state.lake_id,
+                "zone_id": f"{self.state.lake_id}:{line.zone}",
                 "line_id": line.line_id,
                 "game_minute": self.state.game_minutes,
                 "active_game_minute": self.state.narrative.active_play_game_minutes,
+                "eligible_catch_records": [
+                    {
+                        "species_id": hook.catch.species,
+                        "source_line_id": line.line_id,
+                        "lake_id": self.state.lake_id,
+                        "source_zone_id": f"{self.state.lake_id}:{line.zone}",
+                        "bait_id": line.bait,
+                        "catch_game_minute": hook.catch.catch_game_minute,
+                    }
+                    for hook in line.hooks if hook.catch is not None
+                ],
             })
             return
         self.state.toast("Nothing here to check.")
