@@ -308,6 +308,8 @@ class State:
     look_paint: dict = field(default_factory=dict)
     journal: dict = field(default_factory=dict)
     narrative: NarrativeState = field(default_factory=NarrativeState)
+    # Runtime actors for the loaded lake only; definitions are never serialized.
+    npcs: tuple = field(default_factory=tuple, repr=False)
     tutorial: int = 0
     traveled: float = 0.0
     time_scale: int = 1
