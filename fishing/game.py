@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from .content import load_content
+from .dialogue import Conversation, nearby_npc
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
 from .data import BAITS, SPECIES, hour_of_day
@@ -64,6 +65,8 @@ class Session:
         self.quit = False
         self._menu_held: set[str] = set()
         self._npc_content = load_content()
+        self.conversation = None
+        self.ui.dialogue_content = self._npc_content
         self._npc_key = None
         self._refresh_npcs()
 
@@ -81,6 +84,7 @@ class Session:
             self._menu_held.difference_update(keys.pressed)
         else:
             self._menu_held.update(keys.held & NAVIGATION_KEYS)
+        self._refresh_npcs()
         self._keys(keys, dt)
         self._simulate(keys, dt)
 
@@ -114,7 +118,7 @@ class Session:
         elif mode not in FROZEN:
             state.sail_raised = False
             state.drive(dt,0.0,0.0,self.world,idle=True)
-        if mode in DRIVING:
+        if mode in DRIVING or mode == "dialogue":
             sound = tick_bot(state, self.world, dt)
             if sound:
                 self.sound = sound
@@ -123,6 +127,8 @@ class Session:
         if state.hooked_total > hooked_before:
             self.sound = "bite"
         self._refresh_npcs()
+        if self.conversation and not any(n.id == self.conversation.npc_id for n in state.npcs):
+            self._close_dialogue()
         state.tick_toasts(dt)
 
     def _keys(self, keys, dt: float):
@@ -138,6 +144,8 @@ class Session:
             self._title_keys(keys, dt)
         elif mode == "play":
             self._play_keys(keys)
+        elif mode == "dialogue":
+            self._dialogue_keys(keys, dt)
         elif mode == "shop":
             self._shop_keys(keys, dt)
         elif mode == "setbait":
@@ -152,6 +160,8 @@ class Session:
         elif mode == "map":
             if "tab" in keys.pressed or "esc" in keys.pressed:
                 self.ui.mode = "play"
+            elif "c" in keys.pressed:
+                self._hail()
             elif "space" in keys.pressed:
                 self._anchor()
             elif "q" in keys.pressed:
@@ -207,6 +217,9 @@ class Session:
         if "h" in keys.pressed:
             self._open_help("play")
             return
+        if "c" in keys.pressed:
+            self._hail()
+            return
         if "space" in keys.pressed:
             self._anchor()
         if "q" in keys.pressed:
@@ -231,6 +244,47 @@ class Session:
             self._open_set()
         if "e" in keys.pressed:
             self._open_e()
+
+    def _hail(self):
+        npc = nearby_npc(self.state)
+        if npc is None:
+            return
+        self.conversation = Conversation.start(npc, self.state, self._npc_content)
+        self.ui.conversation = self.conversation
+        self.ui.dialogue_from = self.ui.mode
+        self.ui.mode = "dialogue"
+
+    def _close_dialogue(self):
+        self.conversation = None
+        self.ui.conversation = None
+        self.ui.mode = self.ui.dialogue_from
+
+    def _dialogue_keys(self, keys, dt):
+        if "esc" in keys.pressed:
+            self._close_dialogue()
+            return
+        if "h" in keys.pressed:
+            self._open_help("dialogue")
+            return
+        chat = self.conversation
+        if chat is None:
+            self._close_dialogue()
+            return
+        node = self._npc_content.dialogue[chat.node_id]
+        choices = node.get('choices', [])
+        if choices:
+            if keys.tap("up", dt):
+                chat.selected = (chat.selected - 1) % len(choices)
+            if keys.tap("down", dt):
+                chat.selected = (chat.selected + 1) % len(choices)
+        select = bool(keys.pressed & {"return", "space", "c"})
+        for i in range(len(choices)):
+            if str(i + 1) in keys.pressed:
+                chat.selected = i
+                select = True
+                break
+        if select and not chat.advance(self.state, self._npc_content):
+            self._close_dialogue()
 
     def _anchor(self):
         if self.state.anchored:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import textwrap
 
 import numpy as np
 
@@ -29,6 +30,7 @@ from .data import (
     CEDAR_FISH,
 )
 from .platform import Text
+from .dialogue import nearby_npc
 from .world import ZONE_NAME, World
 from .boat import BOATS, FUEL_PRICE
 from .lakes import LAKES
@@ -72,6 +74,9 @@ class UIState:
     confirm_new: bool = False
     note: str = ""
     has_save: bool = False
+    conversation: object = None
+    dialogue_content: object = None
+    dialogue_from: str = "play"
 
 
 def shop_rows(state, tab: int) -> list[Row]:
@@ -228,7 +233,11 @@ class UI:
             self._map(frame, state, big=True)
             self._toasts(frame, state)
             return
-        if mode == "shop":
+        if mode == "dialogue":
+            self._hud(frame, state)
+            self._dialogue(frame, state, ui)
+            self._toasts(frame, state)
+        elif mode == "shop":
             self._shop(frame, state, ui)
         elif mode == "setbait":
             self._setbait(frame, state, ui)
@@ -242,6 +251,39 @@ class UI:
             self._pause(frame, ui)
         elif mode == "help":
             self._help(frame, ui)
+
+    def _dialogue(self, frame, state, ui):
+        chat = ui.conversation
+        if chat is None:
+            return
+        node = ui.dialogue_content.dialogue[chat.node_id]
+        name = ui.dialogue_content.npcs[chat.npc_id]['name']
+        h, w = frame.shape[:2]
+        size = self._size(frame, "small")
+        cw, ch = self.cell(size)
+        margin = 16
+        width = min(w - 24, 1000)
+        cols = max(8, (width - margin*2) // cw)
+        lines = textwrap.wrap(node['text'], cols)
+        choices = node.get('choices', [])
+        rows = lines + ['']
+        colors = [INK] * len(lines) + [DIM]
+        for i, choice in enumerate(choices):
+            label = f"{'>' if i == chat.selected else ' '} {i+1}. {choice['text']}"
+            wrapped = textwrap.wrap(label, cols)
+            rows.extend(wrapped)
+            colors.extend([GOLD if i == chat.selected else DIM] * len(wrapped))
+        foot = "W/S or arrows choose / Enter Space C select / Esc leave / H Help"
+        if not choices:
+            foot = "C / Enter / Space continue    Esc leave    H Help"
+        footer = textwrap.wrap(foot, cols)
+        height = (len(rows) + len(footer) + 2) * (ch + 3) + margin*2
+        x, y = (w-width)//2, h-height-12
+        self._panel(frame, x, y, width, height, 0.96)
+        self._text(frame, name, x+margin, y+margin, size, GOLD, False)
+        top = y+margin+(ch+3)*2
+        for i, (line, color) in enumerate(zip(rows+footer, colors+[DIM]*len(footer))):
+            self._text(frame, line, x+margin, top+i*(ch+3), size, color, False)
 
     # --- primitives -----------------------------------------------------
 
@@ -408,13 +450,23 @@ class UI:
                    sx+16,sy+int(95*unit),small,DIM,False,"sans")
         lines_h = self._lines_panel(frame, state, sx, sy - 8, sw, small)
         map_h = self._minimap(frame, state, m, h - m)
+        npc = nearby_npc(state)
+        if npc is not None:
+            label = f"C  Hail {npc.name}"
+            px, py = 18, h - 115
+            self._panel(frame, px, py, self._measure(label, small) + 56, 34)
+            # A small procedural paw wave avoids a font-dependent emoji.
+            self._round_fill(frame, px+9, py+16, 14, 10, GOLD, 1.0)
+            for dx, dy in ((7, 9), (13, 5), (20, 6), (26, 11)):
+                self._round_fill(frame, px+dx, py+dy, 5, 6, GOLD, 1.0)
+            self._text(frame, label, px+38, py+7, small, INK, False, "sans")
         prompt = state.prompt(self.world)
         if prompt:
             pw = self._measure(prompt,small+2)+32
             px,py = (w-pw)//2,h-m-max(map_h,stat_h+lines_h)-int(35*unit)-8
             self._panel(frame,px,py,pw,int(30*unit)+8,0.72)
             self._text(frame,prompt,px+16,py+5,small+2,INK,False,"sans")
-        hint = "B Bot   SHIFT Idle   Q Sail   F Set   E Landing   H Help" if state.boat_id=="sail" else "B Bot   SHIFT Idle   F Set line   E Check   R Tow   H Help"
+        hint = "B Bot  Shift Idle  Q Sail  F Set  E Landing  C Hail  H Help" if state.boat_id=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  C Hail  H Help"
         self._center(frame,hint,w/2,h-m-small-4,small,DIM)
 
     def _minimap(self, frame, state, margin, bottom) -> int:
@@ -894,6 +946,7 @@ _HELP = (
         "",
         "F sets a trotline       E checks one, or opens the landing",
         "Tab chart    J journal    I livewell",
+        "C hails a paw-wave NPC: within 20 m, below 3 knots",
         "T changes time: 1x 3x 6x 12x, while you are still",
         "B sends Bot ahead, or out to a line. B calls him back.",
         "H help    M mute    Esc pause",
