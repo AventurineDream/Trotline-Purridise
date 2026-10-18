@@ -65,6 +65,8 @@ def selftest(*,software=False) -> int:
     narrative_checks()
     from .test_content import content_checks
     content_checks()
+    from .test_anchors import anchor_checks
+    anchor_checks()
     renderer = Renderer(world,software=software)
     low = renderer.render(State.new(world, seed=1))
     if low.shape != (renderer.h, renderer.w, 3) or low.dtype != np.uint8:

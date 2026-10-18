@@ -241,6 +241,8 @@ class World:
             (p.x,p.z,max(0.16,p.h*0.23)) for p in self.props
             if p.kind in ("rock","stump","knee")],np.float64).reshape(-1,3)
         self.map_rgb, self.map_small = self._bake_map()
+        from .anchors import anchors_for_lake
+        self.anchors = anchors_for_lake(self.id)
 
     def zone_name(self,zone):
         return self.zone_names.get(zone,zone)
