@@ -109,17 +109,18 @@ def tick(state, world, dt: float) -> str | None:
             state.toast(report)
             depth = float(world.depth(state.bot_x, state.bot_z))
             depth_class = "skinny" if depth < 2.2 else "deep" if depth > 8.0 else "middling"
-            state.emit_quest_event({
+            event = {
                 "type": "bot.scout_complete",
                 "lake_id": world.id,
                 "target_line_id": state.bot_target_line_id,
                 "zone_id": f"{world.id}:{world.zone_at(state.bot_x, state.bot_z)}",
-                "distance_m": math.hypot(state.bot_x - state.x, state.bot_z - state.z),
                 "depth_class": depth_class,
-                "exact_depth": depth if state.finder else None,
                 "report_delivered": True,
                 "game_minute": state.game_minutes,
-            })
+            }
+            if state.finder:
+                event["exact_depth_m"] = depth
+            state.emit_quest_event(event)
             return "bot"
     return sound
 

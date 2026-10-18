@@ -130,11 +130,9 @@ class QuestManager:
                 return
             self._ready(state, definition, progress)
             return
-        distance = event.get("distance_m")
-        maximum = objective.get("scout_range_lt_m")
-        if (not _finite_number(distance) or not _finite_number(maximum)
-                or distance >= maximum):
-            return
+        # Bot captures the nearest eligible line (strictly inside the authored
+        # range) at launch. The report can arrive after the boat has moved, so
+        # its arrival-time distance must not be used to re-evaluate that rule.
         line_id = deployment_id(event.get("target_line_id"))
         attempt = self._attempts(progress).get(line_id)
         if line_id is None or not isinstance(attempt, dict):
@@ -158,6 +156,10 @@ class QuestManager:
         set_data = attempt.get("set")
         if not isinstance(set_data, dict):
             return
+        if (event.get("lake_id") != set_data.get("lake_id")
+                or event.get("zone_id") != set_data.get("zone_id")
+                or event.get("zone_id") != objective.get("zone_id")):
+            return
         current = event.get("active_game_minute")
         start = set_data.get("active_game_minute")
         if not (_finite_number(current) and _finite_number(start)):
@@ -175,7 +177,9 @@ class QuestManager:
         self._ready(state, definition, progress)
 
     def _fish_entered(self, state, definition: dict, progress, objective: dict, event: dict) -> None:
-        if (event.get("species_id") != objective.get("species_id")
+        expected_lake = objective.get("zone_id", "").split(":", 1)[0]
+        if (event.get("lake_id") != expected_lake
+                or event.get("species_id") != objective.get("species_id")
                 or event.get("source_zone_id") != objective.get("zone_id")
                 or event.get("bait_id") != objective.get("bait_id")
                 or not deployment_id(event.get("source_line_id"))):
@@ -186,6 +190,7 @@ class QuestManager:
         progress.progress["fish_entered_livewell"] = {
             "species_id": event["species_id"],
             "source_line_id": event["source_line_id"],
+            "lake_id": event["lake_id"],
             "source_zone_id": event["source_zone_id"],
             "bait_id": event["bait_id"],
             "catch_game_minute": event.get("catch_game_minute"),

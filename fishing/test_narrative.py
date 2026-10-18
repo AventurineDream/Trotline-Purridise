@@ -287,7 +287,7 @@ class NarrativeChecks(unittest.TestCase):
         self.assertEqual(self.state.money, other.money)
         self.assertEqual(self.state.journal, other.journal)
 
-    def test_line_scout_requires_the_matching_deployment_and_strict_range(self):
+    def test_line_scout_uses_the_matching_line_captured_at_launch(self):
         manager = QuestManager(load_content())
         qid = QUEST_IDS[0]
         quest = self.state.narrative.quests[qid]
@@ -303,25 +303,31 @@ class NarrativeChecks(unittest.TestCase):
         manager.handle_event(self.state, {
             "type": "bot.scout_complete", "lake_id": "briar",
             "target_line_id": str(UUID(int=1)), "zone_id": "briar:lilies",
-            "distance_m": 10, "depth_class": "middling", "report_delivered": True,
+            "depth_class": "middling", "report_delivered": True,
             "game_minute": 101,
         })
         self.assertEqual(quest.status, "active")
         manager.handle_event(self.state, {
             "type": "bot.scout_complete", "lake_id": "briar",
             "target_line_id": line_id, "zone_id": "briar:lilies",
-            "distance_m": 140, "depth_class": "middling", "report_delivered": True,
-            "game_minute": 101,
-        })
-        self.assertEqual(quest.status, "active")
-        manager.handle_event(self.state, {
-            "type": "bot.scout_complete", "lake_id": "briar",
-            "target_line_id": line_id, "zone_id": "briar:lilies",
-            "distance_m": 139.99, "depth_class": "middling", "report_delivered": True,
+            "depth_class": "middling", "report_delivered": True,
             "game_minute": 101,
         })
         self.assertEqual(quest.status, "ready")
         self.assertEqual(self.state.money, money)
+
+    def test_bot_launch_uses_strict_nearest_line_range(self):
+        world = SimpleNamespace(
+            slip=SimpleNamespace(contains=lambda _x, _z: False),
+            shore_sd=lambda _x, _z: -1.0,
+        )
+        self.state.x = self.state.z = 0.0
+        line = SetLine("std", "worm", 138.99, 0.0, 140.99, 0.0, "lilies", [])
+        self.state.lines = [line]
+        self.assertEqual(bot._target(self.state, world)[2], line.line_id)
+
+        line.x0, line.x1 = 139.0, 141.0
+        self.assertIsNone(bot._target(self.state, world)[2])
 
     def test_successful_line_set_and_opened_check_emit_progress_events(self):
         qid = QUEST_IDS[4]
@@ -340,15 +346,35 @@ class NarrativeChecks(unittest.TestCase):
         )
         self.assertIsNone(self.state.try_set(fake_world, 0, "shad"))
         line = self.state.lines[0]
+        line.hooks[0].catch = Catch("golden_shiner", 0.3, 1.0, 0, "deep", "shad",
+                                    20.5, "briar", catch_game_minute=1230)
         self.state.x = (line.x0 + line.x1) * 0.5
         self.state.z = (line.z0 + line.z1) * 0.5
         deployment = quest.progress["deployments"][line.line_id]
         self.assertEqual(deployment["set"]["zone_id"], "briar:deep")
         self.state.narrative.active_play_game_minutes += 60
         self.state.slip_status = lambda _world: None
+        events = []
+        handler = self.state._quest_event_handler
+
+        def capture(state, event):
+            events.append(event)
+            return handler(state, event)
+
+        self.state._quest_event_handler = capture
         session._open_e()
         self.assertEqual(session.ui.mode, "check")
         self.assertEqual(quest.status, "ready")
+        event = next(event for event in events if event["type"] == "line.check")
+        self.assertEqual(event["zone_id"], "briar:deep")
+        self.assertEqual(event["eligible_catch_records"], [{
+            "species_id": "golden_shiner",
+            "source_line_id": line.line_id,
+            "lake_id": "briar",
+            "source_zone_id": "briar:deep",
+            "bait_id": "shad",
+            "catch_game_minute": 1230,
+        }])
 
     def test_delivered_bot_report_emits_authored_zone_event(self):
         qid = QUEST_IDS[3]
@@ -357,14 +383,27 @@ class NarrativeChecks(unittest.TestCase):
         quest.accepted_game_minute = 0
         Session(self.world, self.path, self.state, False)
         target = self.world.anchors["briar:flats"]
+        self.state.finder = 1
         self.state.x, self.state.z = target.x, target.z
         self.state.bot_phase = "go"
         self.state.bot_x = self.state.bot_tx = target.x
         self.state.bot_z = self.state.bot_tz = target.z
         self.state.bot_target_line_id = None
+        events = []
+        handler = self.state._quest_event_handler
+
+        def capture(state, event):
+            events.append(event)
+            return handler(state, event)
+
+        self.state._quest_event_handler = capture
         bot.tick(self.state, self.world, 0.1)
         self.assertEqual(self.state.bot_phase, "out")
         self.assertEqual(quest.status, "ready")
+        self.assertEqual(events[0]["zone_id"], "briar:flats")
+        self.assertIn("exact_depth_m", events[0])
+        self.assertNotIn("exact_depth", events[0])
+        self.assertNotIn("distance_m", events[0])
 
     def test_scout_check_requires_same_line_and_scout_before_soaked_check(self):
         manager = QuestManager(load_content())
@@ -378,8 +417,9 @@ class NarrativeChecks(unittest.TestCase):
             "zone_id": "cedar:deep", "tier_id": "prem", "hook_count": 18,
             "bait_id": "shad", "game_minute": 50, "active_game_minute": 10,
         })
-        check = {"type": "line.check", "lake_id": "cedar", "line_id": line_id,
-                 "game_minute": 111, "active_game_minute": 71}
+        check = {"type": "line.check", "lake_id": "cedar", "zone_id": "cedar:deep",
+                 "line_id": line_id, "game_minute": 111, "active_game_minute": 71,
+                 "eligible_catch_records": []}
         manager.handle_event(self.state, check)
         self.assertEqual(quest.status, "active")
         self.state.save(self.path)
@@ -387,10 +427,14 @@ class NarrativeChecks(unittest.TestCase):
         manager = QuestManager(load_content())
         manager.handle_event(resumed, {
             "type": "bot.scout_complete", "lake_id": "cedar",
-            "target_line_id": line_id, "zone_id": "cedar:deep", "distance_m": 12,
+            "target_line_id": line_id, "zone_id": "cedar:deep",
             "depth_class": "deep", "report_delivered": True, "game_minute": 112,
         })
         check["game_minute"] = 113
+        manager.handle_event(resumed, {**check, "lake_id": "briar", "zone_id": "briar:deep"})
+        self.assertEqual(resumed.narrative.quests[qid].status, "active")
+        manager.handle_event(resumed, {**check, "zone_id": "cedar:rocks"})
+        self.assertEqual(resumed.narrative.quests[qid].status, "active")
         manager.handle_event(resumed, check)
         resumed_quest = resumed.narrative.quests[qid]
         self.assertEqual(resumed_quest.status, "ready")
@@ -417,12 +461,14 @@ class NarrativeChecks(unittest.TestCase):
                 })
                 manager.handle_event(self.state, {
                     "type": "line.check", "lake_id": lake, "line_id": line_id,
-                    "game_minute": 160, "active_game_minute": 69,
+                    "zone_id": zone, "game_minute": 160, "active_game_minute": 69,
+                    "eligible_catch_records": [],
                 })
                 self.assertEqual(quest.status, "active")
                 manager.handle_event(self.state, {
                     "type": "line.check", "lake_id": lake, "line_id": line_id,
-                    "game_minute": 161, "active_game_minute": 70,
+                    "zone_id": zone, "game_minute": 161, "active_game_minute": 70,
+                    "eligible_catch_records": [],
                 })
                 self.assertEqual(quest.status, "ready")
 
@@ -434,7 +480,7 @@ class NarrativeChecks(unittest.TestCase):
         quest.status = "active"
         quest.accepted_game_minute = 20
         event = {"type": "bot.scout_complete", "lake_id": "briar",
-                 "target_line_id": None, "zone_id": "briar:flats", "distance_m": 8,
+                 "target_line_id": None, "zone_id": "briar:flats",
                  "depth_class": "skinny", "report_delivered": True, "game_minute": 21}
         event["report_delivered"] = False
         manager.handle_event(self.state, event)
@@ -482,8 +528,17 @@ class NarrativeChecks(unittest.TestCase):
         self.state.lines = [line]
         self.state.game_minutes = 335
         session = Session(self.world, self.path, self.state, False)
+        events = []
+        handler = self.state._quest_event_handler
+
+        def capture(state, event):
+            events.append(event)
+            return handler(state, event)
+
+        self.state._quest_event_handler = capture
         self.assertIsNone(self.state.take_hook(0, 0))
         self.assertEqual(quest.status, "ready")
+        self.assertEqual(events[0]["lake_id"], "briar")
         self.assertEqual(quest.progress["fish_entered_livewell"]["entry_game_minute"], 335)
         session.save()
         loaded = State.load(self.path, self.world)
