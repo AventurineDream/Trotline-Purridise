@@ -7,6 +7,10 @@ the earlier requirement for both Amaranth and Jules. Do not require, request, or
 escalate missing Jules reviews or Jules authentication while this decision is
 in effect. Preserve previous Jules evidence and notifications as history.
 
+On 18 October 2026 the owner corrected the review delay to 30 minutes. Both the
+PR creation time and the first-observed time of each head SHA must be at least
+30 minutes old before review feedback can be read.
+
 Amaranth may use the owner's GitHub account. Agent identity and review evidence
 determine the review's provenance; a separate GitHub login and a formal GitHub
 approval are not required. The implementing/merging agent cannot supply the
@@ -19,9 +23,9 @@ comment. Neither is a substitute for Amaranth's substantive review.
 The machine-readable settings are in `.github/merge-policy.json`. The automation
 must enforce all of the following:
 
-1. A PR is open and ready for review. Wait until both one hour after PR creation
-   and one hour after first observing its current head have elapsed before
-   reading its review feedback. Every changed head starts a new review round.
+1. A PR is open and ready for review. Wait until both 30 minutes after PR
+   creation and 30 minutes after first observing its current head have elapsed
+   before reading its review feedback. Every changed head starts a new review round.
    CI may be inspected immediately so execution failures can be fixed promptly.
 2. Amaranth reviewed the exact current head and reported `VERDICT: GREEN`,
    with no outstanding actionable findings. Record Amaranth's verdict, full
@@ -42,7 +46,7 @@ must enforce all of the following:
 5. Immediately before merging, re-fetch the open PR and verify the same head,
    mergeability, Amaranth's verdict, threads and latest required run. Supply the
    expected head SHA to GitHub's merge API and use the configured normal merge
-   commit method. A changed head restarts the one-hour wait.
+   commit method. A changed head restarts the 30-minute wait.
 
 ## Reviewer comment format
 
