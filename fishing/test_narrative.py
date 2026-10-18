@@ -608,6 +608,35 @@ class NarrativeChecks(unittest.TestCase):
         self.assertNotIn(QUEST_IDS[11], self.state.narrative.reward_claims)
         self.assertEqual(self.state.money, money)
 
+    def test_collision_slide_movement_events_follow_accepted_path(self):
+        world = SimpleNamespace(
+            id="cedar",
+            zone_at=lambda x, z: "north" if z >= 0.4 else "south",
+        )
+        self.state.x = self.state.z = 0.0
+        self.state._hull_ok = lambda x, z, _world, yaw=None: not (x > 0.5 and z > 0.5)
+
+        moved, path = self.state._move(1.0, 1.0, world)
+
+        self.assertFalse(moved)
+        self.assertEqual(len(path), 2)
+        self.assertEqual(path[0], (0.0, 0.0, 0.5, 0.5))
+        self.assertEqual(path[1], (0.5, 0.5, 1.0, 0.5))
+
+        events = []
+        self.state._quest_event_handler = lambda _state, event: events.append(event)
+        for x0, z0, x1, z1 in path:
+            self.state._emit_movement_events(
+                world, x0, z0, x1, z1, player_controlled=True, propulsion="motor")
+
+        distance_by_zone = {}
+        for event in events:
+            if event["type"] == "boat.move":
+                distance_by_zone[event["zone_id"]] = (
+                    distance_by_zone.get(event["zone_id"], 0.0) + event["distance_m"])
+        self.assertAlmostEqual(distance_by_zone["cedar:south"], 2 ** 0.5 * 0.4, places=2)
+        self.assertAlmostEqual(distance_by_zone["cedar:north"], 0.5 + 2 ** 0.5 * 0.1, places=2)
+
 
 def narrative_checks():
     result = unittest.TextTestRunner(verbosity=1).run(

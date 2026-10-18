@@ -736,11 +736,11 @@ class State:
                 self.yaw = yaw
             fx,fz = math.sin(self.yaw),math.cos(self.yaw)
             nx,nz = self.x+fx*distance/steps,self.z+fz*distance/steps
-            start_x, start_z = self.x, self.z
-            moved = self._move(nx,nz,world)
-            self._emit_movement_events(world, start_x, start_z, self.x, self.z,
-                                       player_controlled=player_controlled,
-                                       propulsion=propulsion)
+            moved, accepted_path = self._move(nx,nz,world)
+            for x0, z0, x1, z1 in accepted_path:
+                self._emit_movement_events(world, x0, z0, x1, z1,
+                                           player_controlled=player_controlled,
+                                           propulsion=propulsion)
             if not moved:
                 break
         self.yaw = (self.yaw+math.pi)%math.tau-math.pi
@@ -787,12 +787,21 @@ class State:
     def _hull_ok(self, x, z, world: World, *, yaw=None) -> bool:
         return world.hull_clear(x,z,self.yaw if yaw is None else yaw,self.boat_id)
 
-    def _move(self, nx, nz, world: World):
+    def _move(self, nx, nz, world: World) -> tuple[bool, list[tuple[float, float, float, float]]]:
+        accepted_path: list[tuple[float, float, float, float]] = []
+
+        def record_segment(x0: float, z0: float) -> None:
+            if math.hypot(self.x - x0, self.z - z0) > 1e-9:
+                accepted_path.append((x0, z0, self.x, self.z))
+
         if self._hull_ok(nx, nz, world):
+            start_x, start_z = self.x, self.z
             self.x, self.z = nx, nz
-            return True
+            record_segment(start_x, start_z)
+            return True, accepted_path
         # Approach contact without jumping back an entire simulation step.
         dx,dz = nx-self.x,nz-self.z
+        start_x, start_z = self.x, self.z
         lo,hi = 0.0,1.0
         for _ in range(9):
             mid = (lo+hi)*0.5
@@ -802,17 +811,22 @@ class State:
                 hi = mid
         self.x += dx*lo
         self.z += dz*lo
+        record_segment(start_x, start_z)
         nx,nz = self.x+dx*(1-lo),self.z+dz*(1-lo)
         if self._hull_ok(nx, self.z, world):
+            start_x, start_z = self.x, self.z
             self.x = nx
+            record_segment(start_x, start_z)
             self.speed *= 0.55
-            return False
+            return False, accepted_path
         if self._hull_ok(self.x, nz, world):
+            start_x, start_z = self.x, self.z
             self.z = nz
+            record_segment(start_x, start_z)
             self.speed *= 0.55
-            return False
+            return False, accepted_path
         self.speed = 0.0
-        return False
+        return False, accepted_path
 
     def _maybe_snag(self, world: World):
         if abs(self.speed) < 0.9:
