@@ -7,6 +7,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .content import load_content
+from .npcs import active_npcs, schedule_key
 from .audio import Audio
 from .data import BAITS, SPECIES, hour_of_day
 from .weather import weather_visuals
@@ -61,6 +63,9 @@ class Session:
         self.ui = UIState(has_save=has_save)
         self.quit = False
         self._menu_held: set[str] = set()
+        self._npc_content = load_content()
+        self._npc_key = None
+        self._refresh_npcs()
 
     def tick(self, keys, dt: float) -> None:
         self.sound = None
@@ -79,7 +84,14 @@ class Session:
         self._keys(keys, dt)
         self._simulate(keys, dt)
 
+    def _refresh_npcs(self):
+        key = (id(self.state),) + schedule_key(self.state, self.world)
+        if key != self._npc_key:
+            self.state.npcs = active_npcs(self.state, self.world, self._npc_content)
+            self._npc_key = key
+
     def save(self) -> None:
+        self._refresh_npcs()
         self.state.save(self.save_path)
         self.ui.has_save = True
 
@@ -110,6 +122,7 @@ class Session:
         state.advance(dt, mode in FROZEN)
         if state.hooked_total > hooked_before:
             self.sound = "bite"
+        self._refresh_npcs()
         state.tick_toasts(dt)
 
     def _keys(self, keys, dt: float):
