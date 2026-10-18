@@ -12,6 +12,7 @@ import math
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 from uuid import uuid4
 
 from .data import (
@@ -95,6 +96,7 @@ class Catch:
     hour: float
     lake_id: str = "briar"
     noted_tired: bool = False
+    catch_game_minute: float | None = None
 
     def value(self) -> float:
         return fish_value(self.species, self.weight, self.quality)
@@ -110,14 +112,25 @@ class Catch:
             "hour": round(self.hour, 3),
             "lake_id":self.lake_id,
             "noted_tired": self.noted_tired,
+            "catch_game_minute": (None if self.catch_game_minute is None
+                                  else round(self.catch_game_minute, 3)),
         }
 
     @classmethod
     def from_json(cls, raw: dict) -> "Catch":
+        catch_minute = raw.get("catch_game_minute")
+        try:
+            catch_minute_valid = (type(catch_minute) in (int, float)
+                                  and math.isfinite(catch_minute))
+        except OverflowError:
+            catch_minute_valid = False
+        if not catch_minute_valid:
+            catch_minute = None
         return cls(
             raw["species"], float(raw["weight"]), float(raw["quality"]),
             float(raw["age"]), raw["zone"], raw["bait"], float(raw["hour"]),raw.get("lake_id","briar"),
             bool(raw.get("noted_tired", False)),
+            float(catch_minute) if catch_minute is not None else None,
         )
 
 
@@ -214,6 +227,40 @@ def _seg_gap(a: SetLine, b: SetLine) -> float:
         pz = a.z0 + (a.z1 - a.z0) * t
         best = min(best, _point_seg(px, pz, b.x0, b.z0, b.x1, b.z1))
     return best
+
+
+def _zone_path_segments(world: World, x0: float, z0: float,
+                        x1: float, z1: float) -> list[tuple[str, float]]:
+    """Split one accepted short boat substep at live zone boundaries."""
+    total = math.hypot(x1 - x0, z1 - z0)
+    if total <= 1e-9:
+        return []
+    out: list[tuple[str, float]] = []
+
+    def append(zone: str, distance: float) -> None:
+        if distance <= 1e-9:
+            return
+        if out and out[-1][0] == zone:
+            out[-1] = (zone, out[-1][1] + distance)
+        else:
+            out.append((zone, distance))
+
+    def split(t0: float, t1: float, start_zone: str, end_zone: str, depth: int) -> None:
+        tm = (t0 + t1) * 0.5
+        middle_zone = world.zone_at(x0 + (x1 - x0) * tm, z0 + (z1 - z0) * tm)
+        if start_zone == middle_zone == end_zone:
+            append(middle_zone, total * (t1 - t0))
+            return
+        if depth >= 18 or total * (t1 - t0) <= 0.001:
+            append(middle_zone, total * (t1 - t0))
+            return
+        split(t0, tm, start_zone, middle_zone, depth + 1)
+        split(tm, t1, middle_zone, end_zone, depth + 1)
+
+    # State.drive already bounds movement substeps to 10 cm. Midpoint checks
+    # and recursive splitting preserve the world's boundary precedence.
+    split(0.0, 1.0, world.zone_at(x0, z0), world.zone_at(x1, z1), 0)
+    return out
 
 
 def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float, lake_id="briar") -> dict[str, float]:
@@ -332,6 +379,7 @@ class State:
     splash_anim: float = -100.0
     _tired: list = field(default_factory=list)
     _records: list = field(default_factory=list)
+    _quest_event_handler: Callable | None = field(default=None, repr=False, compare=False)
 
     @classmethod
     def new(cls, world: World, seed: int | None = None) -> "State":
@@ -584,7 +632,8 @@ class State:
                 sp = self.rng.pick(rates)
                 weight = self._roll_weight(sp)
                 caught_hour = hour
-                catch = Catch(sp, weight, 1.0, 0.0, zone, line.bait, caught_hour,self.lake_id)
+                catch = Catch(sp, weight, 1.0, 0.0, zone, line.bait, caught_hour,
+                              self.lake_id, catch_game_minute=self.game_minutes)
                 hook.catch = catch
                 hook.baited = False
                 hooked += 1
@@ -621,9 +670,15 @@ class State:
         self._world = world
         self.lake_id = world.id
 
+    def emit_quest_event(self, event: dict) -> None:
+        """Send a live transition to the attached session quest manager."""
+        if self._quest_event_handler is not None:
+            self._quest_event_handler(self, event)
+
     # --- boat -----------------------------------------------------------
 
-    def drive(self, dt: float, throttle_in: float, steer_in: float, world: World, *, idle=False):
+    def drive(self, dt: float, throttle_in: float, steer_in: float, world: World, *, idle=False,
+              player_controlled=False):
         if idle:
             self.throttle_setting = 0.0
             self.throttle = 0.0
@@ -669,18 +724,64 @@ class State:
         # This prevents crossing a thin barrier between endpoint checks.
         steps = max(1,math.ceil((abs(distance)+max(abs(self.boat.bow),abs(self.boat.stern))*abs(turn))/0.10))
         old_x,old_z = self.x,self.z
+        if self.sail_raised and abs(self.sail_drive()) > 0.01:
+            propulsion = "sail"
+        elif abs(self.throttle) > 0.01:
+            propulsion = "motor"
+        else:
+            propulsion = None
         for _ in range(steps):
             yaw = self.yaw+turn/steps
             if self._hull_ok(self.x,self.z,world,yaw=yaw):
                 self.yaw = yaw
             fx,fz = math.sin(self.yaw),math.cos(self.yaw)
             nx,nz = self.x+fx*distance/steps,self.z+fz*distance/steps
-            if not self._move(nx,nz,world):
+            start_x, start_z = self.x, self.z
+            moved = self._move(nx,nz,world)
+            self._emit_movement_events(world, start_x, start_z, self.x, self.z,
+                                       player_controlled=player_controlled,
+                                       propulsion=propulsion)
+            if not moved:
                 break
         self.yaw = (self.yaw+math.pi)%math.tau-math.pi
         self.traveled += math.hypot(self.x-old_x,self.z-old_z)
         self._maybe_snag(world)
         self._tutorial()
+
+    def _emit_movement_events(self, world: World, x0: float, z0: float,
+                              x1: float, z1: float, *, player_controlled: bool,
+                              propulsion: str | None) -> None:
+        previous = world.zone_at(x0, z0)
+        for zone, distance in _zone_path_segments(world, x0, z0, x1, z1):
+            if zone != previous:
+                self.emit_quest_event({
+                    "type": "zone.enter", "lake_id": world.id,
+                    "zone_id": f"{world.id}:{zone}",
+                    "game_minute": self.game_minutes,
+                    "movement_cause": "boat",
+                    "player_controlled": bool(player_controlled),
+                })
+                previous = zone
+            if player_controlled and propulsion is not None and distance > 0:
+                self.emit_quest_event({
+                    "type": "boat.move", "lake_id": world.id,
+                    "zone_id": f"{world.id}:{zone}",
+                    "distance_m": distance,
+                    "player_controlled": True,
+                    "propulsion": propulsion,
+                    "game_minute": self.game_minutes,
+                })
+
+    def _emit_livewell_entry(self, catch: Catch, line: SetLine) -> None:
+        self.emit_quest_event({
+            "type": "fish.enter_livewell",
+            "species_id": catch.species,
+            "source_line_id": line.line_id,
+            "source_zone_id": f"{self.lake_id}:{line.zone}",
+            "bait_id": line.bait,
+            "catch_game_minute": catch.catch_game_minute,
+            "entry_game_minute": self.game_minutes,
+        })
 
     def _hull_ok(self, x, z, world: World, *, yaw=None) -> bool:
         return world.hull_clear(x,z,self.yaw if yaw is None else yaw,self.boat_id)
@@ -836,7 +937,19 @@ class State:
         self.held.pop(held_index)
         line_hooks = [Hook(True) for _ in range(hooks)]
         self.lines.append(SetLine(held.tier, bait_id, x0, z0, x1, z1, zone, line_hooks))
+        line = self.lines[-1]
         self.preferred_bait = bait_id
+        self.emit_quest_event({
+            "type": "line.set",
+            "lake_id": self.lake_id,
+            "line_id": line.line_id,
+            "zone_id": f"{self.lake_id}:{line.zone}",
+            "tier_id": line.tier,
+            "hook_count": len(line.hooks),
+            "bait_id": line.bait,
+            "game_minute": self.game_minutes,
+            "active_game_minute": self.narrative.active_play_game_minutes,
+        })
         from .world import zone_label
         self.toast(f"Line set on the {zone_label(zone).lower()}. {hooks} hooks, {BAIT_BY_ID[bait_id].name.lower()}.")
         return None
@@ -857,7 +970,9 @@ class State:
             return "Nothing on that hook."
         if self.well_load() + hook.catch.weight > self.well_cap() + 1e-6:
             return "The livewell won't take that one."
-        self.well.append(hook.catch)
+        catch = hook.catch
+        self.well.append(catch)
+        self._emit_livewell_entry(catch, line)
         hook.catch = None
         hook.baited = False
         return None
@@ -872,7 +987,9 @@ class State:
             if self.well_load() + hook.catch.weight > self.well_cap() + 1e-6:
                 left += 1
                 continue
-            self.well.append(hook.catch)
+            catch = hook.catch
+            self.well.append(catch)
+            self._emit_livewell_entry(catch, line)
             hook.catch = None
             hook.baited = False
             moved += 1
@@ -906,6 +1023,7 @@ class State:
             return "The livewell can't hold every fish on that line."
         for catch in fish:
             self.well.append(catch)
+            self._emit_livewell_entry(catch, line)
         self.lines.pop(line_index)
         if self.bot_target_line_id == line.line_id:
             self.bot_target_line_id = None

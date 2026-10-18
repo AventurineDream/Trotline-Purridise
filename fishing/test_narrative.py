@@ -4,11 +4,14 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 from uuid import UUID
 
 from . import bot
+from .content import load_content
 from .game import Keys, Session
 from .narrative import NarrativeState, QUEST_IDS
+from .quests import QuestManager
 from .sim import Catch, Hook, SetLine, State
 from .world import World
 
@@ -283,6 +286,272 @@ class NarrativeChecks(unittest.TestCase):
         self.assertEqual(self.state.lines[0].to_json(), other.lines[0].to_json())
         self.assertEqual(self.state.money, other.money)
         self.assertEqual(self.state.journal, other.journal)
+
+    def test_line_scout_requires_the_matching_deployment_and_strict_range(self):
+        manager = QuestManager(load_content())
+        qid = QUEST_IDS[0]
+        quest = self.state.narrative.quests[qid]
+        quest.status = "active"
+        quest.accepted_game_minute = 100
+        money = self.state.money
+        line_id = self.state.lines[0].line_id if self.state.lines else self.line().line_id
+        manager.handle_event(self.state, {
+            "type": "line.set", "lake_id": "briar", "line_id": line_id,
+            "zone_id": "briar:lilies", "tier_id": "std", "hook_count": 12,
+            "bait_id": "worm", "game_minute": 100, "active_game_minute": 20,
+        })
+        manager.handle_event(self.state, {
+            "type": "bot.scout_complete", "lake_id": "briar",
+            "target_line_id": str(UUID(int=1)), "zone_id": "briar:lilies",
+            "distance_m": 10, "depth_class": "middling", "report_delivered": True,
+            "game_minute": 101,
+        })
+        self.assertEqual(quest.status, "active")
+        manager.handle_event(self.state, {
+            "type": "bot.scout_complete", "lake_id": "briar",
+            "target_line_id": line_id, "zone_id": "briar:lilies",
+            "distance_m": 140, "depth_class": "middling", "report_delivered": True,
+            "game_minute": 101,
+        })
+        self.assertEqual(quest.status, "active")
+        manager.handle_event(self.state, {
+            "type": "bot.scout_complete", "lake_id": "briar",
+            "target_line_id": line_id, "zone_id": "briar:lilies",
+            "distance_m": 139.99, "depth_class": "middling", "report_delivered": True,
+            "game_minute": 101,
+        })
+        self.assertEqual(quest.status, "ready")
+        self.assertEqual(self.state.money, money)
+
+    def test_successful_line_set_and_opened_check_emit_progress_events(self):
+        qid = QUEST_IDS[4]
+        quest = self.state.narrative.quests[qid]
+        quest.status = "active"
+        quest.accepted_game_minute = 0
+        self.state.game_minutes = 1230
+        self.state.bait["shad"] = max(12, self.state.bait.get("shad", 0))
+        session = Session(self.world, self.path, self.state, False)
+        fake_world = SimpleNamespace(
+            slip=SimpleNamespace(ox=1000.0, oz=1000.0,
+                                 contains=lambda _x, _z: False),
+            navigable=lambda _x, _z: True,
+            depth=lambda _x, _z: 10.0,
+            zone_at=lambda _x, _z: "deep",
+        )
+        self.assertIsNone(self.state.try_set(fake_world, 0, "shad"))
+        line = self.state.lines[0]
+        self.state.x = (line.x0 + line.x1) * 0.5
+        self.state.z = (line.z0 + line.z1) * 0.5
+        deployment = quest.progress["deployments"][line.line_id]
+        self.assertEqual(deployment["set"]["zone_id"], "briar:deep")
+        self.state.narrative.active_play_game_minutes += 60
+        self.state.slip_status = lambda _world: None
+        session._open_e()
+        self.assertEqual(session.ui.mode, "check")
+        self.assertEqual(quest.status, "ready")
+
+    def test_delivered_bot_report_emits_authored_zone_event(self):
+        qid = QUEST_IDS[3]
+        quest = self.state.narrative.quests[qid]
+        quest.status = "active"
+        quest.accepted_game_minute = 0
+        Session(self.world, self.path, self.state, False)
+        target = self.world.anchors["briar:flats"]
+        self.state.x, self.state.z = target.x, target.z
+        self.state.bot_phase = "go"
+        self.state.bot_x = self.state.bot_tx = target.x
+        self.state.bot_z = self.state.bot_tz = target.z
+        self.state.bot_target_line_id = None
+        bot.tick(self.state, self.world, 0.1)
+        self.assertEqual(self.state.bot_phase, "out")
+        self.assertEqual(quest.status, "ready")
+
+    def test_scout_check_requires_same_line_and_scout_before_soaked_check(self):
+        manager = QuestManager(load_content())
+        qid = QUEST_IDS[10]
+        quest = self.state.narrative.quests[qid]
+        quest.status = "active"
+        quest.accepted_game_minute = 50
+        line_id = str(UUID(int=2))
+        manager.handle_event(self.state, {
+            "type": "line.set", "lake_id": "cedar", "line_id": line_id,
+            "zone_id": "cedar:deep", "tier_id": "prem", "hook_count": 18,
+            "bait_id": "shad", "game_minute": 50, "active_game_minute": 10,
+        })
+        check = {"type": "line.check", "lake_id": "cedar", "line_id": line_id,
+                 "game_minute": 111, "active_game_minute": 71}
+        manager.handle_event(self.state, check)
+        self.assertEqual(quest.status, "active")
+        self.state.save(self.path)
+        resumed = State.load(self.path, self.world)
+        manager = QuestManager(load_content())
+        manager.handle_event(resumed, {
+            "type": "bot.scout_complete", "lake_id": "cedar",
+            "target_line_id": line_id, "zone_id": "cedar:deep", "distance_m": 12,
+            "depth_class": "deep", "report_delivered": True, "game_minute": 112,
+        })
+        check["game_minute"] = 113
+        manager.handle_event(resumed, check)
+        resumed_quest = resumed.narrative.quests[qid]
+        self.assertEqual(resumed_quest.status, "ready")
+        self.assertTrue(resumed_quest.progress["deployments"][line_id]["scouted"])
+
+    def test_all_three_soaked_line_objectives_and_moonlight_set_window(self):
+        manager = QuestManager(load_content())
+        cases = (
+            (QUEST_IDS[1], "cedar", "cedar:rocks", "std", 12, "minnow", 300),
+            (QUEST_IDS[4], "briar", "briar:deep", "std", 12, "shad", 1230),
+            (QUEST_IDS[8], "cedar", "cedar:inlet", "std", 12, "liver", 300),
+        )
+        for index, (qid, lake, zone, tier, hooks, bait, set_minute) in enumerate(cases, 10):
+            with self.subTest(qid=qid):
+                quest = self.state.narrative.quests[qid]
+                quest.status = "active"
+                quest.accepted_game_minute = 100
+                line_id = str(UUID(int=index))
+                manager.handle_event(self.state, {
+                    "type": "line.set", "lake_id": lake, "line_id": line_id,
+                    "zone_id": zone, "tier_id": tier, "hook_count": hooks,
+                    "bait_id": bait, "game_minute": set_minute,
+                    "active_game_minute": 10,
+                })
+                manager.handle_event(self.state, {
+                    "type": "line.check", "lake_id": lake, "line_id": line_id,
+                    "game_minute": 160, "active_game_minute": 69,
+                })
+                self.assertEqual(quest.status, "active")
+                manager.handle_event(self.state, {
+                    "type": "line.check", "lake_id": lake, "line_id": line_id,
+                    "game_minute": 161, "active_game_minute": 70,
+                })
+                self.assertEqual(quest.status, "ready")
+
+    def test_bot_report_and_second_anchor_zone_complete_without_payout(self):
+        manager = QuestManager(load_content())
+        money = self.state.money
+        qid = QUEST_IDS[3]
+        quest = self.state.narrative.quests[qid]
+        quest.status = "active"
+        quest.accepted_game_minute = 20
+        event = {"type": "bot.scout_complete", "lake_id": "briar",
+                 "target_line_id": None, "zone_id": "briar:flats", "distance_m": 8,
+                 "depth_class": "skinny", "report_delivered": True, "game_minute": 21}
+        event["report_delivered"] = False
+        manager.handle_event(self.state, event)
+        self.assertEqual(quest.status, "active")
+        event["report_delivered"] = True
+        manager.handle_event(self.state, event)
+        self.assertEqual(quest.status, "ready")
+
+        nap = self.state.narrative.quests[QUEST_IDS[6]]
+        nap.status = "active"
+        nap.accepted_game_minute = 0
+        manager.handle_event(self.state, {
+            "type": "anchor.sample", "zone_id": "briar:inlet", "game_minute": 120,
+            "elapsed_game_minutes": 120, "anchored": True, "engine_idle": True,
+        })
+        self.assertEqual(nap.status, "ready")
+        self.assertEqual(self.state.money, money)
+
+    def test_objective_readiness_waits_for_authored_prerequisites(self):
+        content = load_content()
+        qid, prerequisite = QUEST_IDS[3], QUEST_IDS[0]
+        content.quests[qid]["prerequisites"] = [prerequisite]
+        manager = QuestManager(content)
+        quest = self.state.narrative.quests[qid]
+        quest.status = "active"
+        quest.accepted_game_minute = 0
+        event = {"type": "bot.scout_complete", "zone_id": "briar:flats",
+                 "depth_class": "middling", "report_delivered": True,
+                 "game_minute": 1}
+        manager.handle_event(self.state, event)
+        self.assertEqual(quest.status, "active")
+        self.state.narrative.quests[prerequisite].status = "completed"
+        manager.handle_event(self.state, event)
+        self.assertEqual(quest.status, "ready")
+
+    def test_livewell_entry_uses_entry_time_and_survives_save_reload(self):
+        qid = QUEST_IDS[5]
+        quest = self.state.narrative.quests[qid]
+        quest.status = "active"
+        quest.accepted_game_minute = 100
+        line = SetLine("std", "worm", 0, 10, 0, 30, "lilies", [
+            Hook(False, Catch("golden_shiner", 0.3, 1.0, 0, "lilies", "worm", 6,
+                              "briar", catch_game_minute=90))
+        ])
+        self.state.lines = [line]
+        self.state.game_minutes = 335
+        session = Session(self.world, self.path, self.state, False)
+        self.assertIsNone(self.state.take_hook(0, 0))
+        self.assertEqual(quest.status, "ready")
+        self.assertEqual(quest.progress["fish_entered_livewell"]["entry_game_minute"], 335)
+        session.save()
+        loaded = State.load(self.path, self.world)
+        self.assertEqual(loaded.narrative.quests[qid].status, "ready")
+        self.assertEqual(loaded.narrative.quests[qid].progress,
+                         quest.progress)
+        self.assertEqual(loaded.money, self.state.money)
+
+    def test_anchor_interruptions_travel_and_zone_visit_provenance(self):
+        manager = QuestManager(load_content())
+        qid = QUEST_IDS[2]
+        quest = self.state.narrative.quests[qid]
+        quest.status = "active"
+        quest.accepted_game_minute = 0
+        sample = {"type": "anchor.sample", "zone_id": "briar:cypress",
+                  "game_minute": 60, "elapsed_game_minutes": 60,
+                  "anchored": True, "engine_idle": True}
+        manager.handle_event(self.state, sample)
+        self.assertEqual(quest.progress["continuous_game_minutes"], 60)
+        sample.update(game_minute=61, elapsed_game_minutes=1, engine_idle=False)
+        manager.handle_event(self.state, sample)
+        self.assertEqual(quest.progress["continuous_game_minutes"], 0)
+
+        travel_id = QUEST_IDS[7]
+        travel = self.state.narrative.quests[travel_id]
+        travel.status = "active"
+        travel.accepted_game_minute = 0
+        movement = {"type": "boat.move", "lake_id": "cedar",
+                    "zone_id": "cedar:open", "distance_m": 300,
+                    "player_controlled": True, "propulsion": "motor", "game_minute": 5}
+        movement["player_controlled"] = False
+        manager.handle_event(self.state, movement)
+        self.assertEqual(travel.status, "active")
+        movement["player_controlled"] = True
+        manager.handle_event(self.state, movement)
+        self.assertEqual(travel.status, "ready")
+
+        visits = self.state.narrative.quests[QUEST_IDS[9]]
+        visits.status = "active"
+        visits.accepted_game_minute = 0
+        for index, zone in enumerate(("cedar:open", "cedar:rocks", "cedar:lilies")):
+            manager.handle_event(self.state, {
+                "type": "zone.enter", "zone_id": zone, "game_minute": index + 1,
+                "movement_cause": "boat", "player_controlled": True,
+            })
+        self.assertEqual(visits.status, "ready")
+
+    def test_sequence_requires_player_control_and_ready_is_not_completion(self):
+        manager = QuestManager(load_content())
+        quest = self.state.narrative.quests[QUEST_IDS[11]]
+        quest.status = "active"
+        quest.accepted_game_minute = 0
+        money = self.state.money
+        zones = ("cedar:landing", "cedar:lilies", "cedar:landing")
+        for index, zone in enumerate(zones):
+            manager.handle_event(self.state, {
+                "type": "zone.enter", "zone_id": zone, "game_minute": index + 1,
+                "movement_cause": "tow", "player_controlled": False,
+            })
+        self.assertEqual(quest.progress.get("sequence_index", 0), 0)
+        for index, zone in enumerate(zones):
+            manager.handle_event(self.state, {
+                "type": "zone.enter", "zone_id": zone, "game_minute": index + 4,
+                "movement_cause": "boat", "player_controlled": True,
+            })
+        self.assertEqual(quest.status, "ready")
+        self.assertNotIn(QUEST_IDS[11], self.state.narrative.reward_claims)
+        self.assertEqual(self.state.money, money)
 
 
 def narrative_checks():
