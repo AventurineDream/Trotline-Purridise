@@ -453,7 +453,7 @@ class UI:
         npc = nearby_npc(state)
         if npc is not None:
             label = f"C  Hail {npc.name}"
-            px, py = 18, h - 115
+            px, py = m, h - m - max(map_h, stat_h + lines_h) - 34 - 8
             self._panel(frame, px, py, self._measure(label, small) + 56, 34)
             # A small procedural paw wave avoids a font-dependent emoji.
             self._round_fill(frame, px+9, py+16, 14, 10, GOLD, 1.0)
@@ -464,6 +464,8 @@ class UI:
         if prompt:
             pw = self._measure(prompt,small+2)+32
             px,py = (w-pw)//2,h-m-max(map_h,stat_h+lines_h)-int(35*unit)-8
+            if npc is not None:
+                py -= 42
             self._panel(frame,px,py,pw,int(30*unit)+8,0.72)
             self._text(frame,prompt,px+16,py+5,small+2,INK,False,"sans")
         hint = "B Bot  Shift Idle  Q Sail  F Set  E Landing  C Hail  H Help" if state.boat_id=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  C Hail  H Help"
