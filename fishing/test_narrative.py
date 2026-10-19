@@ -7,9 +7,12 @@ import unittest
 from types import SimpleNamespace
 from uuid import UUID
 
+import numpy as np
+
 from . import bot
 from .content import load_content
 from .game import Keys, Session
+from .guardian import draw_sighting, maybe_start_sighting
 from .narrative import NarrativeState, QUEST_IDS, RIPPLE_BY_QUEST
 from .quests import QuestManager
 from .sim import Catch, Hook, SetLine, State
@@ -165,6 +168,69 @@ class NarrativeChecks(unittest.TestCase):
         details = quest_journal_details(self.state, content, qid)
         self.assertIn("Whiskered Blessing", details["guardian_status"])
         self.assertIn("broad ripple", details["guardian_status"])
+
+    def test_guardian_sighting_requires_eight_ripples_deep_water_and_sunset(self):
+        cedar = World("cedar")
+        state = State.new(cedar, seed=91)
+        state.x, state.z = cedar.anchors["cedar:deep"].position
+        state.game_minutes = 720  # 18:00, with game time anchored at 06:00.
+        state.narrative.ripples = list(RIPPLE_BY_QUEST.values())[:7]
+
+        self.assertFalse(maybe_start_sighting(state, cedar, "play"))
+        state.narrative.ripples.append("ripple_08")
+        self.assertFalse(maybe_start_sighting(state, cedar, "map"))
+        state.game_minutes = 719.9
+        self.assertFalse(maybe_start_sighting(state, cedar, "play"))
+        state.game_minutes = 840  # 20:00 is outside the half-open window.
+        self.assertFalse(maybe_start_sighting(state, cedar, "play"))
+        state.game_minutes = 720
+        state.x, state.z = cedar.anchors["cedar:open"].position
+        self.assertFalse(maybe_start_sighting(state, cedar, "play"))
+        state.x, state.z = cedar.anchors["cedar:deep"].position
+
+        fishing_before = {key: state.to_json()[key]
+                          for key in ("money", "lines", "well", "bait", "journal", "game_minutes")}
+        state.anim = 12.5
+        self.assertTrue(maybe_start_sighting(state, cedar, "play"))
+        self.assertTrue(state.narrative.guardian_seen)
+        self.assertEqual(state.guardian_sighting_started_at, 12.5)
+        self.assertFalse(maybe_start_sighting(state, cedar, "play"))
+        self.assertEqual(fishing_before, {key: state.to_json()[key]
+                                          for key in fishing_before})
+
+        state.save(self.path)
+        loaded = State.load(self.path, cedar)
+        self.assertTrue(loaded.narrative.guardian_seen)
+        self.assertIsNone(loaded.guardian_sighting_started_at)
+        details = quest_journal_details(loaded, load_content(), QUEST_IDS[0])
+        self.assertIn("Whiskered Blessing", details["guardian_status"])
+
+    def test_guardian_sighting_overlay_is_brief_and_nonblocking(self):
+        state = self.state
+        frame = np.full((180, 320, 3), 96, dtype=np.uint8)
+        state.guardian_sighting_started_at = 2.0
+        state.anim = 3.0
+        draw_sighting(frame, state)
+        self.assertFalse(np.all(frame == 96))
+
+        state.anim = 10.0
+        expired = np.full((180, 320, 3), 96, dtype=np.uint8)
+        draw_sighting(expired, state)
+        self.assertTrue(np.all(expired == 96))
+
+    def test_session_starts_guardian_sighting_during_visible_play(self):
+        cedar = World("cedar")
+        state = State.new(cedar, seed=92)
+        state.x, state.z = cedar.anchors["cedar:deep"].position
+        state.game_minutes = 720
+        state.narrative.ripples = list(RIPPLE_BY_QUEST.values())[:8]
+        session = Session(cedar, self.path, state, False)
+        session.ui.mode = "play"
+
+        session.tick(Keys(), 0.1)
+
+        self.assertTrue(state.narrative.guardian_seen)
+        self.assertAlmostEqual(state.guardian_sighting_started_at, state.anim)
 
     def test_small_narrative_journal_reserves_progress_line(self):
         qid = QUEST_IDS[10]
