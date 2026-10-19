@@ -9,6 +9,7 @@ import numpy as np
 from .data import hour_of_day
 
 SIGHTING_SECONDS = 8.0
+WATERLINE_OFFSET = 0.15
 
 
 def maybe_start_sighting(state, world, mode: str) -> bool:
@@ -24,8 +25,22 @@ def maybe_start_sighting(state, world, mode: str) -> bool:
         return False
 
     state.narrative.guardian_seen = True
-    state.guardian_sighting_started_at = float(state.anim)
+    state.guardian_sighting_pending = True
+    state.guardian_sighting_started_at = None
+    state.guardian_sighting_last_anim = float(state.anim)
     return True
+
+
+def pause_sighting_clock(state) -> None:
+    """Keep hidden time from consuming the one-time visual."""
+    now = float(state.anim)
+    started = getattr(state, "guardian_sighting_started_at", None)
+    last = getattr(state, "guardian_sighting_last_anim", None)
+    if (not getattr(state, "guardian_sighting_pending", False)
+            and type(started) in (int, float) and math.isfinite(float(started))
+            and type(last) in (int, float) and math.isfinite(float(last))):
+        state.guardian_sighting_started_at = float(started) + max(0.0, now - float(last))
+    state.guardian_sighting_last_anim = now
 
 
 def _progress(state) -> float | None:
@@ -36,6 +51,26 @@ def _progress(state) -> float | None:
     if not math.isfinite(age) or age < 0.0 or age >= SIGHTING_SECONDS:
         return None
     return age / SIGHTING_SECONDS
+
+
+def _sighting_center(frame: np.ndarray, camera) -> tuple[float, float] | None:
+    height, width = frame.shape[:2]
+    if camera is None:
+        return width * 0.5, height * 0.60
+    pitch = getattr(camera, "pitch", None)
+    tany = getattr(camera, "tany", None)
+    if (type(pitch) not in (int, float) or type(tany) not in (int, float)
+            or not math.isfinite(float(pitch)) or not math.isfinite(float(tany))
+            or float(tany) <= 0.0):
+        return None
+
+    # The waterline is the camera horizon. Keep the ripple on the water side
+    # of it as the player looks up or down, and defer it if water is off-screen.
+    horizon_y = height * (0.5 + math.tan(float(pitch)) / (2.0 * float(tany)))
+    center_y = horizon_y + height * WATERLINE_OFFSET
+    if not math.isfinite(center_y) or not 0.0 <= center_y < height:
+        return None
+    return width * 0.5, center_y
 
 
 def _blend(frame, x0: int, y0: int, mask: np.ndarray,
@@ -105,14 +140,21 @@ def _draw_guardian_shadow(frame, center_x: float, center_y: float,
            (20, 39, 48), 0.24 * fade_in * fade_out)
 
 
-def draw_sighting(frame: np.ndarray, state) -> None:
+def draw_sighting(frame: np.ndarray, state, camera=None) -> bool:
     """Draw a brief surface ripple and low-contrast under-hull silhouette."""
+    center = _sighting_center(frame, camera)
+    if center is None:
+        pause_sighting_clock(state)
+        return False
+    if getattr(state, "guardian_sighting_pending", False):
+        state.guardian_sighting_pending = False
+        state.guardian_sighting_started_at = float(state.anim)
+    state.guardian_sighting_last_anim = float(state.anim)
     progress = _progress(state)
     if progress is None:
-        return
+        return False
     height, width = frame.shape[:2]
-    center_x = width * 0.5
-    center_y = height * 0.60
+    center_x, center_y = center
     _draw_guardian_shadow(frame, center_x, center_y + height * 0.045,
                           width, height, progress)
 
@@ -126,3 +168,4 @@ def draw_sighting(frame: np.ndarray, state) -> None:
         alpha = 0.24 * (1.0 - progress) * (0.82 ** index)
         _ellipse_region(frame, center_x, center_y, radius_x, radius_y,
                         (158, 205, 197), alpha)
+    return True
