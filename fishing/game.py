@@ -362,6 +362,7 @@ class Session:
         destination = World(lake_id)
         self.world = destination
         self.state.bind(destination)
+        self.state.rowboat_charge_kwh_this_visit = 0.0
         self.state._park(destination)
         reset_bot(self.state)
         self.ui.mode = "play"
