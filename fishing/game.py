@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from .content import load_content
+from .quests import QuestManager
 from .dialogue import Conversation, nearby_npc
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
@@ -65,6 +66,8 @@ class Session:
         self.quit = False
         self._menu_held: set[str] = set()
         self._npc_content = load_content()
+        self.quest_manager = QuestManager(self._npc_content)
+        self._attach_quest_manager()
         self.conversation = None
         self.ui.dialogue_content = self._npc_content
         self._npc_key = None
@@ -99,6 +102,9 @@ class Session:
         self.state.save(self.save_path)
         self.ui.has_save = True
 
+    def _attach_quest_manager(self) -> None:
+        self.state._quest_event_handler = self.quest_manager.handle_event
+
     def _simulate(self, keys, dt: float):
         mode = self.ui.mode
         state = self.state
@@ -107,7 +113,8 @@ class Session:
             # around, even when Enter/Esc closes the menu in this same tick.
             driving_keys = Keys(held=keys.held - self._menu_held)
             state.drive(dt,_throttle(driving_keys,mode),_steer(driving_keys,mode),self.world,
-                        idle=bool(driving_keys.held & {"shift","rshift"}))
+                        idle=bool(driving_keys.held & {"shift","rshift"}),
+                        player_controlled=True)
             if mode == "play":
                 look = 0.0
                 if "up" in driving_keys.held:
@@ -123,7 +130,20 @@ class Session:
             if sound:
                 self.sound = sound
         hooked_before = state.hooked_total
+        game_minute_before = state.game_minutes
         state.advance(dt, mode in FROZEN)
+        elapsed = max(0.0, state.game_minutes - game_minute_before)
+        zone = self.world.zone_at(state.x, state.z)
+        state.emit_quest_event({
+            "type": "anchor.sample",
+            "lake_id": self.world.id,
+            "zone_id": f"{self.world.id}:{zone}",
+            "game_minute": state.game_minutes,
+            "elapsed_game_minutes": elapsed,
+            "anchored": state.anchored,
+            "engine_idle": (not state.sail_raised and abs(state.throttle) <= 0.01
+                            and abs(state.throttle_setting) <= 0.01),
+        })
         if state.hooked_total > hooked_before:
             self.sound = "bite"
         self._refresh_npcs()
@@ -182,6 +202,7 @@ class Session:
                 self.ui.confirm_new = False
             elif "return" in keys.pressed or "space" in keys.pressed:
                 self.state = State.new(self.world)
+                self._attach_quest_manager()
                 self.ui.confirm_new = False
                 self.ui.mode = "play"
                 self.ui.note = ""
@@ -202,6 +223,7 @@ class Session:
                 except (OSError, ValueError, KeyError):
                     self.state.toast("That save could not be read.")
                     return
+                self._attach_quest_manager()
                 self.state.catch_up()
                 self.ui.mode = "play"
             elif choice == "New morning":
@@ -367,6 +389,26 @@ class Session:
             self.ui.check_line = nearest
             self.ui.check_i = 0
             self.ui.note = ""
+            line = self.state.lines[nearest]
+            self.state.emit_quest_event({
+                "type": "line.check",
+                "lake_id": self.state.lake_id,
+                "zone_id": f"{self.state.lake_id}:{line.zone}",
+                "line_id": line.line_id,
+                "game_minute": self.state.game_minutes,
+                "active_game_minute": self.state.narrative.active_play_game_minutes,
+                "eligible_catch_records": [
+                    {
+                        "species_id": hook.catch.species,
+                        "source_line_id": line.line_id,
+                        "lake_id": self.state.lake_id,
+                        "source_zone_id": f"{self.state.lake_id}:{line.zone}",
+                        "bait_id": line.bait,
+                        "catch_game_minute": hook.catch.catch_game_minute,
+                    }
+                    for hook in line.hooks if hook.catch is not None
+                ],
+            })
             return
         self.state.toast("Nothing here to check.")
 

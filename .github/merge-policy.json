@@ -1,7 +1,7 @@
 {
   "version": 3,
   "repository": "AventurineDream/TrotLineSim",
-  "review_wait_seconds": 3600,
+  "review_wait_seconds": 1800,
   "required_checks": [
     {
       "name": "gameplay-tests",
