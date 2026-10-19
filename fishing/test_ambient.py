@@ -1,13 +1,16 @@
 """Bounded, world-anchored wildlife without save or simulation side effects."""
 
 import copy
+import math
 import unittest
 from unittest.mock import patch
 
 import numpy as np
 
 from . import ambient
+from .camera import Camera
 from .sim import State
+from .software import SoftwareRenderer, _legacy_birds_visible
 from .weather import lighting_at
 from .world import World
 
@@ -106,6 +109,31 @@ class AmbientChecks(unittest.TestCase):
         for i, first in enumerate(shapes):
             for second in shapes[i + 1:]:
                 self.assertFalse(np.array_equal(first, second))
+
+    def test_cpu_renderer_draws_ambient_bird_faces_from_both_sides(self):
+        world = self.worlds['briar']
+        renderer = SoftwareRenderer(world, 128, 96)
+        camera = Camera(0, 1.22, 0, 0, -0.055, 0, math.radians(74), 128, 96,
+                        build_rays=False)
+        birds = []
+        ambient._bird(birds, 0, 5, 8, 0, 'gull', 3, .5)
+        light = {
+            'sun': np.array([0, 1, 0], np.float32),
+            'night': 0.0,
+            'moon_i': 0.0,
+            'sun_i': 1.0,
+        }
+
+        renderer._faces(camera, birds, light, boat=False)
+        self.assertFalse(np.any(renderer.col))
+        renderer._faces(camera, birds, light, boat=False, two_sided=True)
+        self.assertTrue(np.any(renderer.col))
+
+    def test_legacy_cpu_birds_follow_daylight_and_heavy_rain_gates(self):
+        self.assertTrue(_legacy_birds_visible({'night': 0.0, 'rain': 0.0}))
+        self.assertTrue(_legacy_birds_visible({'night': 0.64, 'rain': 0.79}))
+        self.assertFalse(_legacy_birds_visible({'night': 0.65, 'rain': 0.0}))
+        self.assertFalse(_legacy_birds_visible({'night': 0.0, 'rain': 0.8}))
 
     def test_camera_turns_and_small_boat_moves_do_not_drag_wildlife(self):
         for world in self.worlds.values():

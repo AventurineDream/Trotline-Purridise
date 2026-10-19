@@ -50,5 +50,8 @@ jobs:
       - name: Run unit and persistence regressions
         run: python -m unittest discover -v
 
+      - name: Run narrative persistence regressions
+        run: python -m unittest fishing.test_narrative -v
+
       - name: Run full gameplay and software rendering self-test
         run: python -m fishing --selftest --software

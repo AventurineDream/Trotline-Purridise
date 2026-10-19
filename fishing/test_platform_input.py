@@ -189,6 +189,60 @@ class PlatformInputChecks(unittest.TestCase):
             session.tick(self.platform.poll(), .1)
             self.assertEqual(state.throttle_setting, throttle)
 
+    def test_short_movement_taps_drive_and_steer_for_one_tick(self):
+        from .game import Session
+        from .sim import State
+        from .world import World
+
+        world = World()
+        with tempfile.TemporaryDirectory(prefix='briar-short-movement-') as temp:
+            state = State.new(world, seed=17)
+            state.anchored = False
+            session = Session(world, Path(temp) / 'save.json', state, True)
+            session.ui.mode = 'play'
+
+            self.key('w')
+            self.key('w', down=False)
+            inp = self.platform.poll()
+            self.assertEqual(inp.pressed, {'w'})
+            self.assertEqual(inp.held, set())
+            session.tick(inp, .1)
+            throttle = state.throttle_setting
+            self.assertGreater(throttle, 0)
+            session.tick(self.platform.poll(), .1)
+            self.assertEqual(state.throttle_setting, throttle)
+
+            self.key('a')
+            self.key('a', down=False)
+            inp = self.platform.poll()
+            self.assertEqual(inp.pressed, {'a'})
+            self.assertEqual(inp.held, set())
+            session.tick(inp, .1)
+            self.assertLess(state.steer, 0)
+            steer = state.steer
+            session.tick(self.platform.poll(), .1)
+            self.assertGreater(state.steer, steer)
+
+    def test_menu_movement_tap_does_not_drive_when_closing_menu(self):
+        from .game import Session
+        from .sim import State
+        from .world import World
+
+        world = World()
+        with tempfile.TemporaryDirectory(prefix='briar-menu-tap-') as temp:
+            state = State.new(world, seed=17)
+            state.anchored = False
+            session = Session(world, Path(temp) / 'save.json', state, True)
+            session.ui.mode = 'help'
+            session.ui.help_from = 'play'
+            self.key('w')
+            self.key('w', down=False)
+            self.key('esc')
+            self.key('esc', down=False)
+            session.tick(self.platform.poll(), .1)
+            self.assertEqual(session.ui.mode, 'play')
+            self.assertEqual(state.throttle_setting, 0)
+
     def test_short_shift_taps_idle_the_lever_after_release(self):
         from .game import Session
         from .sim import State

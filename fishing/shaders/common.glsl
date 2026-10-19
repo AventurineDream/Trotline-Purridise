@@ -77,7 +77,7 @@ vec3 sky(vec3 d) {
     }
     // Small angular wing strokes stay legible without the old blurry circles.
     float day = 1.0-night;
-    if (day>0.05 && d.y>0.04) {
+    if (day>0.35 && rain<0.8 && d.y>0.04) {
         float birds = 0.0;
         float aa = max(0.00045,tanx/viewport.x*1.2);
         for (int i=0;i<4;i++) {
