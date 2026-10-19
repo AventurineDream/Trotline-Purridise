@@ -69,16 +69,16 @@ reference and inside the contract's 20-metre hail range. Rotating NPC water
 anchors are outside the 50-metre landing exclusion. Their default checked
 player position is the anchor with yaw zero.
 
-This ticket provides location data and verification for later encounter work.
-It creates no actor meshes, collisions, hailing UI, NPC schedule or quest
-progress. A later dock-host renderer must use dock placement rather than
-spawning a boat in the slip. Shop, fuel, travel menus and player start/docking
-positions keep using the existing landing. No save fields are added.
+Trinidad Cove keeps this fixed water anchor and adds a short bank-side timber
+launch, cypress shade, reeds and stone detail on the west side. These are
+rendered scene details only: they do not move the surveyed shoreline, create a
+new fishing zone, or obstruct the existing route to the anchor. Shop, fuel,
+travel menus and player start/docking positions keep using the existing landing.
 
 ## Validation
 
 `validate_anchors(world)` rejects wrong-zone or non-navigable points, blocked
-full-hull approaches for any of the three player boats, approaches beyond the
+full-hull approaches for any of the four player boats, approaches beyond the
 hail radius, and water NPCs inside the landing exclusion. It never relocates a
 site. It is invoked by regressions rather than on every frame or startup.
 

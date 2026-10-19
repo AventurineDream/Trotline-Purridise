@@ -48,7 +48,12 @@ from .data import (
     CEDAR_FISH,
 )
 from .world import World
-from .boat import BOATS, FUEL_PRICE, THROTTLE_RATE, REVERSE_LIMIT, sailing_speed
+from .boat import (
+    BOATS, FUEL_PRICE, THROTTLE_RATE, REVERSE_LIMIT, sailing_speed,
+    ROWBOAT_ROW_SPEED, ROWBOAT_ELECTRIC_SPEED, ROWBOAT_MOTOR_POWER_KW,
+    ROWBOAT_BATTERY_KWH, ROWBOAT_MOTOR_PRICE, ELECTRICITY_PRICE,
+    BATTERY_CHARGE_KWH,
+)
 from .weather import wind_at
 from .lakes import LAKES
 from .narrative import NarrativeState, deployment_id
@@ -326,6 +331,9 @@ class State:
     boat_id: str = "jon"
     owned_boats: list[str] = field(default_factory=lambda:["jon"])
     fuel_tanks: dict[str,float] = field(default_factory=lambda:{"jon":12.0})
+    rowboat_trolling_motor: bool = False
+    rowboat_battery_kwh: float = 0.0
+    rowboat_charge_kwh_this_visit: float = 0.0
     sail_raised: bool = False
     game_minutes: float = 0.0
     minute_acc: float = 0.0
@@ -440,6 +448,9 @@ class State:
     def max_speed(self) -> float:
         if self.boat_id=="sail":
             return 1.8  # small auxiliary; powered-boat upgrades stay available
+        if self.boat_id=="rowboat":
+            return (ROWBOAT_ELECTRIC_SPEED if self.rowboat_trolling_motor
+                    and self.rowboat_battery_kwh > 0.0 else ROWBOAT_ROW_SPEED)
         return MOTORS[self.motor]["speed"] * self.boat.speed_factor
 
     @property
@@ -498,6 +509,53 @@ class State:
         self.fuel += amount
         self.toast(f"Added {amount:.1f} L of fuel for {dollars(cost)}.")
         return None
+
+    def buy_rowboat_trolling_motor(self) -> str | None:
+        if "rowboat" not in self.owned_boats:
+            return "Buy the rowboat first."
+        if self.slip_status(self._world) != "docked" or abs(self.speed) >= 0.45:
+            return "Idle at the landing to fit the trolling motor."
+        if self.rowboat_trolling_motor:
+            return "The trolling motor is already installed."
+        if not self._spend(ROWBOAT_MOTOR_PRICE):
+            return f"Need {dollars(ROWBOAT_MOTOR_PRICE)}."
+        self.rowboat_trolling_motor = True
+        self.rowboat_battery_kwh = ROWBOAT_BATTERY_KWH
+        self.toast("Installed the 9.9 hp electric trolling motor.")
+        return None
+
+    def charge_rowboat_battery(self) -> str | None:
+        if not self.rowboat_trolling_motor:
+            return "Fit the trolling motor first."
+        if self.boat_id != "rowboat":
+            return "Aboard the rowboat to charge its battery."
+        world = getattr(self, "_world", None)
+        if (world is None or self.slip_status(world) != "docked"
+                or abs(self.speed) >= 0.45):
+            return "Idle at the landing to charge the battery."
+        missing = ROWBOAT_BATTERY_KWH - self.rowboat_battery_kwh
+        if missing < 0.001:
+            return "The battery is full."
+        visit_remaining = self.battery_charge_available_this_visit()
+        if visit_remaining < 0.1:
+            return "The 5 kWh charge limit is used for this landing visit. Leave and return to recharge."
+        amount = min(visit_remaining, missing,
+                     max(0.0, self.money) / ELECTRICITY_PRICE)
+        if amount < 0.1:
+            return "Need some cash to charge the battery."
+        cost = round(amount * ELECTRICITY_PRICE, 2)
+        if not self._spend(cost):
+            return f"Need {dollars(cost)}."
+        self.rowboat_battery_kwh = min(ROWBOAT_BATTERY_KWH,
+                                       self.rowboat_battery_kwh + amount)
+        self.rowboat_charge_kwh_this_visit = min(
+            BATTERY_CHARGE_KWH, self.rowboat_charge_kwh_this_visit + amount)
+        self.toast(f"Added {amount:.1f} kWh for {dollars(cost)}.")
+        return None
+
+    def battery_charge_available_this_visit(self) -> float:
+        used = min(BATTERY_CHARGE_KWH, max(0.0, self.rowboat_charge_kwh_this_visit))
+        return BATTERY_CHARGE_KWH - used
 
     def owned_lines(self) -> int:
         return len(self.held) + len(self.lines)
@@ -702,16 +760,33 @@ class State:
             self.sail_raised = False
         else:
             engine = self.throttle
+            movement_propulsion = None
             if abs(engine)>0.01:
-                burn = self.boat.fuel_burn*(1.0 if self.boat_id=="sail" else 1+self.motor*0.75)
-                needed = burn*(0.12+0.88*abs(engine)**1.7)*dt/60.0
-                available = min(self.fuel,needed)
-                engine *= available/max(needed,1e-12)
-                was_fueled = self.fuel>0
-                self.fuel -= available
-                self.throttle = engine
-                if was_fueled and self.fuel==0:
-                    self.toast("Tank empty. Refuel at the landing; R calls the tow boat.")
+                if self.boat_id == "rowboat":
+                    if self.rowboat_trolling_motor and self.rowboat_battery_kwh > 0.0:
+                        needed = (ROWBOAT_MOTOR_POWER_KW
+                                  * (0.12 + 0.88 * abs(engine) ** 1.7) * dt / 60.0)
+                        available = min(self.rowboat_battery_kwh, needed)
+                        engine *= available / max(needed, 1e-12)
+                        self.rowboat_battery_kwh = max(0.0, self.rowboat_battery_kwh - available)
+                        self.throttle = engine
+                        movement_propulsion = "motor"
+                        if self.rowboat_battery_kwh == 0.0:
+                            self.toast("Battery empty. W/S still row the boat.")
+                    else:
+                        movement_propulsion = "oar"
+                else:
+                    burn = self.boat.fuel_burn*(1.0 if self.boat_id=="sail" else 1+self.motor*0.75)
+                    needed = burn*(0.12+0.88*abs(engine)**1.7)*dt/60.0
+                    available = min(self.fuel,needed)
+                    engine *= available/max(needed,1e-12)
+                    was_fueled = self.fuel>0
+                    self.fuel -= available
+                    self.throttle = engine
+                    if was_fueled and self.fuel==0:
+                        self.toast("Tank empty. Refuel at the landing; R calls the tow boat.")
+                    if abs(engine) > 0.01:
+                        movement_propulsion = "motor"
             target_speed = engine*self.max_speed()+self.sail_drive()
             target_speed = min(target_speed,max(self.max_speed(),self.boat.sail_speed))
             rate = self.boat.acceleration if abs(target_speed) > abs(self.speed) else 0.65
@@ -731,7 +806,7 @@ class State:
         if self.sail_raised and abs(self.sail_drive()) > 0.01:
             propulsion = "sail"
         elif abs(self.throttle) > 0.01:
-            propulsion = "motor"
+            propulsion = movement_propulsion
         else:
             propulsion = None
         for _ in range(steps):
@@ -741,6 +816,8 @@ class State:
             fx,fz = math.sin(self.yaw),math.cos(self.yaw)
             nx,nz = self.x+fx*distance/steps,self.z+fz*distance/steps
             moved, accepted_path = self._move(nx,nz,world)
+            if self.slip_status(world) != "docked":
+                self.rowboat_charge_kwh_this_visit = 0.0
             for x0, z0, x1, z1 in accepted_path:
                 self._emit_movement_events(world, x0, z0, x1, z1,
                                            player_controlled=player_controlled,
@@ -867,7 +944,7 @@ class State:
 
     def hint(self) -> str | None:
         if self.tutorial == 0:
-            return "W/S adjust throttle    Shift idle    A/D steer"
+            return "W/S row or power    Shift idle    A/D steer"
         if self.tutorial == 1:
             return "Stop, then F to set a trotline"
         if self.tutorial == 2:
@@ -1208,6 +1285,9 @@ class State:
             "version": SAVE_VERSION,
             "lake_id":self.lake_id,"boat_id":self.boat_id,"owned_boats":self.owned_boats,
             "fuel_tanks":{key:round(value,6) for key,value in self.fuel_tanks.items()},
+            "rowboat_trolling_motor":self.rowboat_trolling_motor,
+            "rowboat_battery_kwh":round(self.rowboat_battery_kwh,6),
+            "rowboat_charge_kwh_this_visit":round(self.rowboat_charge_kwh_this_visit,6),
             "seed": self.rng.s,
             "game_minutes": round(self.game_minutes, 3),
             "money": self.money,
@@ -1260,6 +1340,23 @@ class State:
             st.owned_boats.append(st.boat_id)
         st.fuel_tanks = {key:max(0.0,min(BOATS[key].tank,float(value)))
                          for key,value in raw.get("fuel_tanks",{"jon":12.0}).items() if key in BOATS}
+        st.rowboat_trolling_motor = (bool(raw.get("rowboat_trolling_motor", False))
+                                     and "rowboat" in st.owned_boats)
+        battery = raw.get("rowboat_battery_kwh", 0.0)
+        try:
+            battery = float(battery)
+        except (TypeError, ValueError, OverflowError):
+            battery = 0.0
+        st.rowboat_battery_kwh = (min(ROWBOAT_BATTERY_KWH, max(0.0, battery))
+                                  if st.rowboat_trolling_motor and math.isfinite(battery) else 0.0)
+        charge_used = raw.get("rowboat_charge_kwh_this_visit", 0.0)
+        try:
+            charge_used = float(charge_used)
+        except (TypeError, ValueError, OverflowError):
+            charge_used = 0.0
+        st.rowboat_charge_kwh_this_visit = (
+            min(BATTERY_CHARGE_KWH, max(0.0, charge_used))
+            if st.rowboat_trolling_motor and math.isfinite(charge_used) else 0.0)
         st.game_minutes = float(raw["game_minutes"])
         st.money = float(raw["money"])
         st.earned = float(raw.get("earned", 0))
@@ -1313,6 +1410,8 @@ class State:
         if (safe_x,safe_z,safe_yaw)!=(st.x,st.z,st.yaw):
             st.x,st.z,st.yaw = safe_x,safe_z,safe_yaw
             st.toast("Boat eased back into clear water.")
+        if st.slip_status(world) != "docked":
+            st.rowboat_charge_kwh_this_visit = 0.0
         return st
 
 

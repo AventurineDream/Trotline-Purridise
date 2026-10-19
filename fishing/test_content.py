@@ -80,7 +80,7 @@ class ContentChecks(unittest.TestCase):
         distance = objectives[7]
         self.assertEqual((distance['type'],distance['zone_id'],distance['distance_m']), ('travel_distance','cedar:open',300))
         self.assertEqual(distance['measurement'], 'in_zone_path')
-        self.assertEqual(distance['propulsion'], ['motor','sail'])
+        self.assertEqual(distance['propulsion'], ['motor','sail','oar'])
         self.assertTrue(distance['player_controlled'])
         self.assertFalse(distance['count_tow'])
         self.assertEqual(objectives[9]['zone_ids'], ['cedar:rocks','cedar:lilies','cedar:open'])

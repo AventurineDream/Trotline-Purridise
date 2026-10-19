@@ -18,6 +18,7 @@ _PERCH = {
     "jon": (0.34, -0.49, 2.24),
     "sail": (0.28, -0.45, 2.02),
     "pontoon": (0.58, -0.84, 1.48),
+    "rowboat": (0.0, -0.36, 1.05),
 }
 _SPEED = 7.5  # metres per real second
 
@@ -165,6 +166,14 @@ def checks(world) -> None:
     center = amber[0].pts.mean(axis=0)
     if float(np.dot(amber[0].normal, eye - center)) <= 0.2:
         raise AssertionError("Bot's lamp faces away from the skipper")
+    rowboat = State.new(world, seed=4)
+    rowboat.boat_id = "rowboat"
+    rowboat.owned_boats.append("rowboat")
+    eye, _right, _up, forward = _boat_basis(rowboat)
+    rowboat_points = _points(faces(rowboat)).reshape(-1, 3)
+    along = (rowboat_points - eye) @ forward
+    if float(along.max()) >= rowboat.boat.bow or float(along.min()) <= rowboat.boat.stern:
+        raise AssertionError("Bot's rowboat perch extends beyond the hull")
     money = state.money
     sound = summon(state, world)
     if sound != "bot" or state.bot_phase != "go" or state.money != money:
