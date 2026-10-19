@@ -55,7 +55,11 @@ class NarrativeChecks(unittest.TestCase):
         n.schedule_seed = -17
         n.day_npc_by_lake = {"briar": "willow", "cedar": "quill"}
         n.schedule_day_by_lake = {"briar": 2, "cedar": 2}
-        n.bot_notes = ["Bot: Middling water."]
+        n.record_bot_note("Bot: Middling water.")
+        n.record_bot_reaction("npc:grandmother_whiskers",
+                              "Bot: His brass ears turn toward Grandmother Whiskers.")
+        n.record_bot_reaction(f"quest:{QUEST_IDS[2]}",
+                              "Bot: He gives a small approving brass click.")
         n.guardian_seen = True
         n.active_play_game_minutes = 140
         return n.to_json()
@@ -148,6 +152,11 @@ class NarrativeChecks(unittest.TestCase):
         self.state.narrative.bot_notes = ["Bot: Minnows along the shaded bank."]
         details = quest_journal_details(self.state, content, qid)
         self.assertEqual(details["bot_notes"], ["Bot: Minnows along the shaded bank."])
+        self.state.narrative.record_bot_reaction(
+            "npc:elder_moss", "Bot: His brass ears turn toward Elder Moss.")
+        details = quest_journal_details(self.state, content, qid)
+        self.assertEqual(details["latest_bot_note"],
+                         "Bot: His brass ears turn toward Elder Moss.")
         self.assertIn("Guardian locked (<8 Ripples)", details["guardian_status"])
         self.state.narrative.ripples = list(RIPPLE_BY_QUEST.values())[:8]
         details = quest_journal_details(self.state, content, qid)
@@ -203,6 +212,35 @@ class NarrativeChecks(unittest.TestCase):
         self.assertEqual(n.quests[qid].status, "completed")
         self.assertEqual(n.reward_claims, [qid])
 
+    def test_bot_reactions_are_keyed_once_and_journal_notes_roundtrip(self):
+        n = self.state.narrative
+        npc_note = "Bot: His brass ears turn toward Elder Moss."
+        quest_note = "Bot: He gives a small approving brass click."
+        self.assertTrue(n.record_bot_reaction("npc:elder_moss", npc_note))
+        self.assertFalse(n.record_bot_reaction("npc:elder_moss", "Repeated cue."))
+        self.assertTrue(n.record_bot_reaction(f"quest:{QUEST_IDS[2]}", quest_note))
+        self.assertFalse(n.record_bot_reaction("npc:unknown", "Unsupported NPC."))
+        self.assertFalse(n.record_bot_reaction([], "Invalid key."))
+        self.assertEqual(n.bot_journal, [npc_note, quest_note])
+
+        loaded = self.load()
+        self.assertEqual(loaded.narrative.bot_reactions, n.bot_reactions)
+        self.assertEqual(loaded.narrative.bot_journal, [npc_note, quest_note])
+        self.assertFalse(loaded.narrative.record_bot_reaction(
+            "npc:elder_moss", "A cue must not repeat after loading."))
+
+    def test_scout_reports_keep_their_two_note_history_and_journal_order(self):
+        n = self.state.narrative
+        reports = [f"Bot: Report {index}." for index in range(3)]
+        for report in reports:
+            self.assertTrue(n.record_bot_note(report))
+        reaction = "Bot: His brass ears turn toward Doc Barnaby."
+        n.record_bot_reaction("npc:doc_barnaby", reaction)
+        self.assertEqual(n.bot_notes, reports[-2:])
+        self.assertEqual(n.bot_journal, reports + [reaction])
+        self.assertEqual(self.load().narrative.bot_notes, reports[-2:])
+        self.assertEqual(self.load().narrative.bot_journal, reports + [reaction])
+
     def test_malformed_optional_fields_do_not_discard_fishing_or_valid_siblings(self):
         raw = self.state.to_json()
         for invalid in (None, False, "broken", [], 42):
@@ -221,6 +259,9 @@ class NarrativeChecks(unittest.TestCase):
             "schedule_day_by_lake": {"briar": True, "cedar": 3},
             "ripples": ["ripple_01", [], "ripple_01", "ripple_99"],
             "bot_notes": ["Kept note", None], "guardian_seen": "false",
+            "bot_reactions": {"npc:elder_moss": "One cue", "npc:unknown": "Drop",
+                              f"quest:{QUEST_IDS[0]}": None},
+            "bot_journal": ["Journal entry", None, 42, "  "],
             "reward_claims": [QUEST_IDS[2], {}, QUEST_IDS[2]],
         }
         loaded = self.load(raw)
@@ -230,6 +271,8 @@ class NarrativeChecks(unittest.TestCase):
         self.assertEqual(n.quests[qid].status, "active")
         self.assertEqual(n.ripples, ["ripple_01"])
         self.assertEqual(n.bot_notes, ["Kept note"])
+        self.assertEqual(n.bot_reactions, {"npc:elder_moss": "One cue"})
+        self.assertEqual(n.bot_journal, ["Journal entry"])
         self.assertEqual(n.schedule_seed, 0)
         self.assertEqual(n.schedule_day_by_lake, {"briar": None, "cedar": 3})
         self.assertFalse(n.guardian_seen)

@@ -147,9 +147,19 @@ class Session:
         if state.hooked_total > hooked_before:
             self.sound = "bite"
         self._refresh_npcs()
+        if mode in DRIVING:
+            self._react_to_nearby_npc()
         if self.conversation and not any(n.id == self.conversation.npc_id for n in state.npcs):
             self._close_dialogue()
         state.tick_toasts(dt)
+
+    def _react_to_nearby_npc(self):
+        npc = nearby_npc(self.state)
+        if npc is None:
+            return
+        note = f"Bot: His brass ears turn toward {npc.name}."
+        if self.state.narrative.record_bot_reaction(f"npc:{npc.id}", note):
+            self.state.toast(note)
 
     def _keys(self, keys, dt: float):
         mode = self.ui.mode
