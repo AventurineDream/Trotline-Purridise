@@ -101,6 +101,11 @@ pages. Arrow keys also work, including held-key repeat. Enter or Space selects;
 Esc closes. The field guide accepts all four WASD keys to turn pages. Release a
 direction used in a menu before using it to drive the boat again.
 
+The journal keeps the full 36-species collection and adds a separate **Lake
+Whispers & Ripples** page. Use **A/D** to switch pages and **W/S** to inspect
+quest status, objectives, progress, locations, and Bot's saved notes. Declined
+offers remain available, and missed time windows return later.
+
 Release W or S and the throttle stays where you set it. The HUD shows forward,
 reverse, or idle and the lever percentage. Dropping the anchor resets the lever
 to idle, and existing saves resume at idle.
