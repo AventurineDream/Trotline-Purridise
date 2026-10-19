@@ -18,6 +18,7 @@ from .platform import Text
 from .render import Renderer
 from .sim import Catch, Hook, SetLine, State
 from .ui import UI, UIState, SHOP_TABS, HELP_N
+from .narrative import QUEST_IDS
 from .boat import BOATS
 from .world import World
 
@@ -131,6 +132,8 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             panel.shop_tab = (i//20)%len(SHOP_TABS)
             panel.help_page = (i//100)%HELP_N
             panel.journal_i = i%36
+            panel.journal_page = (i//20)%2
+            panel.journal_quest_i = i%len(QUEST_IDS)
             panel.confirm_new = panel.mode=="title" and i%40>20
             forward = np.array([math.sin(state.yaw),math.cos(state.yaw)])
             right = np.array([forward[1],-forward[0]])

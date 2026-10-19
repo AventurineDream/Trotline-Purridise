@@ -173,7 +173,7 @@ class Session:
         elif mode == "check":
             self._check_keys(keys, dt)
         elif mode == "journal":
-            self._list_keys(keys, dt, "journal_i", len(SPECIES), "j")
+            self._journal_keys(keys, dt)
         elif mode == "well":
             n = max(1, len(self.state.well))
             self._list_keys(keys, dt, "well_i", n, "i")
@@ -257,6 +257,8 @@ class Session:
         if "j" in keys.pressed:
             self.ui.mode = "journal"
             self.ui.journal_i = 0
+            self.ui.journal_page = 0
+            self.ui.journal_quest_i = 0
         if "i" in keys.pressed:
             self.ui.mode = "well"
             self.ui.well_i = 0
@@ -566,6 +568,26 @@ class Session:
         if "esc" in keys.pressed or close_key in keys.pressed:
             self.ui.mode = "play"
             return
+        if count <= 0:
+            return
+        if keys.tap("up", dt):
+            setattr(self.ui, field, (getattr(self.ui, field) - 1) % count)
+        if keys.tap("down", dt):
+            setattr(self.ui, field, (getattr(self.ui, field) + 1) % count)
+
+    def _journal_keys(self, keys, dt):
+        if "esc" in keys.pressed or "j" in keys.pressed:
+            self.ui.mode = "play"
+            return
+        left = keys.tap("left", dt)
+        right = keys.tap("right", dt)
+        if left or right:
+            self.ui.journal_page = (self.ui.journal_page + (1 if right else -1)) % 2
+            return
+        if self.ui.journal_page == 1:
+            field, count = "journal_quest_i", len(self._npc_content.quests)
+        else:
+            field, count = "journal_i", len(SPECIES)
         if count <= 0:
             return
         if keys.tap("up", dt):

@@ -13,6 +13,7 @@ from .game import Keys, Session
 from .narrative import NarrativeState, QUEST_IDS
 from .quests import QuestManager
 from .sim import Catch, Hook, SetLine, State
+from .ui import quest_journal_details
 from .world import World
 
 
@@ -99,6 +100,37 @@ class NarrativeChecks(unittest.TestCase):
             self.assertFalse(loaded.narrative.record_reward_claim(QUEST_IDS[2]))
             loaded.save(self.path)
             loaded = State.load(self.path, self.world)
+
+    def test_quest_journal_details_follow_saved_state_and_contract(self):
+        content = load_content()
+        qid = QUEST_IDS[1]
+        details = quest_journal_details(self.state, content, qid)
+        self.assertEqual(details["status"], "Available")
+        self.assertEqual(details["giver"], "Doc Barnaby · Doc's Lonely Star Marina")
+        self.assertEqual(details["prerequisites"], "none")
+        self.assertIn("Dam riprap", details["objective"])
+        self.assertIn("Not started", details["progress"])
+
+        quest_progress = self.state.narrative.quests[qid]
+        quest_progress.declined = True
+        details = quest_journal_details(self.state, content, qid)
+        self.assertIn("Declined earlier", details["progress"])
+
+        quest_progress.status = "active"
+        quest_progress.progress = {
+            "deployments": {
+                "line-a": {"set": {"active_game_minute": 40}, "checked": False}
+            }
+        }
+        self.state.narrative.active_play_game_minutes = 75
+        details = quest_journal_details(self.state, content, qid)
+        self.assertIn("soak 35/60 active-play min", details["progress"])
+
+        self.state.narrative.bot_notes = ["Bot: Minnows along the shaded bank."]
+        self.state.narrative.guardian_seen = True
+        details = quest_journal_details(self.state, content, qid)
+        self.assertEqual(len(details["bot_notes"]), 2)
+        self.assertTrue(any("broad ripple" in note for note in details["bot_notes"]))
 
     def test_reward_claim_latches_once_and_survives_reload(self):
         qid = QUEST_IDS[3]
