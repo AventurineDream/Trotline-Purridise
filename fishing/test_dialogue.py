@@ -6,9 +6,9 @@ import unittest
 from unittest.mock import patch
 
 from .platform import SCAN
-from .dialogue import HAIL_SPEED_MPS, nearby_npc
+from .dialogue import Conversation, HAIL_SPEED_MPS, nearby_npc
 from .game import Keys, Session
-from .sim import State
+from .sim import Catch, State
 from .npcs import active_npcs
 from .narrative import DAY_NPCS
 from .world import World
@@ -100,21 +100,117 @@ class DialogueChecks(unittest.TestCase):
         self.assertGreater(self.state.game_minutes, before)
         self.assertEqual(self.state.narrative.quests[self.npc.quest_id].progress, {})
 
-    def test_schedule_exit_and_ready_does_not_pay(self):
+    def test_ready_wait_does_not_pay_until_explicit_turn_in(self):
         self.key('c')
         self.state.game_minutes = 840
         self.session._simulate(Keys(), 0)
         self.assertEqual(self.session.ui.mode, 'play')
         self.state.game_minutes = 0
         self.session._refresh_npcs()
-        q = self.state.narrative.quests[self.npc.quest_id]
+        quest_id = self.npc.quest_id
+        q = self.state.narrative.quests[quest_id]
         q.status = 'ready'
         money = self.state.money
-        self.key('c'); self.key('1')
+        reward = self.session._npc_content.rewards[
+            self.session._npc_content.quests[quest_id]['reward_id']]
+        self.key('c'); self.key('2')
         self.assertEqual(q.status, 'ready')
         self.assertEqual(self.state.money, money)
-        self.assertEqual(self.state.narrative.ripples, [])
+        self.assertNotIn(quest_id, self.state.narrative.reward_claims)
+        self.key('c')  # Acknowledge the authored "come back" line.
         self.assertEqual(self.session.ui.mode, 'play')
+        self.key('c'); self.key('1')
+        self.assertEqual(q.status, 'completed')
+        self.assertEqual(self.state.money, round(money + reward['cash'], 2))
+
+    def test_turn_in_is_idempotent_and_preserves_a_full_starter_livewell(self):
+        content = self.session._npc_content
+        quest_id = self.npc.quest_id
+        quest = content.quests[quest_id]
+        reward = content.rewards[quest['reward_id']]
+        progress = self.state.narrative.quests[quest_id]
+        progress.status = 'ready'
+        catch = Catch('bluegill', 0.5, 0.8, 2, 'flats', 'worm', 7)
+        self.state.well = [catch for _ in range(int(self.state.well_cap() / catch.weight))]
+        self.assertEqual(self.state.well_load(), self.state.well_cap())
+        well_before = [item.to_json() for item in self.state.well]
+        money_before = self.state.money
+        earned_before = self.state.earned
+        spent_before = self.state.spent
+
+        self.key('c')
+        conversation = self.session.conversation
+        ready_node = conversation.node_id
+        self.key('1')
+
+        self.assertEqual(progress.status, 'completed')
+        self.assertIn(quest_id, self.state.narrative.reward_claims)
+        self.assertEqual(self.state.money, round(money_before + reward['cash'], 2))
+        self.assertEqual(self.state.earned, earned_before)
+        self.assertEqual(self.state.spent, spent_before)
+        self.assertEqual([item.to_json() for item in self.state.well], well_before)
+        self.assertEqual(self.state.well_load(), self.state.well_cap())
+        ripple_id = reward['ripple_id']
+        if ripple_id is None:
+            self.assertNotIn(None, self.state.narrative.ripples)
+        else:
+            self.assertIn(ripple_id, self.state.narrative.ripples)
+
+        # A stale ready conversation cannot pay the completed quest again.
+        paid_money = self.state.money
+        conversation.node_id = ready_node
+        self.assertFalse(conversation.advance(self.state, content))
+        self.assertEqual(self.state.money, paid_money)
+        if ripple_id is None:
+            self.assertNotIn(None, self.state.narrative.ripples)
+        else:
+            self.assertEqual(self.state.narrative.ripples.count(ripple_id), 1)
+
+        self.session.save()
+        restored = State.load(self.path, self.world)
+        self.assertEqual(restored.money, paid_money)
+        self.assertEqual(restored.earned, earned_before)
+        self.assertEqual(restored.well_load(), restored.well_cap())
+        self.assertEqual([item.to_json() for item in restored.well], well_before)
+        self.assertEqual(restored.narrative.quests[quest_id].status, 'completed')
+        self.assertIn(quest_id, restored.narrative.reward_claims)
+        if ripple_id is not None:
+            self.assertIn(ripple_id, restored.narrative.ripples)
+
+    def test_turn_in_requires_the_same_present_giver(self):
+        content = self.session._npc_content
+        quest_id = self.npc.quest_id
+        self.state.narrative.quests[quest_id].status = 'ready'
+        conversation = Conversation.start(self.npc, self.state, content)
+        money = self.state.money
+        other = self.state.npcs[0]
+        self.state.x, self.state.z = other.anchor.position
+
+        self.assertFalse(conversation.advance(self.state, content))
+        self.assertEqual(self.state.narrative.quests[quest_id].status, 'ready')
+        self.assertEqual(self.state.money, money)
+        self.assertNotIn(quest_id, self.state.narrative.reward_claims)
+
+    def test_cash_only_turn_in_does_not_create_a_ripple(self):
+        content = self.session._npc_content
+        giver = next(npc for npc in self.state.npcs
+                     if content.rewards[content.quests[npc.quest_id]['reward_id']]['ripple_id'] is None)
+        self.state.x, self.state.z = giver.anchor.position
+        quest_id = giver.quest_id
+        reward = content.rewards[content.quests[quest_id]['reward_id']]
+        self.state.narrative.quests[quest_id].status = 'ready'
+        money = self.state.money
+        ripples = list(self.state.narrative.ripples)
+        conversation = Conversation.start(giver, self.state, content)
+        ready_node = conversation.node_id
+
+        self.assertTrue(conversation.advance(self.state, content))
+        self.assertEqual(self.state.money, round(money + reward['cash'], 2))
+        self.assertEqual(self.state.narrative.ripples, ripples)
+        conversation.node_id = ready_node
+        self.assertFalse(conversation.advance(self.state, content))
+        self.assertEqual(self.state.money, round(money + reward['cash'], 2))
+        self.assertEqual(self.state.narrative.ripples, ripples)
 
     def test_every_giver_and_saved_status_uses_authored_entry(self):
         content = self.session._npc_content
