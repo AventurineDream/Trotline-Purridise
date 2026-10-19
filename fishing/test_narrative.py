@@ -10,12 +10,14 @@ from uuid import UUID
 import numpy as np
 
 from . import bot
+from .camera import Camera
 from .content import load_content
 from .game import Keys, Session
 from .guardian import draw_sighting, maybe_start_sighting
 from .narrative import NarrativeState, QUEST_IDS, RIPPLE_BY_QUEST
 from .quests import QuestManager
 from .sim import Catch, Hook, SetLine, State
+from .software import BASE_PITCH, FOV
 from .ui import UI, UIState, quest_journal_details
 from .world import World
 
@@ -193,7 +195,8 @@ class NarrativeChecks(unittest.TestCase):
         state.anim = 12.5
         self.assertTrue(maybe_start_sighting(state, cedar, "play"))
         self.assertTrue(state.narrative.guardian_seen)
-        self.assertEqual(state.guardian_sighting_started_at, 12.5)
+        self.assertTrue(state.guardian_sighting_pending)
+        self.assertIsNone(state.guardian_sighting_started_at)
         self.assertFalse(maybe_start_sighting(state, cedar, "play"))
         self.assertEqual(fishing_before, {key: state.to_json()[key]
                                           for key in fishing_before})
@@ -201,6 +204,7 @@ class NarrativeChecks(unittest.TestCase):
         state.save(self.path)
         loaded = State.load(self.path, cedar)
         self.assertTrue(loaded.narrative.guardian_seen)
+        self.assertFalse(loaded.guardian_sighting_pending)
         self.assertIsNone(loaded.guardian_sighting_started_at)
         details = quest_journal_details(loaded, load_content(), QUEST_IDS[0])
         self.assertIn("Whiskered Blessing", details["guardian_status"])
@@ -209,6 +213,7 @@ class NarrativeChecks(unittest.TestCase):
         state = self.state
         frame = np.full((180, 320, 3), 96, dtype=np.uint8)
         state.guardian_sighting_started_at = 2.0
+        state.guardian_sighting_last_anim = 2.0
         state.anim = 3.0
         draw_sighting(frame, state)
         self.assertFalse(np.all(frame == 96))
@@ -217,6 +222,57 @@ class NarrativeChecks(unittest.TestCase):
         expired = np.full((180, 320, 3), 96, dtype=np.uint8)
         draw_sighting(expired, state)
         self.assertTrue(np.all(expired == 96))
+
+    def test_guardian_sighting_tracks_waterline_and_waits_until_visible(self):
+        state = self.state
+        frame = np.full((270, 360, 3), 96, dtype=np.uint8)
+        state.anim = 2.0
+        state.guardian_sighting_pending = True
+        state.guardian_sighting_last_anim = 2.0
+
+        def camera_for_state():
+            return Camera(state.x, state.boat.eye_height, state.z, state.yaw,
+                          BASE_PITCH + state.look, 0.0, FOV,
+                          frame.shape[1], frame.shape[0], build_rays=False)
+
+        state.look = 0.0
+        self.assertTrue(draw_sighting(frame, state, camera_for_state()))
+        self.assertFalse(state.guardian_sighting_pending)
+        self.assertEqual(state.guardian_sighting_started_at, 2.0)
+        self.assertFalse(np.all(frame == 96))
+
+        state.anim = 3.0
+        state.look = 0.62
+        sky_view = np.full_like(frame, 96)
+        self.assertFalse(draw_sighting(sky_view, state, camera_for_state()))
+        self.assertTrue(np.all(sky_view == 96))
+        self.assertEqual(state.guardian_sighting_started_at, 3.0)
+
+        state.anim = 4.0
+        state.look = 0.0
+        resumed = np.full_like(frame, 96)
+        self.assertTrue(draw_sighting(resumed, state, camera_for_state()))
+        self.assertFalse(np.all(resumed == 96))
+        self.assertEqual(state.guardian_sighting_started_at, 3.0)
+
+    def test_guardian_sighting_clock_pauses_while_ui_hides_it(self):
+        state = self.state
+        state.narrative.guardian_seen = True
+        state.anim = 3.0
+        state.guardian_sighting_started_at = 2.0
+        state.guardian_sighting_last_anim = 3.0
+        session = Session(self.world, self.path, state, False)
+        session.ui.mode = "journal"
+
+        session.tick(Keys(), 2.0)
+
+        self.assertEqual(state.anim, 5.0)
+        self.assertEqual(state.guardian_sighting_started_at, 4.0)
+        self.assertEqual(state.guardian_sighting_last_anim, 5.0)
+
+        session.ui.mode = "play"
+        session.tick(Keys(), 1.0)
+        self.assertEqual(state.anim - state.guardian_sighting_started_at, 2.0)
 
     def test_session_starts_guardian_sighting_during_visible_play(self):
         cedar = World("cedar")
@@ -230,7 +286,8 @@ class NarrativeChecks(unittest.TestCase):
         session.tick(Keys(), 0.1)
 
         self.assertTrue(state.narrative.guardian_seen)
-        self.assertAlmostEqual(state.guardian_sighting_started_at, state.anim)
+        self.assertTrue(state.guardian_sighting_pending)
+        self.assertAlmostEqual(state.guardian_sighting_last_anim, state.anim)
 
     def test_small_narrative_journal_reserves_progress_line(self):
         qid = QUEST_IDS[10]

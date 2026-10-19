@@ -456,10 +456,10 @@ class UI:
             self._ch[size] = max(1, img.shape[0])
         return self._cw[size], self._ch[size]
 
-    def draw(self, frame: np.ndarray, state, ui: UIState) -> None:
+    def draw(self, frame: np.ndarray, state, ui: UIState, camera=None) -> None:
         mode = ui.mode
         if mode == "play":
-            draw_sighting(frame, state)
+            draw_sighting(frame, state, camera)
         if mode == "title":
             self._title(frame, state, ui)
             return
