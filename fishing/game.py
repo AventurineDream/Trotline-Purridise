@@ -29,6 +29,7 @@ FROZEN = {"title", "setbait", "check", "pause", "help"}
 DRIVING = {"play", "map"}
 MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
 NAVIGATION_KEYS = set(MENU_DIRECTIONS) | set(MENU_DIRECTIONS.values())
+DRIVING_KEYS = {"w", "s", "a", "d", "up", "down", "left", "right"}
 PAUSE_N = 4
 
 
@@ -83,6 +84,7 @@ class Session:
         if keys.quit:
             self.quit = True
             return
+        driving_presses = keys.pressed & DRIVING_KEYS if self.ui.mode in DRIVING else set()
         self._menu_held.intersection_update(keys.held)
         if self.ui.mode in DRIVING:
             self._menu_held.difference_update(keys.pressed)
@@ -90,7 +92,7 @@ class Session:
             self._menu_held.update(keys.held & NAVIGATION_KEYS)
         self._refresh_npcs()
         self._keys(keys, dt)
-        self._simulate(keys, dt)
+        self._simulate(keys, dt, driving_presses)
 
     def _refresh_npcs(self):
         key = (id(self.state),) + schedule_key(self.state, self.world)
@@ -106,15 +108,18 @@ class Session:
     def _attach_quest_manager(self) -> None:
         self.state._quest_event_handler = self.quest_manager.handle_event
 
-    def _simulate(self, keys, dt: float):
+    def _simulate(self, keys, dt: float, driving_presses=()):
         mode = self.ui.mode
         state = self.state
         if mode in DRIVING:
             # A held menu direction must be released before it drives or looks
             # around, even when Enter/Esc closes the menu in this same tick.
-            driving_keys = Keys(held=keys.held - self._menu_held)
+            driving_keys = Keys(
+                pressed=set(driving_presses) - self._menu_held,
+                held=keys.held - self._menu_held,
+            )
             state.drive(dt,_throttle(driving_keys,mode),_steer(driving_keys,mode),self.world,
-                        idle=bool(driving_keys.held & {"shift","rshift"}),
+                        idle=bool((driving_keys.held | keys.pressed) & {"shift","rshift"}),
                         player_controlled=True)
             if mode == "play":
                 look = 0.0

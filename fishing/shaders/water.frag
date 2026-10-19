@@ -9,19 +9,38 @@ out vec4 frag;
 void main() {
     float sd = shore(pos.xz);
     bool slip = in_slip(pos.xz);
-    if (sd>=0.0 && !slip) discard;
+    // Opaque terrain hides this existing bounded plane. At the coarse bank's
+    // raised clipped edge, shade the projected crack as land rather than
+    // reflecting bright sky. No shore, depth, navigation or geometry changes.
+    if (sd>=0.0 && !slip) {
+        float patch = fbm(pos.xz*0.18);
+        vec3 grass = mix(vec3(0.16,0.24,0.13),vec3(0.31,0.36,0.18),patch);
+        vec3 earth = mix(vec3(0.38,0.31,0.21),vec3(0.57,0.48,0.33),patch);
+        vec3 bank = mix(earth,grass,smoothstep(1.0,9.0,sd));
+        float canopy = smoothstep(3.0,12.0,sd)*(1.0-smoothstep(55.0,95.0,sd));
+        bank *= 1.0-canopy*(0.12+0.18*noise(pos.xz*0.10));
+        float ambient = mix(0.67,0.14,night)+moon_i*0.17;
+        bank *= vec3(ambient)+vec3(1.0,0.91,0.73)*max(sun.y,0.0)*sun_i*0.52;
+        bank += vec3(0.75,0.63,0.37)*lamp(pos)*smoothstep(2.5,6.0,length(pos.xz-boat_pos));
+        frag = vec4(haze(bank,pos),1);
+        return;
+    }
     float dist = distance(pos,eye);
-    float fine = 1.0-smoothstep(20.0,160.0,dist);
+    float fine = 1.0-smoothstep(18.0,125.0,dist);
     float a = dot(pos.xz,vec2(0.24,0.17))+anim*0.55;
     float b = dot(pos.xz,vec2(-0.17,0.31))-anim*0.39;
-    float micro = sin(pos.x*2.4+pos.z*1.8+anim*1.6)*fine;
+    // Crossing wind ripples are shading only; the shore and depth remain fixed.
+    float phase = pos.x*1.7+pos.z*2.1+anim*1.6;
+    float crossphase = pos.x*3.4-pos.z*1.3-anim*1.1;
+    float wave = sin(phase)*(1.0-smoothstep(0.8,2.8,fwidth(phase)));
+    float crosswave = sin(crossphase)*(1.0-smoothstep(0.8,2.8,fwidth(crossphase)));
     float ripple = 1.0+rain*0.5;
-    vec3 n = normalize(vec3((cos(a)*0.028+micro*0.008)*ripple,1,
-                            (cos(b)*0.025+micro*0.006)*ripple));
+    vec3 n = normalize(vec3((cos(a)*0.045+(wave*0.012+crosswave*0.006)*fine)*ripple,1,
+                            (cos(b)*0.040+(wave*0.009-crosswave*0.010)*fine)*ripple));
     vec3 v = normalize(eye-pos);
-    float fres = 0.12+0.78*pow(1.0-max(dot(v,n),0.0),4.0);
+    float fres = 0.12+0.78*pow(1.0-clamp(dot(v,n),0.0,1.0),4.0);
     vec2 screen = gl_FragCoord.xy/viewport;
-    vec2 distortion = n.xz*0.045*vec2(1.0,0.65);
+    vec2 distortion = n.xz*0.070*vec2(1.0,0.65);
     vec3 reflected = texture(reflection,clamp(screen+distortion,0.002,0.998)).rgb;
     float depth = 0.5+5.0*(1.0-exp(min(sd,0.0)/28.0));
     depth += 10.0*exp(-dot(pos.xz-vec2(75,-28),pos.xz-vec2(75,-28))/(2.0*72.0*72.0));
@@ -34,12 +53,15 @@ void main() {
     }
     body *= mix(0.85,0.30,night)+moon_i*0.1;
     vec3 c = mix(body,reflected,fres);
+    // Restrained rippled highlights give open water detail away from reflections.
+    float facets = (wave*0.5+crosswave*0.5)*fine;
+    c *= 1.0+facets*0.022*(1.0-night*0.7);
     vec3 r = reflect(-v,n);
     float spec = pow(max(dot(r,sun),0.0),240.0)*sun_i;
     spec *= 0.5+0.5*sin(a*3.2+b*2.5);
     c += vec3(1.0,0.79,0.47)*spec*0.58;
     c += vec3(0.46,0.59,0.76)*pow(max(dot(r,moon),0.0),180.0)*moon_i*0.48;
-    float edge = exp(-pow(sd+0.2,2.0)*3.0)*(0.5+0.5*sin(a*2.0));
+    float edge = exp(-square(sd+0.2)*3.0)*(0.5+0.5*sin(a*2.0));
     if (!slip) c = mix(c,vec3(0.57,0.59,0.47),edge*0.16);
     // Pads, their veins and occasional flowers in the lily cove.
     vec2 cell = floor(pos.xz/2.3), f = fract(pos.xz/2.3)-0.5;
@@ -74,9 +96,11 @@ void main() {
     float behind = -along;
     float spd = clamp(abs(speed)/2.0,0.0,1.0);
     float spread = 0.38+behind*0.10;
-    float rail = exp(-pow(side-spread,2.0)/(0.045+behind*0.010));
+    // Water ahead has negative behind: keep the Gaussian variance positive.
+    // An overflowing exponential multiplied by a zero fade used to poison it.
+    float rail = exp(-square(side-spread)/max(0.045,0.045+behind*0.010));
     float wake = rail*smoothstep(0.55,1.3,behind)*(1.0-smoothstep(5.0,16.0,behind))*spd;
-    float streak = exp(-pow(side,2.0)/0.07)*smoothstep(0.25,0.9,behind)*(1.0-smoothstep(2.2,9.0,behind))*spd;
+    float streak = exp(-square(side)/0.07)*smoothstep(0.25,0.9,behind)*(1.0-smoothstep(2.2,9.0,behind))*spd;
     c = mix(c,vec3(0.74,0.80,0.76),clamp(wake*0.62+streak*0.38,0.0,0.7));
     if (!slip) {
         float rises = 0.0;
@@ -89,7 +113,7 @@ void main() {
             center += vec2(sin(anim*0.15+fi),cos(anim*0.11+fi*1.7))*6.0;
             if (distance(center,boat_pos)<9.0) continue;
             float rad = life*2.4;
-            float ring = exp(-pow((distance(pos.xz,center)-rad)/0.085,2.0));
+            float ring = exp(-square((distance(pos.xz,center)-rad)/0.085));
             rises += ring*(1.0-smoothstep(0.62,1.0,life));
         }
         c = mix(c,vec3(0.78,0.84,0.80),clamp(rises,0.0,0.7)*0.5);
@@ -100,7 +124,7 @@ void main() {
         float age = ripples[i].z;
         float rad = 0.4+age*2.4;
         float d = distance(pos.xz,ripples[i].xy);
-        float ring = exp(-pow(d-rad,2.0)/0.25)*(1.0-clamp(age/2.4,0.0,1.0));
+        float ring = exp(-square(d-rad)/0.25)*(1.0-clamp(age/2.4,0.0,1.0));
         c += ring*0.35;
     }
     c += vec3(0.65,0.55,0.33)*lamp(pos)*0.35;
