@@ -54,6 +54,9 @@ def _turn_in_reward(state, content, quest_id: str, npc_id: str) -> bool:
     state.money = round(state.money + reward['cash'], 2)
     if ripple_id is not None and ripple_id not in state.narrative.ripples:
         state.narrative.ripples.append(ripple_id)
+    note = "Bot: He gives a small approving brass click."
+    if state.narrative.record_bot_reaction(f"quest:{quest_id}", note):
+        state.toast(note)
     return True
 
 

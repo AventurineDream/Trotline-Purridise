@@ -254,6 +254,8 @@ def quest_journal_details(state, content, quest_id: str) -> dict:
                          if prerequisites else "none")
     notes = [note for note in state.narrative.bot_notes
              if isinstance(note, str) and note.strip()]
+    bot_journal = [note for note in state.narrative.bot_journal
+                   if isinstance(note, str) and note.strip()]
     ripple_count = min(10, len(set(state.narrative.ripples)))
     if state.narrative.guardian_seen:
         guardian_status = ("Guardian seen — Whiskered Blessing: A broad ripple passed "
@@ -272,6 +274,7 @@ def quest_journal_details(state, content, quest_id: str) -> dict:
         "progress": _quest_progress_text(quest, quest_progress, state.narrative),
         "prerequisites": prerequisite_text,
         "bot_notes": notes[-2:],
+        "latest_bot_note": bot_journal[-1] if bot_journal else (notes[-1] if notes else None),
         "guardian_status": guardian_status,
     }
 
@@ -1175,16 +1178,15 @@ class UI:
             max_lines=2, bottom=detail_bottom)
 
         note_y = footer_top
-        bot_notes = detail["bot_notes"]
+        latest_bot_note = detail["latest_bot_note"]
         note_bottom = y + ph - 5
-        if bot_notes:
-            for note in bot_notes[-1:]:
-                note = note.strip()
-                if note.lower().startswith("bot:"):
-                    note = note.split(":", 1)[1].strip()
-                note_y = self._draw_journal_text(
-                    frame, "Bot: " + note, x + m, note_y, pw - m * 2,
-                    small, GOLD, max_lines=1, bottom=note_bottom)
+        if latest_bot_note:
+            note = latest_bot_note.strip()
+            if note.lower().startswith("bot:"):
+                note = note.split(":", 1)[1].strip()
+            note_y = self._draw_journal_text(
+                frame, "Bot: " + note, x + m, note_y, pw - m * 2,
+                small, GOLD, max_lines=1, bottom=note_bottom)
         else:
             note_y = self._draw_journal_text(
                 frame, "No narrative notes yet.", x + m, note_y, pw - m * 2,

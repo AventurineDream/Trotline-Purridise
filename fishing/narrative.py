@@ -24,6 +24,12 @@ DAY_NPCS = {
     "briar": ("elder_moss", "pip_pebble", "willow", "silas"),
     "cedar": ("captain_maeve", "sparky", "quill", "dr_alder", "patch"),
 }
+NPC_IDS = frozenset({"grandmother_whiskers", "doc_barnaby", "master_cinder"}).union(
+    *(set(pool) for pool in DAY_NPCS.values()))
+BOT_REACTION_KEYS = frozenset(
+    [f"npc:{npc_id}" for npc_id in NPC_IDS]
+    + [f"quest:{quest_id}" for quest_id in QUEST_IDS])
+BOT_JOURNAL_LIMIT = 40
 _INVALID = object()
 
 
@@ -110,9 +116,36 @@ class NarrativeState:
     day_npc_by_lake: dict = field(default_factory=lambda: dict.fromkeys(DAY_NPCS))
     schedule_day_by_lake: dict = field(default_factory=lambda: dict.fromkeys(DAY_NPCS))
     bot_notes: list[str] = field(default_factory=list)
+    bot_reactions: dict[str, str] = field(default_factory=dict)
+    bot_journal: list[str] = field(default_factory=list)
     reward_claims: list[str] = field(default_factory=list)
     guardian_seen: bool = False
     active_play_game_minutes: float = 0.0
+
+    def _append_bot_journal(self, note: str) -> None:
+        self.bot_journal.append(note)
+        del self.bot_journal[:-BOT_JOURNAL_LIMIT]
+
+    def record_bot_note(self, note: str) -> bool:
+        """Keep the existing two scout reports and journal their delivery."""
+        if not isinstance(note, str) or not note.strip():
+            return False
+        note = note.strip()
+        self.bot_notes.append(note)
+        del self.bot_notes[:-2]
+        self._append_bot_journal(note)
+        return True
+
+    def record_bot_reaction(self, key: str, note: str) -> bool:
+        """Record a one-time NPC or completed-quest cue without game effects."""
+        if (not isinstance(key, str) or key not in BOT_REACTION_KEYS
+                or key in self.bot_reactions
+                or not isinstance(note, str) or not note.strip()):
+            return False
+        note = note.strip()
+        self.bot_reactions[key] = note
+        self._append_bot_journal(note)
+        return True
 
     def record_reward_claim(self, quest_id: str) -> bool:
         """Latch a ready quest once before applying its validated reward.
@@ -133,7 +166,10 @@ class NarrativeState:
             "ripples": list(self.ripples), "schedule_seed": self.schedule_seed,
             "day_npc_by_lake": dict(self.day_npc_by_lake),
             "schedule_day_by_lake": dict(self.schedule_day_by_lake),
-            "bot_notes": list(self.bot_notes), "reward_claims": list(self.reward_claims),
+            "bot_notes": list(self.bot_notes),
+            "bot_reactions": dict(self.bot_reactions),
+            "bot_journal": list(self.bot_journal),
+            "reward_claims": list(self.reward_claims),
             "guardian_seen": self.guardian_seen,
             "active_play_game_minutes": self.active_play_game_minutes,
         }
@@ -157,7 +193,24 @@ class NarrativeState:
                     st.day_npc_by_lake[lake], st.schedule_day_by_lake[lake] = npc, day
         notes = raw.get("bot_notes")
         if isinstance(notes, list):
-            st.bot_notes = [note for note in notes if isinstance(note, str)]
+            st.bot_notes = [note.strip() for note in notes
+                            if isinstance(note, str) and note.strip()][-2:]
+        reactions = raw.get("bot_reactions")
+        if isinstance(reactions, dict):
+            st.bot_reactions = {
+                key: note.strip()[:240]
+                for key, note in reactions.items()
+                if (isinstance(key, str) and key in BOT_REACTION_KEYS
+                    and isinstance(note, str) and note.strip())
+            }
+        journal = raw.get("bot_journal")
+        if isinstance(journal, list):
+            st.bot_journal = [note.strip()[:240] for note in journal
+                              if isinstance(note, str) and note.strip()][-BOT_JOURNAL_LIMIT:]
+        else:
+            # Older saves only had the last two delivered scout reports.
+            st.bot_journal = (list(st.bot_notes)
+                              + [note for note in st.bot_reactions.values()])[-BOT_JOURNAL_LIMIT:]
         st.reward_claims = _ids(raw.get("reward_claims"), QUEST_IDS)
         for qid, quest in st.quests.items():
             if qid in st.reward_claims:
