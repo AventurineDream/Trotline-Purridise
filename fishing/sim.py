@@ -377,6 +377,8 @@ class State:
     splash_x: float = 0.0
     splash_z: float = 0.0
     splash_anim: float = -100.0
+    # Brief visual only; guardian_seen is the persisted encounter latch.
+    guardian_sighting_started_at: float | None = field(default=None, repr=False, compare=False)
     _tired: list = field(default_factory=list)
     _records: list = field(default_factory=list)
     _quest_event_handler: Callable | None = field(default=None, repr=False, compare=False)

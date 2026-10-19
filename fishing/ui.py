@@ -31,6 +31,7 @@ from .data import (
     CEDAR_FISH,
 )
 from .content import load_content
+from .guardian import draw_sighting
 from .narrative import QUEST_IDS
 from .platform import Text
 from .dialogue import nearby_npc
@@ -457,6 +458,8 @@ class UI:
 
     def draw(self, frame: np.ndarray, state, ui: UIState) -> None:
         mode = ui.mode
+        if mode == "play":
+            draw_sighting(frame, state)
         if mode == "title":
             self._title(frame, state, ui)
             return

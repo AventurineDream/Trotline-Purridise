@@ -17,6 +17,7 @@ from .weather import weather_visuals
 from .platform import Platform, Text
 from .render import Renderer
 from .imageops import resize_rgb
+from .guardian import maybe_start_sighting
 from .bot import reset as reset_bot
 from .bot import summon as summon_bot
 from .bot import tick as tick_bot
@@ -132,6 +133,7 @@ class Session:
         hooked_before = state.hooked_total
         game_minute_before = state.game_minutes
         state.advance(dt, mode in FROZEN)
+        maybe_start_sighting(state, self.world, mode)
         elapsed = max(0.0, state.game_minutes - game_minute_before)
         zone = self.world.zone_at(state.x, state.z)
         state.emit_quest_event({
