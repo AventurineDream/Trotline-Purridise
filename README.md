@@ -6,6 +6,19 @@ The lake now uses a 16:9 OpenGL renderer: fixed terrain, a dense procedural fore
 
 The shore stays fixed. Terrain is baked once, the water boundary follows the same lake and landing-slip functions used by the simulation, and the camera no longer bobs or rolls while you look at the bank.
 
+Both main landings have full marina wings around the original service slip:
+planked promenades, finger piers, moored boats, lanterns, life rings, shore
+buildings, and picnic details. Cedar has covered berths. The central approach
+stays open, and the piers and moored hulls have matching collision footprints.
+Trinidad Cove keeps its smaller, quiet launch.
+
+The banks have cattails, grasses, wildflowers, shrubs, driftwood, shore stones,
+herons, and ducks. Gulls circle above the lake, swallows dart, and broad-winged
+herons fly more slowly. Dragonflies work the sunny margins; fireflies pulse
+after dusk, while heavy rain quiets the wildlife. These are decorative, bounded
+details, shared by the OpenGL and CPU renderers. They add no saved entities or
+retained particle histories and do not change fishing or quest outcomes.
+
 A moving boat leaves a wake, and fish rise on the open water. When a hook takes a fish, a ring spreads on that spot and a flagged cork stands up on the line. The chart and the corner list show which lines are soaking, which have fish, and which are getting tired. With the depth finder, idling tells you what you would bait there. The lake has a voice: lapping water, the motor or the rowboat's oar strokes, wind when you sail or it rains, birds at the edge of the day, frogs after dark, and a splash with the strike. M mutes it.
 
 Weather blends over an hour on the lake, including changes at midnight. Cloud
@@ -37,7 +50,7 @@ That makes a `.venv` if you don't have one, installs the dependencies, and start
 ./play.sh --smoke             # real window, sailing, purchases, weather, and lake changes
 ```
 
-The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. It exercises both lakes, all four boats, six shop tabs, four help pages, the 36-entry journal, weather fades, fuel and battery gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry is also checked for stability. Results depend on the graphics driver and the other applications running on the computer.
+The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. Its full 1,200-frame run checks observed coverage of both lakes, all four boats, six shop tabs, four help pages, 36 fish and 12 quest journal entries, and dialogue for all twelve givers in four quest states. It also exercises weather fades, fuel and battery gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry and finite floating-point scene colors are checked as well. Results depend on the graphics driver and the other applications running on the computer.
 
 During play the window and lake share one OpenGL context. The window check reads the pixels submitted to the actual window and verifies that presenting a frame does not corrupt subsequent lake frames. Headless screenshots use a separate standalone context.
 
@@ -103,6 +116,10 @@ Menus accept **W/S** to move through items and **A/D** to change tabs, lines, or
 pages. Arrow keys also work, including held-key repeat. Enter or Space selects;
 Esc closes. The field guide accepts all four WASD keys to turn pages. Release a
 direction used in a menu before using it to drive the boat again.
+
+Short taps are retained even when pressed and released between rendered frames.
+Losing window focus clears pending input and menu repeat, while held steering
+and throttle still follow the current keyboard state.
 
 The journal keeps the full 36-species collection and adds a separate **Lake
 Whispers & Ripples** page. Use **A/D** to switch pages and **W/S** to inspect

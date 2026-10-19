@@ -114,7 +114,7 @@ class Session:
             # around, even when Enter/Esc closes the menu in this same tick.
             driving_keys = Keys(held=keys.held - self._menu_held)
             state.drive(dt,_throttle(driving_keys,mode),_steer(driving_keys,mode),self.world,
-                        idle=bool(driving_keys.held & {"shift","rshift"}),
+                        idle=bool((driving_keys.held | keys.pressed) & {"shift","rshift"}),
                         player_controlled=True)
             if mode == "play":
                 look = 0.0

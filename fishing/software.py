@@ -107,7 +107,8 @@ class SoftwareRenderer:
         px = np.array([p.x for p in world.props],np.float32)
         pz = np.array([p.z for p in world.props],np.float32)
         gy = world.sample_height(px,pz)
-        wet = np.array([p.kind in ("knee","reed") for p in world.props])
+        from .sprites import WATERLINE_KINDS
+        wet = np.array([p.kind in WATERLINE_KINDS for p in world.props])
         self.prop_positions = np.stack([px,np.where(wet,0,gy),pz],axis=1)
 
     def _sync_buoy(self, state):
@@ -155,6 +156,8 @@ class SoftwareRenderer:
         self._faces(cam, self._boat_faces(state), light, boat=True)
         from .bot import faces as bot_faces
         self._faces(cam, bot_faces(state), light, boat=False)
+        from .ambient import faces as ambient_faces
+        self._faces(cam, ambient_faces(state,world,light), light, boat=False)
         if light["rain"] > 0.0:
             self._rain(state.anim, light["rain"])
         self._birds(cam, state.anim)
