@@ -43,6 +43,10 @@ _ZONE_TINT = np.array([
 _LILY = ZONE_ORDER.index("lilies")
 
 
+def _legacy_birds_visible(light: dict) -> bool:
+    return light["night"] < 0.65 and light["rain"] < 0.8
+
+
 def sky_color(dx, dy, dz, light: dict) -> np.ndarray:
     inv = 1.0 / np.maximum(np.sqrt(dx * dx + dy * dy + dz * dz), 1e-6)
     dx, dy, dz = dx * inv, dy * inv, dz * inv
@@ -157,10 +161,11 @@ class SoftwareRenderer:
         from .bot import faces as bot_faces
         self._faces(cam, bot_faces(state), light, boat=False)
         from .ambient import faces as ambient_faces
-        self._faces(cam, ambient_faces(state,world,light), light, boat=False)
+        self._faces(cam, ambient_faces(state,world,light), light, boat=False, two_sided=True)
         if light["rain"] > 0.0:
             self._rain(state.anim, light["rain"])
-        self._birds(cam, state.anim)
+        if _legacy_birds_visible(light):
+            self._birds(cam, state.anim)
         rgb = self._quantize(col)
         self.last_ms = (_time.perf_counter() - t0) * 1000.0
         return rgb
@@ -633,7 +638,7 @@ class SoftwareRenderer:
             fog = float(np.clip(1.0 - math.exp(-zz / 380.0), 0.0, 0.82))
             blit_sprite(self.col, self.z, self.sprites[kind], sx, sy, zz, int(dest_h), tint, fog, fog_c)
 
-    def _faces(self, cam, faces: list[Face], light, boat: bool):
+    def _faces(self, cam, faces: list[Face], light, boat: bool, two_sided: bool = False):
         sun = light["sun"]
         for face in faces:
             if face.space == "world":
@@ -641,7 +646,7 @@ class SoftwareRenderer:
                 delta = center - cam.eye
                 if float(delta @ delta) > 170.0 * 170.0:
                     continue
-                if float(np.dot(face.normal, -delta)) <= 0.0:
+                if not two_sided and float(np.dot(face.normal, -delta)) <= 0.0:
                     continue
                 pts = cam.world_to_cam(face.pts)
                 ndotl = float(np.clip(np.dot(face.normal, sun), 0.0, 1.0))
