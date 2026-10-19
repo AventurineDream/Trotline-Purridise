@@ -1,23 +1,29 @@
 """Guide layout checks using the native font metrics used by the game."""
 
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
-from .platform import Text
+from .platform import Text, find_font
 from .ui import UI, UIState, _HELP
 
 
 class GuideLayoutChecks(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.text = Text()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.text.close()
+    def setUp(self):
+        self.text = Text()
+        self.addCleanup(self.text.close)
 
     def test_every_authored_page_fits_without_clipping_or_text_overlap(self):
+        self._check_pages()
+
+    def test_layout_with_proportional_fallback_font(self):
+        # Linux installs without the preferred monospace font use a sans
+        # fallback. Its ascenders/descenders can have different surface heights.
+        with patch('fishing.platform.find_font', side_effect=lambda family: find_font('sans')):
+            self._check_pages()
+
+    def _check_pages(self):
         # The guide needs no world or save. Keep the actual font rasterizer and
         # panel/text draws, while recording their geometry before any clipping.
         ui = UI.__new__(UI)
