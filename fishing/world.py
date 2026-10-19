@@ -229,6 +229,8 @@ class World:
         self.zones = self._zone_table()
         self.height = self._bake_height()
         self.faces = self._build_camp()
+        if self.id == "cedar":
+            self.faces.extend(self._build_trinidad_cove())
         self.props = self._place_props()
         # Physical footprints of the two piers and the crossbeam. The values
         # match the camp meshes, including their extent into the slip.
@@ -491,6 +493,43 @@ class World:
         faces += _box(center(11.2, -3.6, 0.85), inland, up, side, (0.7, 0.7, 0.7), (0.35, 0.28, 0.18))
         return faces
 
+    def _build_trinidad_cove(self) -> list[Face]:
+        """A short cedar creek landing on the west bank, separate from the survey."""
+        along = np.array([0.88, 0.0, 0.475], np.float32)
+        across = np.array([-0.475, 0.0, 0.88], np.float32)
+        up = (0.0, 1.0, 0.0)
+        origin = np.array([181.25, 0.0, -858.36], np.float32)
+
+        def center(t, s, y):
+            p = origin + along * t + across * s
+            return (float(p[0]), y, float(p[2]))
+
+        faces: list[Face] = []
+        wood = (0.46, 0.31, 0.18)
+        board = (0.59, 0.42, 0.25)
+        edge = (0.31, 0.23, 0.16)
+        # A narrow plank launch reaches from the bank into the existing cove.
+        for i, t in enumerate(np.arange(-3.0, 3.01, 0.78)):
+            shade = 0.93 + 0.025 * (i % 4)
+            faces += _box(center(float(t), 0.0, 0.51), along, up, across,
+                          (0.72, 0.09, 1.28), tuple(c * shade for c in board))
+        for t in (-2.45, -0.35, 1.75, 2.85):
+            for s in (-0.53, 0.53):
+                faces += _box(center(t, s, -0.46), along, up, across,
+                              (0.16, 1.94, 0.16), wood)
+        for s in (-0.53, 0.53):
+            faces += _box(center(0.15, s, 0.40), along, up, across,
+                          (5.45, 0.13, 0.11), edge)
+        # A small bank-side marker and a stone approach path.
+        faces += _box(center(-2.30, -0.92, 1.23), along, up, across,
+                      (0.12, 0.76, 1.06), (0.23, 0.30, 0.24))
+        faces += _box(center(-2.30, -0.92, 1.24), along, up, across,
+                      (0.135, 0.07, 0.79), (0.83, 0.78, 0.63))
+        for t in (-4.05, -3.62, -3.19, -2.76):
+            faces += _box(center(t, -1.12, 0.13), along, up, across,
+                          (0.34, 0.08, 0.72), (0.42, 0.42, 0.38))
+        return faces
+
     def _place_props(self) -> list[Prop]:
         if self.id=="cedar":
             return self._cedar_props()
@@ -625,6 +664,17 @@ class World:
                 continue
             kind = "reed" if i<40 else "rock"
             props.append(Prop(kind,x,z,float(rng.uniform(0.8,2.1)),0.9))
+        # Trinidad Cove's quieter west bank has cypress shade, limestone and reeds.
+        props.extend([
+            Prop("cypress", 173.8, -866.7, 17.0, 0.88),
+            Prop("cypress", 170.4, -860.0, 15.5, 0.91),
+            Prop("oak", 176.6, -851.6, 12.5, 0.85),
+            Prop("reed", 184.0, -861.0, 1.9, 0.92),
+            Prop("reed", 187.0, -862.1, 1.7, 0.86),
+            Prop("reed", 191.4, -859.7, 1.8, 0.90),
+            Prop("rock", 180.2, -861.8, 1.2, 0.88),
+            Prop("rock", 178.7, -856.1, 1.0, 0.82),
+        ])
         return props
 
     def _bake_map(self):

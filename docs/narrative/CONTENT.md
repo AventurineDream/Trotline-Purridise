@@ -84,7 +84,7 @@ All objectives begin observation after acceptance. Supported type semantics are:
 | `anchor_idle` | Advance only foreground anchor samples in the target zone with anchor set and engine idle; any interruption resets the continuous timer. |
 | `scout_report` | Delivered Bot report with scout point in the target zone; no line, exact depth or new instrument required. |
 | `fish_livewell` | Qualifying species transferred after acceptance from a line set with the named bait/zone; evaluate the entry-time window. The source line may predate acceptance. |
-| `travel_distance` | Actual accepted player movement path portions in the named zone, by motor or sail, counted once. Exclude outside portions, tow, load and travel placement. |
+| `travel_distance` | Actual accepted player movement path portions in the named zone, by motor, oars or sail, counted once. Exclude outside portions, tow, load and travel placement. |
 | `visit_zones` | Record each listed `zone.enter` after acceptance in any order, following the contract's q10 event rules. |
 | `visit_sequence` | Record each listed entry in order, including the repeated landing. Require boat movement provenance and player control; excluded placement never advances or resets a leg. |
 

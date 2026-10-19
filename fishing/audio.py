@@ -21,6 +21,7 @@ class Audio:
         self.sdl = None
         self.time = 0.0
         self.motor_phase = 0.0
+        self.oar_phase = 0.0
         self.shots: list[tuple[np.ndarray, int]] = []
         self._water = self._make_water()
         self._water_at = 0
@@ -33,6 +34,8 @@ class Audio:
         self._hour = 12.0
         self._rain = 0.0
         self._sailing = False
+        self._motorized = True
+        self._rowing = False
         try:
             self.sdl = _load("libSDL2-2.0.so.0")
             s = self.sdl
@@ -222,7 +225,8 @@ class Audio:
             self._frog_at = self.time + self._span(6.0, 7.0)
 
     def update(self, dt: float, throttle: float, speed: float, muted: bool,
-               *, hour: float = 12.0, rain: float = 0.0, sailing: bool = False):
+               *, hour: float = 12.0, rain: float = 0.0, sailing: bool = False,
+               motorized: bool = True, rowing: bool = False):
         # hour, rain, and sailing stay keyword-only. The window smoke test
         # still calls this with the four positional arguments.
         if not self.ok:
@@ -231,6 +235,8 @@ class Audio:
         self._hour = float(hour)
         self._rain = max(0.0, float(rain))
         self._sailing = bool(sailing)
+        self._motorized = bool(motorized)
+        self._rowing = bool(rowing)
         if muted:
             self.shots.clear()
             self.sdl.SDL_PauseAudioDevice(self.dev, 1)
@@ -258,8 +264,16 @@ class Audio:
         idx = np.arange(frames, dtype=np.float32)
         phase = self.motor_phase + idx * (freq / SR)
         self.motor_phase = float(phase[-1] + freq / SR) % 1.0
-        motor = np.sin(2 * np.pi * phase) * (0.04 + 0.10 * drive)
-        motor += np.sin(2 * np.pi * phase * 2.0) * (0.02 * drive)
+        if self._motorized:
+            motor = np.sin(2 * np.pi * phase) * (0.04 + 0.10 * drive)
+            motor += np.sin(2 * np.pi * phase * 2.0) * (0.02 * drive)
+        elif self._rowing and drive > 0.01:
+            cadence = self.oar_phase + idx * (1.65 / SR)
+            self.oar_phase = float(cadence[-1] + 1.65 / SR) % 1.0
+            stroke = np.maximum(0.0, np.sin(2 * np.pi * cadence)) ** 5
+            motor = np.sin(2 * np.pi * cadence * 8.0) * (0.035 * drive) * stroke
+        else:
+            motor = np.zeros_like(water)
         mix = water * 0.22 + motor
         # One-shots stay centered. Wind and crickets sit a little wider.
         alive = []

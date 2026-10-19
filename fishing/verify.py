@@ -117,7 +117,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                 state.x,state.z,state.yaw = spot[1],spot[2],locations[(i//60)%len(locations)][2]
             else:
                 state.x,state.z,state.yaw = locations[(i//60)%len(locations)]
-            state.boat_id = tuple(BOATS)[(i//100)%3]
+            state.boat_id = tuple(BOATS)[(i//100)%len(BOATS)]
             state.sail_raised = state.boat_id=="sail" and (i//20)%2==1
             state.fuel = state.boat.tank*(0.1+0.8*((i%100)/100))
             state.yaw += math.sin(i*0.02)*0.18
@@ -180,8 +180,8 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             "text_cache_limit_bytes":text.cache_limit,
             "memory_samples":samples,
             "checks":["fixed anchored depth","matching camera projections","all ten UI modes",
-                      "both lakes with repeated renderer release and rebuild","all three boats and raised sail",
-                      "six shop tabs, four help pages and 36 journal entries","changing fuel gauges",
+                      "both lakes with repeated renderer release and rebuild","all four boats and raised sail",
+                      "six shop tabs, four help pages and 36 journal entries","changing fuel and battery gauges",
                       "clear, fair, night, drizzle and 12x midnight fades","five heavy lines and fifteen buoys",
                       "all paint colors","changing look and steering","bounded text cache"],
         }
