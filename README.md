@@ -6,7 +6,7 @@ The lake now uses a 16:9 OpenGL renderer: fixed terrain, a dense procedural fore
 
 The shore stays fixed. Terrain is baked once, the water boundary follows the same lake and landing-slip functions used by the simulation, and the camera no longer bobs or rolls while you look at the bank.
 
-A moving boat leaves a wake, and fish rise on the open water. When a hook takes a fish, a ring spreads on that spot and a flagged cork stands up on the line. The chart and the corner list show which lines are soaking, which have fish, and which are getting tired. With the depth finder, idling tells you what you would bait there. The lake has a voice: lapping water, the motor, wind when you sail or it rains, birds at the edge of the day, frogs after dark, and a splash with the strike. M mutes it.
+A moving boat leaves a wake, and fish rise on the open water. When a hook takes a fish, a ring spreads on that spot and a flagged cork stands up on the line. The chart and the corner list show which lines are soaking, which have fish, and which are getting tired. With the depth finder, idling tells you what you would bait there. The lake has a voice: lapping water, the motor or the rowboat's oar strokes, wind when you sail or it rains, birds at the edge of the day, frogs after dark, and a splash with the strike. M mutes it.
 
 Weather blends over an hour on the lake, including changes at midnight. Cloud
 cover, rain, mist, water chop, and lighting fade together; the sun and moon
@@ -31,13 +31,13 @@ That makes a `.venv` if you don't have one, installs the dependencies, and start
 ./play.sh --selftest          # gameplay and graphics regressions. No window.
 ./play.sh --shots shots       # PNG frames of the lake and the menus
 ./play.sh --chart shots/chart.png
-./play.sh --benchmark 1200    # both lakes, three boats, menus, weather, and 15 buoys
+./play.sh --benchmark 1200    # both lakes, four boats, menus, weather, and 15 buoys
 ./play.sh --software          # use the simpler CPU fallback
 ./play.sh --selftest --software
 ./play.sh --smoke             # real window, sailing, purchases, weather, and lake changes
 ```
 
-The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. It exercises both lakes, all three boats, six shop tabs, four help pages, the 36-entry journal, weather fades, fuel gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry is also checked for stability. Results depend on the graphics driver and the other applications running on the computer.
+The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. It exercises both lakes, all four boats, six shop tabs, four help pages, the 36-entry journal, weather fades, fuel and battery gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry is also checked for stability. Results depend on the graphics driver and the other applications running on the computer.
 
 During play the window and lake share one OpenGL context. The window check reads the pixels submitted to the actual window and verifies that presenting a frame does not corrupt subsequent lake frames. Headless screenshots use a separate standalone context.
 

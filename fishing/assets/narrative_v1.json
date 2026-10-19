@@ -308,7 +308,8 @@
         "player_controlled": true,
         "propulsion": [
           "motor",
-          "sail"
+          "sail",
+          "oar"
         ],
         "count_tow": false,
         "measurement": "in_zone_path"
@@ -1123,7 +1124,7 @@
       "id": "q08_channel_run:dialogue:offer",
       "quest_id": "q08_channel_run",
       "speaker_id": "captain_maeve",
-      "text": "Travel 300 game metres under your own power within Cedar open water. Your motor or sail will do; a tow won’t count.",
+      "text": "Travel 300 game metres under your own power within Cedar open water. Your motor, oars, or sail will do; a tow won’t count.",
       "choices": [
         {
           "id": "q08_channel_run:choice:accept",
@@ -1157,7 +1158,7 @@
       "id": "q08_channel_run:dialogue:progress",
       "quest_id": "q08_channel_run",
       "speaker_id": "captain_maeve",
-      "text": "Accumulate 300 game metres of actual travel inside Cedar open water using your motor or sail. Outside portions and tow movement do not count.",
+      "text": "Accumulate 300 game metres of actual travel inside Cedar open water using your motor, oars, or sail. Outside portions and tow movement do not count.",
       "next": null
     },
     {
