@@ -1,4 +1,41 @@
-# Little Briar
+# Trotline Purridise
+
+*A cozy, first-person trotline-fishing game.* You are the Skipper, a water-cat,
+with Bot, a tin deckhand riding the bow. Set lines, let them soak, run them by
+hand, and fill an old fish book with notes from five very different waters. No rod
+and reel, no fail states, no hurry.
+
+## Status
+
+The **V1.0 beta** is in production. The design is final, and implementation is
+tracked as GitHub issues labeled `v1.0`.
+
+| | |
+| --- | --- |
+| **Design packet** (source of truth) | [`docs/v1/`](docs/v1/): [Final review](docs/v1/00-FINAL-REVIEW.md) · [Canon](docs/v1/01-CANON.md) · [Gameplay spec](docs/v1/02-GAMEPLAY-SPEC.md) · [Content tables](docs/v1/03-CONTENT-TABLES.md) · [Characters](docs/v1/04-CHARACTERS.md) · [Script](docs/v1/05-SCRIPT.md) · [Implementation guide](docs/v1/06-IMPLEMENTATION-GUIDE.md) · [Tickets](docs/v1/07-TICKETS.md) |
+| **Implemented baseline** | V3 narrative layer: [`docs/narrative/`](docs/narrative/) (12 quests, Ripples, Whiskered Guardian) |
+| **Review policy** | [`docs/PR-REVIEW-POLICY.md`](docs/PR-REVIEW-POLICY.md) |
+
+### V1.0 at a glance
+
+- **Five waters:** Little Briar, Cedar Creek, Flathead Alpine, Crater Caldera and
+  the Starlight Nebula Lagoon.
+- **144 species + 12 legendaries**, in an inherited book that grows from cat
+  folklore (*What we heard*) to verified notes (*What we found*).
+- **52 visible cat neighbors**, each with a want, a quirk and two quests.
+- **The Book of Five Waters:** a short, optional story (10–12 h). Free play
+  continues afterward.
+- **24 boats** in eight families, with traits instead of a strict ladder.
+- **Bot's five shells and tools:** sonar grid, reed anchor, wave chime,
+  thermocline scanner, zero-G winch.
+- **Cozy by default** (nothing can be lost), plus an opt-in **Old Salt** routine
+  mode.
+- **Built to a 3 GB RAM cap** with fully procedural art.
+
+## The current build
+
+Everything below describes what is playable on `main` today. The game was
+previously titled *Little Briar*; that is now the first lake's name.
 
 A first-person trotline game with two lakes, 36 catchable fish, and four boat models. Start in a 12-foot jon boat, set lines, let them soak, and sell the catch at the landing. Earn a wind-powered daysailer or a 15-foot pontoon and take your gear to Cedar Creek Lake, or buy a 10-foot rowboat for oar-powered travel. There is no rod and reel.
 
