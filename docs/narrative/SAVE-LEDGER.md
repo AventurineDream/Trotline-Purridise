@@ -22,8 +22,10 @@ Malformed optional fields fall back independently; valid fishing data and valid
 ledger siblings survive. Unknown quest/Ripple IDs are ignored. A completed quest
 counts as already claimed even in a ledger missing `reward_claims`; a saved claim
 also restores completed status. `record_reward_claim` latches a ready quest once
-and returns whether it changed. It does not grant cash, Ripples or items. Ticket 8
-must use the latch with the supported reward transaction. Loading pays nothing.
+and returns whether it changed. Ticket 8 uses that latch before paying the
+validated cash reward and adding its unique Ripple. Quest cash does not alter
+fish-sale totals, and hand-in leaves the livewell unchanged. Loading this ledger
+never grants rewards.
 
 Each deployment saves a UUID `line_id`. Legacy or invalid IDs receive a new UUID;
 ambiguous duplicate IDs are all replaced without altering fishing state or

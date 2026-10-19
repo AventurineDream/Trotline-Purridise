@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 import math
 
+from .narrative import RIPPLE_BY_QUEST
+
 HAIL_RANGE_M = 20.0
 # Boat speed is metres/second; one knot is exactly 1852 metres/hour.
 HAIL_SPEED_MPS = 3.0 * 1852 / 3600
@@ -15,6 +17,44 @@ def nearby_npc(state):
                 for n in state.npcs if n.anchor.lake_id == state.lake_id]
     eligible = [row for row in eligible if row[0] <= HAIL_RANGE_M]
     return min(eligible, default=(0, '', None))[-1]
+
+
+def _turn_in_reward(state, content, quest_id: str, npc_id: str) -> bool:
+    """Pay one contract-supported reward to its present giver, at most once."""
+    quest = content.quests.get(quest_id)
+    giver = content.npcs.get(npc_id)
+    progress = state.narrative.quests.get(quest_id)
+    if (quest is None or giver is None or progress is None
+            or quest.get('giver_id') != npc_id
+            or giver.get('quest_id') != quest_id
+            or progress.status != 'ready'):
+        return False
+
+    current = nearby_npc(state)
+    if current is None or current.id != npc_id:
+        state.toast(f"Come back to {giver['name']} when nearby to turn in.")
+        return False
+
+    reward_id = quest.get('reward_id')
+    reward = content.rewards.get(reward_id)
+    ripple_id = RIPPLE_BY_QUEST.get(quest_id)
+    if (not isinstance(reward, dict)
+            or set(reward) != {'id', 'cash', 'ripple_id'}
+            or reward.get('id') != reward_id
+            or type(reward.get('cash')) is not int
+            or reward['cash'] <= 0
+            or reward.get('ripple_id') != ripple_id):
+        # Content validation rejects unsupported reward payloads before play.
+        return False
+
+    if not state.narrative.record_reward_claim(quest_id):
+        return False
+    # Quest cash adds to the purse, but is not fish-sale income (which drives
+    # the first-sale tutorial). The livewell is intentionally left untouched.
+    state.money = round(state.money + reward['cash'], 2)
+    if ripple_id is not None and ripple_id not in state.narrative.ripples:
+        state.narrative.ripples.append(ripple_id)
+    return True
 
 
 @dataclass
@@ -43,10 +83,8 @@ class Conversation:
             elif action == 'decline' and progress.status == 'available':
                 progress.declined = True
             elif action == 'turn_in':
-                # Ticket 8 owns atomic, idempotent payouts. Do not show a false
-                # completion or mutate readiness until that handler is present.
-                state.toast('Your work is remembered. Turn-ins are not available yet.')
-                return False
+                if not _turn_in_reward(state, content, self.quest_id, self.npc_id):
+                    return False
             target = choice['target']
         else:
             target = node['next']

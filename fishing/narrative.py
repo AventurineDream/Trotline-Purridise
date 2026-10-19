@@ -115,7 +115,7 @@ class NarrativeState:
     active_play_game_minutes: float = 0.0
 
     def record_reward_claim(self, quest_id: str) -> bool:
-        """Latch a ready quest's claim once; the later turn-in code owns payouts.
+        """Latch a ready quest once before applying its validated reward.
 
         Completed quests also block claims, including older ledgers with no
         explicit reward_claims list. Loading this ledger never grants rewards.
