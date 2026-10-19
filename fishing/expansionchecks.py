@@ -1,4 +1,4 @@
-"""Two-lake gameplay, boat ownership, fuel, sailing, and save regressions."""
+"""Two-lake gameplay, boat ownership, propulsion, and save regressions."""
 
 import hashlib
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .boat import BOATS, FUEL_PRICE, sailing_speed
+from .boat import BOATS, BATTERY_CHARGE_KWH, FUEL_PRICE, ROWBOAT_BATTERY_KWH, sailing_speed
 from .data import BAITS, SPECIES, SPECIES_BY_ID, WELLS, ZONE_ORDER
 from .game import Keys, Session
 from .render import Renderer
@@ -45,7 +45,8 @@ def expansion_checks(briar,software=False):
         path = Path(temp)/"save.json"
         state = State.new(briar,seed=61)
         old = state.to_json()
-        for field in ("lake_id","boat_id","owned_boats","fuel_tanks"):
+        for field in ("lake_id","boat_id","owned_boats","fuel_tanks",
+                      "rowboat_charge_kwh_this_visit"):
             del old[field]
         old["money"] = 123.45
         old["game_minutes"] = 2222
@@ -77,14 +78,70 @@ def expansion_checks(briar,software=False):
         state.refuel()
         if state.fuel!=36:
             raise AssertionError("refill overfilled the tank")
+        if state.buy_boat("rowboat",briar) is not None or state.fuel!=0:
+            raise AssertionError("rowboat purchase did not preserve its no-fuel setup")
+        if state.buy_rowboat_trolling_motor() is not None or not state.rowboat_trolling_motor:
+            raise AssertionError("trolling motor purchase was not charged or installed")
+        if state.rowboat_battery_kwh!=ROWBOAT_BATTERY_KWH:
+            raise AssertionError("new trolling motor did not include a full battery")
+        state.x=state.z=state.yaw=0
+        state.anchored=False
+        state.throttle=state.throttle_setting=1
+        battery=state.rowboat_battery_kwh
+        movement=[]
+        state._quest_event_handler=lambda _state,event: movement.append(event)
+        for _ in range(20):
+            state.drive(0.1,0,0,briar,player_controlled=True)
+        if not state.rowboat_battery_kwh<battery or state.speed<=0:
+            raise AssertionError("electric trolling motor did not use battery or move the rowboat")
+        state.rowboat_battery_kwh=0
+        state.speed=0
+        state.throttle=state.throttle_setting=1
+        state.drive(0.1,0,0,briar,player_controlled=True)
+        if state.max_speed()<=0 or state.max_speed()>=4.0:
+            raise AssertionError("empty electric battery did not fall back to rowing speed")
+        if not any(event.get("type")=="boat.move" and event.get("propulsion")=="oar"
+                   for event in movement):
+            raise AssertionError("rowed movement was not recorded as oar propulsion")
+        state._park(briar)
+        cash=state.money
+        if state.charge_rowboat_battery() is not None or state.rowboat_battery_kwh!=5.0:
+            raise AssertionError("battery charge at the landing failed")
+        if not math.isclose(cash-state.money,1.75):
+            raise AssertionError("battery charge was not billed at the posted kWh rate")
+        if state.battery_charge_available_this_visit()!=0.0:
+            raise AssertionError("battery visit allowance did not decrease by the charge amount")
+        if state.charge_rowboat_battery() is None or state.rowboat_battery_kwh!=5.0:
+            raise AssertionError("multiple charges exceeded the per-visit battery limit")
+        battery_row = next((row for row in shop_rows(state,4) if row.kind=="battery"),None)
+        if battery_row is None or battery_row.enabled:
+            raise AssertionError("shop still offered another battery charge this visit")
+        state.anchored=False
+        for _ in range(200):
+            state.drive(0.1,1.0,0.0,briar)
+            if state.slip_status(briar)!="docked":
+                break
+        if state.slip_status(briar)=="docked" or state.rowboat_charge_kwh_this_visit!=0.0:
+            raise AssertionError("leaving the landing did not reset battery charge allowance")
+        state._park(briar)
+        before_recharge=state.rowboat_battery_kwh
+        if (state.charge_rowboat_battery() is not None
+                or state.rowboat_battery_kwh<=before_recharge
+                or state.rowboat_charge_kwh_this_visit!=BATTERY_CHARGE_KWH):
+            raise AssertionError("battery could not be charged after a new landing visit")
+        if state.buy_boat("pontoon",briar) is not None:
+            raise AssertionError("could not switch back to an owned boat")
         state.well=[Catch("alligator_gar",65,1,0,"inlet","shad",23)]
         if state.buy_boat("sail",briar) is None or state.boat_id!="pontoon":
             raise AssertionError("boat switch lost an oversized catch")
         state.well.clear()
         state.save(path)
         loaded=State.load(path,briar)
-        if loaded.boat_id!="pontoon" or loaded.fuel!=36 or len(loaded.owned_boats)!=3:
-            raise AssertionError("boats and fuel did not roundtrip")
+        if (loaded.boat_id!="pontoon" or loaded.fuel!=36 or len(loaded.owned_boats)!=4
+                or not loaded.rowboat_trolling_motor
+                or not math.isclose(loaded.rowboat_battery_kwh,state.rowboat_battery_kwh,abs_tol=1e-6)
+                or loaded.rowboat_charge_kwh_this_visit!=BATTERY_CHARGE_KWH):
+            raise AssertionError("boats, fuel, trolling motor and battery did not roundtrip")
 
         session=Session(briar,path,state,True)
         state.x=state.z=state.yaw=0
@@ -110,7 +167,7 @@ def expansion_checks(briar,software=False):
             raise AssertionError("Cedar save did not reload on the correct lake")
         if session.change_lake("briar") is not None:
             raise AssertionError("return travel failed")
-        if [r.kind for r in shop_rows(state,4)]!=["boat","boat","boat","fuel"]:
+        if [r.kind for r in shop_rows(state,4)]!=["boat","boat","boat","boat","trolling_motor","fuel"]:
             raise AssertionError("Boats tab includes unrelated shop rows")
 
     # Motor use costs fuel; sailing under the same simulated clock does not.
@@ -202,4 +259,4 @@ def expansion_checks(briar,software=False):
                     raise AssertionError(f"Cedar {boat_id} geometry moved or graphics objects grew")
     finally:
         renderer.close()
-    print("expansion graphics ok  Cedar shoreline, all three hulls, fixed anchored depth and bounded objects")
+    print("expansion graphics ok  Cedar shoreline, all four hulls, fixed anchored depth and bounded objects")

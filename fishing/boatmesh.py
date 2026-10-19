@@ -54,7 +54,72 @@ def boat_faces(state):
             quad([a+n*r,b+n*r,b+m*r,a+m*r],color,n+m)
 
     model = state.boat
-    if state.boat_id=="sail":
+    if state.boat_id=="rowboat":
+        beam,bow,stern = model.half_beam,model.bow,model.stern
+        # Blue molded shell, cream liner, shallow floor and a blunt transom.
+        shell = (np.array([0.08,0.29,0.67],np.float32)
+                if state.look_paint.get("hull", "aluminum")=="aluminum"
+                else np.asarray(paint_rgb("hull",state.look_paint["hull"]),np.float32))
+        cream = (0.84,0.81,0.68)
+        dark_blue = tuple(np.asarray(shell)*0.66)
+        stations = [(-1.34,0.44),(-1.10,0.57),(-0.58,0.65),
+                    (0.48,0.65),(1.08,0.52),(1.62,0.045)]
+        for side in (-1,1):
+            for (z0,w0),(z1,w1) in zip(stations,stations[1:]):
+                inner0,inner1 = w0*0.62,w1*0.62
+                # The lower chine tapers in to keep the 10-foot hull shallow.
+                lower0,lower1 = max(0.12,w0*0.66),max(0.08,w1*0.66)
+                quad([(side*w0,-0.44,z0),(side*w1,-0.44,z1),
+                      (side*lower1,-1.53,z1),(side*lower0,-1.53,z0)],
+                     shell,(-side,0.08,0))
+                quad([(side*inner0,-0.48,z0),(side*inner1,-0.48,z1),
+                      (side*w1,-0.44,z1),(side*w0,-0.44,z0)],cream,(0,1,0))
+            # Continuous molded blue gunwale and thin dark rub strip.
+            for (z0,w0),(z1,w1) in zip(stations,stations[1:]):
+                tube((side*w0,-0.405,z0),(side*w1,-0.405,z1),0.035,shell,8)
+                tube((side*(w0+0.012),-0.49,z0),(side*(w1+0.012),-0.49,z1),
+                     0.012,dark_blue,6)
+        quad([(-0.29,-1.53,-1.24),(0.29,-1.53,-1.24),
+              (0.31,-1.53,0.80),(-0.31,-1.53,0.80)],shell,(0,-1,0))
+        # Cream floor and molded footwells.
+        quad([(-0.40,-0.88,-1.12),(0.40,-0.88,-1.12),
+              (0.44,-0.88,0.87),(-0.44,-0.88,0.87)],cream,(0,1,0))
+        for x in (-0.29,0.29):
+            box((x,-0.975,-0.47),(0.055,0.025,0.94),(0.77,0.75,0.61))
+        # Two molded benches leave the center seat as a separate backless stool.
+        box((0,-0.45,1.12),(1.04,0.18,0.30),cream)
+        box((0,-0.79,-1.02),(0.94,0.17,0.32),cream)
+        for x in (-0.33,0.33):
+            box((x,-0.69,-1.02),(0.25,0.055,0.24),(0.91,0.87,0.73))
+        # A plain plastic stool: flat seat and four short legs, with no back.
+        stool = (0.96,0.93,0.82)
+        box((0,-0.265,0.74),(0.34,0.13,0.36),stool)
+        for x in (-0.11,0.11):
+            for z in (0.63,0.85):
+                tube((x,-0.33,z),(x*1.12,-0.82,z*1.10),0.022,stool,6)
+        # Oarlocks and oars remain fitted even if the optional motor is installed.
+        for side in (-1,1):
+            tube((side*0.55,-0.29,0.96),(side*0.66,-0.29,0.96),0.045,metal,8)
+            tube((side*0.59,-0.26,0.96),(side*0.59,-0.39,0.96),0.025,metal,8)
+            tube((side*0.59,-0.33,0.96),(side*1.42,-0.46,0.74),0.026,teak,8)
+            blade_x = side*1.42
+            quad([(blade_x-0.11,-0.38,0.60),(blade_x+0.11,-0.38,0.60),
+                  (blade_x+0.12,-0.50,0.88),(blade_x-0.12,-0.50,0.88)],
+                 (0.62,0.43,0.25),(0,1,0))
+        # Transom motor pad is part of the boat; the electric unit is optional.
+        box((0,-0.49,stern-0.02),(0.66,0.16,0.12),dark_blue)
+        if state.rowboat_trolling_motor:
+            electric = (0.12,0.15,0.17)
+            box((0,-0.65,stern-0.11),(0.36,0.32,0.30),electric)
+            tube((0,-0.76,stern-0.12),(0,-1.47,stern-0.16),0.035,electric,10)
+            tube((0,-1.45,stern-0.16),(-0.11,-1.49,stern-0.16),0.018,metal,8)
+            tube((0,-1.45,stern-0.16),(0.11,-1.49,stern-0.16),0.018,metal,8)
+            tube((0.12,-0.60,stern-0.08),(0.43,-0.50,stern+0.12),0.018,electric,8)
+            # A short tiller grip sits within reach from the center stool.
+            tube((0.50,-0.31,0.43),(0.50,-0.27,0.88),0.018,electric,8)
+            box((0.50,-0.24,0.89),(0.09,0.06,0.16),electric)
+            box((0.04,-0.57,stern-0.11),(0.045,0.045,0.045),(0.21,0.72,0.58))
+    elif state.boat_id=="sail":
         beam,bow,stern = model.half_beam,model.bow,model.stern
         rim = [(-beam,stern),(-beam,1.25),(-0.56,2.05),(0,bow),(0.56,2.05),(beam,1.25),(beam,stern)]
         quad([(-0.76,-1.00,stern),(0.76,-1.00,stern),(0.76,-1.00,1.12),(-0.76,-1.00,1.12)],deck,(0,1,0))

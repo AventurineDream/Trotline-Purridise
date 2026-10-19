@@ -192,7 +192,7 @@ class _Validator:
             self.literal(obj.get("set_after_acceptance"), kind != "fish_livewell",
                          where + ".set_after_acceptance")
         if "propulsion" in fields:
-            self.literal(obj.get("propulsion"), ["motor", "sail"], where + ".propulsion")
+            self.literal(obj.get("propulsion"), ["motor", "sail", "oar"], where + ".propulsion")
 
 
 def validate_content(raw, *, source="<content>") -> NarrativeContent:

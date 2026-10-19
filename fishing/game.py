@@ -362,6 +362,7 @@ class Session:
         destination = World(lake_id)
         self.world = destination
         self.state.bind(destination)
+        self.state.rowboat_charge_kwh_this_visit = 0.0
         self.state._park(destination)
         reset_bot(self.state)
         self.ui.mode = "play"
@@ -486,6 +487,10 @@ class Session:
             err = state.buy_boat(row.arg,self.world)
         elif row.kind == "fuel":
             err = state.refuel()
+        elif row.kind == "trolling_motor":
+            err = state.buy_rowboat_trolling_motor()
+        elif row.kind == "battery":
+            err = state.charge_rowboat_battery()
         elif row.kind == "lake":
             err = self.change_lake(row.arg)
         elif row.kind == "paint":
@@ -732,7 +737,14 @@ def run(*,software=False) -> None:
             audio.update(dt, session.state.throttle, session.state.speed, session.state.muted,
                          hour=hour_of_day(minutes),
                          rain=float(weather_visuals(minutes)["rain"]),
-                         sailing=session.state.sail_raised)
+                         sailing=session.state.sail_raised,
+                         motorized=(session.state.boat_id!="rowboat"
+                                    or (session.state.rowboat_trolling_motor
+                                        and session.state.rowboat_battery_kwh>0)),
+                         rowing=(session.state.boat_id=="rowboat"
+                                 and (not session.state.rowboat_trolling_motor
+                                      or session.state.rowboat_battery_kwh<=0)
+                                 and abs(session.state.throttle)>0.01))
             if session.ui.mode != "title":
                 save_acc += dt
                 if save_acc >= 45.0:

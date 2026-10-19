@@ -15,6 +15,13 @@ HULL_CLEARANCE = 0.04
 THROTTLE_RATE = 0.50
 REVERSE_LIMIT = -0.45
 FUEL_PRICE = 1.40  # game dollars per litre
+ROWBOAT_ROW_SPEED = 1.55  # m/s under oars
+ROWBOAT_ELECTRIC_SPEED = 4.25  # m/s, 9.9 hp-equivalent trolling motor
+ROWBOAT_MOTOR_POWER_KW = 7.4
+ROWBOAT_BATTERY_KWH = 18.0
+ROWBOAT_MOTOR_PRICE = 350.0
+ELECTRICITY_PRICE = 0.35  # game dollars per kWh at the landing
+BATTERY_CHARGE_KWH = 5.0  # maximum per landing visit
 
 
 @dataclass(frozen=True)
@@ -47,6 +54,8 @@ BOATS = {
                       0.72, 1.30, 650, 6, 0.45, 0.57, 0.72, 0.65, sail_speed=4.6),
     "pontoon": BoatModel("pontoon", "15 ft Pontoon", 3.37, -1.20, 1.20,
                          0.44, 1.65, 1450, 36, 2.6, 0.83, 0.52, 0.72, well_bonus=40),
+    "rowboat": BoatModel("rowboat", "10 ft Plastic Rowboat", 1.64, -1.41, 0.68,
+                         0.22, 1.12, 325, 0, 0.0, 1.0, 0.88, 0.78),
 }
 
 # Perimeter and interior samples, including every corner. Narrow solid props

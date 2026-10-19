@@ -36,7 +36,10 @@ from .narrative import QUEST_IDS
 from .platform import Text
 from .dialogue import nearby_npc
 from .world import ZONE_NAME, World
-from .boat import BOATS, FUEL_PRICE
+from .boat import (
+    BOATS, FUEL_PRICE, ROWBOAT_MOTOR_PRICE, ROWBOAT_BATTERY_KWH,
+    BATTERY_CHARGE_KWH, ELECTRICITY_PRICE,
+)
 from .lakes import LAKES
 from .weather import wind_at
 
@@ -394,16 +397,46 @@ def shop_rows(state, tab: int) -> list[Row]:
             "jon":"Light and nimble. A 12 L tank and your familiar 12-foot hull.",
             "sail":"Wind power uses no fuel. Small auxiliary, 6 L tank. Q raises or lowers the sail.",
             "pontoon":"Wide deck, sheltered helm, 36 L tank, and 40 lb of extra livewell capacity.",
+            "rowboat":"Blue 10-foot plastic hull, cream interior, two-place front bench, backless center stool, and two aft seats. Row with W/S; steer with A/D.",
         }
         for model in BOATS.values():
             owned = model.id in state.owned_boats
             right = "aboard" if model.id==state.boat_id else ("owned" if owned else dollars(model.price))
             rows.append(Row(model.name,right,descriptions[model.id],model.id!=state.boat_id,"boat",model.id))
-        missing = state.boat.tank-state.fuel
-        amount = min(5.0,missing,max(0.0,state.money)/FUEL_PRICE)
-        rows.append(Row(f"Fuel  {state.fuel:.1f}/{state.boat.tank:.0f} L",
-                        f"{dollars(amount*FUEL_PRICE)} / {amount:.1f} L",
-                        "Buy up to five litres. Tanks stay with each owned boat.",missing>0.001,"fuel"))
+        if "rowboat" in state.owned_boats:
+            if state.rowboat_trolling_motor:
+                rows.append(Row("9.9 hp electric trolling motor", "installed",
+                                "Runs on its own battery; W/S row the boat if the battery runs out.",
+                                False, "trolling_motor"))
+            else:
+                rows.append(Row("9.9 hp electric trolling motor", dollars(ROWBOAT_MOTOR_PRICE),
+                                "Fits the rowboat transom. Includes an 18 kWh battery; oars stay aboard.",
+                                True, "trolling_motor"))
+        if state.boat_id=="rowboat":
+            if state.rowboat_trolling_motor:
+                missing = ROWBOAT_BATTERY_KWH-state.rowboat_battery_kwh
+                visit_remaining = state.battery_charge_available_this_visit()
+                amount = min(visit_remaining,missing,
+                             max(0.0,state.money)/ELECTRICITY_PRICE)
+                if missing <= 0.001:
+                    charge_description = "Battery full. Oars still work if it runs down."
+                elif visit_remaining < 0.1:
+                    charge_description = "Five kWh used this visit. Leave and return to charge again."
+                else:
+                    charge_description = "Buy up to five kWh per landing visit. Oars work at zero charge."
+                rows.append(Row(f"Battery  {state.rowboat_battery_kwh:.1f}/{ROWBOAT_BATTERY_KWH:.0f} kWh",
+                                f"{dollars(amount*ELECTRICITY_PRICE)} / {amount:.1f} kWh",
+                                charge_description,
+                                missing>0.001 and visit_remaining>=0.1,"battery"))
+            else:
+                rows.append(Row("Oars", "ready", "W/S row forward or reverse; A/D steer. No fuel needed.",
+                                False, "oars"))
+        elif state.boat.tank>0:
+            missing = state.boat.tank-state.fuel
+            amount = min(5.0,missing,max(0.0,state.money)/FUEL_PRICE)
+            rows.append(Row(f"Fuel  {state.fuel:.1f}/{state.boat.tank:.0f} L",
+                            f"{dollars(amount*FUEL_PRICE)} / {amount:.1f} L",
+                            "Buy up to five litres. Tanks stay with each owned boat.",missing>0.001,"fuel"))
     elif tab==5:
         for lake_id,lake in LAKES.items():
             here = lake_id==state.lake_id
@@ -654,12 +687,24 @@ class UI:
         lever = state.throttle_setting
         gear = "IDLE" if abs(lever)<0.005 else ("FWD" if lever>0 else "REV")
         percent = round(abs(lever)/(1.0 if lever>=0 else 0.45)*100)
-        throttle = "THROTTLE  IDLE" if gear=="IDLE" else f"THROTTLE  {gear} {percent}%"
+        if state.boat_id=="rowboat":
+            power = ("E-MOTOR" if state.rowboat_trolling_motor
+                     and state.rowboat_battery_kwh>0 else "OARS")
+            throttle = f"{power}  IDLE" if gear=="IDLE" else f"{power}  {gear} {percent}%"
+        else:
+            throttle = "THROTTLE  IDLE" if gear=="IDLE" else f"THROTTLE  {gear} {percent}%"
         self._text(frame,throttle,rx+16,m+int(91*unit),small,
                    DIM if gear=="IDLE" else GOLD,False,"sans")
-        fuel = f"FUEL  {state.fuel:.1f} / {state.boat.tank:.0f} L"
-        self._text(frame,fuel,rx+16,m+int(111*unit),small,
-                   WARN if state.fuel<state.boat.tank*0.15 else DIM,False,"sans")
+        if state.boat_id=="rowboat":
+            power = (f"BATTERY  {state.rowboat_battery_kwh:.1f} / {ROWBOAT_BATTERY_KWH:.0f} kWh"
+                     if state.rowboat_trolling_motor else "ROW POWER  OARS READY")
+            low_power = (state.rowboat_trolling_motor
+                         and state.rowboat_battery_kwh<ROWBOAT_BATTERY_KWH*0.15)
+            self._text(frame,power,rx+16,m+int(111*unit),small,WARN if low_power else DIM,False,"sans")
+        else:
+            fuel = f"FUEL  {state.fuel:.1f} / {state.boat.tank:.0f} L"
+            self._text(frame,fuel,rx+16,m+int(111*unit),small,
+                       WARN if state.fuel<state.boat.tank*0.15 else DIM,False,"sans")
         if state.boat_id=="sail":
             wind,wind_speed = wind_at(state.game_minutes+state.minute_acc)
             coming_from = (wind+np.pi)%(2*np.pi)
@@ -729,6 +774,7 @@ class UI:
         frame[y:y + mh, x:x + mw] = scaled
         for line in state.lines:
             self._seg(frame, line.x0, line.z0, line.x1, line.z1, x, y, mw, mh, self._line_color(line))
+        self._plot_trinidad_cove(frame, x, y, mw, mh)
         self._plot_npcs(frame, state, x, y, mw, mh)
         self._plot_boat(frame, state, x, y, mw, mh, radius=3)
         self._plot_bot(frame, state, x, y, mw, mh)
@@ -797,6 +843,7 @@ class UI:
                     dot = (90, 104, 98)
                 u, v = self.world.map_pixel(hx, hz, mw, mh)
                 self._dot(frame, x + u, y + v, 2 if hook.catch is not None else 1, dot)
+        self._plot_trinidad_cove(frame, x, y, mw, mh, labels=True)
         self._plot_npcs(frame, state, x, y, mw, mh, labels=True)
         self._plot_boat(frame, state, x, y, mw, mh, radius=4)
         self._plot_bot(frame, state, x, y, mw, mh)
@@ -804,6 +851,23 @@ class UI:
         self._text(frame, self.world.name, x, y - self.cell(size)[1] - 14, size, INK)
         self._text(frame, "Fish gold   soak green   tired red   NPC blue", x, y + mh + 12, size, DIM, shadow=False)
         self._text(frame, "Tab closes the chart", x + mw - 20 * self.cell(size)[0], y + mh + 14 + self.cell(size)[1], size, DIM, shadow=False)
+
+    def _plot_trinidad_cove(self, frame, x, y, mw, mh, labels=False):
+        if self.world.id != "cedar":
+            return
+        anchor = self.world.anchors.get("cedar:trinidad_cove")
+        if anchor is None:
+            return
+        u, v = self.world.map_pixel(anchor.x, anchor.z, mw, mh)
+        color = (240, 198, 112)
+        self._dot(frame, x + u, y + v, 3 if labels else 2, color)
+        if labels:
+            size = self._size(frame, "small")
+            label = anchor.name
+            width = len(label) * self.cell(size)[0]
+            tx = max(x, min(x + u + 7, x + mw - width))
+            ty = max(y, min(y + v + 6, y + mh - self.cell(size)[1]))
+            self._text(frame, label, tx, ty, size, color)
 
     def _plot_npcs(self, frame, state, x, y, mw, mh, labels=False):
         color = (128, 206, 240)
@@ -1298,8 +1362,8 @@ class UI:
 
 _HELP = (
     ("ON THE WATER", (
-        "W raises throttle     S lowers it, then reverses",
-        "Throttle stays set    Shift returns it to idle",
+        "W/S row, or run the motor when one is installed",
+        "Power stays set       Shift returns it to idle",
         "A D or arrows steer   arrows look up and down",
         "Space drops or raises the anchor",
         "W / S also pull the anchor when you mean to go",
@@ -1333,8 +1397,9 @@ _HELP = (
     ("THE LANDING", (
         "Nose into the slip and press E.",
         "Sell the well. Buy bait by the dozen.",
-        "Lines, a bigger motor, a deeper well, a bait box,",
+        "Motors, a deeper well, a bait box,",
         "a depth finder, and a bow light are at the same counter.",
+        "The rowboat runs on oars; its electric motor is optional.",
         "",
         "Hull, deck, buoy, and tiller colors are yours once you",
         "buy them. Wearing one you own is free.",

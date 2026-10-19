@@ -13,7 +13,7 @@ Ticket 1 freezes a design against the current Little Briar game. It does not imp
 | Area | Current build | V3 proposal covered by this contract |
 | --- | --- | --- |
 | Game and world | Python game, Little Briar and Cedar Creek Lake; lake IDs briar and cedar | Optional narrative layer across both existing lakes |
-| Fishing | 36 fish, five bait IDs, three boats, trotline tiers of 12/18/24 hooks, maximum five deployed lines | Quest listeners observe existing line, catch, and boat events |
+| Fishing | 36 fish, five bait IDs, four boats, trotline tiers of 12/18/24 hooks, maximum five deployed lines | Quest listeners observe existing line, catch, and boat events |
 | Bot | B sends and recalls Bot; report contains zone, depth class or exact depth when a finder is owned, and bait advice | Quest objectives can request that existing report; no thermal or audio sensors |
 | Controls | F sets a line; E checks a line or opens the landing; B controls Bot; H opens Help; M mutes | C is the keyboard hail/chat action; H remains Help |
 | Time | One real second advances one game minute at 1x; day is 1,440 game minutes (24 real minutes at 1x). T selects 1x/3x/6x/12x while still | All quest durations and windows use the game clock |
@@ -145,7 +145,7 @@ Quest IDs and Ripple IDs are permanent save identifiers. Reward amounts are game
 | q05_moonlight_trotlines | Moonlight Trotlines — Master Cinder | briar:deep | Set a 12-hook std line with shad bait in briar:deep during 20:00–04:00; wait at least 60 game minutes and check that line. The boat spotlight is optional. | $50 and ripple_03 |
 | q06_unrepeatable_sunrise | The Unrepeatable Sunrise — Willow | briar:lilies | After acceptance, a fish whose `species_id` is `golden_shiner` must enter the livewell during 05:00–08:00 from a worm-bait line set in briar:lilies. The line may be set earlier. The fish stays in the livewell. | $55 and ripple_04 |
 | q07_art_of_the_nap | The Art of the Nap — Silas | briar:inlet | Anchor in briar:inlet with engine idle for 120 continuous game minutes. Fishing continues normally. | $40 and ripple_05 |
-| q08_channel_run | The Channel Run — Captain Maeve | cedar:open | Travel at least 300 game metres within cedar:open under player control by motor or sail. Accumulate actual path distance; tow movement does not count. | $65 and ripple_06 |
+| q08_channel_run | The Channel Run — Captain Maeve | cedar:open | Travel at least 300 game metres within cedar:open under player control by motor, oars or sail. Accumulate actual path distance; tow movement does not count. | $65 and ripple_06 |
 | q09_quiet_channel | The Quiet Channel — Sparky | cedar:inlet | Set a 12-hook std line with liver bait in cedar:inlet; wait at least 60 game minutes; check that same line. | $50 and ripple_07 |
 | q10_ballad_lonely_star | Ballad of the Lonely Star — Quill | Quill at cedar:flats | After acceptance, enter cedar:rocks, cedar:lilies, and cedar:open in any order. Then hail Quill to turn in. No sound recording is required. | $45 and ripple_08 |
 | q11_deep_water_drift | The Deep-Water Drift — Dr. Alder | cedar:deep | Set an 18-hook prem line with shad bait in cedar:deep; make it the nearest deployed line within Bot's current scout range, receive his ordinary report for it, wait at least 60 game minutes from set time, and check that same line. | $60 and ripple_09 |
@@ -194,7 +194,7 @@ For line-directed Bot scouts, capture the chosen deployment's `line_id` as `targ
 
 Each `boat.move` event describes only the traversed portion in its named zone: `zone_id` is the segment's zone, and `distance_m` is the non-negative path length in that zone. Split the actual accepted movement path at zone boundaries using the live world's zone classification, including its boundary precedence. Use the movement substeps that actually occurred; do not substitute the update's start-to-end displacement, count rejected movement, or classify the whole update by its final position. Emit separate portions when a move crosses a boundary, and count each portion once.
 
-For q08, accumulate only portions with lake `cedar`, zone `open`, player control, and motor or sail propulsion after acceptance. For example, an update traveling 8 metres outside Cedar open water followed by 2 metres inside contributes 2 metres, regardless of its event cadence. Reversing across that boundary does not make the outside portion eligible. Tow movement and repositioning on load or lake travel contribute zero.
+For q08, accumulate only portions with lake `cedar`, zone `open`, player control, and motor, oar or sail propulsion after acceptance. For example, an update traveling 8 metres outside Cedar open water followed by 2 metres inside contributes 2 metres, regardless of its event cadence. Reversing across that boundary does not make the outside portion eligible. Tow movement and repositioning on load or lake travel contribute zero.
 
 ### 5.3 Zone-entry provenance
 
