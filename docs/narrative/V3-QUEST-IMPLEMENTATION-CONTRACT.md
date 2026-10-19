@@ -1,8 +1,8 @@
 # Little Briar: V3 Quest Implementation Contract
 
 *Ticket 1 scope gate*
-*Contract version 1.0 — 15 October 2026*
-*Status: normative design for later implementation; the current game does not yet contain NPC or quest systems.*
+*Contract version 1.1 — 18 October 2026*
+*Status: normative V3 design and implementation contract; NPC and quest systems are present in the current game.*
 
 This contract is the single authority for the V3 narrative feature's quest names, IDs, locations, schedules, controls, progress rules, rewards, persistence, and optionality. CanonSheet-v3, GameplayNarrativeUpdateSpec-v3, RelationshipAndQuestFlowmap-v3, ImplementationGuide-v3, StoryOverview-v3, CharactersOverview-v3, the V3 character sheets, and Script-v3 must agree with it. Earlier V2 material remains in the existing superseded archive.
 
@@ -73,6 +73,14 @@ Doc's NPC anchor is at cedar:docs_marina_dock. Cedar shop, fuel, and lake-travel
 - H does not change; it remains Help. Do not remap it to F1.
 - Right Bumper is not a binding in the current gamepad layer and is not part of V3 acceptance.
 - The existing game clock and line simulation continue during dialogue. Player boat input is ignored while the dialogue choice panel is open; closing it restores input. Hailing never changes quest progress by itself.
+
+### 2.4 Bot reactions
+
+Ticket 10 adds optional, non-authoritative reactions to the existing NPC and quest state:
+
+- On the first foreground play frame when an active NPC is within the same 20.0-metre and below-3.0-knot eligibility boundary in §2.3, Bot shows a short, non-blocking text toast and records a matching narrative-journal note. Record at most one proximity reaction for each stable NPC ID per save. Use only the current lake's active NPCs; do not create offscreen or retroactive reactions.
+- After a successful quest turn-in has latched its existing reward and applied the existing cash and Ripple, Bot shows one short text toast and records one journal note keyed by quest ID. Do not react to accepting or declining an offer, an objective merely becoming ready, or a failed turn-in.
+- Describe Bot's small brass-ear or approving-click gesture in text. Add no audio cue, animation, NPC response, dialogue, choice, reward, or quest progress. These notes do not interpret the player's achievement or alter any fishing, movement, control, or narrative outcome.
 
 ## 3. NPC presence and daily schedule
 
@@ -209,14 +217,16 @@ Suggested stable shape:
     "day_npc_by_lake": {"briar": null, "cedar": null},
     "schedule_day_by_lake": {"briar": null, "cedar": null},
     "guardian_seen": false,
-    "active_play_game_minutes": 0
+    "active_play_game_minutes": 0,
+    "bot_reactions": {},
+    "bot_journal": []
   }
 }
 ~~~
 
-Persist quest status and counters, accepted game minute, qualifying line IDs and their set properties including their `active_game_minute` at set time, the day-NPC choice and selection day for each lake, collected Ripple IDs, `active_play_game_minutes`, and `guardian_seen`. Derive display labels from IDs; do not save drifting prose as identifiers.
+Persist quest status and counters, accepted game minute, qualifying line IDs and their set properties including their `active_game_minute` at set time, the day-NPC choice and selection day for each lake, collected Ripple IDs, `active_play_game_minutes`, and `guardian_seen`. Persist `bot_reactions` as a map from stable `npc:<npc_id>` or `quest:<quest_id>` keys to the one-time note text, so save/load cannot repeat a cue. Preserve the existing `bot_notes` scout-report history. Keep `bot_journal` as the chronological report/reaction history, retaining its latest 40 entries, and display its latest entry on the narrative journal page; when loading an older save without this field, initialize it from the existing `bot_notes`. Derive display labels from IDs; do not save drifting prose as identifiers.
 
-The V3 Journal page is titled Lake Whispers & Ripples. It shows quest state and explicit counters, qualifying conditions and remaining game minutes, the 0/10 unique Ripple count, and the Guardian availability state. Keep the existing fish journal and livewell pages. Bot logs only the existing depth/ground/bait report; no temperature or ambient-sound log is added.
+The V3 Journal page is titled Lake Whispers & Ripples. It shows quest state and explicit counters, qualifying conditions and remaining game minutes, the 0/10 unique Ripple count, and the Guardian availability state. Keep the existing fish journal and livewell pages. Preserve Bot's existing depth/ground/bait report unchanged; the optional reactions in §2.4 add non-authoritative journal notes only. No temperature or ambient-sound log is added.
 
 ## 7. Dialogue and reward boundaries
 
@@ -238,4 +248,5 @@ A later implementation is contract-compatible when it can demonstrate all of the
 - q12 advances landing → lilies → landing only through qualifying player-controlled boat entries; tow calls and load/travel placement cannot satisfy any leg.
 - Exactly ten unique Ripple IDs can be earned; the optional Guardian can be seen after eight and is retryable on later windows.
 - Dialogue, journal counters, event fields, reward values, units, and zones match this contract.
+- Each active NPC can trigger at most one proximity reaction per save, and each successful quest turn-in can trigger at most one completion reaction. Notes survive save/load and appear in the narrative journal; toasts do not block control. Neither reaction changes fishing, movement, quest progress, or rewards, and ordinary scouting report content remains unchanged.
 - Fishing and lake travel remain playable without opening the quest journal or accepting any quest.

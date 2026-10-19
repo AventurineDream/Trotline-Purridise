@@ -52,6 +52,39 @@ class DialogueChecks(unittest.TestCase):
         self.state.npcs = (replace(self.npc, anchor=replace(self.npc.anchor, id='cedar:open')),)
         self.assertIsNone(nearby_npc(self.state))
 
+    def test_bot_proximity_cue_is_nonblocking_once_per_npc_and_persisted(self):
+        key = f"npc:{self.npc.id}"
+        self.state.speed = HAIL_SPEED_MPS
+        self.key(dt=0)
+        self.assertNotIn(key, self.state.narrative.bot_reactions)
+
+        before = (self.state.money, list(self.state.narrative.ripples),
+                  [quest.status for quest in self.state.narrative.quests.values()],
+                  [line.to_json() for line in self.state.lines],
+                  [catch.to_json() for catch in self.state.well])
+        self.state.speed = 0
+        self.key(dt=0)
+        note = f"Bot: His brass ears turn toward {self.npc.name}."
+        self.assertEqual(self.state.narrative.bot_reactions[key], note)
+        self.assertEqual(self.state.narrative.bot_journal[-1], note)
+        self.assertEqual([toast[0] for toast in self.state.toasts].count(note), 1)
+        self.key(dt=0)
+        self.assertEqual([toast[0] for toast in self.state.toasts].count(note), 1)
+        after = (self.state.money, list(self.state.narrative.ripples),
+                 [quest.status for quest in self.state.narrative.quests.values()],
+                 [line.to_json() for line in self.state.lines],
+                 [catch.to_json() for catch in self.state.well])
+        self.assertEqual(after, before)
+
+        self.session.save()
+        restored = State.load(self.path, self.world)
+        resumed = Session(self.world, self.path, restored, True)
+        resumed.ui.mode = 'play'
+        resumed.tick(Keys(), 0)
+        self.assertEqual(restored.narrative.bot_reactions[key], note)
+        self.assertEqual(restored.narrative.bot_journal[-1], note)
+        self.assertEqual([toast[0] for toast in restored.toasts].count(note), 0)
+
     def test_hail_decline_accept_persistence(self):
         q = self.state.narrative.quests[self.npc.quest_id]
         self.key('c'); self.assertEqual(self.session.ui.mode, 'dialogue')
@@ -145,6 +178,11 @@ class DialogueChecks(unittest.TestCase):
 
         self.assertEqual(progress.status, 'completed')
         self.assertIn(quest_id, self.state.narrative.reward_claims)
+        reaction_key = f"quest:{quest_id}"
+        reaction_note = "Bot: He gives a small approving brass click."
+        self.assertEqual(self.state.narrative.bot_reactions[reaction_key], reaction_note)
+        self.assertEqual(self.state.narrative.bot_journal[-1], reaction_note)
+        self.assertEqual([toast[0] for toast in self.state.toasts].count(reaction_note), 1)
         self.assertEqual(self.state.money, round(money_before + reward['cash'], 2))
         self.assertEqual(self.state.earned, earned_before)
         self.assertEqual(self.state.spent, spent_before)
@@ -174,6 +212,8 @@ class DialogueChecks(unittest.TestCase):
         self.assertEqual([item.to_json() for item in restored.well], well_before)
         self.assertEqual(restored.narrative.quests[quest_id].status, 'completed')
         self.assertIn(quest_id, restored.narrative.reward_claims)
+        self.assertEqual(restored.narrative.bot_reactions[reaction_key], reaction_note)
+        self.assertEqual(restored.narrative.bot_journal[-1], reaction_note)
         if ripple_id is not None:
             self.assertIn(ripple_id, restored.narrative.ripples)
 
