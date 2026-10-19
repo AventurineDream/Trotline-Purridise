@@ -68,8 +68,11 @@ completion and return. Node IDs are `<quest-id>:dialogue:<stage>`; choice IDs ar
 either `next` (null closes) or a nonempty list of choices with explicit target
 and action. Only the available entry can reach accept/decline actions, and only
 the ready entry can reach turn-in/close actions. The data loader executes none
-of these actions. Later dialogue and payout code must apply them to live state,
-check readiness again and use the existing idempotent reward-claim ledger.
+of these actions. Dialogue applies them to live state, checks readiness and
+giver presence again, and uses the existing idempotent reward-claim ledger
+before paying the supported cash and Ripple. Turn-in leaves catches in the
+livewell; the current contract defines no fish consumption or physical quest
+reward.
 
 All objectives begin observation after acceptance. Supported type semantics are:
 
@@ -93,8 +96,9 @@ distance is game metres, and cash is whole game dollars. Reward definitions
 contain only cash plus an optional unique Ripple. Host quests award no Ripple.
 There are no quest prerequisites, consumption costs, physical items or unlocks.
 
-This ticket adds definitions and validation only. Actors, schedules, hailing,
-UI, event adapters, progress evaluation, payouts and Guardian behavior remain
-with their roadmap tickets. Existing fishing data and assets are unchanged.
-The full software self-test includes `fishing.test_content`, so the existing
-required `gameplay-tests` workflow validates the content through its normal path.
+This document originally described Ticket 3's definitions and validation.
+Tickets 4–8 have since added actors, schedules, hailing, event adapters, progress
+evaluation and contract-supported turn-in rewards. Guardian behavior remains
+with its roadmap ticket. Existing fishing data and assets are unchanged. The full
+software self-test includes `fishing.test_content`, so the existing required
+`gameplay-tests` workflow validates the content through its normal path.

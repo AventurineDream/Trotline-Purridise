@@ -148,6 +148,7 @@ class ContentChecks(unittest.TestCase):
             (lambda d: d['quests'][11]['objective'].update(movement_cause='tow'), "expected 'boat'"),
             (lambda d: d['rewards'][0].update(ripple_id='ripple_01'), 'hosts award cash only'),
             (lambda d: d['rewards'][2].update(ripple_id='ripple_02'), 'canonical Ripple'),
+            (lambda d: d['rewards'][0].update(item_id='new_lure'), 'unknown field'),
             (lambda d: d['quests'][1].update(reward_id=d['quests'][0]['reward_id']), 'shared'),
             (lambda d: d['quests'][0].update(prerequisites=[QUEST_IDS[1]]), 'expected []'),
             (lambda d: d.update(schema_version=True), 'expected 1'),

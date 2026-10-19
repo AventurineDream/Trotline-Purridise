@@ -1,7 +1,7 @@
 """Load and validate optional narrative definitions without changing game state.
 
-The returned indexes are fresh per call. Scheduling, event evaluation, dialogue
-execution and rewards belong to later tickets; loading never runs an action.
+The returned indexes are fresh per call. Runtime scheduling, progress, dialogue,
+and reward actions are handled by their game layers; loading never runs an action.
 """
 
 from __future__ import annotations
