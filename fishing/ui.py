@@ -100,7 +100,6 @@ _SHORT_QUEST_TITLES = {
     "q11_deep_water_drift": "Drift",
     "q12_first_voyage": "Voyage",
 }
-_GUARDIAN_NOTE = "A broad ripple passed under the hull. The lake was quiet again."
 
 
 def _zone_label(zone_id: str) -> str:
@@ -164,8 +163,8 @@ def _quest_objective_text(quest: dict) -> str:
         species = SPECIES_BY_ID.get(species_id)
         species_name = species.name.lower() if species else species_id.replace("_", " ")
         window = _clock_window(objective.get("entry_window"))
-        return (f"Bring a {species_name} into the livewell from a {bait} line set in {zone} "
-                f"during {window}; the fish stays yours.")
+        return (f"Bring a {species_name} into the livewell during {window} from a {bait} "
+                f"line set in {zone}; the fish stays yours.")
     if kind == "travel_distance":
         propulsion = objective.get("propulsion", [])
         methods = " or ".join(str(item) for item in propulsion) or "your own power"
@@ -237,7 +236,7 @@ def _quest_progress_text(quest: dict, quest_progress, narrative) -> str:
             set_minute = _finite_progress(attempt["set"].get("active_game_minute"))
             active_now = _finite_progress(narrative.active_play_game_minutes)
             elapsed = max(0.0, active_now - set_minute)
-            recorded = _finite_progress(progress.get("active_soak_game_minutes"))
+            recorded = _finite_progress(attempt.get("active_soak_game_minutes"))
             elapsed = max(elapsed, recorded)
             parts.append(f"soak {elapsed:g}/{target:g} active-play min")
         return "; ".join(parts) + "."
@@ -255,8 +254,16 @@ def quest_journal_details(state, content, quest_id: str) -> dict:
                          if prerequisites else "none")
     notes = [note for note in state.narrative.bot_notes
              if isinstance(note, str) and note.strip()]
-    if state.narrative.guardian_seen and _GUARDIAN_NOTE not in notes:
-        notes.append(_GUARDIAN_NOTE)
+    ripple_count = min(10, len(set(state.narrative.ripples)))
+    if state.narrative.guardian_seen:
+        guardian_status = ("Guardian seen — Whiskered Blessing: A broad ripple passed "
+                           "under the hull. The lake was quiet again.")
+    elif ripple_count >= 8:
+        guardian_status = ("Guardian available. Cedar deep water at sunset "
+                           "(18:00–20:00).")
+    else:
+        guardian_status = ("Guardian locked (<8 Ripples). Cedar deep water at sunset "
+                           "(18:00–20:00).")
     return {
         "title": quest["title"],
         "status": _STATUS_LABELS.get(quest_progress.status, "Available"),
@@ -265,6 +272,7 @@ def quest_journal_details(state, content, quest_id: str) -> dict:
         "progress": _quest_progress_text(quest, quest_progress, state.narrative),
         "prerequisites": prerequisite_text,
         "bot_notes": notes[-2:],
+        "guardian_status": guardian_status,
     }
 
 
@@ -1146,47 +1154,44 @@ class UI:
                                        QUEST_IDS[ui.journal_quest_i])
         detail_y = content_top
         detail_bottom = footer_top - 3
+        progress_line_height = small_ch + 2
+        detail_body_bottom = max(content_top, detail_bottom - progress_line_height)
         detail_y = self._draw_journal_text(
             frame, detail["title"], detail_x, detail_y, detail_w, body, INK,
-            max_lines=1, bottom=detail_bottom)
-        detail_y += 1
+            max_lines=1, bottom=detail_body_bottom)
+        detail_y = min(detail_y + 1, detail_body_bottom)
         detail_y = self._draw_journal_text(
             frame, f"{detail['status']} · Prerequisites: {detail['prerequisites']}",
-            detail_x, detail_y, detail_w, small, GOLD, max_lines=2, bottom=detail_bottom)
+            detail_x, detail_y, detail_w, small, GOLD, max_lines=2, bottom=detail_body_bottom)
         detail_y = self._draw_journal_text(
             frame, f"Giver: {detail['giver']}", detail_x, detail_y, detail_w,
-            small, INK, max_lines=2, bottom=detail_bottom)
+            small, INK, max_lines=2, bottom=detail_body_bottom)
         detail_y = self._draw_journal_text(
             frame, f"Objective: {detail['objective']}", detail_x, detail_y, detail_w,
-            small, DIM, max_lines=4, bottom=detail_bottom)
+            small, DIM, max_lines=4, bottom=detail_body_bottom)
         self._draw_journal_text(
             frame, f"Progress: {detail['progress']}", detail_x, detail_y, detail_w,
             small, GOOD if detail["status"] == "Ready" else INK,
             max_lines=2, bottom=detail_bottom)
 
         note_y = footer_top
-        notes = detail["bot_notes"]
-        guardian_note = next((note for note in notes if note == _GUARDIAN_NOTE), None)
-        bot_notes = [note for note in notes if note != _GUARDIAN_NOTE]
+        bot_notes = detail["bot_notes"]
         note_bottom = y + ph - 5
         if bot_notes:
-            # One line per Bot note keeps the optional journal readable in the
-            # game's smallest supported window while preserving recent context.
-            for note in bot_notes[-(2 if guardian_note is None else 1):]:
+            for note in bot_notes[-1:]:
                 note = note.strip()
                 if note.lower().startswith("bot:"):
                     note = note.split(":", 1)[1].strip()
                 note_y = self._draw_journal_text(
                     frame, "Bot: " + note, x + m, note_y, pw - m * 2,
                     small, GOLD, max_lines=1, bottom=note_bottom)
-        elif guardian_note is None:
+        else:
             note_y = self._draw_journal_text(
                 frame, "No narrative notes yet.", x + m, note_y, pw - m * 2,
                 small, DIM, max_lines=1, bottom=note_bottom)
-        if guardian_note is not None:
-            note_y = self._draw_journal_text(
-                frame, "Guardian: " + guardian_note, x + m, note_y, pw - m * 2,
-                small, GOLD, max_lines=2, bottom=note_bottom)
+        note_y = self._draw_journal_text(
+            frame, detail["guardian_status"], x + m, note_y, pw - m * 2,
+            small, GOLD, max_lines=2, bottom=note_bottom)
         revisit = "Declined? Re-hail. Missed windows repeat; no expiry."
         self._draw_journal_text(
             frame, revisit, x + m, note_y, pw - m * 2, small, DIM,

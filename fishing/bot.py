@@ -107,6 +107,10 @@ def tick(state, world, dt: float) -> str | None:
             state.bot_x, state.bot_z = state.bot_tx, state.bot_tz
             report = _report(state, world)
             state.toast(report)
+            if world.zone_at(state.bot_x, state.bot_z) != "landing":
+                notes = state.narrative.bot_notes
+                notes.append(report)
+                del notes[:-2]
             depth = float(world.depth(state.bot_x, state.bot_z))
             depth_class = "skinny" if depth < 2.2 else "deep" if depth > 8.0 else "middling"
             event = {

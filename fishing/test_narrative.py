@@ -10,10 +10,10 @@ from uuid import UUID
 from . import bot
 from .content import load_content
 from .game import Keys, Session
-from .narrative import NarrativeState, QUEST_IDS
+from .narrative import NarrativeState, QUEST_IDS, RIPPLE_BY_QUEST
 from .quests import QuestManager
 from .sim import Catch, Hook, SetLine, State
-from .ui import quest_journal_details
+from .ui import UI, UIState, quest_journal_details
 from .world import World
 
 
@@ -126,11 +126,61 @@ class NarrativeChecks(unittest.TestCase):
         details = quest_journal_details(self.state, content, qid)
         self.assertIn("soak 35/60 active-play min", details["progress"])
 
+        quest_progress = self.state.narrative.quests[QUEST_IDS[10]]
+        quest_progress.status = "active"
+        quest_progress.progress = {
+            "deployments": {
+                "line-old": {"set": {"active_game_minute": 0},
+                             "active_soak_game_minutes": 60},
+                "line-new": {"set": {"active_game_minute": 75},
+                             "active_soak_game_minutes": 2},
+            },
+            "active_soak_game_minutes": 60,
+        }
+        self.state.narrative.active_play_game_minutes = 80
+        details = quest_journal_details(self.state, content, QUEST_IDS[10])
+        self.assertIn("soak 5/60 active-play min", details["progress"])
+
+        sunrise = quest_journal_details(self.state, content, QUEST_IDS[5])
+        self.assertIn("into the livewell during 05:00–08:00", sunrise["objective"])
+        self.assertIn("line set in Lily cove", sunrise["objective"])
+
         self.state.narrative.bot_notes = ["Bot: Minnows along the shaded bank."]
+        details = quest_journal_details(self.state, content, qid)
+        self.assertEqual(details["bot_notes"], ["Bot: Minnows along the shaded bank."])
+        self.assertIn("Guardian locked (<8 Ripples)", details["guardian_status"])
+        self.state.narrative.ripples = list(RIPPLE_BY_QUEST.values())[:8]
+        details = quest_journal_details(self.state, content, qid)
+        self.assertIn("Guardian available", details["guardian_status"])
         self.state.narrative.guardian_seen = True
         details = quest_journal_details(self.state, content, qid)
-        self.assertEqual(len(details["bot_notes"]), 2)
-        self.assertTrue(any("broad ripple" in note for note in details["bot_notes"]))
+        self.assertIn("Whiskered Blessing", details["guardian_status"])
+        self.assertIn("broad ripple", details["guardian_status"])
+
+    def test_small_narrative_journal_reserves_progress_line(self):
+        qid = QUEST_IDS[10]
+        progress = self.state.narrative.quests[qid]
+        progress.status = "active"
+        progress.progress = {
+            "deployments": {
+                "line-new": {"set": {"active_game_minute": 5}, "checked": False}
+            }
+        }
+        self.state.narrative.active_play_game_minutes = 10
+
+        class FakeText:
+            def render(self, value, size, color, family="mono"):
+                return SimpleNamespace(shape=(size + 4, size // 2 + 1))
+
+        renderer = UI(FakeText(), self.world)
+        drawn = []
+        renderer._text = lambda _frame, value, *_args, **_kwargs: drawn.append(str(value))
+        renderer._panel = lambda *_args, **_kwargs: None
+        renderer._fill = lambda *_args, **_kwargs: None
+        renderer._narrative_journal(SimpleNamespace(shape=(270, 480)), self.state,
+                                     UIState(journal_quest_i=10))
+        self.assertTrue(any(line.startswith("Progress:") for line in drawn), drawn)
+        self.assertTrue(any(line.startswith("Guardian locked") for line in drawn), drawn)
 
     def test_reward_claim_latches_once_and_survives_reload(self):
         qid = QUEST_IDS[3]
@@ -433,6 +483,11 @@ class NarrativeChecks(unittest.TestCase):
         self.assertEqual(self.state.bot_phase, "out")
         self.assertEqual(quest.status, "ready")
         self.assertEqual(events[0]["zone_id"], "briar:flats")
+        self.assertEqual(len(self.state.narrative.bot_notes), 1)
+        self.assertIn("Bot:", self.state.narrative.bot_notes[0])
+        self.state.save(self.path)
+        loaded = State.load(self.path, self.world)
+        self.assertEqual(loaded.narrative.bot_notes, self.state.narrative.bot_notes)
         self.assertIn("exact_depth_m", events[0])
         self.assertNotIn("exact_depth", events[0])
         self.assertNotIn("distance_m", events[0])

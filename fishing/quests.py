@@ -165,6 +165,10 @@ class QuestManager:
         if not (_finite_number(current) and _finite_number(start)):
             return
         soaked = max(0.0, current - start)
+        attempt_recorded = attempt.get("active_soak_game_minutes", 0.0)
+        if not _finite_number(attempt_recorded) or attempt_recorded < 0:
+            attempt_recorded = 0.0
+        attempt["active_soak_game_minutes"] = max(attempt_recorded, soaked)
         recorded = progress.progress.get("active_soak_game_minutes", 0.0)
         if not _finite_number(recorded) or recorded < 0:
             recorded = 0.0
