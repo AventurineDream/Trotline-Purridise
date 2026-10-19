@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import textwrap
 
 import numpy as np
@@ -29,6 +30,8 @@ from .data import (
     clock_string,
     CEDAR_FISH,
 )
+from .content import load_content
+from .narrative import QUEST_IDS
 from .platform import Text
 from .dialogue import nearby_npc
 from .world import ZONE_NAME, World
@@ -44,6 +47,233 @@ GOOD = (150, 196, 140)
 
 SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes")
 _TABS = SHOP_TABS
+
+_ZONE_LABELS = {
+    "briar:landing": "Briar Landing",
+    "briar:inlet": "Creek inlet",
+    "briar:flats": "North flats",
+    "briar:lilies": "Lily cove",
+    "briar:cypress": "Cypress shore",
+    "briar:deep": "Deep hole",
+    "briar:rocks": "South rocks",
+    "briar:open": "Open water",
+    "cedar:landing": "Caney Creek landing",
+    "cedar:inlet": "Creek channels",
+    "cedar:flats": "Upper lake flats",
+    "cedar:lilies": "Clear Creek coves",
+    "cedar:cypress": "Flooded shoreline",
+    "cedar:rocks": "Dam riprap",
+    "cedar:deep": "Southern basin",
+    "cedar:open": "Cedar open water",
+    "cedar:docs_marina_dock": "Doc's Lonely Star Marina",
+}
+_LAKE_LABELS = {"briar": "Little Briar Lake", "cedar": "Cedar Creek Lake"}
+_STATUS_LABELS = {
+    "available": "Available",
+    "active": "Active",
+    "ready": "Ready",
+    "completed": "Completed",
+}
+_STATUS_BADGES = {
+    "available": "AVL",
+    "active": "ACT",
+    "ready": "RDY",
+    "completed": "DONE",
+}
+_STATUS_COLORS = {
+    "available": DIM,
+    "active": GOLD,
+    "ready": GOOD,
+    "completed": INK,
+}
+_SHORT_QUEST_TITLES = {
+    "q01_tea_leaves_deep_holes": "Tea",
+    "q02_lonely_star_current": "Star",
+    "q03_unstrung_line": "Line",
+    "q04_great_contour_chart": "Chart",
+    "q05_moonlight_trotlines": "Moon",
+    "q06_unrepeatable_sunrise": "Sunrise",
+    "q07_art_of_the_nap": "Nap",
+    "q08_channel_run": "Channel",
+    "q09_quiet_channel": "Quiet",
+    "q10_ballad_lonely_star": "Song",
+    "q11_deep_water_drift": "Drift",
+    "q12_first_voyage": "Voyage",
+}
+
+
+def _zone_label(zone_id: str) -> str:
+    if not isinstance(zone_id, str):
+        return "Unknown water"
+    if zone_id in _ZONE_LABELS:
+        return _ZONE_LABELS[zone_id]
+    lake, separator, zone = zone_id.partition(":")
+    if not separator:
+        return zone_id
+    return f"{_LAKE_LABELS.get(lake, lake.title())} · {zone.replace('_', ' ')}"
+
+
+def _finite_progress(value) -> float:
+    if type(value) not in (int, float):
+        return 0.0
+    try:
+        return float(value) if math.isfinite(value) and value >= 0 else 0.0
+    except OverflowError:
+        return 0.0
+
+
+def _clock_window(window) -> str:
+    if not isinstance(window, (list, tuple)) or len(window) != 2:
+        return ""
+    if any(type(value) is not int or not 0 <= value < 1440 for value in window):
+        return ""
+    start, end = window
+    return f"{start // 60:02d}:{start % 60:02d}–{end // 60:02d}:{end % 60:02d}"
+
+
+def _quest_objective_text(quest: dict) -> str:
+    objective = quest.get("objective", {})
+    kind = objective.get("type")
+    zone = _zone_label(objective.get("zone_id", ""))
+    bait_row = BAIT_BY_ID.get(objective.get("bait_id"))
+    bait = bait_row.name.lower() if bait_row else "specified bait"
+    hooks = objective.get("hook_count")
+    duration = objective.get("active_soak_game_minutes")
+
+    if kind == "line_scout":
+        return (f"Set a {hooks}-hook {bait} line in {zone}; make it Bot's nearest line "
+                f"under {objective.get('scout_range_lt_m', 140)} m and request a report.")
+    if kind == "line_check":
+        window = _clock_window(objective.get("set_window"))
+        window_text = f" during {window}" if window else ""
+        return (f"Set a {hooks}-hook {bait} line in {zone}{window_text}; check that same line "
+                f"after {duration} active-play game minutes.")
+    if kind == "line_scout_check":
+        return (f"Set an {hooks}-hook {bait} line in {zone}; have Bot report on it under "
+                f"{objective.get('scout_range_lt_m', 140)} m, then check it after "
+                f"{duration} active-play game minutes.")
+    if kind == "anchor_idle":
+        return (f"Anchor with the engine idle in {zone} for "
+                f"{objective.get('continuous_game_minutes', 0)} continuous game minutes; "
+                "interruptions reset the timer.")
+    if kind == "scout_report":
+        return f"Ask Bot for his ordinary depth report in {zone}."
+    if kind == "fish_livewell":
+        species_id = objective.get("species_id", "fish")
+        species = SPECIES_BY_ID.get(species_id)
+        species_name = species.name.lower() if species else species_id.replace("_", " ")
+        window = _clock_window(objective.get("entry_window"))
+        return (f"Bring a {species_name} into the livewell during {window} from a {bait} "
+                f"line set in {zone}; the fish stays yours.")
+    if kind == "travel_distance":
+        propulsion = objective.get("propulsion", [])
+        methods = " or ".join(str(item) for item in propulsion) or "your own power"
+        return (f"Travel {objective.get('distance_m', 0)} m under your control in {zone} "
+                f"({methods}; towing does not count).")
+    if kind in ("visit_zones", "visit_sequence"):
+        locations = [_zone_label(item) for item in objective.get("zone_ids", [])]
+        joiner = " → " if kind == "visit_sequence" else ", "
+        order = " in order" if kind == "visit_sequence" else " in any order"
+        return f"Visit {joiner.join(locations)}{order}."
+    return "Follow the current quest objective."
+
+
+def _quest_progress_text(quest: dict, quest_progress, narrative) -> str:
+    status = quest_progress.status
+    if status == "available":
+        return ("Declined earlier; still available." if quest_progress.declined
+                else "Not started; accept whenever you like.")
+    if status == "ready":
+        return "Ready to turn in; hail the same giver again."
+    if status == "completed":
+        return "Completed; the reward has been claimed once."
+
+    objective = quest.get("objective", {})
+    progress = quest_progress.progress if isinstance(quest_progress.progress, dict) else {}
+    kind = objective.get("type")
+    if kind == "anchor_idle":
+        current = _finite_progress(progress.get("continuous_game_minutes"))
+        target = _finite_progress(objective.get("continuous_game_minutes"))
+        return f"Anchor timer: {current:g}/{target:g} game min."
+    if kind == "travel_distance":
+        current = _finite_progress(progress.get("distance_m"))
+        target = _finite_progress(objective.get("distance_m"))
+        return f"Travel: {current:.0f}/{target:.0f} m."
+    if kind == "visit_zones":
+        expected = objective.get("zone_ids", [])
+        visited = progress.get("visited_zones", [])
+        visited = visited if isinstance(visited, list) else []
+        count = sum(1 for zone in expected if zone in visited)
+        return f"Places visited: {count}/{len(expected)}."
+    if kind == "visit_sequence":
+        expected = objective.get("zone_ids", [])
+        index = progress.get("sequence_index", 0)
+        if type(index) is not int or index < 0:
+            index = 0
+        index = min(index, len(expected))
+        if index < len(expected):
+            return f"Route: step {index + 1}/{len(expected)} — {_zone_label(expected[index])}."
+        return f"Route: {len(expected)}/{len(expected)} steps."
+    if kind == "scout_report":
+        return "Waiting for Bot's report."
+    if kind == "fish_livewell":
+        return "Waiting for a qualifying fish to enter the livewell."
+    if kind in ("line_scout", "line_check", "line_scout_check"):
+        deployments = progress.get("deployments", {})
+        if not isinstance(deployments, dict):
+            deployments = {}
+        attempts = [value for value in deployments.values()
+                    if isinstance(value, dict) and isinstance(value.get("set"), dict)]
+        if not attempts:
+            return "No qualifying line set yet."
+        attempt = attempts[-1]
+        parts = ["Line set"]
+        if kind in ("line_scout", "line_scout_check"):
+            parts.append("Bot report received" if attempt.get("scouted") is True
+                         else "Bot report pending")
+        if kind in ("line_check", "line_scout_check"):
+            target = _finite_progress(objective.get("active_soak_game_minutes"))
+            set_minute = _finite_progress(attempt["set"].get("active_game_minute"))
+            active_now = _finite_progress(narrative.active_play_game_minutes)
+            elapsed = max(0.0, active_now - set_minute)
+            recorded = _finite_progress(attempt.get("active_soak_game_minutes"))
+            elapsed = max(elapsed, recorded)
+            parts.append(f"soak {elapsed:g}/{target:g} active-play min")
+        return "; ".join(parts) + "."
+    return "Objective in progress."
+
+
+def quest_journal_details(state, content, quest_id: str) -> dict:
+    """Build safe, contract-grounded text for the selected narrative journal row."""
+    quest = content.quests[quest_id]
+    giver = content.npcs[quest["giver_id"]]
+    quest_progress = state.narrative.quests[quest_id]
+    prerequisites = quest.get("prerequisites", [])
+    titles = {row["id"]: row["title"] for row in content.quests.values()}
+    prerequisite_text = (", ".join(titles[item] for item in prerequisites if item in titles)
+                         if prerequisites else "none")
+    notes = [note for note in state.narrative.bot_notes
+             if isinstance(note, str) and note.strip()]
+    ripple_count = min(10, len(set(state.narrative.ripples)))
+    if state.narrative.guardian_seen:
+        guardian_status = ("Guardian seen — Whiskered Blessing: A broad ripple passed "
+                           "under the hull. The lake was quiet again.")
+    elif ripple_count >= 8:
+        guardian_status = ("Guardian available. Cedar deep water at sunset "
+                           "(18:00–20:00).")
+    else:
+        guardian_status = ("Guardian locked (<8 Ripples). Cedar deep water at sunset "
+                           "(18:00–20:00).")
+    return {
+        "title": quest["title"],
+        "status": _STATUS_LABELS.get(quest_progress.status, "Available"),
+        "giver": f"{giver['name']} · {_zone_label(giver.get('anchor_id', ''))}",
+        "objective": _quest_objective_text(quest),
+        "progress": _quest_progress_text(quest, quest_progress, state.narrative),
+        "prerequisites": prerequisite_text,
+        "bot_notes": notes[-2:],
+        "guardian_status": guardian_status,
+    }
 
 
 @dataclass
@@ -66,6 +296,8 @@ class UIState:
     check_line: int = 0
     check_i: int = 0
     journal_i: int = 0
+    journal_page: int = 0
+    journal_quest_i: int = 0
     well_i: int = 0
     pause_i: int = 0
     help_page: int = 0
@@ -209,6 +441,7 @@ class UI:
     def __init__(self, text: Text, world: World):
         self.text = text
         self.world = world
+        self.narrative_content = load_content()
         self._cw: dict[int, int] = {}
         self._ch: dict[int, int] = {}
 
@@ -244,7 +477,10 @@ class UI:
         elif mode == "check":
             self._check(frame, state, ui)
         elif mode == "journal":
-            self._journal(frame, state, ui)
+            if ui.journal_page == 1:
+                self._narrative_journal(frame, state, ui)
+            else:
+                self._journal(frame, state, ui)
         elif mode == "well":
             self._well(frame, state, ui)
         elif mode == "pause":
@@ -805,6 +1041,7 @@ class UI:
         seen = sum(1 for sp in SPECIES if state.journal.get(sp.id, {}).get("count", 0) > 0)
         self._text(frame, "JOURNAL", x + m, y + 12, head, INK)
         self._text(frame, f"{seen} of {len(SPECIES)} species", x + m + len("JOURNAL") * self.cell(head)[0] + 16, y + 18, small, GOLD, shadow=False)
+        self._text(frame, "1/2 · A/D pages", x + pw - m - 18 * self.cell(small)[0], y + 18, small, DIM, shadow=False)
         sp = SPECIES[ui.journal_i]
         rec = state.journal.get(sp.id, {})
         count = int(rec.get("count", 0))
@@ -842,7 +1079,123 @@ class UI:
             where = "  ".join(p for p in (zone, bait, band) if p)
             self._text(frame, where, dx, top + ch + self.cell(small)[1] + 12, small, INK, shadow=False)
             self._wrap(frame, sp.blurb, dx, top + ch + self.cell(small)[1] * 2 + 24, small, DIM, pw - (dx - x) - m)
-        self._text(frame, "W/S or arrows choose    J closes", x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
+        self._text(frame, "W/S or arrows choose    A/D pages    J or Esc closes", x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
+
+    def _draw_journal_text(self, frame, value, x, y, width, size, color,
+                           max_lines=4, bottom=None):
+        cw, ch = self.cell(size)
+        columns = max(1, int(width) // cw)
+        lines = textwrap.wrap(str(value), width=columns, break_long_words=True,
+                              break_on_hyphens=False) or [""]
+        line_height = ch + 2
+        if bottom is not None:
+            max_lines = min(max_lines, max(0, (bottom - y) // line_height))
+        if max_lines <= 0:
+            return y
+        if len(lines) > max_lines:
+            lines = lines[:max_lines]
+            lines[-1] = self._trim(lines[-1], size, width)
+        for i, line in enumerate(lines):
+            self._text(frame, line, x, y + i * line_height, size, color, shadow=False)
+        return y + len(lines) * line_height
+
+    def _narrative_journal(self, frame, state, ui: UIState):
+        h, w = frame.shape[:2]
+        pw, ph = int(w * 0.94), int(h * 0.96)
+        x, y = (w - pw) // 2, (h - ph) // 2
+        self._panel(frame, x, y, pw, ph, 0.97)
+        head = self._size(frame, "head")
+        body = self._size(frame, "body")
+        small = self._size(frame, "small")
+        m = 16
+        quests = self.narrative_content.quests
+        ui.journal_quest_i = _clamp(ui.journal_quest_i, len(QUEST_IDS))
+        ripple_count = min(10, len(set(state.narrative.ripples)))
+        self._text(frame, "LAKE WHISPERS & RIPPLES", x + m, y + 9, head, INK)
+        counter = f"{ripple_count}/10 Ripples"
+        counter_w = len(counter) * self.cell(small)[0]
+        self._text(frame, counter, x + pw - m - counter_w, y + 16, small, GOLD, shadow=False)
+        page_line = "2/2 · W/S · A/D pages · J closes"
+        page_w = len(page_line) * self.cell(small)[0]
+        self._text(frame, page_line, x + pw - m - page_w, y + 16 + self.cell(small)[1], small, DIM, shadow=False)
+
+        small_ch = self.cell(small)[1]
+        row_height = small_ch + 2
+        content_top = y + 12 + self.cell(head)[1] + 5
+        footer_height = row_height * 4 + 10
+        footer_top = y + ph - footer_height
+        left_w = int(pw * 0.34)
+        detail_x = x + left_w + 12
+        detail_w = pw - (detail_x - x) - m
+        self._text(frame, "OPTIONAL QUESTS", x + m, content_top, small, GOLD, shadow=False)
+
+        rows_top = content_top + row_height + 3
+        visible = max(1, (footer_top - rows_top) // row_height)
+        start = _window(ui.journal_quest_i, len(QUEST_IDS), visible)
+        badge_w = max(map(len, _STATUS_BADGES.values())) * self.cell(small)[0]
+        for row_offset, quest_id in enumerate(QUEST_IDS[start:start + visible]):
+            index = start + row_offset
+            quest = quests[quest_id]
+            status = state.narrative.quests[quest_id].status
+            ry = rows_top + row_offset * row_height
+            if index == ui.journal_quest_i:
+                self._fill(frame, x + m - 4, ry - 1, left_w - m, row_height, (46, 42, 28), 0.86)
+            color = _STATUS_COLORS.get(status, DIM)
+            prefix = "> " if index == ui.journal_quest_i else "  "
+            label_width = left_w - 2 * m - badge_w - 8 - len(prefix) * self.cell(small)[0]
+            short_title = _SHORT_QUEST_TITLES.get(quest_id, quest["title"])
+            label = self._trim(short_title, small, label_width)
+            self._text(frame, prefix + label, x + m, ry, small, color, shadow=False)
+            badge = _STATUS_BADGES.get(status, "AVAIL")
+            badge_width = len(badge) * self.cell(small)[0]
+            self._text(frame, badge, x + left_w - m - badge_width, ry, small, color, shadow=False)
+
+        detail = quest_journal_details(state, self.narrative_content,
+                                       QUEST_IDS[ui.journal_quest_i])
+        detail_y = content_top
+        detail_bottom = footer_top - 3
+        progress_line_height = small_ch + 2
+        detail_body_bottom = max(content_top, detail_bottom - progress_line_height)
+        detail_y = self._draw_journal_text(
+            frame, detail["title"], detail_x, detail_y, detail_w, body, INK,
+            max_lines=1, bottom=detail_body_bottom)
+        detail_y = min(detail_y + 1, detail_body_bottom)
+        detail_y = self._draw_journal_text(
+            frame, f"{detail['status']} · Prerequisites: {detail['prerequisites']}",
+            detail_x, detail_y, detail_w, small, GOLD, max_lines=2, bottom=detail_body_bottom)
+        detail_y = self._draw_journal_text(
+            frame, f"Giver: {detail['giver']}", detail_x, detail_y, detail_w,
+            small, INK, max_lines=2, bottom=detail_body_bottom)
+        detail_y = self._draw_journal_text(
+            frame, f"Objective: {detail['objective']}", detail_x, detail_y, detail_w,
+            small, DIM, max_lines=4, bottom=detail_body_bottom)
+        self._draw_journal_text(
+            frame, f"Progress: {detail['progress']}", detail_x, detail_y, detail_w,
+            small, GOOD if detail["status"] == "Ready" else INK,
+            max_lines=2, bottom=detail_bottom)
+
+        note_y = footer_top
+        bot_notes = detail["bot_notes"]
+        note_bottom = y + ph - 5
+        if bot_notes:
+            for note in bot_notes[-1:]:
+                note = note.strip()
+                if note.lower().startswith("bot:"):
+                    note = note.split(":", 1)[1].strip()
+                note_y = self._draw_journal_text(
+                    frame, "Bot: " + note, x + m, note_y, pw - m * 2,
+                    small, GOLD, max_lines=1, bottom=note_bottom)
+        else:
+            note_y = self._draw_journal_text(
+                frame, "No narrative notes yet.", x + m, note_y, pw - m * 2,
+                small, DIM, max_lines=1, bottom=note_bottom)
+        note_y = self._draw_journal_text(
+            frame, detail["guardian_status"], x + m, note_y, pw - m * 2,
+            small, GOLD, max_lines=2, bottom=note_bottom)
+        revisit = "Declined? Re-hail. Missed windows repeat; no expiry."
+        self._draw_journal_text(
+            frame, revisit, x + m, note_y, pw - m * 2, small, DIM,
+            max_lines=1, bottom=note_bottom)
 
     def _wrap(self, frame, text, x, y, size, color, width):
         cw, ch = self.cell(size)

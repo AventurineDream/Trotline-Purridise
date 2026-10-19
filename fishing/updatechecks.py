@@ -68,6 +68,25 @@ def interface_checks(world):
         if session.ui.set_line:
             raise AssertionError("A did not return to the previous held line")
 
+        session.ui.mode = "journal"
+        session.ui.journal_page = 0
+        session.ui.journal_quest_i = 0
+        session.tick(Keys(pressed={"d"}), 0.05)
+        if session.ui.journal_page != 1:
+            raise AssertionError("D did not open the narrative journal page")
+        session.tick(Keys(pressed={"s"}), 0.05)
+        if session.ui.journal_quest_i != 1:
+            raise AssertionError("S did not select the next narrative quest")
+        session.tick(Keys(pressed={"left"}), 0.05)
+        if session.ui.journal_page != 0:
+            raise AssertionError("left arrow did not return to the species journal")
+        session.tick(Keys(pressed={"a"}), 0.05)
+        if session.ui.journal_page != 1:
+            raise AssertionError("A did not wrap to the narrative journal page")
+        session.tick(Keys(pressed={"j"}), 0.05)
+        if session.ui.mode != "play":
+            raise AssertionError("J did not close the journal from the narrative page")
+
         session.ui.mode = "help"
         for key in ("d", "s", "a", "w", "right", "down", "left", "up"):
             session.ui.help_page = 0
@@ -79,6 +98,7 @@ def interface_checks(world):
         # Exercise the actual keyboard repeat implementation, rather than the
         # headless Keys helper, including releasing and pressing the key again.
         session.ui.mode = "journal"
+        session.ui.journal_page = 0
         session.ui.journal_i = 0
         keys = Input()
         keys.pressed = keys.held = {"s"}
