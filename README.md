@@ -1,6 +1,6 @@
 # Little Briar
 
-A first-person trotline game with two lakes, 36 catchable fish, and three boat models. Start in a 12-foot jon boat, set lines, let them soak, and sell the catch at the landing. Earn a wind-powered daysailer or a 15-foot pontoon and take your gear to Cedar Creek Lake. There is no rod and reel.
+A first-person trotline game with two lakes, 36 catchable fish, and four boat models. Start in a 12-foot jon boat, set lines, let them soak, and sell the catch at the landing. Earn a wind-powered daysailer or a 15-foot pontoon and take your gear to Cedar Creek Lake, or buy a 10-foot rowboat for oar-powered travel. There is no rod and reel.
 
 The lake now uses a 16:9 OpenGL renderer: fixed terrain, a dense procedural forest, reflected trees and sky, gentle water ripples, warm dawn and sunset light, night lighting, and mist in rain. The boat and landing have individual boards and hardware, and the HUD uses a quiet lake-journal style.
 
@@ -41,7 +41,7 @@ The benchmark writes `shots/benchmark.json`, records peak process RAM and frame 
 
 During play the window and lake share one OpenGL context. The window check reads the pixels submitted to the actual window and verifies that presenting a frame does not corrupt subsequent lake frames. Headless screenshots use a separate standalone context.
 
-The original source is preserved in `backups/original-2026-10-13.tar.gz`; the version before the two-lake expansion is in `backups/before-two-lakes-2026-10-13.tar.gz`. Older saves keep their money, fish, lines, gear, and records. They start with the owned jon boat and a full starter fuel tank; the new boats must be purchased. The active lake, owned boats, and each boat's fuel tank are saved. Engines resume at idle and sails resume lowered.
+The original source is preserved in `backups/original-2026-10-13.tar.gz`; the version before the two-lake expansion is in `backups/before-two-lakes-2026-10-13.tar.gz`. Older saves keep their money, fish, lines, gear, and records. They start with the owned jon boat and a full starter fuel tank; the new boats must be purchased. The active lake, owned boats, fuel tanks, rowboat battery, and its charge allowance for the current landing visit are saved. Engines resume at idle and sails resume lowered.
 
 ## Two lakes
 
@@ -57,19 +57,22 @@ The game loads only the bundled `fishing/assets/cedar.npz` and `cedar.json`, abo
 
 ## Boats and fuel
 
-The **Boats** tab at either landing sells boats and fuel. New boats include a full tank, and switching to a boat you already own is free. Each boat keeps its own fuel; switching cannot refill a tank.
+The **Boats** tab at either landing sells boats and fuel. New powered boats include a full tank, and switching to a boat you already own is free. Each powered boat keeps its own fuel; switching cannot refill a tank. The rowboat has no fuel tank.
 
 | Boat | Purchase | Tank | Character |
 | --- | ---: | ---: | --- |
 | 12 ft Jon boat | Starting boat | 12 L | Nimble tiller boat with the original handling |
 | 12 ft Daysailer | $650 | 6 L | Wind power, a small auxiliary motor, and a wider cockpit |
 | 15 ft Pontoon | $1,450 | 36 L | Broad deck, bimini canopy, helm console, slower turns, and 40 lb extra livewell space |
+| 10 ft Plastic Rowboat | $325 | — | Oars by default; an optional electric trolling motor is available |
 
-All three models have their own complete hull collision footprint and draft. A wider boat needs more clearance. Motor and livewell upgrades stay with your equipment; motor upgrades improve the jon boat and pontoon, while the daysailer's auxiliary remains small. Sell enough fish before changing to a boat with a smaller livewell.
+All four models have their own complete hull collision footprint and draft. A wider boat needs more clearance. Motor and livewell upgrades stay with your equipment; motor upgrades improve the jon boat and pontoon, while the daysailer's auxiliary remains small. Sell enough fish before changing to a boat with a smaller livewell.
 
 **Q** raises or lowers the daysailer's sail. Raising it lifts the anchor. **A/D** steers, while the sail trims to the wind. A reach across the wind is fastest; the boat cannot sail straight into the wind, so tack or use the auxiliary. The HUD shows wind direction, wind speed, and sail status. **Space** anchors and lowers the sail. **Shift** idles the auxiliary; a raised sail keeps providing wind power.
 
-**Sailing burns no fuel.** Powered travel uses fuel according to the engine, boat, throttle, and lake clock. A lowered throttle uses less fuel, and idling or anchoring does not consume it. Fuel costs **$1.40 per litre**, sold in up-to-five-litre fills, limited by tank space and available cash. Empty tanks stop motor thrust, but the daysailer can keep sailing.
+**Sailing burns no fuel.** Powered travel uses fuel according to the engine, boat, throttle, and lake clock. A lowered throttle uses less fuel, and idling or anchoring does not consume it. Fuel costs **$1.40 per litre**, sold in up-to-five-litre fills, limited by tank space and available cash. Empty tanks stop motor thrust, but the daysailer can keep sailing and the rowboat can keep rowing.
+
+The rowboat runs on oars without fuel. You can fit an optional **$350 9.9 hp electric trolling motor** with an **18 kWh battery**. Charging costs **$0.35 per kWh**, up to **5 kWh per landing visit**. Leave and return to charge again; the oars still work when the battery is empty.
 
 If stranded, lower the sail and idle, then press **R** for a tow to the current landing. A tow takes one game hour and costs up to $10, limited by available cash; a small emergency fuel reserve prevents an empty wallet from trapping the player. Deployed lines keep soaking in their original positions.
 

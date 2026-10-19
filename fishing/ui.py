@@ -415,12 +415,19 @@ def shop_rows(state, tab: int) -> list[Row]:
         if state.boat_id=="rowboat":
             if state.rowboat_trolling_motor:
                 missing = ROWBOAT_BATTERY_KWH-state.rowboat_battery_kwh
-                amount = min(BATTERY_CHARGE_KWH,missing,
+                visit_remaining = state.battery_charge_available_this_visit()
+                amount = min(visit_remaining,missing,
                              max(0.0,state.money)/ELECTRICITY_PRICE)
+                if missing <= 0.001:
+                    charge_description = "Battery full. Oars still work if it runs down."
+                elif visit_remaining < 0.1:
+                    charge_description = "Five kWh used this visit. Leave and return to charge again."
+                else:
+                    charge_description = "Buy up to five kWh per landing visit. Oars work at zero charge."
                 rows.append(Row(f"Battery  {state.rowboat_battery_kwh:.1f}/{ROWBOAT_BATTERY_KWH:.0f} kWh",
                                 f"{dollars(amount*ELECTRICITY_PRICE)} / {amount:.1f} kWh",
-                                "Buy up to five kWh at the landing. Oars still work at zero charge.",
-                                missing>0.001,"battery"))
+                                charge_description,
+                                missing>0.001 and visit_remaining>=0.1,"battery"))
             else:
                 rows.append(Row("Oars", "ready", "W/S row forward or reverse; A/D steer. No fuel needed.",
                                 False, "oars"))

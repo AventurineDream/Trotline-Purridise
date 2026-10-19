@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .boat import BOATS, FUEL_PRICE, ROWBOAT_BATTERY_KWH, sailing_speed
+from .boat import BOATS, BATTERY_CHARGE_KWH, FUEL_PRICE, ROWBOAT_BATTERY_KWH, sailing_speed
 from .data import BAITS, SPECIES, SPECIES_BY_ID, WELLS, ZONE_ORDER
 from .game import Keys, Session
 from .render import Renderer
@@ -45,7 +45,8 @@ def expansion_checks(briar,software=False):
         path = Path(temp)/"save.json"
         state = State.new(briar,seed=61)
         old = state.to_json()
-        for field in ("lake_id","boat_id","owned_boats","fuel_tanks"):
+        for field in ("lake_id","boat_id","owned_boats","fuel_tanks",
+                      "rowboat_charge_kwh_this_visit"):
             del old[field]
         old["money"] = 123.45
         old["game_minutes"] = 2222
@@ -108,6 +109,26 @@ def expansion_checks(briar,software=False):
             raise AssertionError("battery charge at the landing failed")
         if not math.isclose(cash-state.money,1.75):
             raise AssertionError("battery charge was not billed at the posted kWh rate")
+        if state.battery_charge_available_this_visit()!=0.0:
+            raise AssertionError("battery visit allowance did not decrease by the charge amount")
+        if state.charge_rowboat_battery() is None or state.rowboat_battery_kwh!=5.0:
+            raise AssertionError("multiple charges exceeded the per-visit battery limit")
+        battery_row = next((row for row in shop_rows(state,4) if row.kind=="battery"),None)
+        if battery_row is None or battery_row.enabled:
+            raise AssertionError("shop still offered another battery charge this visit")
+        state.anchored=False
+        for _ in range(200):
+            state.drive(0.1,1.0,0.0,briar)
+            if state.slip_status(briar)!="docked":
+                break
+        if state.slip_status(briar)=="docked" or state.rowboat_charge_kwh_this_visit!=0.0:
+            raise AssertionError("leaving the landing did not reset battery charge allowance")
+        state._park(briar)
+        before_recharge=state.rowboat_battery_kwh
+        if (state.charge_rowboat_battery() is not None
+                or state.rowboat_battery_kwh<=before_recharge
+                or state.rowboat_charge_kwh_this_visit!=BATTERY_CHARGE_KWH):
+            raise AssertionError("battery could not be charged after a new landing visit")
         if state.buy_boat("pontoon",briar) is not None:
             raise AssertionError("could not switch back to an owned boat")
         state.well=[Catch("alligator_gar",65,1,0,"inlet","shad",23)]
@@ -117,7 +138,9 @@ def expansion_checks(briar,software=False):
         state.save(path)
         loaded=State.load(path,briar)
         if (loaded.boat_id!="pontoon" or loaded.fuel!=36 or len(loaded.owned_boats)!=4
-                or not loaded.rowboat_trolling_motor or loaded.rowboat_battery_kwh!=5.0):
+                or not loaded.rowboat_trolling_motor
+                or not math.isclose(loaded.rowboat_battery_kwh,state.rowboat_battery_kwh,abs_tol=1e-6)
+                or loaded.rowboat_charge_kwh_this_visit!=BATTERY_CHARGE_KWH):
             raise AssertionError("boats, fuel, trolling motor and battery did not roundtrip")
 
         session=Session(briar,path,state,True)

@@ -333,6 +333,7 @@ class State:
     fuel_tanks: dict[str,float] = field(default_factory=lambda:{"jon":12.0})
     rowboat_trolling_motor: bool = False
     rowboat_battery_kwh: float = 0.0
+    rowboat_charge_kwh_this_visit: float = 0.0
     sail_raised: bool = False
     game_minutes: float = 0.0
     minute_acc: float = 0.0
@@ -526,11 +527,20 @@ class State:
     def charge_rowboat_battery(self) -> str | None:
         if not self.rowboat_trolling_motor:
             return "Fit the trolling motor first."
+        if self.boat_id != "rowboat":
+            return "Aboard the rowboat to charge its battery."
+        world = getattr(self, "_world", None)
+        if (world is None or self.slip_status(world) != "docked"
+                or abs(self.speed) >= 0.45):
+            return "Idle at the landing to charge the battery."
         missing = ROWBOAT_BATTERY_KWH - self.rowboat_battery_kwh
-        amount = min(BATTERY_CHARGE_KWH, missing,
-                     max(0.0, self.money) / ELECTRICITY_PRICE)
         if missing < 0.001:
             return "The battery is full."
+        visit_remaining = self.battery_charge_available_this_visit()
+        if visit_remaining < 0.1:
+            return "The 5 kWh charge limit is used for this landing visit. Leave and return to recharge."
+        amount = min(visit_remaining, missing,
+                     max(0.0, self.money) / ELECTRICITY_PRICE)
         if amount < 0.1:
             return "Need some cash to charge the battery."
         cost = round(amount * ELECTRICITY_PRICE, 2)
@@ -538,8 +548,14 @@ class State:
             return f"Need {dollars(cost)}."
         self.rowboat_battery_kwh = min(ROWBOAT_BATTERY_KWH,
                                        self.rowboat_battery_kwh + amount)
+        self.rowboat_charge_kwh_this_visit = min(
+            BATTERY_CHARGE_KWH, self.rowboat_charge_kwh_this_visit + amount)
         self.toast(f"Added {amount:.1f} kWh for {dollars(cost)}.")
         return None
+
+    def battery_charge_available_this_visit(self) -> float:
+        used = min(BATTERY_CHARGE_KWH, max(0.0, self.rowboat_charge_kwh_this_visit))
+        return BATTERY_CHARGE_KWH - used
 
     def owned_lines(self) -> int:
         return len(self.held) + len(self.lines)
@@ -800,6 +816,8 @@ class State:
             fx,fz = math.sin(self.yaw),math.cos(self.yaw)
             nx,nz = self.x+fx*distance/steps,self.z+fz*distance/steps
             moved, accepted_path = self._move(nx,nz,world)
+            if self.slip_status(world) != "docked":
+                self.rowboat_charge_kwh_this_visit = 0.0
             for x0, z0, x1, z1 in accepted_path:
                 self._emit_movement_events(world, x0, z0, x1, z1,
                                            player_controlled=player_controlled,
@@ -1269,6 +1287,7 @@ class State:
             "fuel_tanks":{key:round(value,6) for key,value in self.fuel_tanks.items()},
             "rowboat_trolling_motor":self.rowboat_trolling_motor,
             "rowboat_battery_kwh":round(self.rowboat_battery_kwh,6),
+            "rowboat_charge_kwh_this_visit":round(self.rowboat_charge_kwh_this_visit,6),
             "seed": self.rng.s,
             "game_minutes": round(self.game_minutes, 3),
             "money": self.money,
@@ -1330,6 +1349,14 @@ class State:
             battery = 0.0
         st.rowboat_battery_kwh = (min(ROWBOAT_BATTERY_KWH, max(0.0, battery))
                                   if st.rowboat_trolling_motor and math.isfinite(battery) else 0.0)
+        charge_used = raw.get("rowboat_charge_kwh_this_visit", 0.0)
+        try:
+            charge_used = float(charge_used)
+        except (TypeError, ValueError, OverflowError):
+            charge_used = 0.0
+        st.rowboat_charge_kwh_this_visit = (
+            min(BATTERY_CHARGE_KWH, max(0.0, charge_used))
+            if st.rowboat_trolling_motor and math.isfinite(charge_used) else 0.0)
         st.game_minutes = float(raw["game_minutes"])
         st.money = float(raw["money"])
         st.earned = float(raw.get("earned", 0))
@@ -1383,6 +1410,8 @@ class State:
         if (safe_x,safe_z,safe_yaw)!=(st.x,st.z,st.yaw):
             st.x,st.z,st.yaw = safe_x,safe_z,safe_yaw
             st.toast("Boat eased back into clear water.")
+        if st.slip_status(world) != "docked":
+            st.rowboat_charge_kwh_this_visit = 0.0
         return st
 
 
