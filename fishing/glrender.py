@@ -236,14 +236,15 @@ class LakeRenderer(SoftwareRenderer):
         return faces
 
     def _props(self):
+        from .sprites import PROP_ASPECTS, WATERLINE_KINDS
         rows = []
         for i,prop in enumerate(self.world.props):
             tree = prop.kind in ("pine","oak","cypress")
             kind = f"{prop.kind}{i%3}" if tree else prop.kind
-            gy = 0 if prop.kind in ("reed","knee") else float(self.world.sample_height(prop.x,prop.z))
+            gy = 0 if prop.kind in WATERLINE_KINDS else float(self.world.sample_height(prop.x,prop.z))
             height = prop.h*(1.35 if tree else 1)
             aspect = ATLAS_W/ATLAS_H if tree else {
-                "rock":1.5,"reed":0.50,"stump":1.17,"knee":0.56}.get(kind,0.57)
+                "rock":1.5,"reed":0.50,"stump":1.17,"knee":0.56,**PROP_ASPECTS}.get(kind,0.57)
             rows.append((prop.x,gy,prop.z,height*aspect,height,self.layers[kind],prop.shade))
         return np.asarray(rows,np.float32)
 
@@ -256,7 +257,7 @@ class LakeRenderer(SoftwareRenderer):
 
     def _boat_vertices(self,state,cam):
         wind_key = round(state.game_minutes+state.minute_acc,2) if state.sail_raised else 0
-        key = (state.boat_id,state.sail_raised,wind_key,tuple(sorted(state.look_paint.items())),state.well_tier,state.light,float(state.steer))
+        key = (state.boat_id,state.sail_raised,wind_key,tuple(sorted(state.look_paint.items())),state.well_tier,state.light,float(state.steer),state.rowboat_trolling_motor)
         if key!=self._boat_key:
             self._boat_local = self._pack_faces(self._detailed_boat(state))
             self._boat_key = key
@@ -294,12 +295,13 @@ class LakeRenderer(SoftwareRenderer):
         if bid!=self._buoy_id:
             # Update only the two buoy layers, preserving all forest textures.
             from .sprites import buoy
+            from .forest import _bleed_edges
             rgb = tuple(int(c*255) for c in paint_rgb("buoy",bid))
             for name,flag in (("buoy",False),("buoy_flag",True)):
                 src = buoy(rgb,flag)
                 ys = np.minimum(np.arange(ATLAS_H)*src.shape[0]//ATLAS_H,src.shape[0]-1)
                 xs = np.minimum(np.arange(ATLAS_W)*src.shape[1]//ATLAS_W,src.shape[1]-1)
-                img = src[ys[:,None],xs[None,:]][::-1].copy()
+                img = _bleed_edges(src[ys[:,None],xs[None,:]])[::-1].copy()
                 self.atlas.write(img.tobytes(),viewport=(0,0,self.layers[name],ATLAS_W,ATLAS_H,1))
             self._buoy_id = bid
         rows = []
@@ -422,6 +424,17 @@ class LakeRenderer(SoftwareRenderer):
         self.boat_buf.write(boat.tobytes())
         self._uniforms(self.mesh_p,state,cam,light,1,self.scene_fb.size)
         self.boat_vao.render(vertices=len(boat))
+        from .ambient import faces as ambient_faces
+        wildlife = self._pack_faces(ambient_faces(state,self.world,light))
+        if len(wildlife):
+            self.boat_buf.write(wildlife.tobytes())
+            # Wildlife tests against the scene, but keeps the stable terrain
+            # depth attachment untouched and allocates no extra GPU objects.
+            self.draw_fb.depth_mask = False
+            try:
+                self.boat_vao.render(vertices=len(wildlife))
+            finally:
+                self.draw_fb.depth_mask = True
         if self.draw_fb is not self.scene_fb:
             self.ctx.copy_framebuffer(self.scene_fb,self.draw_fb)
         self.output_fb.use()

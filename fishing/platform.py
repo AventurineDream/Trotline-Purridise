@@ -14,6 +14,11 @@ SDL_WINDOWPOS_CENTERED = 0x2FFF0000
 SDL_WINDOW_SHOWN = 0x00000004
 SDL_WINDOW_OPENGL = 0x00000002
 SDL_QUIT = 0x100
+SDL_WINDOWEVENT = 0x200
+SDL_WINDOWEVENT_FOCUS_GAINED = 12
+SDL_WINDOWEVENT_FOCUS_LOST = 13
+SDL_KEYDOWN = 0x300
+SDL_KEYUP = 0x301
 RGB24 = 0x17101803
 ARGB8888 = 0x16362004
 
@@ -25,6 +30,7 @@ SCAN = {
     "right": 79, "left": 80, "down": 81, "up": 82,
     "shift": 225, "rshift": 229,
 }
+_SCAN_NAMES = {code: name for name, code in SCAN.items()}
 
 FONT_CANDIDATES = (
     "/usr/share/fonts/liberation/LiberationMono-Regular.ttf",
@@ -70,8 +76,31 @@ class SDL_Color(ctypes.Structure):
     _fields_ = [("r", c_uint8), ("g", c_uint8), ("b", c_uint8), ("a", c_uint8)]
 
 
+class SDL_Keysym(ctypes.Structure):
+    _fields_ = [("scancode", c_int), ("sym", c_int), ("mod", c_uint16), ("unused", c_uint32)]
+
+
+class SDL_KeyboardEvent(ctypes.Structure):
+    _fields_ = [
+        ("type", c_uint32), ("timestamp", c_uint32), ("windowID", c_uint32),
+        ("state", c_uint8), ("repeat", c_uint8), ("padding2", c_uint8), ("padding3", c_uint8),
+        ("keysym", SDL_Keysym),
+    ]
+
+
+class SDL_WindowEvent(ctypes.Structure):
+    _fields_ = [
+        ("type", c_uint32), ("timestamp", c_uint32), ("windowID", c_uint32),
+        ("event", c_uint8), ("padding1", c_uint8), ("padding2", c_uint8), ("padding3", c_uint8),
+        ("data1", c_int), ("data2", c_int),
+    ]
+
+
 class SDL_Event(ctypes.Union):
-    _fields_ = [("type", c_uint32), ("pad", c_uint8 * 56)]
+    _fields_ = [
+        ("type", c_uint32), ("key", SDL_KeyboardEvent), ("window", SDL_WindowEvent),
+        ("pad", c_uint8 * 56),
+    ]
 
 
 class SDL_AudioSpec(ctypes.Structure):
@@ -296,7 +325,7 @@ class Platform:
         if not self.window:
             raise RuntimeError(self._err())
         self._input = Input()
-        self._prev: set[str] = set()
+        self._focused = True
 
     def _setup_presenter(self):
         import moderngl
@@ -377,20 +406,36 @@ class Platform:
         # Reuse one Input so key-repeat timers survive across frames.
         inp = self._input
         inp.quit = False
+        inp.pressed.clear()
         event = SDL_Event()
         while self.sdl.SDL_PollEvent(ctypes.byref(event)):
             if event.type == SDL_QUIT:
                 inp.quit = True
+            elif event.type == SDL_WINDOWEVENT:
+                if event.window.event == SDL_WINDOWEVENT_FOCUS_LOST:
+                    self._focused = False
+                    inp.pressed.clear()
+                    inp._rep.clear()
+                elif event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED:
+                    self._focused = True
+            elif event.type == SDL_KEYDOWN and self._focused and not event.key.repeat:
+                name = _SCAN_NAMES.get(event.key.keysym.scancode)
+                if name is not None:
+                    # A press and release can both arrive between slow frames.
+                    # Keep that edge even though the final keyboard state is up.
+                    inp.pressed.add(name)
         n = c_int()
         state = self.sdl.SDL_GetKeyboardState(ctypes.byref(n))
         held = set()
-        if state:
+        if state and self._focused:
             for name, code in SCAN.items():
                 if code < n.value and state[code]:
                     held.add(name)
         inp.held = held
-        inp.pressed = held - self._prev
-        self._prev = set(held)
+        # SDL's held snapshot still controls throttle/steering and menu repeat.
+        # OS key-repeat events must never become additional one-shot actions.
+        for name in inp._rep.keys() - held:
+            inp._rep.pop(name, None)
         return inp
 
     def present(self, rgb: np.ndarray):

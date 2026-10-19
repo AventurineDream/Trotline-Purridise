@@ -506,7 +506,7 @@ class UI:
             self._toasts(frame, state)
             return
         if mode == "dialogue":
-            self._hud(frame, state)
+            self._hud(frame, state, interactions=False)
             self._dialogue(frame, state, ui)
             self._toasts(frame, state)
         elif mode == "shop":
@@ -657,7 +657,7 @@ class UI:
 
     # --- play ------------------------------------------------------------
 
-    def _hud(self, frame, state):
+    def _hud(self, frame, state, *, interactions=True):
         h, w = frame.shape[:2]
         unit = h / 720
         size,small = max(16,int(22*unit)),max(11,int(12*unit))
@@ -737,6 +737,8 @@ class UI:
                    sx+16,sy+int(95*unit),small,DIM,False,"sans")
         lines_h = self._lines_panel(frame, state, sx, sy - 8, sw, small)
         map_h = self._minimap(frame, state, m, h - m)
+        if not interactions:
+            return
         npc = nearby_npc(state)
         if npc is not None:
             label = f"C  Hail {npc.name}"
@@ -756,7 +758,11 @@ class UI:
             self._panel(frame,px,py,pw,int(30*unit)+8,0.72)
             self._text(frame,prompt,px+16,py+5,small+2,INK,False,"sans")
         hint = "B Bot  Shift Idle  Q Sail  F Set  E Landing  C Hail  H Help" if state.boat_id=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  C Hail  H Help"
-        self._center(frame,hint,w/2,h-m-small-4,small,DIM)
+        hint_w = self._measure(hint,small)
+        hint_h = small + 16
+        hint_x, hint_y = (w-hint_w-24)//2, h-m-hint_h
+        self._panel(frame,hint_x,hint_y,hint_w+24,hint_h,0.88)
+        self._center(frame,hint,w/2,hint_y+6,small,INK)
 
     def _minimap(self, frame, state, margin, bottom) -> int:
         chart = self.world.map_small
@@ -1343,21 +1349,42 @@ class UI:
         ui.help_page %= len(pages)
         title, lines = pages[ui.help_page]
         h, w = frame.shape[:2]
-        pw, ph = int(w * 0.70), int(h * 0.74)
-        x, y = (w - pw) // 2, (h - ph) // 2
-        self._panel(frame, x, y, pw, ph, 0.92)
         head = self._size(frame, "head")
         body = self._size(frame, "small")
-        m = 18
-        self._text(frame, title, x + m, y + 14, head, INK)
+        m = 12 if w < 800 else 18
         page = f"{ui.help_page + 1} / {len(pages)}"
-        self._text(frame, page, x + pw - m - len(page) * self.cell(body)[0], y + 20, body, GOLD, shadow=False)
-        ch = self.cell(body)[1]
-        top = y + 24 + self.cell(head)[1]
-        for i, line in enumerate(lines):
-            self._text(frame, line, x + m, top + i * (ch + 3), body, INK if line else DIM, shadow=False)
         foot = "WASD or arrows turn pages    Esc closes"
-        self._text(frame, foot, x + m, y + ph - ch - 12, body, DIM, shadow=False)
+        page_w = self._measure(page, body, "mono")
+        content_w = max(self._measure(line, body, "mono") for line in (*lines, foot) if line)
+        content_w = max(content_w, self._measure(title, head, "mono") + page_w + 16)
+        pw = min(w - 16, max(int(w * 0.70), content_w + m * 2))
+        ch = self.cell(body)[1]
+        hh = self.cell(head)[1]
+        header = 8 if h < 400 else 14
+        top = header + hh + (6 if h < 400 else 10)
+        bottom = 10 if h < 400 else 12
+        available = h - 16 - top - 8 - ch - bottom
+        # Expand the sheet before reducing spacing. Even at 480x270 the
+        # authored text keeps its readable 12px font; only blank gaps collapse.
+        gap = max(0, min(3, (available - len(lines) * ch) // len(lines)))
+        blank_count = sum(not line for line in lines)
+        blank_h = ch + gap
+        if blank_count:
+            blank_h = max(0, min(blank_h,
+                (available - (len(lines) - blank_count) * (ch + gap)) // blank_count))
+        row_heights = [ch + gap if line else blank_h for line in lines]
+        ph = min(h - 16, max(int(h * 0.74), top + sum(row_heights) + 8 + ch + bottom))
+        x, y = (w - pw) // 2, (h - ph) // 2
+        self._panel(frame, x, y, pw, ph, 0.92)
+        self._text(frame, title, x + m, y + header, head, INK)
+        self._text(frame, page, x + pw - m - page_w,
+                   y + header + (hh - ch) // 2, body, GOLD, shadow=False)
+        row_y = y + top
+        for line, row_h in zip(lines, row_heights):
+            if line:
+                self._text(frame, line, x + m, row_y, body, INK, shadow=False)
+            row_y += row_h
+        self._text(frame, foot, x + m, y + ph - ch - bottom, body, DIM, shadow=False)
 
 
 _HELP = (
