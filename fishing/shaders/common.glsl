@@ -10,6 +10,9 @@ uniform sampler2D lake_shore, lake_depth;
 uniform vec4 lake_bounds;
 uniform vec2 lake_grid, lily_centre;
 
+// Signed distances must not use pow(x, 2): GLSL leaves negative bases undefined.
+float square(float x) { return x*x; }
+
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -29,7 +32,7 @@ vec2 lake_uv(vec2 p) {
 float shore(vec2 p) {
     if (lake_kind>0.5) return texture(lake_shore,lake_uv(p)).r;
     float a = atan(p.y, p.x);
-    float inlet = exp(-pow(a-2.5393053, 2.0)/(2.0*0.16*0.16));
+    float inlet = exp(-square(a-2.5393053)/(2.0*0.16*0.16));
     float warp = 1.0+0.05*sin(3.0*a)+0.035*sin(5.0*a+0.7)
                  +0.02*sin(8.0*a+1.9)+0.145*inlet;
     return length(p)-length(vec2(cos(a)*430.0, sin(a)*285.0))*warp;
@@ -46,13 +49,17 @@ vec4 project(vec3 p) {
     return vec4(v.x/tanx, v.y/tany,
                 (far+near)/(far-near)*v.z-2.0*far*near/(far-near), v.z);
 }
+float segment_distance(vec2 p, vec2 a, vec2 b) {
+    vec2 ab = b-a;
+    return length(p-a-ab*clamp(dot(p-a,ab)/dot(ab,ab),0.0,1.0));
+}
 vec3 sky(vec3 d) {
     float h = smoothstep(-0.04, 0.9, d.y);
     vec3 col = mix(horizon, zenith, h);
     float s = max(dot(d, sun), 0.0);
     col += vec3(1.0,0.68,0.33)*pow(s,24.0)*sun_i*0.23;
     col += vec3(1.0,0.85,0.53)*smoothstep(0.99945,0.99985,s)*sun_i*1.6*(1.0-rain*0.9);
-    col += vec3(0.30,0.13,0.04)*gold*exp(-pow(d.y-0.03,2.0)/0.025);
+    col += vec3(0.30,0.13,0.04)*gold*exp(-square(d.y-0.03)/0.025);
     float m = max(dot(d, moon),0.0);
     col += vec3(0.71,0.80,0.96)*smoothstep(0.99965,0.99987,m)*moon_i*1.4;
     if (d.y>0.015) {
@@ -68,10 +75,11 @@ vec3 sky(vec3 d) {
         float visibility = 1.0-smoothstep(0.72,1.2,cloud_cover);
         col += stars*night*max(0.0,1.0-cloud)*visibility*vec3(0.44,0.51,0.61);
     }
-    // A few birds. Color only, and they follow anim rather than the lake minute.
+    // Small angular wing strokes stay legible without the old blurry circles.
     float day = 1.0-night;
-    if (day>0.05 && d.y>0.04) {
+    if (day>0.35 && rain<0.8 && d.y>0.04) {
         float birds = 0.0;
+        float aa = max(0.00045,tanx/viewport.x*1.2);
         for (int i=0;i<4;i++) {
             float fi = float(i);
             float sx = hash(vec2(fi+1.0,1.7));
@@ -79,15 +87,18 @@ vec3 sky(vec3 d) {
             float az = (sx*2.0-1.0)*2.2+sin(anim*0.15+fi)*0.35;
             float el = 0.16+sy*0.40+sin(anim*0.23+fi*1.3)*0.025;
             float ce = cos(el), se = sin(el);
-            vec3 bdir = vec3(cos(az)*ce, se, sin(az)*ce);
-            float body = exp(-(1.0-dot(d,bdir))/0.000055);
-            float span = 0.02+0.014*abs(sin(anim*6.0+fi*2.1));
-            vec3 w1 = vec3(cos(az+span)*ce, se, sin(az+span)*ce);
-            vec3 w2 = vec3(cos(az-span)*ce, se, sin(az-span)*ce);
-            float wings = exp(-(1.0-dot(d,w1))/0.00004)+exp(-(1.0-dot(d,w2))/0.00004);
-            birds += body+wings*0.65;
+            vec3 bdir = vec3(cos(az)*ce,se,sin(az)*ce);
+            vec3 tangent = vec3(-sin(az),0,cos(az));
+            vec3 vertical = vec3(-cos(az)*se,ce,-sin(az)*se);
+            vec2 p = vec2(dot(d,tangent),dot(d,vertical));
+            if (dot(d,bdir)<0.999 || abs(p.x)>0.018 || abs(p.y)>0.016) continue;
+            float span = 0.010+0.002*sin(fi*2.3);
+            float flap = sin(anim*4.5+fi*2.1)*0.005;
+            float wing = segment_distance(vec2(abs(p.x),p.y),vec2(0,0),vec2(span*0.52,0.002+flap*0.65));
+            wing = min(wing,segment_distance(vec2(abs(p.x),p.y),vec2(span*0.52,0.002+flap*0.65),vec2(span,flap)));
+            birds += (1.0-smoothstep(0.0006,0.0006+aa,wing))*step(0.99,dot(d,bdir));
         }
-        col = mix(col,vec3(0.06,0.07,0.08),clamp(birds,0.0,0.85)*day);
+        col = mix(col,vec3(0.08,0.09,0.09),clamp(birds,0.0,0.9)*day);
     }
     return col;
 }

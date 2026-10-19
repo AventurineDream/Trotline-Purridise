@@ -77,6 +77,28 @@ def tree(kind, variant):
     return img
 
 
+def _bleed_edges(img):
+    """Keep linear filtering from mixing opaque leaves with transparent black.
+
+    RGB extends two texels into the empty border; alpha and silhouette stay put.
+    The same bounded operation works for every small sprite layer.
+    """
+    out = img.copy()
+    occupied = out[:,:,3]>0
+    h,w = occupied.shape
+    for _ in range(2):
+        old = np.pad(out[:,:,:3],((1,1),(1,1),(0,0)),mode="edge")
+        mask = np.pad(occupied,1)
+        filled = occupied.copy()
+        for dy,dx in ((-1,0),(1,0),(0,-1),(0,1),(-1,-1),(-1,1),(1,-1),(1,1)):
+            neighbors = mask[1+dy:1+dy+h,1+dx:1+dx+w]
+            take = ~filled & neighbors
+            out[:,:,:3][take] = old[1+dy:1+dy+h,1+dx:1+dx+w][take]
+            filled |= take
+        occupied = filled
+    return out
+
+
 def atlas(buoy_rgb):
     names, images = [], []
     for kind in KINDS:
@@ -91,4 +113,4 @@ def atlas(buoy_rgb):
         ys = np.minimum(np.arange(H)*src.shape[0]//H,src.shape[0]-1)
         xs = np.minimum(np.arange(W)*src.shape[1]//W,src.shape[1]-1)
         images.append(src[ys[:,None],xs[None,:]])
-    return {name:i for i,name in enumerate(names)}, np.stack(images)[:,::-1].copy()
+    return {name:i for i,name in enumerate(names)}, np.stack([_bleed_edges(img) for img in images])[:,::-1].copy()

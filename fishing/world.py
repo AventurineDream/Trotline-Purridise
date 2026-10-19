@@ -231,7 +231,15 @@ class World:
         self.faces = self._build_camp()
         if self.id == "cedar":
             self.faces.extend(self._build_trinidad_cove())
+        from .marina import build_marina
+        self.marina = build_marina(self)
+        self.faces.extend(self.marina.faces)
         self.props = self._place_props()
+        # Static buildings and piers occupy these clearings. Keep random old
+        # scenery from growing through them as the shoreline becomes richer.
+        self.props = [p for p in self.props if not self._in_marina_clearing(p.x,p.z)]
+        from .shoreline import shoreline_props
+        self.props.extend(shoreline_props(self, Prop))
         # Physical footprints of the two piers and the crossbeam. The values
         # match the camp meshes, including their extent into the slip.
         self.dock_barriers = np.array([
@@ -239,12 +247,23 @@ class World:
             (4.0, self.slip.half_w+0.85,8.0,0.775),
             (self.slip.land_ext-0.4,0.0,0.20,self.slip.half_w+1.6),
         ],np.float64)
+        self.dock_barriers = np.vstack((self.dock_barriers,self.marina.barriers))
         self.solid_props = np.array([
             (p.x,p.z,max(0.16,p.h*0.23)) for p in self.props
             if p.kind in ("rock","stump","knee")],np.float64).reshape(-1,3)
         self.map_rgb, self.map_small = self._bake_map()
         from .anchors import anchors_for_lake
         self.anchors = anchors_for_lake(self.id)
+
+    def _in_marina_clearing(self,x,z):
+        a,s = self.slip.local(x,z)
+        # Leave existing obstacles in the original service lane alone. The
+        # clearings follow only the new structures, with room for tree crowns.
+        for footprint in (*self.marina.footprints,*self.marina.shore_buildings):
+            if (abs(float(a)-footprint.a)<footprint.half_a+8
+                    and abs(float(s)-footprint.s)<footprint.half_s+8):
+                return True
+        return False
 
     def zone_name(self,zone):
         return self.zone_names.get(zone,zone)
