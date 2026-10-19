@@ -1351,6 +1351,8 @@ class UI:
         h, w = frame.shape[:2]
         head = self._size(frame, "head")
         body = self._size(frame, "small")
+        if h < 300:
+            head = body
         m = 12 if w < 800 else 18
         page = f"{ui.help_page + 1} / {len(pages)}"
         foot = "WASD or arrows turn pages    Esc closes"
@@ -1358,12 +1360,16 @@ class UI:
         content_w = max(self._measure(line, body, "mono") for line in (*lines, foot) if line)
         content_w = max(content_w, self._measure(title, head, "mono") + page_w + 16)
         pw = min(w - 16, max(int(w * 0.70), content_w + m * 2))
-        ch = self.cell(body)[1]
-        hh = self.cell(head)[1]
-        header = 8 if h < 400 else 14
-        top = header + hh + (6 if h < 400 else 10)
-        bottom = 10 if h < 400 else 12
-        available = h - 16 - top - 8 - ch - bottom
+        # Fallback fonts may give descenders a taller surface than "M".
+        # Space rows using the actual authored strings on this machine.
+        ch = max(self.text.render(line, body, INK).shape[0] for line in (*lines, foot) if line)
+        hh = self.text.render(title, head, INK).shape[0]
+        header = 2 if h < 300 else 4 if h < 400 else 14
+        top = header + hh + (2 if h < 300 else 4 if h < 400 else 10)
+        bottom = 2 if h < 300 else 6 if h < 400 else 12
+        foot_gap = 2 if h < 300 else 4 if h < 400 else 8
+        vertical_margin = 4 if h < 300 else 16
+        available = h - vertical_margin - top - foot_gap - ch - bottom
         # Expand the sheet before reducing spacing. Even at 480x270 the
         # authored text keeps its readable 12px font; only blank gaps collapse.
         gap = max(0, min(3, (available - len(lines) * ch) // len(lines)))
@@ -1373,7 +1379,7 @@ class UI:
             blank_h = max(0, min(blank_h,
                 (available - (len(lines) - blank_count) * (ch + gap)) // blank_count))
         row_heights = [ch + gap if line else blank_h for line in lines]
-        ph = min(h - 16, max(int(h * 0.74), top + sum(row_heights) + 8 + ch + bottom))
+        ph = min(h - vertical_margin, max(int(h * 0.74), top + sum(row_heights) + foot_gap + ch + bottom))
         x, y = (w - pw) // 2, (h - ph) // 2
         self._panel(frame, x, y, pw, ph, 0.92)
         self._text(frame, title, x + m, y + header, head, INK)
