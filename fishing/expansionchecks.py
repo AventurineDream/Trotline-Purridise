@@ -28,7 +28,8 @@ def expansion_checks(briar,software=False):
         depth = sum(fish.depth)/2
         best = max(species_rates(zone,bait.id,hour,"fair",depth)[fish.id]
                    for zone in ZONE_ORDER for bait in BAITS for hour in (6,12,18,23))
-        if best<=0 or fish.min_lb>=fish.max_lb or fish.price<=0:
+        if (best<=0 or fish.min_lb>=fish.max_lb
+                or fish.price<0 or (fish.price==0 and "protected" not in fish.tags)):
             raise AssertionError(f"unreachable or invalid fish: {fish.id}")
     cedar = World("cedar")
     assets = Path(__file__).with_name("assets")

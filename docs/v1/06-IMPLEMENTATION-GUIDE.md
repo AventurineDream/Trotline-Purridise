@@ -69,9 +69,18 @@ fishing/assets/content_v2/
   keepsakes.json     # 44
 ```
 
+V1-01 seeds the existing 36 species only. In its initial Briar/Cedar dataset,
+the manifest records 36 Briar species and 30 Cedar species; the six Cedar
+additions in `03 §1.3` and species for the later lakes arrive with their content
+tickets. Each lake's declared `species_count` is checked against its species IDs
+and the reciprocal lake memberships in `species.json`.
+
 `fishing/assets/narrative_v1.json` stays as-is and is loaded **in addition**. The
-v2 loader rejects any id that collides with a v1 id unless the row is marked
-`"extends": "<v1 id>"` (used for quest-B links and recopied V3 lines).
+current v2 gameplay loader handles the separate species, bait, boat, and lake
+tables above; it does not load v2 narrative rows. When those narrative rows are
+introduced, their loader must reject ids that collide with a v1 id unless the
+row is marked `"extends": "<v1 id>"` (used for quest-B links and recopied V3
+lines).
 
 **Validation** (extend `content.py`, keep its collect-all-errors style): unique
 ids; every reference resolves; numbers finite and in range; every lake has ≥ 2
@@ -351,7 +360,7 @@ with an LRU; the `--benchmark` run logs per-subsystem estimates
 - **PR body:** link the ticket, list acceptance criteria with ✓, attach
   `--shots` output for visual work, and paste the benchmark summary for anything
   that renders or allocates.
-- **Review and merge:** follow `docs/PR-REVIEW-POLICY.md` (the required reviewer and
-  the 30-minute wait are owner policy, not ticket choices).
+- **Review and merge:** follow `docs/PR-REVIEW-POLICY.md`; Codex and Claude must
+  each give a clear review of the current pull request head before merging.
 - **Definition of Done:** acceptance criteria met; CI green; docs updated; no new
   warnings in `--selftest`; benchmark under budget when relevant; saves migrate.

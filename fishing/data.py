@@ -1,13 +1,58 @@
-"""Species, bait, gear, and paint. All gameplay numbers live here."""
+"""Typed gameplay data loaded from the versioned content files."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
 
 SPOIL_HOURS = 13.0
 MAX_LINES = 5
 DOZEN = 12
+CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
+_CONTENT_FILES = ("species.json", "baits.json", "boats.json", "lakes.json")
+
+
+def _unique_json_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
+
+
+def _read_content_file(filename: str) -> dict:
+    path = CONTENT_V2_PATH / filename
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_json_keys)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{path}: expected a JSON object")
+    return value
+
+
+# Keep the source documents available to the authoring validator. Runtime
+# consumers use the typed views below, never duplicate hard-coded rosters.
+CONTENT_V2_RAW = {filename: _read_content_file(filename) for filename in _CONTENT_FILES}
+
+
+def _validate_content_v2_files(raw_files: dict) -> None:
+    # Validate before building typed runtime objects so malformed rows fail with
+    # their source file and content ID instead of a bare KeyError or TypeError.
+    from .content import validate_content_v2
+
+    validate_content_v2(raw_files)
+
+
+_validate_content_v2_files(CONTENT_V2_RAW)
+
+_TIER_DEFAULTS = {
+    row["tier"]: {key: row[key] for key in ("rate", "trophy")}
+    for row in CONTENT_V2_RAW["species.json"]["tier_defaults"]
+}
 
 
 @dataclass(frozen=True)
@@ -22,81 +67,25 @@ class Species:
     pref_time: str
     depth: tuple[float, float]
     blurb: str
+    folk_name: str = ""
+    lakes: tuple[str, ...] = ()
+    food: str = "none"
+    tags: tuple[str, ...] = ()
+    shiny: str = "albino"
 
 
-SPECIES: tuple[Species, ...] = (
-    Species("bluegill", "Bluegill", 1.40, 0.12, 0.90, 0.03, 0.055, "day", (0.4, 3.2),
-            "Worms on the flats. A sweet fillet, and they keep a line busy."),
-    Species("bullhead", "Yellow bullhead", 1.55, 0.30, 2.2, 0.04, 0.040, "dusk", (0.4, 4.5),
-            "Small cat, big mouth. Dusk, worms, and skinny water."),
-    Species("crappie", "Black crappie", 3.10, 0.25, 2.0, 0.05, 0.022, "dawn", (1.0, 6.0),
-            "Papermouth. Minnows at dawn around brush and lilies."),
-    Species("carp", "Common carp", 0.72, 2.0, 18.0, 0.04, 0.016, "day", (0.8, 8.0),
-            "They will pull a jug under. Worms on the warm flats."),
-    Species("drum", "Freshwater drum", 1.15, 1.0, 12.0, 0.04, 0.012, "day", (2.0, 14.0),
-            "Croaker. Crawfish and cut bait over deep mud."),
-    Species("channel", "Channel catfish", 2.55, 1.0, 16.0, 0.05, 0.026, "night", (1.5, 12.0),
-            "The lake's wage. Liver at night along cypress and the creek."),
-    Species("blue", "Blue catfish", 3.15, 3.0, 30.0, 0.06, 0.0065, "night", (6.0, 18.0),
-            "The big one. Cut shad, the deep hole, after dark."),
-    Species("flathead", "Flathead catfish", 3.40, 2.0, 28.0, 0.06, 0.007, "night", (2.0, 10.0),
-            "They want it alive. Minnows on the south rocks at night."),
-    Species("largemouth", "Largemouth bass", 4.10, 0.8, 8.5, 0.05, 0.010, "dawn", (0.6, 5.0),
-            "A bass will take a trotline minnow at dawn in the lilies."),
-    Species("smallmouth", "Smallmouth bass", 5.00, 0.7, 5.5, 0.05, 0.008, "day", (1.0, 6.5),
-            "Bronze and mean. Crawfish along the south rocks."),
-    Species("gar", "Longnose gar", 0.95, 2.0, 16.0, 0.04, 0.007, "night", (1.0, 8.0),
-            "Long teeth. Cut bait in the cypress after sunset."),
-    Species("buffalo", "Smallmouth buffalo", 1.05, 2.0, 22.0, 0.04, 0.010, "day", (4.0, 16.0),
-            "A deep-water drifter. Not prized, but they fill a well."),
-    Species("white_crappie", "White crappie", 3.15, 0.25, 2.4, 0.05, 0.014, "dawn", (1.0, 7.0),
-            "Minnows beside brush and creek channels. Cedar Creek's other papermouth."),
-    Species("redear", "Redear sunfish", 1.85, 0.15, 1.5, 0.04, 0.012, "day", (0.6, 4.5),
-            "Shellcracker. Worms and small crawfish on a firm, shallow bottom."),
-    Species("green_sunfish", "Green sunfish", 1.10, 0.08, 0.8, 0.04, 0.009, "day", (0.3, 3.0),
-            "A hungry little creek fish. Worms near rocks and flooded banks."),
-    Species("warmouth", "Warmouth", 1.75, 0.15, 1.2, 0.04, 0.009, "dusk", (0.4, 4.0),
-            "Big mouth, small fish. Minnows and worms in brushy coves."),
-    Species("redbreast", "Redbreast sunfish", 1.55, 0.10, 1.0, 0.04, 0.008, "day", (0.4, 3.5),
-            "Long ear flap and a copper belly. Worms in creek mouths."),
-    Species("longear", "Longear sunfish", 1.45, 0.08, 0.7, 0.04, 0.008, "day", (0.3, 3.0),
-            "Bright colors in clear shallows. Worms along rocky banks."),
-    Species("spotted_bass", "Spotted bass", 4.35, 0.6, 5.5, 0.05, 0.006, "dawn", (1.0, 8.0),
-            "A creek-channel hunter. Minnows or crawfish around rock and drops."),
-    Species("white_bass", "White bass", 2.95, 0.4, 3.2, 0.05, 0.010, "dawn", (2.0, 12.0),
-            "Schooling sand bass. Minnows where the creek channel meets open water."),
-    Species("yellow_bass", "Yellow bass", 1.95, 0.2, 1.6, 0.04, 0.007, "day", (1.5, 10.0),
-            "Golden schooling bass. Small minnows over submerged humps."),
-    Species("hybrid_striper", "Hybrid striped bass", 5.20, 1.2, 13.0, 0.05, 0.004, "dawn", (3.0, 16.5),
-            "Cedar Creek's stocked powerhouse. Shad and minnows over deep humps."),
-    Species("striped_bass", "Striped bass", 5.35, 2.0, 22.0, 0.05, 0.0025, "dawn", (5.0, 18.0),
-            "A rare Little Briar stocking. Cut shad in deep, open water."),
-    Species("bowfin", "Bowfin", 1.30, 1.0, 11.0, 0.04, 0.004, "night", (0.5, 6.0),
-            "An old swamp predator. Cut bait in warm, weedy backwaters."),
-    Species("spotted_gar", "Spotted gar", 1.15, 0.8, 9.0, 0.04, 0.004, "dusk", (0.5, 6.0),
-            "A spotted ambush fish. Shad and minnows beside flooded timber."),
-    Species("shortnose_gar", "Shortnose gar", 1.10, 0.6, 7.5, 0.04, 0.0025, "dusk", (1.0, 8.0),
-            "A short, broad snout. Cut bait near muddy creek mouths."),
-    Species("alligator_gar", "Alligator gar", 1.70, 5.0, 65.0, 0.025, 0.0008, "night", (2.0, 12.0),
-            "The heavyweight. Cut shad in creek channels; a big one needs a big well."),
-    Species("black_bullhead", "Black bullhead", 1.55, 0.3, 3.0, 0.04, 0.006, "night", (0.5, 5.0),
-            "A small cat from quiet, muddy water. Liver or worms after dark."),
-    Species("brown_bullhead", "Brown bullhead", 1.70, 0.4, 4.0, 0.04, 0.004, "night", (0.6, 6.0),
-            "A mottled Little Briar catfish. Liver beside flooded brush."),
-    Species("blue_sucker", "Blue sucker", 1.60, 1.5, 12.0, 0.04, 0.002, "day", (4.0, 15.0),
-            "A rare channel-bottom visitor in Little Briar. Worms on deeper gravel."),
-    Species("bigmouth_buffalo", "Bigmouth buffalo", 0.95, 3.0, 35.0, 0.04, 0.003, "day", (3.0, 14.0),
-            "A broad-backed drifter. An occasional worm catch over deep mud."),
-    Species("black_buffalo", "Black buffalo", 1.15, 3.0, 30.0, 0.04, 0.002, "day", (4.0, 16.0),
-            "A scarce Little Briar bottom fish. Worms or cut bait on the deep shelf."),
-    Species("golden_shiner", "Golden shiner", 0.80, 0.04, 0.35, 0.03, 0.006, "day", (0.3, 3.0),
-            "A flashing gold forage fish. Tiny worm bites among the weeds."),
-    Species("gizzard_shad", "Gizzard shad", 0.70, 0.15, 1.8, 0.03, 0.002, "day", (1.5, 10.0),
-            "Broad schools over open water. An occasional small worm catch."),
-    Species("threadfin_shad", "Threadfin shad", 0.60, 0.02, 0.25, 0.02, 0.002, "day", (1.0, 8.0),
-            "A tiny forage fish, rarely caught on a baited hook. Warm open water."),
-    Species("chain_pickerel", "Chain pickerel", 3.40, 0.6, 5.0, 0.04, 0.003, "dawn", (0.4, 5.0),
-            "A toothy Little Briar weed hunter. Live minnows in the lily cove."),
+def _species_values(row: dict) -> dict:
+    """Apply tier defaults while allowing row-level rate and trophy overrides."""
+    values = dict(_TIER_DEFAULTS.get(row.get("tier"), {}))
+    values.update(row)
+    values.pop("tier", None)
+    return values
+
+
+SPECIES: tuple[Species, ...] = tuple(
+    Species(**{**_species_values(row), "depth": tuple(row["depth"]), "lakes": tuple(row["lakes"]),
+               "tags": tuple(row["tags"])})
+    for row in CONTENT_V2_RAW["species.json"]["species"]
 )
 
 SPECIES_BY_ID = {s.id: s for s in SPECIES}
@@ -110,100 +99,39 @@ class Bait:
     blurb: str
 
 
-BAITS: tuple[Bait, ...] = (
-    Bait("worm", "Nightcrawlers", 6.0, "Panfish, bullheads, and carp."),
-    Bait("liver", "Chicken liver", 8.0, "Channel cats and bullheads."),
-    Bait("shad", "Cut shad", 10.0, "Blue cats, drum, and gar."),
-    Bait("minnow", "Live minnows", 14.0, "Bass, crappie, and flatheads."),
-    Bait("craw", "Crawfish", 16.0, "Smallmouth, largemouth, and drum."),
+BAITS: tuple[Bait, ...] = tuple(
+    Bait(**{key: row[key] for key in ("id", "name", "price", "blurb")})
+    for row in CONTENT_V2_RAW["baits.json"]["baits"]
 )
 
 BAIT_BY_ID = {b.id: b for b in BAITS}
 
-# Preferred bait multiplier. Missing pairs fall back to 0.05.
 BAIT_MATCH: dict[str, dict[str, float]] = {
-    "worm": {
-        "bluegill": 1.0, "bullhead": 1.0, "carp": 0.9, "buffalo": 0.65,
-        "channel": 0.4, "crappie": 0.22, "drum": 0.2, "largemouth": 0.18,
-        "smallmouth": 0.12, "blue": 0.12,
-    },
-    "liver": {
-        "channel": 1.0, "bullhead": 0.95, "blue": 0.72, "flathead": 0.22,
-        "drum": 0.18, "gar": 0.12, "buffalo": 0.2,
-    },
-    "shad": {
-        "blue": 1.0, "channel": 0.85, "gar": 0.95, "drum": 0.8,
-        "flathead": 0.32, "buffalo": 0.45, "carp": 0.15,
-    },
-    "minnow": {
-        "flathead": 1.0, "largemouth": 1.0, "crappie": 1.0, "smallmouth": 0.7,
-        "channel": 0.28, "bluegill": 0.15,
-    },
-    "craw": {
-        "smallmouth": 1.0, "largemouth": 0.85, "drum": 0.75, "channel": 0.3,
-        "flathead": 0.2, "bullhead": 0.25,
-    },
+    row["id"]: dict(row["matches"])
+    for row in CONTENT_V2_RAW["baits.json"]["baits"]
 }
+BAIT_FALLBACK_MULTIPLIER = CONTENT_V2_RAW["baits.json"]["fallback_multiplier"]
 
-# Zone affinity. Missing pairs fall back to 0.07. "open" and "landing" are thin.
+_LAKE_CONTENT = CONTENT_V2_RAW["lakes.json"]
+ZONE_ORDER = tuple(_LAKE_CONTENT["zone_order"])
 ZONE_MATCH: dict[str, dict[str, float]] = {
-    "flats": {"bluegill": 1.0, "bullhead": 1.0, "carp": 0.85, "largemouth": 0.3, "crappie": 0.25},
-    "lilies": {"largemouth": 1.0, "bluegill": 0.75, "crappie": 0.7, "bullhead": 0.28},
-    "cypress": {"gar": 1.0, "channel": 0.85, "crappie": 0.5, "largemouth": 0.35, "bullhead": 0.2},
-    "deep": {"blue": 1.0, "buffalo": 1.0, "drum": 0.75, "channel": 0.55},
-    "rocks": {"flathead": 1.0, "smallmouth": 1.0, "drum": 0.4, "channel": 0.28},
-    "inlet": {"channel": 0.95, "blue": 0.65, "carp": 0.8, "drum": 0.55, "gar": 0.4},
-    "open": {"channel": 0.4, "drum": 0.4, "carp": 0.32, "buffalo": 0.3, "bluegill": 0.15},
-    "landing": {"crappie": 0.2, "bluegill": 0.15},
+    row["id"]: dict(row["matches"]) for row in _LAKE_CONTENT["zones"]
 }
-
-# Additional fish share ecological preferences, but retain individual rates,
-# sizes, prices, and records. All 36 are available in fictional Little Briar.
-_GROUPS = (
-    (("redear", "green_sunfish", "redbreast", "longear", "golden_shiner"),
-     {"worm": 1.0, "craw": 0.35}, {"flats": 1.0, "lilies": 0.8, "inlet": 0.6, "rocks": 0.5}),
-    (("warmouth", "white_crappie", "chain_pickerel"),
-     {"minnow": 1.0, "worm": 0.3}, {"lilies": 1.0, "cypress": 0.8, "inlet": 0.5}),
-    (("spotted_bass",), {"minnow": 1.0, "craw": 0.9}, {"rocks": 1.0, "inlet": 0.8}),
-    (("white_bass", "yellow_bass", "hybrid_striper", "striped_bass"),
-     {"minnow": 1.0, "shad": 0.8}, {"open": 1.0, "deep": 1.0, "inlet": 0.65, "rocks": 0.5}),
-    (("bowfin", "spotted_gar", "shortnose_gar", "alligator_gar"),
-     {"shad": 1.0, "minnow": 0.8}, {"cypress": 1.0, "inlet": 0.85, "lilies": 0.6}),
-    (("black_bullhead", "brown_bullhead"),
-     {"liver": 1.0, "worm": 0.9}, {"inlet": 1.0, "cypress": 0.8, "flats": 0.65}),
-    (("blue_sucker", "bigmouth_buffalo", "black_buffalo"),
-     {"worm": 0.8, "shad": 0.35}, {"deep": 1.0, "inlet": 0.75, "open": 0.5}),
-    (("gizzard_shad", "threadfin_shad"), {"worm": 0.3}, {"open": 1.0, "flats": 0.5}),
-)
-for _ids, _baits, _zones in _GROUPS:
-    for _id in _ids:
-        for _bait, _match in _baits.items():
-            BAIT_MATCH[_bait][_id] = _match
-        for _zone, _match in _zones.items():
-            ZONE_MATCH[_zone][_id] = _match
-
-# Survey-backed core fish dominate Cedar Creek; several Little Briar
-# specialties are absent. The remaining community and bite rates are gameplay.
-CEDAR_FISH = {sp.id: 0.7 for sp in SPECIES}
-for _id in ("smallmouth", "striped_bass", "brown_bullhead", "blue_sucker", "black_buffalo", "chain_pickerel"):
-    CEDAR_FISH[_id] = 0.0
-CEDAR_FISH.update(blue=2.4, channel=0.85, white_bass=2.0, hybrid_striper=2.6,
-                  white_crappie=1.9, crappie=1.1, largemouth=1.25, yellow_bass=1.4)
-
-ZONE_NAME = {
-    "flats": "North flats",
-    "lilies": "Lily cove",
-    "cypress": "Cypress shore",
-    "deep": "Deep hole",
-    "rocks": "South rocks",
-    "inlet": "Creek inlet",
-    "open": "Open water",
-    "landing": "Briar Landing",
-    "shore": "Bank",
-}
-
-# Order used by the map legend and zone ids.
-ZONE_ORDER = ("landing", "inlet", "flats", "lilies", "cypress", "rocks", "deep", "open")
+ZONE_FALLBACK_MULTIPLIER = _LAKE_CONTENT["zone_fallback_multiplier"]
+ZONE_NAME = {row["id"]: row["name"] for row in _LAKE_CONTENT["zones"]}
+LAKES = {row["id"]: {key: value for key, value in row.items()
+                      if key not in ("id", "species_count", "species_ids", "rate_multipliers", "zone_labels")}
+         for row in _LAKE_CONTENT["lakes"]}
+LAKE_SPECIES_IDS = {row["id"]: tuple(row["species_ids"]) for row in _LAKE_CONTENT["lakes"]}
+LAKE_RATE_MULTIPLIERS = {}
+for _lake in _LAKE_CONTENT["lakes"]:
+    _rates = {species_id: 0.0 for species_id in SPECIES_BY_ID}
+    _rates.update({species_id: 1.0 for species_id in _lake["species_ids"]})
+    _rates.update(_lake.get("rate_multipliers", {}))
+    LAKE_RATE_MULTIPLIERS[_lake["id"]] = _rates
+CEDAR_ZONES = dict(next(row for row in _LAKE_CONTENT["lakes"] if row["id"] == "cedar")["zone_labels"])
+CEDAR_FISH = dict(LAKE_RATE_MULTIPLIERS["cedar"])
+BOAT_DATA: tuple[dict, ...] = tuple(CONTENT_V2_RAW["boats.json"]["boats"])
 
 
 LINE_TIERS = {
@@ -276,11 +204,11 @@ def paint_name(slot: str, pid: str) -> str:
 
 
 def bait_mult(bait: str, species: str) -> float:
-    return BAIT_MATCH.get(bait, {}).get(species, 0.05)
+    return BAIT_MATCH.get(bait, {}).get(species, BAIT_FALLBACK_MULTIPLIER)
 
 
 def zone_mult(zone: str, species: str) -> float:
-    return ZONE_MATCH.get(zone, {}).get(species, 0.07)
+    return ZONE_MATCH.get(zone, {}).get(species, ZONE_FALLBACK_MULTIPLIER)
 
 
 def band_of(hour: float) -> str:

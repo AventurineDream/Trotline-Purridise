@@ -1,0 +1,79 @@
+{
+  "schema_version": 2,
+  "boats": [
+    {
+      "id": "jon",
+      "name": "12 ft Jon boat",
+      "bow": 2.86,
+      "stern": -0.8,
+      "half_beam": 0.7,
+      "draft": 0.47,
+      "eye_height": 1.22,
+      "price": 0,
+      "tank": 12,
+      "fuel_burn": 1.8,
+      "speed_factor": 1.0,
+      "turn_factor": 1.0,
+      "acceleration": 1.3,
+      "well_bonus": 0.0,
+      "sail_speed": 0.0,
+      "traits": []
+    },
+    {
+      "id": "sail",
+      "name": "12 ft Daysailer",
+      "bow": 2.63,
+      "stern": -1.03,
+      "half_beam": 0.86,
+      "draft": 0.72,
+      "eye_height": 1.3,
+      "price": 650,
+      "tank": 6,
+      "fuel_burn": 0.45,
+      "speed_factor": 0.57,
+      "turn_factor": 0.72,
+      "acceleration": 0.65,
+      "well_bonus": 0.0,
+      "sail_speed": 4.6,
+      "traits": []
+    },
+    {
+      "id": "pontoon",
+      "name": "15 ft Pontoon",
+      "bow": 3.37,
+      "stern": -1.2,
+      "half_beam": 1.2,
+      "draft": 0.44,
+      "eye_height": 1.65,
+      "price": 1450,
+      "tank": 36,
+      "fuel_burn": 2.6,
+      "speed_factor": 0.83,
+      "turn_factor": 0.52,
+      "acceleration": 0.72,
+      "well_bonus": 40,
+      "sail_speed": 0.0,
+      "traits": [
+        "hammock"
+      ]
+    },
+    {
+      "id": "rowboat",
+      "name": "10 ft Plastic Rowboat",
+      "bow": 1.64,
+      "stern": -1.41,
+      "half_beam": 0.68,
+      "draft": 0.22,
+      "eye_height": 1.12,
+      "price": 325,
+      "tank": 0,
+      "fuel_burn": 0.0,
+      "speed_factor": 1.0,
+      "turn_factor": 0.88,
+      "acceleration": 0.78,
+      "well_bonus": 0.0,
+      "sail_speed": 0.0,
+      "traits": []
+    }
+  ]
+}
