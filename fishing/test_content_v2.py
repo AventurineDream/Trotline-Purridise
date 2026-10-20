@@ -2,14 +2,17 @@
 
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 from .boat import BOATS
-from .content import (ContentError, _load_all_content, load_content_v2,
-                      validate_content_v2)
+from .content import ContentError, load_content_v2, validate_content_v2
 from .data import (BAITS, BAIT_BY_ID, BAIT_MATCH, CEDAR_FISH, LINE_TIERS,
                    CONTENT_V2_RAW, LAKE_RATE_MULTIPLIERS, SPECIES, SPECIES_BY_ID, ZONE_MATCH, ZONE_ORDER,
                    _species_values, _validate_content_v2_files, bait_mult, zone_mult)
@@ -202,13 +205,44 @@ class ContentV2Checks(unittest.TestCase):
 
         self.assertIn("baits.json:baits[0](worm): missing required field 'matches'", str(caught.exception))
 
-    def test_cli_reports_v1_and_v2_errors_together(self):
-        with patch("fishing.content.load_content", side_effect=ContentError("narrative.json:root: bad v1")), \
-                patch("fishing.content.load_content_v2", side_effect=ContentError("species.json:root: bad v2")):
-            with self.assertRaises(ContentError) as caught:
-                _load_all_content()
+    def test_cli_reports_v1_and_v2_errors_together_without_mocks(self):
+        source_package = Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "fishing"
+            required_files = (
+                "__init__.py", "content.py", "narrative.py", "data.py",
+                "assets/narrative_v1.json",
+                "assets/content_v2/species.json", "assets/content_v2/baits.json",
+                "assets/content_v2/boats.json", "assets/content_v2/lakes.json",
+            )
+            for relative_path in required_files:
+                source = source_package / relative_path
+                target = package / relative_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
 
-        self.assertEqual(str(caught.exception), "narrative.json:root: bad v1\nspecies.json:root: bad v2")
+            narrative_path = package / "assets/narrative_v1.json"
+            narrative = json.loads(narrative_path.read_text(encoding="utf-8"))
+            narrative.pop("sources")
+            narrative_path.write_text(json.dumps(narrative), encoding="utf-8")
+
+            species_path = package / "assets/content_v2/species.json"
+            species = json.loads(species_path.read_text(encoding="utf-8"))
+            species["species"][0].pop("name")
+            species_path.write_text(json.dumps(species), encoding="utf-8")
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(root)
+            result = subprocess.run(
+                [sys.executable, "-m", "fishing.content"], cwd=root, env=env,
+                text=True, capture_output=True, check=False,
+            )
+
+        combined = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("narrative_v1.json:root: missing required field 'sources'", combined)
+        self.assertIn("species.json:species[0](bluegill): missing required field 'name'", combined)
 
     def test_duplicate_and_non_string_ids_do_not_skip_row_value_checks(self):
         broken = deepcopy(CONTENT_V2_RAW)
