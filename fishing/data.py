@@ -99,8 +99,14 @@ LAKES = {row["id"]: {key: value for key, value in row.items()
                       if key not in ("id", "species_count", "species_ids", "rate_multipliers", "zone_labels")}
          for row in _LAKE_CONTENT["lakes"]}
 LAKE_SPECIES_IDS = {row["id"]: tuple(row["species_ids"]) for row in _LAKE_CONTENT["lakes"]}
+LAKE_RATE_MULTIPLIERS = {}
+for _lake in _LAKE_CONTENT["lakes"]:
+    _rates = {species_id: 0.0 for species_id in SPECIES_BY_ID}
+    _rates.update({species_id: 1.0 for species_id in _lake["species_ids"]})
+    _rates.update(_lake.get("rate_multipliers", {}))
+    LAKE_RATE_MULTIPLIERS[_lake["id"]] = _rates
 CEDAR_ZONES = dict(next(row for row in _LAKE_CONTENT["lakes"] if row["id"] == "cedar")["zone_labels"])
-CEDAR_FISH = dict(next(row for row in _LAKE_CONTENT["lakes"] if row["id"] == "cedar")["rate_multipliers"])
+CEDAR_FISH = dict(LAKE_RATE_MULTIPLIERS["cedar"])
 BOAT_DATA: tuple[dict, ...] = tuple(CONTENT_V2_RAW["boats.json"]["boats"])
 
 

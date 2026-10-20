@@ -76,8 +76,11 @@ tickets. Each lake's declared `species_count` is checked against its species IDs
 and the reciprocal lake memberships in `species.json`.
 
 `fishing/assets/narrative_v1.json` stays as-is and is loaded **in addition**. The
-v2 loader rejects any id that collides with a v1 id unless the row is marked
-`"extends": "<v1 id>"` (used for quest-B links and recopied V3 lines).
+current v2 gameplay loader handles the separate species, bait, boat, and lake
+tables above; it does not load v2 narrative rows. When those narrative rows are
+introduced, their loader must reject ids that collide with a v1 id unless the
+row is marked `"extends": "<v1 id>"` (used for quest-B links and recopied V3
+lines).
 
 **Validation** (extend `content.py`, keep its collect-all-errors style): unique
 ids; every reference resolves; numbers finite and in range; every lake has ≥ 2
