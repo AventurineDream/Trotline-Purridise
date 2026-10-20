@@ -5,6 +5,9 @@ Every pull request requires completed, clear reviews from both **Codex** and
 the full current head commit. A review for an earlier commit, or a pending,
 failed, or incomplete review, does not satisfy the gate.
 
+Amaranth is no longer part of this review process and is not a reviewer signal
+or merge requirement.
+
 A review is clear when it has no actionable findings or unresolved requests for
 changes. Resolve all findings and blocking review threads before merging. If a
 finding requires a code change, push the fix to the same pull request and

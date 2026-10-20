@@ -24,9 +24,15 @@ def _load_gameplay_refs():
     global BAIT_BY_ID, LAKES, LINE_TIERS, SPECIES_BY_ID, ZONE_ORDER, _GAMEPLAY_REFS_LOADED
     if _GAMEPLAY_REFS_LOADED:
         return
-    from .data import BAIT_BY_ID as bait_by_id, LINE_TIERS as line_tiers
-    from .data import SPECIES_BY_ID as species_by_id, ZONE_ORDER as zone_order
-    from .lakes import LAKES as lakes
+    try:
+        from .data import BAIT_BY_ID as bait_by_id, LINE_TIERS as line_tiers
+        from .data import SPECIES_BY_ID as species_by_id, ZONE_ORDER as zone_order
+        from .lakes import LAKES as lakes
+    except ValueError:
+        # Keep v1 diagnostics available when the independent v2 data is broken.
+        # The command-line validator reports the v2 error separately.
+        _set_fallback_gameplay_refs()
+        return
 
     BAIT_BY_ID = bait_by_id
     LAKES = lakes
@@ -433,7 +439,33 @@ _SAVE_REFERENCED_IDS = {
     "baits": frozenset({"worm", "liver", "shad", "minnow", "craw"}),
     "boats": frozenset({"jon", "rowboat", "sail", "pontoon"}),
     "lakes": frozenset({"briar", "cedar"}),
+    "zones": frozenset({
+        "landing", "inlet", "flats", "lilies", "cypress", "rocks", "deep", "open", "shore",
+    }),
 }
+_BASELINE_CEDAR_EXCLUSIONS = frozenset({
+    "smallmouth", "striped_bass", "brown_bullhead", "blue_sucker", "black_buffalo",
+    "chain_pickerel",
+})
+_BASELINE_LAKE_MEMBERSHIPS = {
+    species_id: frozenset({"briar"} | (set() if species_id in _BASELINE_CEDAR_EXCLUSIONS else {"cedar"}))
+    for species_id in _SAVE_REFERENCED_IDS["species"]
+}
+
+
+def _set_fallback_gameplay_refs():
+    """Use stable baseline IDs so v1 can still report its errors when v2 is invalid."""
+    global BAIT_BY_ID, LAKES, LINE_TIERS, SPECIES_BY_ID, ZONE_ORDER, _GAMEPLAY_REFS_LOADED
+    BAIT_BY_ID = {item_id: None for item_id in _SAVE_REFERENCED_IDS["baits"]}
+    LAKES = {item_id: None for item_id in _SAVE_REFERENCED_IDS["lakes"]}
+    LINE_TIERS = {
+        "std": {"hooks": 12},
+        "prem": {"hooks": 18},
+        "heavy": {"hooks": 24},
+    }
+    SPECIES_BY_ID = {item_id: None for item_id in _SAVE_REFERENCED_IDS["species"]}
+    ZONE_ORDER = tuple(_SAVE_REFERENCED_IDS["zones"])
+    _GAMEPLAY_REFS_LOADED = True
 
 
 class _ContentV2Validator:
@@ -586,8 +618,8 @@ class _ContentV2Validator:
             self.number(species_file, where + ".trophy", row.get("trophy"), minimum=0, maximum=1)
 
         species = self.table(docs, species_file, "species", {
-            "id", "name", "price", "min_lb", "max_lb", "trophy", "rate", "pref_time",
-            "depth", "blurb", "folk_name", "lakes", "food", "tags", "shiny"})
+            "id", "name", "price", "min_lb", "max_lb", "pref_time", "depth", "blurb",
+            "folk_name", "lakes", "food", "tags", "shiny"}, {"rate", "trophy", "tier"})
         baits = self.table(docs, baits_file, "baits", {"id", "name", "price", "blurb", "matches"})
         boats = self.table(docs, boats_file, "boats", {
             "id", "name", "bow", "stern", "half_beam", "draft", "eye_height", "price",
@@ -608,14 +640,18 @@ class _ContentV2Validator:
             elif any(not isinstance(item, str) for item in zone_order):
                 self.error(lakes_file, "zone_order", "expected string zone IDs")
                 zone_order = [item for item in zone_order if isinstance(item, str)]
-            if len(set(zone_order)) != len(zone_order):
-                self.error(lakes_file, "zone_order", "zone IDs must be unique")
+            seen_zone_ids = set()
+            for index, zone_id in enumerate(zone_order):
+                if zone_id in seen_zone_ids:
+                    self.error(lakes_file, f"zone_order[{index}]({zone_id})", f"duplicate zone ID {zone_id!r}")
+                seen_zone_ids.add(zone_id)
             self.number(lakes_file, "zone_fallback_multiplier", lakes_root.get("zone_fallback_multiplier"),
                         minimum=0, maximum=1)
         zones = self.table(docs, lakes_file, "zones", {"id", "name", "cedar_name", "fishing", "matches"})
         lakes = self.table(docs, lakes_file, "lakes", {
             "id", "name", "landing", "region", "blurb", "species_count", "species_ids"},
             {"rate_multipliers", "zone_labels"})
+        self.require_saved_ids(lakes_file, "zones", zones)
         self.require_saved_ids(lakes_file, "lakes", lakes)
         if lakes_file not in self.unavailable_files and not {"briar", "cedar"}.issubset(lakes):
             self.error(lakes_file, "lakes", "must include the existing briar and cedar lakes")
@@ -629,16 +665,29 @@ class _ContentV2Validator:
             self.text(species_file, where + ".name", row.get("name"))
             self.text(species_file, where + ".blurb", row.get("blurb"))
             self.text(species_file, where + ".folk_name", row.get("folk_name"))
-            for key in ("price", "rate", "min_lb", "max_lb"):
+            for key in ("price", "min_lb", "max_lb"):
                 self.number(species_file, where + "." + key, row.get(key), minimum=0)
             if (type(row.get("price")) in (int, float) and row.get("price", 0) <= 0):
                 self.error(species_file, where + ".price", "must be greater than zero")
-            if (type(row.get("rate")) in (int, float) and row.get("rate", 0) <= 0):
-                self.error(species_file, where + ".rate", "must be greater than zero")
             if (type(row.get("max_lb")) in (int, float) and type(row.get("min_lb")) in (int, float)
                     and row["max_lb"] <= row["min_lb"]):
                 self.error(species_file, where + ".max_lb", "must be greater than min_lb")
-            self.number(species_file, where + ".trophy", row.get("trophy"), minimum=0, maximum=1)
+            tier_defaults = None
+            if "tier" in row and self.enum(species_file, where + ".tier", row.get("tier"), tiers):
+                tier_defaults = tiers[row["tier"]]
+            for key in ("rate", "trophy"):
+                if key in row:
+                    value = row[key]
+                elif tier_defaults is not None and key in tier_defaults:
+                    value = tier_defaults[key]
+                else:
+                    self.error(species_file, where + "." + key,
+                               f"missing required field {key!r}; provide it or a valid tier default")
+                    continue
+                self.number(species_file, where + "." + key, value,
+                            minimum=0, maximum=1 if key == "trophy" else None)
+                if key == "rate" and type(value) in (int, float) and value <= 0:
+                    self.error(species_file, where + ".rate", "must be greater than zero")
             self.enum(species_file, where + ".pref_time", row.get("pref_time"),
                       {"dawn", "day", "dusk", "night", "any"})
             depth = row.get("depth")
@@ -647,7 +696,14 @@ class _ContentV2Validator:
                 self.error(species_file, where + ".depth", "expected two finite depth values")
             elif depth[0] < 0 or depth[1] <= depth[0]:
                 self.error(species_file, where + ".depth", "expected 0 <= min depth < max depth")
-            self.id_list(species_file, where + ".lakes", row.get("lakes"), lake_refs)
+            declared_lakes = self.id_list(species_file, where + ".lakes", row.get("lakes"), lake_refs)
+            if not declared_lakes:
+                self.error(species_file, where + ".lakes", "species must belong to at least one lake")
+            required_lakes = (_BASELINE_LAKE_MEMBERSHIPS.get(sid, frozenset())
+                              if isinstance(sid, str) else frozenset())
+            for lake_id in sorted(required_lakes - set(declared_lakes)):
+                self.error(species_file, where + ".lakes",
+                           f"must retain baseline lake membership {lake_id!r}")
             self.enum(species_file, where + ".food", row.get("food"), _SPECIES_FOODS)
             tags = row.get("tags")
             if not isinstance(tags, list):
@@ -674,6 +730,10 @@ class _ContentV2Validator:
             for key in ("bow", "stern", "half_beam", "draft", "eye_height", "price", "tank",
                         "fuel_burn", "speed_factor", "turn_factor", "acceleration", "well_bonus", "sail_speed"):
                 self.number(boats_file, where + "." + key, row.get(key), minimum=None if key == "stern" else 0)
+            for key in ("speed_factor", "turn_factor", "acceleration"):
+                value = row.get(key)
+                if type(value) in (int, float) and value <= 0:
+                    self.error(boats_file, where + "." + key, "must be greater than zero")
             if (type(row.get("bow")) in (int, float) and type(row.get("stern")) in (int, float)
                     and row["bow"] <= row["stern"]):
                 self.error(boats_file, where + ".bow", "must be forward of stern")
@@ -697,8 +757,11 @@ class _ContentV2Validator:
                 self.error(lakes_file, where + ".fishing", "expected a boolean")
             self.multiplier_map(lakes_file, where + ".matches", row.get("matches"), species_refs, maximum=1)
         fishing_zones = {zid for zid, row in zones.items() if row.get("fishing") is True}
-        if lakes_file not in self.unavailable_files and set(zone_order) != fishing_zones:
-            self.error(lakes_file, "zone_order", "must list every fishing zone exactly once")
+        if lakes_file not in self.unavailable_files:
+            for zone_id in sorted(fishing_zones - set(zone_order)):
+                self.error(lakes_file, f"zone_order({zone_id})", "missing fishing zone from zone_order")
+            for zone_id in sorted(set(zone_order) - fishing_zones):
+                self.error(lakes_file, f"zone_order({zone_id})", "zone order includes an unknown or non-fishing zone")
         for lid, row, where in self.rows(lakes_file, "lakes"):
             for key in ("name", "landing", "region", "blurb"):
                 self.text(lakes_file, where + "." + key, row.get(key))
@@ -710,8 +773,10 @@ class _ContentV2Validator:
             if "rate_multipliers" in row:
                 rates = self.multiplier_map(lakes_file, where + ".rate_multipliers",
                                             row.get("rate_multipliers"), species_refs)
-                if species_file not in self.unavailable_files and set(rates) != species_ids:
-                    self.error(lakes_file, where + ".rate_multipliers", "must declare one rate for every species")
+                if species_file not in self.unavailable_files:
+                    for sid in sorted(species_ids - set(rates)):
+                        self.error(lakes_file, f"{where}.rate_multipliers({sid})",
+                                   f"missing rate entry for species {sid!r}")
                 listed = row.get("species_ids")
                 listed_ids = {sid for sid in listed if isinstance(sid, str)} if isinstance(listed, list) else set()
                 for sid in species_ids.intersection(rates):
@@ -733,7 +798,9 @@ class _ContentV2Validator:
                             self.error(lakes_file, where + ".zone_labels." + str(zone_id), f"unknown zone {zone_id!r}")
                         self.text(lakes_file, where + ".zone_labels." + str(zone_id), label)
                     if (lakes_file not in self.unavailable_files and set(labels) != zone_ids):
-                        self.error(lakes_file, where + ".zone_labels", "must provide a label for every zone")
+                        for zone_id in sorted(zone_ids - set(labels)):
+                            self.error(lakes_file, f"{where}.zone_labels.{zone_id}",
+                                       f"missing label for zone {zone_id!r}")
 
         for sid, row, _where in self.rows(species_file, "species"):
             if not isinstance(sid, str):
@@ -907,8 +974,6 @@ def load_content_v2(directory: str | Path = CONTENT_V2_PATH) -> GameplayContent:
 def load_content(path: str | Path = CONTENT_PATH) -> NarrativeContent:
     """Fail with actionable path/ID context instead of returning partial data."""
     path = Path(path)
-    if path.resolve() == CONTENT_PATH.resolve():
-        load_content_v2()
     try:
         raw = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_keys)
     except (OSError, ValueError) as exc:
@@ -916,9 +981,25 @@ def load_content(path: str | Path = CONTENT_PATH) -> NarrativeContent:
     return validate_content(raw, source=path)
 
 
+def _load_all_content():
+    """Validate v1 and v2 independently, then report both sets of errors."""
+    errors = []
+    narrative = gameplay = None
+    try:
+        narrative = load_content()
+    except ContentError as exc:
+        errors.extend(str(exc).splitlines())
+    try:
+        gameplay = load_content_v2()
+    except ContentError as exc:
+        errors.extend(str(exc).splitlines())
+    if errors:
+        raise ContentError("\n".join(errors))
+    return narrative, gameplay
+
+
 if __name__ == "__main__":
-    content = load_content()
-    gameplay = load_content_v2()
+    content, gameplay = _load_all_content()
     print(f"Content valid: {len(content.npcs)} NPCs, {len(content.quests)} narrative quests, "
           f"{len(content.dialogue)} dialogue nodes, {len(gameplay.species)} species, "
           f"{len(gameplay.baits)} baits, {len(gameplay.boats)} boats, "
