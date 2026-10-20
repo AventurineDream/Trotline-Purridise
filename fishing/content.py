@@ -11,11 +11,42 @@ import json
 import math
 from pathlib import Path
 
-from .data import BAIT_BY_ID, LINE_TIERS, SPECIES_BY_ID, ZONE_ORDER
-from .lakes import LAKES
 from .narrative import DAY_NPCS, QUEST_IDS, RIPPLE_BY_QUEST
 
 CONTENT_PATH = Path(__file__).with_name("assets") / "narrative_v1.json"
+CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
+CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json")
+BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
+_GAMEPLAY_REFS_LOADED = False
+
+
+def _load_gameplay_refs():
+    global BAIT_BY_ID, LAKES, LINE_TIERS, SPECIES_BY_ID, ZONE_ORDER, _GAMEPLAY_REFS_LOADED
+    if _GAMEPLAY_REFS_LOADED:
+        return
+    try:
+        from .data import BAIT_BY_ID as bait_by_id, LINE_TIERS as line_tiers
+        from .data import SPECIES_BY_ID as species_by_id, ZONE_ORDER as zone_order
+        from .lakes import LAKES as lakes
+    except ValueError:
+        # Keep v1 diagnostics available when the independent v2 data is broken.
+        # The command-line validator reports the v2 error separately.
+        _set_fallback_gameplay_refs()
+        return
+
+    BAIT_BY_ID = bait_by_id
+    LAKES = lakes
+    LINE_TIERS = line_tiers
+    SPECIES_BY_ID = species_by_id
+    ZONE_ORDER = zone_order
+    _GAMEPLAY_REFS_LOADED = True
+
+
+def _is_finite(value):
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 NPC_IDS = {"grandmother_whiskers", "doc_barnaby", "master_cinder"}.union(
     *(set(pool) for pool in DAY_NPCS.values()))
 WAYPOINTS = {
@@ -46,12 +77,29 @@ class ContentError(ValueError):
     """An authored file is invalid; every message includes source and ID context."""
 
 
+class _DuplicateJSONKeyError(ContentError):
+    def __init__(self, key):
+        self.key = key
+        super().__init__(f"duplicate JSON key {key!r}")
+
+
 @dataclass
 class NarrativeContent:
     npcs: dict[str, dict]
     quests: dict[str, dict]
     rewards: dict[str, dict]
     dialogue: dict[str, dict]
+
+
+@dataclass
+class GameplayContent:
+    """Validated v2 gameplay definitions indexed by their stable IDs."""
+
+    species: dict[str, dict]
+    baits: dict[str, dict]
+    boats: dict[str, dict]
+    lakes: dict[str, dict]
+    zones: dict[str, dict]
 
 
 class _Validator:
@@ -197,6 +245,7 @@ class _Validator:
 
 def validate_content(raw, *, source="<content>") -> NarrativeContent:
     """Validate all definitions and links before returning any usable content."""
+    _load_gameplay_refs()
     v = _Validator(source)
     if not v.shape(raw, "root", {"schema_version", "sources", "adaptations", "npcs",
                                  "quests", "rewards", "dialogue"}):
@@ -367,13 +416,564 @@ def validate_content(raw, *, source="<content>") -> NarrativeContent:
     return NarrativeContent(npcs, quests, rewards, dialogue)
 
 
+_SPECIES_FOODS = {"none", "panfish", "catfish", "hearty", "bass", "trout", "fillet", "cosmic"}
+_SPECIES_TAGS = {"surface", "cold", "shy", "current", "protected"}
+_SHINY_PALETTES = {"albino", "golden", "starry", "glow", "ink", "rose"}
+_BOAT_TRAITS = {
+    "shallow", "silent", "hammock", "wind_steady", "trophy_rail", "glow",
+    "galley", "ice_hull",
+}
+
+# These IDs are persisted in saves and must remain loadable when content grows.
+# New IDs may be added; existing IDs cannot be renamed or removed.
+_SAVE_REFERENCED_IDS = {
+    "species": frozenset({
+        "bluegill", "bullhead", "crappie", "carp", "drum", "channel", "blue",
+        "flathead", "largemouth", "smallmouth", "gar", "buffalo", "white_crappie",
+        "redear", "green_sunfish", "warmouth", "redbreast", "longear", "spotted_bass",
+        "white_bass", "yellow_bass", "hybrid_striper", "striped_bass", "bowfin",
+        "spotted_gar", "shortnose_gar", "alligator_gar", "black_bullhead",
+        "brown_bullhead", "blue_sucker", "bigmouth_buffalo", "black_buffalo",
+        "golden_shiner", "gizzard_shad", "threadfin_shad", "chain_pickerel",
+    }),
+    "baits": frozenset({"worm", "liver", "shad", "minnow", "craw"}),
+    "boats": frozenset({"jon", "rowboat", "sail", "pontoon"}),
+    "lakes": frozenset({"briar", "cedar"}),
+    "zones": frozenset({
+        "landing", "inlet", "flats", "lilies", "cypress", "rocks", "deep", "open", "shore",
+    }),
+}
+_BASELINE_CEDAR_EXCLUSIONS = frozenset({
+    "smallmouth", "striped_bass", "brown_bullhead", "blue_sucker", "black_buffalo",
+    "chain_pickerel",
+})
+_FALLBACK_FISHING_ZONE_ORDER = (
+    "landing", "inlet", "flats", "lilies", "cypress", "rocks", "deep", "open",
+)
+_BASELINE_LAKE_MEMBERSHIPS = {
+    species_id: frozenset({"briar"} | (set() if species_id in _BASELINE_CEDAR_EXCLUSIONS else {"cedar"}))
+    for species_id in _SAVE_REFERENCED_IDS["species"]
+}
+
+
+def _set_fallback_gameplay_refs():
+    """Use stable baseline IDs so v1 can still report its errors when v2 is invalid."""
+    global BAIT_BY_ID, LAKES, LINE_TIERS, SPECIES_BY_ID, ZONE_ORDER, _GAMEPLAY_REFS_LOADED
+    BAIT_BY_ID = {item_id: None for item_id in _SAVE_REFERENCED_IDS["baits"]}
+    LAKES = {item_id: None for item_id in _SAVE_REFERENCED_IDS["lakes"]}
+    LINE_TIERS = {
+        "std": {"hooks": 12},
+        "prem": {"hooks": 18},
+        "heavy": {"hooks": 24},
+    }
+    SPECIES_BY_ID = {item_id: None for item_id in _SAVE_REFERENCED_IDS["species"]}
+    ZONE_ORDER = _FALLBACK_FISHING_ZONE_ORDER
+    _GAMEPLAY_REFS_LOADED = True
+
+
+class _ContentV2Validator:
+    """Collect schema, value, reference, and roster errors across all v2 files."""
+
+    def __init__(self, unavailable_files=()):
+        self.errors: list[str] = []
+        self.unavailable_files = set(unavailable_files)
+        self.table_rows = {}
+
+    def error(self, filename, where, message):
+        self.errors.append(f"{filename}:{where}: {message}")
+
+    def root(self, docs, filename, required):
+        if filename in self.unavailable_files:
+            return {}
+        raw = docs.get(filename)
+        if not isinstance(raw, dict):
+            self.error(filename, "root", "expected a JSON object")
+            return {}
+        for key in sorted(set(required) - raw.keys()):
+            self.error(filename, "root", f"missing required field {key!r}")
+        for key in sorted(raw.keys() - set(required)):
+            self.error(filename, "root", f"unknown field {key!r}")
+        if type(raw.get("schema_version")) is not int or raw.get("schema_version") != 2:
+            self.error(filename, "schema_version", "expected 2")
+        return raw
+
+    def text(self, filename, where, value):
+        if not isinstance(value, str) or not value.strip():
+            self.error(filename, where, "expected non-empty text")
+
+    def number(self, filename, where, value, *, minimum=None, maximum=None, integer=False):
+        valid = type(value) is int if integer else type(value) in (int, float)
+        try:
+            valid = valid and math.isfinite(value)
+        except OverflowError:
+            valid = False
+        if valid and minimum is not None:
+            valid = value >= minimum
+        if valid and maximum is not None:
+            valid = value <= maximum
+        if not valid:
+            bounds = []
+            if minimum is not None:
+                bounds.append(f">= {minimum}")
+            if maximum is not None:
+                bounds.append(f"<= {maximum}")
+            description = "finite " + ("integer" if integer else "number")
+            if bounds:
+                description += " " + " and ".join(bounds)
+            self.error(filename, where, f"expected {description}")
+        return valid
+
+    def enum(self, filename, where, value, allowed):
+        if not isinstance(value, str) or value not in allowed:
+            self.error(filename, where, f"unknown value/reference {value!r}")
+            return False
+        return True
+
+    def table(self, docs, filename, group, required, optional=(), *, id_field="id"):
+        validation_rows = []
+        self.table_rows[(filename, group)] = validation_rows
+        if filename in self.unavailable_files:
+            return {}
+        raw = docs.get(filename)
+        raw_rows = raw.get(group) if isinstance(raw, dict) else None
+        if not isinstance(raw_rows, list):
+            self.error(filename, group, "expected a list")
+            return {}
+        indexed = {}
+        for index, row in enumerate(raw_rows):
+            where = f"{group}[{index}]"
+            if isinstance(row, dict) and isinstance(row.get(id_field), str):
+                where += f"({row[id_field]})"
+            if not isinstance(row, dict):
+                self.error(filename, where, "expected an object")
+                continue
+            validation_rows.append((row.get(id_field), row, where))
+            for key in sorted(set(required) - row.keys()):
+                self.error(filename, where, f"missing required field {key!r}")
+            for key in sorted(row.keys() - set(required) - set(optional)):
+                self.error(filename, where, f"unknown field {key!r}")
+            item_id = row.get(id_field)
+            if not isinstance(item_id, str) or not item_id.strip():
+                self.error(filename, where + "." + id_field, "expected non-empty text")
+            elif item_id in indexed:
+                self.error(filename, where + "." + id_field, f"duplicate ID {item_id!r}")
+            else:
+                indexed[item_id] = row
+        return indexed
+
+    def rows(self, filename, group):
+        if filename in self.unavailable_files:
+            return ()
+        return self.table_rows.get((filename, group), ())
+
+    def require_saved_ids(self, filename, group, indexed):
+        if filename in self.unavailable_files:
+            return
+        for item_id in sorted(_SAVE_REFERENCED_IDS.get(group, ()) - indexed.keys()):
+            self.error(filename, f"{group}({item_id})", "missing save-referenced ID")
+
+    def id_list(self, filename, where, value, allowed):
+        if not isinstance(value, list):
+            self.error(filename, where, "expected a list")
+            return []
+        seen = set()
+        valid = []
+        for index, item in enumerate(value):
+            item_where = f"{where}[{index}]"
+            if not isinstance(item, str):
+                self.error(filename, item_where, f"expected a string ID, got {item!r}")
+                continue
+            if item in seen:
+                self.error(filename, item_where, f"duplicate ID {item!r}")
+                continue
+            seen.add(item)
+            if allowed is not None and item not in allowed:
+                self.error(filename, item_where, f"unknown reference {item!r}")
+            elif allowed is None or item in allowed:
+                valid.append(item)
+        return valid
+
+    def multiplier_map(self, filename, where, value, allowed, *, maximum=None):
+        if not isinstance(value, dict):
+            self.error(filename, where, "expected an object of IDs to multipliers")
+            return {}
+        for item_id, multiplier in value.items():
+            item_where = where + "." + str(item_id)
+            if allowed is not None and item_id not in allowed:
+                self.error(filename, item_where, f"unknown reference {item_id!r}")
+            self.number(filename, item_where, multiplier, minimum=0, maximum=maximum)
+        return value
+
+    def validate(self, docs):
+        species_file, baits_file = "species.json", "baits.json"
+        boats_file, lakes_file = "boats.json", "lakes.json"
+        species_root = self.root(docs, species_file, {"schema_version", "tier_defaults", "species"})
+        baits_root = self.root(docs, baits_file, {"schema_version", "fallback_multiplier", "baits"})
+        boats_root = self.root(docs, boats_file, {"schema_version", "boats"})
+        lakes_root = self.root(docs, lakes_file, {
+            "schema_version", "zone_order", "zone_fallback_multiplier", "zones", "lakes"})
+
+        tiers = self.table(docs, species_file, "tier_defaults", {"tier", "rate", "trophy"}, id_field="tier")
+        if species_file not in self.unavailable_files and set(tiers) != {"C", "U", "R", "V"}:
+            self.error(species_file, "tier_defaults", "must define exactly C, U, R, and V")
+        for tier_id, row, where in self.rows(species_file, "tier_defaults"):
+            self.number(species_file, where + ".rate", row.get("rate"), minimum=0)
+            self.number(species_file, where + ".trophy", row.get("trophy"), minimum=0, maximum=1)
+
+        species = self.table(docs, species_file, "species", {
+            "id", "name", "price", "min_lb", "max_lb", "pref_time", "depth", "blurb",
+            "folk_name", "lakes", "food", "tags", "shiny"}, {"rate", "trophy", "tier"})
+        baits = self.table(docs, baits_file, "baits", {"id", "name", "price", "blurb", "matches"})
+        boats = self.table(docs, boats_file, "boats", {
+            "id", "name", "bow", "stern", "half_beam", "draft", "eye_height", "price",
+            "tank", "fuel_burn", "speed_factor", "turn_factor", "acceleration",
+            "well_bonus", "sail_speed", "traits"})
+
+        self.require_saved_ids(species_file, "species", species)
+        self.require_saved_ids(baits_file, "baits", baits)
+        self.require_saved_ids(boats_file, "boats", boats)
+
+        if lakes_file in self.unavailable_files:
+            zone_order = []
+        else:
+            zone_order = lakes_root.get("zone_order")
+            if not isinstance(zone_order, list):
+                self.error(lakes_file, "zone_order", "expected a list")
+                zone_order = []
+            elif any(not isinstance(item, str) for item in zone_order):
+                self.error(lakes_file, "zone_order", "expected string zone IDs")
+                zone_order = [item for item in zone_order if isinstance(item, str)]
+            seen_zone_ids = set()
+            for index, zone_id in enumerate(zone_order):
+                if zone_id in seen_zone_ids:
+                    self.error(lakes_file, f"zone_order[{index}]({zone_id})", f"duplicate zone ID {zone_id!r}")
+                seen_zone_ids.add(zone_id)
+            self.number(lakes_file, "zone_fallback_multiplier", lakes_root.get("zone_fallback_multiplier"),
+                        minimum=0, maximum=1)
+        zones = self.table(docs, lakes_file, "zones", {"id", "name", "cedar_name", "fishing", "matches"})
+        lakes = self.table(docs, lakes_file, "lakes", {
+            "id", "name", "landing", "region", "blurb", "species_count", "species_ids"},
+            {"rate_multipliers", "zone_labels"})
+        self.require_saved_ids(lakes_file, "zones", zones)
+        self.require_saved_ids(lakes_file, "lakes", lakes)
+        if lakes_file not in self.unavailable_files and not {"briar", "cedar"}.issubset(lakes):
+            self.error(lakes_file, "lakes", "must include the existing briar and cedar lakes")
+
+        species_ids = set(species)
+        lake_ids = set(lakes)
+        zone_ids = set(zones)
+        lake_refs = lake_ids if lakes_file not in self.unavailable_files else None
+        species_refs = species_ids if species_file not in self.unavailable_files else None
+        for sid, row, where in self.rows(species_file, "species"):
+            tags = row.get("tags")
+            protected = isinstance(tags, list) and "protected" in tags
+            self.text(species_file, where + ".name", row.get("name"))
+            self.text(species_file, where + ".blurb", row.get("blurb"))
+            self.text(species_file, where + ".folk_name", row.get("folk_name"))
+            for key in ("price", "min_lb", "max_lb"):
+                self.number(species_file, where + "." + key, row.get(key), minimum=0)
+            if (type(row.get("price")) in (int, float) and row.get("price", 0) <= 0
+                    and not protected):
+                self.error(species_file, where + ".price", "must be greater than zero")
+            if (type(row.get("max_lb")) in (int, float) and type(row.get("min_lb")) in (int, float)
+                    and row["max_lb"] <= row["min_lb"]):
+                self.error(species_file, where + ".max_lb", "must be greater than min_lb")
+            tier_defaults = None
+            if "tier" in row and self.enum(species_file, where + ".tier", row.get("tier"), tiers):
+                tier_defaults = tiers[row["tier"]]
+            for key in ("rate", "trophy"):
+                if key in row:
+                    value = row[key]
+                elif tier_defaults is not None and key in tier_defaults:
+                    value = tier_defaults[key]
+                else:
+                    self.error(species_file, where + "." + key,
+                               f"missing required field {key!r}; provide it or a valid tier default")
+                    continue
+                self.number(species_file, where + "." + key, value,
+                            minimum=0, maximum=1 if key == "trophy" else None)
+                if key == "rate" and type(value) in (int, float) and value <= 0:
+                    self.error(species_file, where + ".rate", "must be greater than zero")
+            self.enum(species_file, where + ".pref_time", row.get("pref_time"),
+                      {"dawn", "day", "dusk", "night", "any"})
+            depth = row.get("depth")
+            if (not isinstance(depth, list) or len(depth) != 2
+                    or any(type(n) not in (int, float) or not _is_finite(n) for n in depth)):
+                self.error(species_file, where + ".depth", "expected two finite depth values")
+            elif depth[0] < 0 or depth[1] <= depth[0]:
+                self.error(species_file, where + ".depth", "expected 0 <= min depth < max depth")
+            declared_lakes = self.id_list(species_file, where + ".lakes", row.get("lakes"), lake_refs)
+            if not declared_lakes:
+                self.error(species_file, where + ".lakes", "species must belong to at least one lake")
+            required_lakes = (_BASELINE_LAKE_MEMBERSHIPS.get(sid, frozenset())
+                              if isinstance(sid, str) else frozenset())
+            for lake_id in sorted(required_lakes - set(declared_lakes)):
+                self.error(species_file, where + ".lakes",
+                           f"must retain baseline lake membership {lake_id!r}")
+            self.enum(species_file, where + ".food", row.get("food"), _SPECIES_FOODS)
+            if not isinstance(tags, list):
+                self.error(species_file, where + ".tags", "expected a list")
+            else:
+                if all(isinstance(tag, str) for tag in tags) and len(tags) != len(set(tags)):
+                    self.error(species_file, where + ".tags", "tags must be unique")
+                for index, tag in enumerate(tags):
+                    self.enum(species_file, f"{where}.tags[{index}]", tag, _SPECIES_TAGS)
+            self.enum(species_file, where + ".shiny", row.get("shiny"), _SHINY_PALETTES)
+
+        if baits_file not in self.unavailable_files:
+            self.number(baits_file, "fallback_multiplier", baits_root.get("fallback_multiplier"), minimum=0, maximum=1)
+        for bid, row, where in self.rows(baits_file, "baits"):
+            self.text(baits_file, where + ".name", row.get("name"))
+            self.text(baits_file, where + ".blurb", row.get("blurb"))
+            self.number(baits_file, where + ".price", row.get("price"), minimum=0)
+            if type(row.get("price")) in (int, float) and row.get("price", 0) <= 0:
+                self.error(baits_file, where + ".price", "must be greater than zero")
+            self.multiplier_map(baits_file, where + ".matches", row.get("matches"), species_refs, maximum=1)
+
+        for bid, row, where in self.rows(boats_file, "boats"):
+            self.text(boats_file, where + ".name", row.get("name"))
+            for key in ("bow", "stern", "half_beam", "draft", "eye_height", "price", "tank",
+                        "fuel_burn", "speed_factor", "turn_factor", "acceleration", "well_bonus", "sail_speed"):
+                self.number(boats_file, where + "." + key, row.get(key), minimum=None if key == "stern" else 0)
+            for key in ("speed_factor", "turn_factor", "acceleration"):
+                value = row.get(key)
+                if type(value) in (int, float) and value <= 0:
+                    self.error(boats_file, where + "." + key, "must be greater than zero")
+            if (type(row.get("bow")) in (int, float) and type(row.get("stern")) in (int, float)
+                    and row["bow"] <= row["stern"]):
+                self.error(boats_file, where + ".bow", "must be forward of stern")
+            traits = row.get("traits")
+            if not isinstance(traits, list):
+                self.error(boats_file, where + ".traits", "expected a list")
+            else:
+                seen_traits = set()
+                for index, trait in enumerate(traits):
+                    trait_where = f"{where}.traits[{index}]"
+                    if isinstance(trait, str) and trait in seen_traits:
+                        self.error(boats_file, trait_where, f"duplicate trait {trait!r}")
+                    if isinstance(trait, str):
+                        seen_traits.add(trait)
+                    self.enum(boats_file, trait_where, trait, _BOAT_TRAITS)
+
+        for zid, row, where in self.rows(lakes_file, "zones"):
+            self.text(lakes_file, where + ".name", row.get("name"))
+            self.text(lakes_file, where + ".cedar_name", row.get("cedar_name"))
+            if type(row.get("fishing")) is not bool:
+                self.error(lakes_file, where + ".fishing", "expected a boolean")
+            self.multiplier_map(lakes_file, where + ".matches", row.get("matches"), species_refs, maximum=1)
+        fishing_zones = {zid for zid, row in zones.items() if row.get("fishing") is True}
+        if lakes_file not in self.unavailable_files:
+            for zone_id in sorted(fishing_zones - set(zone_order)):
+                self.error(lakes_file, f"zone_order({zone_id})", "missing fishing zone from zone_order")
+            for zone_id in sorted(set(zone_order) - fishing_zones):
+                self.error(lakes_file, f"zone_order({zone_id})", "zone order includes an unknown or non-fishing zone")
+        for lid, row, where in self.rows(lakes_file, "lakes"):
+            for key in ("name", "landing", "region", "blurb"):
+                self.text(lakes_file, where + "." + key, row.get(key))
+            listed_ids = self.id_list(lakes_file, where + ".species_ids", row.get("species_ids"), species_refs)
+            count = row.get("species_count")
+            self.number(lakes_file, where + ".species_count", count, integer=True, minimum=1)
+            if type(count) is int and count != len(listed_ids):
+                self.error(lakes_file, where + ".species_count", f"declares {count}, but lists {len(listed_ids)} species")
+            if "rate_multipliers" in row:
+                rates = self.multiplier_map(lakes_file, where + ".rate_multipliers",
+                                            row.get("rate_multipliers"), species_refs)
+                if species_file not in self.unavailable_files:
+                    for sid in sorted(species_ids - set(rates)):
+                        self.error(lakes_file, f"{where}.rate_multipliers({sid})",
+                                   f"missing rate entry for species {sid!r}")
+                listed = row.get("species_ids")
+                listed_ids = {sid for sid in listed if isinstance(sid, str)} if isinstance(listed, list) else set()
+                for sid in species_ids.intersection(rates):
+                    rate = rates[sid]
+                    if type(rate) in (int, float) and _is_finite(rate) and rate >= 0:
+                        if (sid in listed_ids) != (rate > 0):
+                            self.error(
+                                lakes_file,
+                                f"{where}.rate_multipliers({sid})",
+                                "must be positive exactly when the species is listed in species_ids",
+                            )
+            if "zone_labels" in row:
+                labels = row.get("zone_labels")
+                if not isinstance(labels, dict):
+                    self.error(lakes_file, where + ".zone_labels", "expected an object")
+                else:
+                    for zone_id, label in labels.items():
+                        if zone_id not in zone_ids and lakes_file not in self.unavailable_files:
+                            self.error(lakes_file, where + ".zone_labels." + str(zone_id), f"unknown zone {zone_id!r}")
+                        self.text(lakes_file, where + ".zone_labels." + str(zone_id), label)
+                    if (lakes_file not in self.unavailable_files and set(labels) != zone_ids):
+                        for zone_id in sorted(zone_ids - set(labels)):
+                            self.error(lakes_file, f"{where}.zone_labels.{zone_id}",
+                                       f"missing label for zone {zone_id!r}")
+
+        for sid, row, _where in self.rows(species_file, "species"):
+            if not isinstance(sid, str):
+                continue
+            declared = row.get("lakes")
+            if not isinstance(declared, list):
+                continue
+            for lid in declared:
+                if isinstance(lid, str) and lid in lakes:
+                    listed = lakes[lid].get("species_ids")
+                    if isinstance(listed, list) and sid not in listed:
+                        self.error(lakes_file, f"lakes({lid}).species_ids", f"missing species {sid!r} declared for this lake")
+        for lid, row, _where in self.rows(lakes_file, "lakes"):
+            if not isinstance(lid, str):
+                continue
+            listed = row.get("species_ids")
+            if not isinstance(listed, list):
+                continue
+            for sid in listed:
+                if isinstance(sid, str) and sid in species:
+                    species_lakes = species[sid].get("lakes")
+                    if isinstance(species_lakes, list) and lid not in species_lakes:
+                        self.error(species_file, f"species({sid}).lakes",
+                                   f"missing lake {lid!r} listed by lakes.json")
+
+        cedar = lakes.get("cedar")
+        if isinstance(cedar, dict):
+            if "rate_multipliers" not in cedar:
+                self.error(lakes_file, "lakes(cedar).rate_multipliers", "required for the CEDAR_FISH API")
+            if "zone_labels" not in cedar:
+                self.error(lakes_file, "lakes(cedar).zone_labels", "required for the existing Cedar zone labels")
+
+        if self.errors:
+            raise ContentError("\n".join(self.errors))
+        return GameplayContent(species, baits, boats, lakes, zones)
+
+
+def validate_content_v2(raw_files, *, unavailable_files=()) -> GameplayContent:
+    """Validate all four v2 source files and every cross-file reference."""
+    if not isinstance(raw_files, dict):
+        raise ContentError("content_v2:root: expected a mapping of filenames to documents")
+    validator = _ContentV2Validator(unavailable_files)
+    return validator.validate(raw_files)
+
+
 def _unique_keys(pairs):
     result = {}
     for key, value in pairs:
         if key in result:
-            raise ContentError(f"duplicate JSON key {key!r}")
+            raise _DuplicateJSONKeyError(key)
         result[key] = value
     return result
+
+
+def _duplicate_key_location(source, duplicate_key):
+    """Locate the repeated key token so parse errors can name a source line."""
+    decoder = json.JSONDecoder()
+    frames = []
+
+    def consume_value():
+        if not frames:
+            return True
+        frame = frames[-1]
+        if frame["kind"] == "object" and frame["state"] == "value":
+            frame["state"] = "comma"
+            return True
+        if frame["kind"] == "array" and frame["state"] in {"value", "value_or_end"}:
+            frame["state"] = "comma"
+            return True
+        return False
+
+    index = 0
+    while index < len(source):
+        if source[index].isspace():
+            index += 1
+            continue
+        char = source[index]
+        if char == "{":
+            if not consume_value():
+                return None
+            frames.append({"kind": "object", "state": "key_or_end", "keys": set()})
+            index += 1
+        elif char == "[":
+            if not consume_value():
+                return None
+            frames.append({"kind": "array", "state": "value_or_end"})
+            index += 1
+        elif char in "}]":
+            if not frames:
+                return None
+            frame = frames[-1]
+            expected_kind = "object" if char == "}" else "array"
+            allowed = {"key_or_end", "comma"} if char == "}" else {"value_or_end", "comma"}
+            if frame["kind"] != expected_kind or frame["state"] not in allowed:
+                return None
+            frames.pop()
+            index += 1
+        elif char == ":":
+            if not frames or frames[-1]["kind"] != "object" or frames[-1]["state"] != "colon":
+                return None
+            frames[-1]["state"] = "value"
+            index += 1
+        elif char == ",":
+            if not frames or frames[-1]["state"] != "comma":
+                return None
+            frames[-1]["state"] = "key" if frames[-1]["kind"] == "object" else "value"
+            index += 1
+        elif char == '"':
+            try:
+                value, end = decoder.raw_decode(source, index)
+            except ValueError:
+                return None
+            if frames and frames[-1]["kind"] == "object" and frames[-1]["state"] in {"key", "key_or_end"}:
+                frame = frames[-1]
+                if value == duplicate_key and value in frame["keys"]:
+                    line = source.count("\n", 0, index) + 1
+                    column = index - source.rfind("\n", 0, index)
+                    return line, column
+                frame["keys"].add(value)
+                frame["state"] = "colon"
+            elif not consume_value():
+                return None
+            index = end
+        else:
+            try:
+                _value, end = decoder.raw_decode(source, index)
+            except ValueError:
+                return None
+            if not consume_value():
+                return None
+            index = end
+    return None
+
+
+def load_content_v2(directory: str | Path = CONTENT_V2_PATH) -> GameplayContent:
+    """Read and validate the v2 gameplay files, collecting errors across files."""
+    directory = Path(directory)
+    raw_files = {}
+    read_errors = []
+    unavailable_files = set()
+    for filename in CONTENT_V2_FILES:
+        path = directory / filename
+        source = None
+        try:
+            source = path.read_text(encoding="utf-8")
+            raw_files[filename] = json.loads(source, object_pairs_hook=_unique_keys)
+        except _DuplicateJSONKeyError as exc:
+            raw_files[filename] = None
+            unavailable_files.add(filename)
+            location = _duplicate_key_location(source, exc.key) if source is not None else None
+            if location:
+                read_errors.append(f"{filename}:root: {exc} at line {location[0]}, column {location[1]}")
+            else:
+                read_errors.append(f"{filename}:root: {exc}")
+        except (OSError, ValueError) as exc:
+            raw_files[filename] = None
+            unavailable_files.add(filename)
+            if isinstance(exc, json.JSONDecodeError):
+                read_errors.append(f"{filename}:root: {exc.msg} at line {exc.lineno}, column {exc.colno}")
+            else:
+                read_errors.append(f"{filename}:root: {exc}")
+    try:
+        content = validate_content_v2(raw_files, unavailable_files=unavailable_files)
+    except ContentError as exc:
+        read_errors.extend(str(exc).splitlines())
+    if read_errors:
+        raise ContentError("\n".join(read_errors))
+    return content
 
 
 def load_content(path: str | Path = CONTENT_PATH) -> NarrativeContent:
@@ -386,7 +986,26 @@ def load_content(path: str | Path = CONTENT_PATH) -> NarrativeContent:
     return validate_content(raw, source=path)
 
 
+def _load_all_content():
+    """Validate v1 and v2 independently, then report both sets of errors."""
+    errors = []
+    narrative = gameplay = None
+    try:
+        narrative = load_content()
+    except ContentError as exc:
+        errors.extend(str(exc).splitlines())
+    try:
+        gameplay = load_content_v2()
+    except ContentError as exc:
+        errors.extend(str(exc).splitlines())
+    if errors:
+        raise ContentError("\n".join(errors))
+    return narrative, gameplay
+
+
 if __name__ == "__main__":
-    content = load_content()
-    print(f"Narrative content valid: {len(content.npcs)} NPCs, "
-          f"{len(content.quests)} quests, {len(content.dialogue)} dialogue nodes")
+    content, gameplay = _load_all_content()
+    print(f"Content valid: {len(content.npcs)} NPCs, {len(content.quests)} narrative quests, "
+          f"{len(content.dialogue)} dialogue nodes, {len(gameplay.species)} species, "
+          f"{len(gameplay.baits)} baits, {len(gameplay.boats)} boats, "
+          f"{len(gameplay.lakes)} lakes")

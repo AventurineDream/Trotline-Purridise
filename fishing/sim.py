@@ -28,6 +28,7 @@ from .data import (
     PAINT,
     SPECIES,
     SPECIES_BY_ID,
+    LAKE_RATE_MULTIPLIERS,
     SPOIL_HOURS,
     WELL_PRICE,
     WELLS,
@@ -45,7 +46,6 @@ from .data import (
     time_mult,
     weather_mult,
     depth_mult,
-    CEDAR_FISH,
 )
 from .world import World
 from .boat import (
@@ -270,6 +270,7 @@ def _zone_path_segments(world: World, x0: float, z0: float,
 
 def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float, lake_id="briar") -> dict[str, float]:
     out = {}
+    lake_rates = LAKE_RATE_MULTIPLIERS.get(lake_id, {})
     for sp in SPECIES:
         out[sp.id] = (
             sp.rate
@@ -278,7 +279,7 @@ def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float,
             * time_mult(sp.pref_time, hour)
             * weather_mult(sp.id, weather)
             * depth_mult(sp, depth)
-            * (CEDAR_FISH.get(sp.id,0.0) if lake_id=="cedar" else 1.0)
+            * lake_rates.get(sp.id, 0.0)
         )
     return out
 
