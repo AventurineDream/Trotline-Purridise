@@ -14,7 +14,11 @@
    `{lake}`, `{fish}`, `{depth_ft}`, `{zone}`. Never put a placeholder at the start
    of a sentence.
 4. **Truth rule (canon §3):** any line marked **[F]** is factual and needs a live
-   condition. Its **[U]** twin is the fallback when the condition is false.
+   condition. When the condition is false, the game uses the line's declared
+   fallback: a **[U]** twin, `fallback: silent` (say nothing), or
+   `fallback: report` (the line's data comes straight from the simulation, so it
+   is true whenever it is shown, as with Bot's depth and Sonar Grid reports). Every
+   [F] line declares exactly one of the three.
 5. **Every quest node set** has greeting, offer, accept, decline, progress, ready,
    ready-wait, completion and return (existing 9-node pattern). This script gives
    the lines that carry character. Implementers fill accept/decline/progress/
@@ -347,17 +351,17 @@ true state.
 20 real seconds, except for direct responses to the player.
 
 ### 5.1 Scouting (existing report, with V1.0 additions)
-- [F] "Depth {depth_ft} ft. {ground} ground. I would try {bait}." (exact depth needs
-  the finder; otherwise use the existing depth class)
-- [F] *(herbal_stew active)* "…and I think {fish1} or {fish2} live here."
+- [F] `fallback: report` "Depth {depth_ft} ft. {ground} ground. I would try {bait}."
+  (exact depth needs the finder; otherwise use the existing depth class)
+- [F] `fallback: silent` *(herbal_stew active)* "…and I think {fish1} or {fish2} live here."
 - [F] *(scanner, Flathead/Crater)* "Cold water begins near {depth_ft} ft."
 - [U] *(scanner, no layer)* "I cannot find a cold layer here. It may be deeper."
-- [F] *(Sonar Grid)* "Mapped. The bottom drops off to the {direction}."
+- [F] `fallback: report` *(Sonar Grid)* "Mapped. The bottom drops off to the {direction}."
 
 ### 5.2 Tools
 - Wave Chime cast: "Chime's out. Let's see who visits!" *(always: this is the [U] form, safe)*
 - Wave Chime, a surface fish later hooked on that line: [F] "A surface fish came to
-  the chime. I am trying not to be smug."
+  the chime. I am trying not to be smug." (`fallback: silent`)
 - Reed Anchor set: "Anchor's holding in the reeds. Ribbit. I said that on purpose."
 - Winch engaged: "Lines are holding steady in the current."
 
@@ -377,9 +381,8 @@ true state.
 - Livewell full: "The livewell is full. I picked the smallest to swim home. You can change that."
 
 ### 5.5 Invitations and needs
-- Weather invitation: [F] "The {zone} is having a good {time_band}. Shall I mark it?"
-  · *(no [U]; say nothing)*
-- Lake Day (morning, once): [F] "It is {day_name}. On {lake}, that means {effect_short}."
+- Weather invitation: [F] `fallback: silent` "The {zone} is having a good {time_band}. Shall I mark it?"
+- Lake Day (morning, once): [F] `fallback: silent` "It is {day_name}. On {lake}, that means {effect_short}."
 - Old Salt Drowsy: "Your blinks are getting longer, Skipper. A catnap would help."
 - Old Salt Peckish: "My sensors say 'peckish'. That is a funny word. Shall we cook?"
 - Cozy nap invitation (at most once per game day, only if the player hasn't
@@ -426,8 +429,8 @@ good tonight, Skipper. I'm not scared of the landing anymore. Mostly."
 **Willow.** *A (existing q06).* · **Clue:** "In the misty mornings there's a pickerel
 in the lilies as long as my canoe. The Lily Queen. She likes a fancy breakfast:
 minnow, crawfish, herbs." · **B offer:** "Wait with me in the lily cove in the mist?
-I want to paint the moment before she rises." · `obj:` Anchor in Lily cove while
-it's misty. · **B done:** "No queen today, and I painted the mist anyway. It's the
+I want to paint the moment before she rises." · `obj:` Anchor in Lily cove for 30
+game minutes while it's misty. · **B done:** "No queen today, and I painted the mist anyway. It's the
 best one I've done." · *friend greet:* "Look, another heron. I'm going to paint it.
 Don't judge me."
 
@@ -442,7 +445,7 @@ Some of us adore it." · **A offer:** "Paddle alongside me across the open water
 Everyone else just stares." · `obj:` Travel 200 m in Open water. · **A done:** "See?
 Perfectly normal. Here, a little thing I think about while floating." → Ripple 11 ·
 **B offer:** "Confession: I hate rain on my ears. Could I shelter under your boat next
-time it rains?" · `obj:` Be in any Little Briar zone while it rains. · **B done:**
+time it rains?" · `obj:` Anchor anywhere on Little Briar for 30 game minutes while it rains. · **B done:**
 "Dry ears! You're a hero. Have my old swim cap. It's lucky." · *friend greet:* "Water's
 lovely today! Come in! No? Fine, I'll swim by your boat."
 
@@ -551,7 +554,7 @@ Retired again. Hello."
 
 **Freya.** *greet:* "Shh. The light's nearly right. …No. Gone. Hello!" · **A offer:**
 "Wait with me in the snowmelt inlet next time the snow mist comes. Mist makes the
-best light." · `obj:` Be in Snowmelt inlet during snow mist. · **A done:** "Look at
+best light." · `obj:` Anchor in Snowmelt inlet for 30 game minutes during snow mist. · **A done:** "Look at
 that. I forgot my lens cap, and it's still the best photo I've taken." → Ripple 19
 · **Clue:** "In the snow mist at dawn there's a trout so pale it looks like a ghost.
 The Glacial Phantom. It likes roe and minnow with a little huckleberry." · **B
@@ -639,7 +642,7 @@ tell me loudly." · **B done:** "IT'S SO SHINY!! Take a bead from the shore." ·
 
 **Ashby.** *greet:* "Cocoa? It's better on foggy mornings. I hate foggy mornings." ·
 **A offer:** "Wait with me in the next fog on the pumice shelf. I'll make two cups."
-· `obj:` Be in Pumice shelf during fog. · **A done:** "*(sip)* Perfect. Don't tell
+· `obj:` Anchor on Pumice shelf for 30 game minutes during fog. · **A done:** "*(sip)* Perfect. Don't tell
 the fog." → Ripple 29 · **B offer:** "Sora makes a mineral broth. Cook it? I want to
 try a savory cup." · **B done:** "Savory cocoa. I've made a terrible mistake and I
 love it. Take the mug." · *friend greet:* "Two cups ready. Fog or no fog."
@@ -670,7 +673,7 @@ eyes." · *friend greet:* "Lookout Ember! You're cleared to fish."
 
 **Mist.** *greet:* "*(whisper)* hello… *(enormous sneeze)* …sorry." · **A offer:**
 "*(whisper)* My poem is about the fog. Wait in it with me, among the drowned pines.
-Then I'll read it." · `obj:` Be in Drowned pines during fog, then talk to Mist. · **A
+Then I'll read it." · `obj:` Anchor in Drowned pines for 30 game minutes during fog, then talk to Mist. · **A
 done (poem):** "*Something warm walks under the cold, / carrying a lamp it was
 never told about. / I hear it more than see it, / and I don't mind.*" → Ripple 33
 (unlocks the Fire-Lizard gate) · **B offer:** "There's a minnow that hides in fog
@@ -679,7 +682,7 @@ poem; I know it by heart." · *friend greet:* "*(whisper)* hello again."
 
 **Juno.** *greet:* "*(yawning)* Is it night yet? I'm an astronomer. I keep missing
 it." · **A offer:** "On a clear day the water's so still it shows the sky. Wait in it
-with me?" · `obj:` Be in Caldera open while it's clear. · **A done:** "See? The sky
+with me?" · `obj:` Anchor in Caldera open for 30 game minutes while it's clear. · **A done:** "See? The sky
 lies down on the water. I *knew* it." → Ripple 34 · **B offer (after ch. 5):** "You
 went IN the reflection? Come tell me everything." · **B done:** "I told everyone. I
 TOLD them. Take my chart, you'll use it more than me." · *friend greet:* "I stayed

@@ -207,8 +207,8 @@ unchanged with no buff.
 seeded weather plan with the legendary coverage guarantee, the Sunday cookout
 event (cats gather; bring a fish to get a pantry gift), Bot's weather invitation
 (once per day, only when true), and the journal week view.
-**Acceptance:** over 1,000 seeded weeks, every legendary weather window occurs
-within 4 game days of eligibility. Lake Day multipliers apply only on their day.
+**Acceptance:** over 1,000 seeded weeks, every legendary's weather window occurs
+within 3 game days of eligibility (the single bound in `02 §3.6`). Lake Day multipliers apply only on their day.
 The plan is reproducible after reload and lake switches.
 **Depends on:** V1-01, V1-23 (lake list; stub with briar/cedar first).
 
@@ -260,7 +260,10 @@ galley, hammock, trophy_rail, wind_steady, ice_hull, glow); tier unlock gates by
 story chapter; the T8 shop exclusivity; display renames for the existing 4; the
 pontoon gets +1 line and hammock.
 **Acceptance:** existing boat physics and collision tests pass unchanged; each
-trait has a test; a shop listing test per chapter state.
+trait has a test (hammock: nap at idle without anchoring; other boats need
+anchor or dock); a shop listing test per chapter state; a test that the price of
+each tier's cheapest new boat ÷ its unlock-stage income midpoint is between 3 and
+6.
 **Depends on:** V1-01.
 
 ### V1-22 (#50) · Parametric boat families (20 new hulls) · `model:opus-sol` · art
@@ -365,8 +368,10 @@ migration.
 ### V1-31 (#59) · Quests v2: objective types, friendship, rewards · `model:luna-haiku` · quest
 **Source:** `02 §12`, `04`.
 **Scope:** objective types `catch_species`, `book_stage`, `cook_dish`, `catnap`,
-`tool_use`, `wait_weather`, `settle`, `talk_to`, `attend_event`, plus the extended
-fields; quest B unlock the day after A; turn-in at the giver or host;
+`tool_use`, `wait_weather`, `settle`, `talk_to`, `attend_event`, every extended
+field in `02 §12.3` (`min_tier`, `area_id`, `waypoint_ids`, `windows`,
+`bait_id`, `shell_id`, `then_weather`, cross-lake `visit_zones`), multi-step
+objectives and `requires`; named areas and waypoints from `lakes.json`; quest B unlock the day after A; turn-in at the giver or host;
 Stranger/Acquaintance/Friend states; reward kinds (cash, Ripple, keepsake,
 recipe, dish card, item, shell, unlock) via the claim ledger; letters via Pounce.
 **Acceptance:** a test per objective type (event-driven, after-acceptance only,

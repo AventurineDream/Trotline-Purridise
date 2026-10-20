@@ -84,8 +84,9 @@ each can be snoozed ("Later") for 30 real minutes.
 5. **Windows are generous.** No objective, legendary window or event lasts less
    than **120 game minutes**. Every recurring window shows its next occurrence in
    the journal.
-6. Legendary and story windows are generated so an eligible one starts within **2
-   game days** of becoming eligible.
+6. Legendary and story windows are generated so an eligible one starts within **3
+   game days** of becoming eligible. This is the single bound used by the weather
+   planner (`03 §3`) and its test (V1-16).
 
 ---
 
@@ -93,8 +94,10 @@ each can be snoozed ("Later") for 30 real minutes.
 
 ### 4.1 Catnap (Z) — new
 
-- Available when anchored, docked, or at idle with no throttle, on any boat.
-  Boats with a **hammock** trait nap from anywhere at idle.
+- On any boat: available when anchored or docked.
+- On boats with the **hammock** trait: also available anywhere while idling at zero
+  throttle, without anchoring. This is the trait's whole benefit, and V1-21 tests
+  it.
 - Advances 2 game hours (§3.3). Lines soak normally.
 - **Rested:** the first nap in any 6 game hours grants *Rested* for 6 game hours.
   Rested gives a **Bot dream-clue**: one unknown habitat lead for a species
@@ -319,7 +322,7 @@ size, trim, numbers and traits.
 | Jon boats | 3 | Tiller outboard (existing jon physics) | `jon` → *Aluminum Jon Boat* (starting boat) |
 | Utility skiffs | 4 | Console outboard, stable in wind, more lines | — |
 | Runabouts | 5 | Fast, small well, smooth | — |
-| Sail & trawler | 6 | Sail (existing rules), or a slow tug with a big well | `daysailer` → *Cat-Rigged Daysailer* |
+| Sail & trawler | 6 | Sail (existing rules), or a slow tug with a big well | `sail` → *Cat-Rigged Daysailer* |
 | Pontoons & houseboats | 7 | Broad, slow turning, galley and hammock | `pontoon` → *Classic Pontoon* |
 | Cosmic barges | 8 | Glide on any water, quiet, star-lit | — |
 
@@ -334,9 +337,10 @@ chop), `glow` (lit hull at night).
 - **Buying:** at any landing, unless the boat is lake-exclusive in `03`. Owned
   boats can be switched for free (existing rule). Livewell-size rules are
   unchanged.
-- **Unlocks:** tiers 1–3 are available from the start, 4–5 after chapter 2, 6–7
-  after chapter 3, and 8 after chapter 5. Existing owners keep their boats
-  regardless.
+- **Unlocks (new boats):** tiers 1–2 are available from the start. Tiers 3–4
+  unlock after chapter 2, 5–6 after chapter 3, 7 after chapter 4, and 8 after
+  chapter 5. The four existing boats stay buyable from the start at their current
+  prices, and existing owners keep every boat they own.
 
 ---
 
@@ -420,7 +424,7 @@ an occasional letter via Pounce: at most 1 per game day, flavor plus a hint.
 | Kind | Count | Reward |
 | --- | --- | --- |
 | Story steps (5 chapters × 3) | 15 | Chapter rewards (§13) |
-| Host errands | 5 (q01, q02 existing + 3 new) | Cash + a dish card |
+| Host errands | 5 (`q01_tea_leaves_deep_holes`, `q02_lonely_star_current` existing and unchanged + 3 new) | Cash only (dish cards come from chapters, §4.3) |
 | Water-cat quest A | 44 (10 existing) | Cash + a unique **Ripple** |
 | Water-cat quest B | 44 | Cash + a **Keepsake** (boat decoration, `03 §9`) |
 | **Total** | **108** | |
@@ -451,18 +455,32 @@ New:
 
 | Type | Fields | Meaning |
 | --- | --- | --- |
-| `catch_species` | species_id or group, min_lb?, count, zone_id? | Haul-time catch after acceptance (kept or released) |
+| `catch_species` | species_id \| species_ids \| group \| tag \| `any`; count; distinct?; min_lb?; zone_id?; area_id?; lake_id?; time_band?; bait_id?; in_cold_band? | Haul-time catch after acceptance (kept or released). A legendary id is satisfied by that legendary's record, caught **or witnessed** |
 | `book_stage` | species list or lake, stage, count | N entries at or above a stage |
 | `cook_dish` | dish_id or any | Cook after acceptance |
 | `catnap` | zone_id? | A nap completes in the zone |
-| `tool_use` | tool_id, zone_id? | A successful tool use (chime cast, scanner read, reed anchor set) |
-| `wait_weather` | weather, zone_id | Anchored in the zone while that weather is active, for ≥ 30 game min (accumulated, not reset by drifting) |
+| `tool_use` | tool_id, zone_id?, lake_id?, shell_id? | A successful tool use (chime cast, scanner read, reed anchor set). `shell_id` requires that shell to be equipped at the time |
+| `wait_weather` | weather, then_weather?, zone_id \| zone_ids \| lake_id, minutes (default 30) | Anchored in a qualifying zone while that weather is active, for `minutes` game minutes in total (accumulated; drifting pauses progress without resetting it). With `then_weather`, it completes when the weather changes to that state while the player is waiting there |
 | `settle` | zone_id, cues | The finale "settle in" interaction (§13.5) |
 | `talk_to` | npc_id, distinct_days? | Hail that cat after acceptance (letters, introductions). `distinct_days: 3` means three different game days |
 | `attend_event` | lake_id, event | Be at that lake's landing during the event (Sunday cookout) and hail the host |
 
-Extended fields: `line_check.in_cold_band` (the line was set inside `[d, d+6 m]` at
-set time); `catch_species.distinct` (count distinct species), `.time_band`, `.lake_id`.
+Extended fields on existing types:
+
+- `line_check` / `line_scout_check`: `min_tier` (`std` < `prem` < `heavy`, as an
+  alternative to the exact `tier_id`), `in_cold_band` (the line was set inside
+  `[d, d+6 m]` at set time), and `area_id` (a named sub-area such as the Marked
+  Pool).
+- `scout_report` / `visit_sequence` / `visit_zones`: `waypoint_ids` (named story
+  points, `06 §5`) instead of zones, and `windows` (a list of clock windows that
+  must **each** be hit by a separate report). `visit_zones` may list zones on
+  several lakes.
+
+**Quest structure:** a quest's objective may be a list of **steps** completed in
+order (for example `catch_species` then `talk_to`). A quest may declare `requires`
+(`chapter_complete: N`, a quest id, or `travel_unlocked: lake`), which keeps it
+unavailable until met. The validator must reject any authored objective that uses
+a field not in this table.
 
 Mechanics text belongs only in the journal objective string (`05 §0`).
 
@@ -490,8 +508,10 @@ journal as **Story** and never time-limited.
   at one of three safe coves (the player chooses) → `scout_report` at the marker
   after the clearing. Rewards: star reading, Nebula travel; knot choice scene (3
   knots, cosmetic).
-- **Ch. 5 Settle In** (Nebula): `talk_to astra_9` → `settle` (§13.5) →
-  automatic trip to Briar for the ending.
+- **Ch. 5 Settle In** (Nebula): `talk_to astra_9` → `settle` (§13.5) → story
+  objective "Go home to Briar Landing". A free trip to Briar is offered at once,
+  and accepting it or travelling there any other way starts the ending scene
+  (`05 §2.5`, `§3`). Nothing happens automatically.
 
 ### 13.5 Settle In (finale interaction)
 
@@ -536,14 +556,17 @@ for an attentive player:
 
 ### 15.2 Sinks
 
-Boats ($150–$24,000), lines, bait, recipes, tools ($120–$400), pantry, fuel and
+Boats ($300–$11,000 new; existing boats $325–$1,450), lines, bait, recipes, tools ($120–$400), pantry, fuel and
 electricity (existing), paints ($15–$30), dish cards ($40).
 
 ### 15.3 Pacing guardrails (test targets)
 
 - A chapter's required gear costs no more than **2 game days** of that stage's
   income.
-- The cheapest boat of each new tier costs **3–6 game days** of income.
+- The cheapest **new** boat of each tier costs **3–6 game days** of the income-band
+  midpoint at the stage it unlocks (start 90, ch. 2 225, ch. 3 400, ch. 4 600,
+  ch. 5 900 dollars a day). The `03 §6` prices satisfy this; V1-44 re-checks it
+  against the pacing simulator.
 - No objective requires a specific boat, except a trait (e.g. `shallow`), and at
   least one cheap boat must have that trait.
 
