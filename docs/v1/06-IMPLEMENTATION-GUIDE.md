@@ -88,7 +88,9 @@ with `python -m fishing.content`.
 ### 3.1 Location and migration
 
 - New path: the platform user-data directory, via SDL `SDL_GetPrefPath("TrotLineSim",
-  "TrotlinePurridise")`, file `save.json`. Override with `--save PATH` for tests.
+  "TrotlinePurridise")`, file `save.json`. Keep `TrotLineSim` as the stable SDL
+  organization identifier; the GitHub repository is `AventurineDream/Trotline-Purridise`.
+  Override with `--save PATH` for tests.
 - On first launch, if `saves/briar.json` (v1) exists and no v2 save does: copy it
   to `<prefpath>/backup/briar.v1.<timestamp>.json`, migrate, write v2, and leave
   the original untouched.
@@ -300,8 +302,12 @@ Peak RSS target **≤ 2.6 GB** on the GPU path. The benchmark hard-fails at
 | Audio synthesis buffers + music | 150 MB |
 | UI, text cache (existing 8 MiB), book assets | 150 MB |
 | Content data, save, simulation state | 100 MB |
+| **Steady-state subtotal** | **≤ 1.9 GB** |
 | Transient bake headroom during lake load | 400 MB |
-| **Total** | **≤ 2.3 GB typical, ≤ 2.6 GB peak** |
+| **Modeled lake-load peak** | **≤ 2.3 GB** |
+
+The allocations above leave a further 300 MB between the modeled peak and the
+2.6 GB peak RSS target for driver and process variance.
 
 Rules: free bake scratch arrays after upload; no frame histories; cap every cache
 with an LRU; the `--benchmark` run logs per-subsystem estimates

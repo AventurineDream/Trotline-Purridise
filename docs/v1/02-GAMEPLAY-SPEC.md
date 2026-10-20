@@ -299,8 +299,9 @@ Each gated legendary has a journal **watch card** showing:
   species at a time from the book. While tracking, a shiny is **guaranteed by the
   50th eligible catch** of that species since the last shiny of it. The counter is
   saved per species and survives switching targets.
-- **Look:** a per-species variant palette (albino, golden, star-dusted, deep-glow;
-  `03` column *Shiny*) plus a sparkle. It is never conveyed by color alone (a
+- **Look:** a per-species variant palette (`albino`, `golden`, `starry`, `glow`,
+  `ink`, `rose`; see the `03` *Shiny* column) plus a sparkle. It is never
+  conveyed by color alone (a
   sparkle icon and "✦" in the name).
 - **Value:** sells at 3× the normal price. Default disposition is *Treasured*
   (§5.5). Shiny trophies can be mounted on boats with the *trophy rail* trait or

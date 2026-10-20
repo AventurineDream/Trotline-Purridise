@@ -70,8 +70,10 @@ Offline-soak tests still pass.
 **Goal:** a consistent player-facing title.
 **Source:** `01 §1`.
 **Scope:** window title, title screen text, help pages and the README heading.
-"Little Briar" stays as the lake name. The package, repo and save folder names
-stay TrotLineSim.
+"Little Briar" stays as the lake name. The GitHub repository is
+`AventurineDream/Trotline-Purridise`; the Python import package remains `fishing`.
+Keep the SDL organization identifier `TrotLineSim` for the user-data namespace and
+use the `TrotlinePurridise` app name specified in `06 §3`.
 **Acceptance:** no player-facing "Little Briar" refers to the game, verified by a
 grep test over UI strings. Screenshots of the title screen are attached.
 **Depends on:** none.

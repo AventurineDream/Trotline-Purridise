@@ -20,7 +20,7 @@ This review replaces them with a complete, internally consistent V1.0 packet:
 | `01-CANON.md` | Title, identity, pillars, truth rules, five lakes, the *Book of Five Waters* story spine, Bot, 12 legendaries |
 | `02-GAMEPLAY-SPEC.md` | All systems with numbers: modes, clock, comfort, fishing, haul view, book, legendaries, shinies, boats, Bot tools, NPCs, quests, economy, controls, accessibility |
 | `03-CONTENT-TABLES.md` | All 144 species with stats, 12 legendaries with gates, 9 baits + 8 recipes, 10 dishes, 24 boats, Bot shells, zones, Lake Days |
-| `04-CHARACTERS.md` | All 52 cats with want, contradiction, schedule, two quests, Ripple and keepsake |
+| `04-CHARACTERS.md` | All 52 cats; 44 water-cat encounters have A/B quests, 5 hosts have one errand each, and 2 travelers have no quests |
 | `05-SCRIPT.md` | The full story script, host lines, Bot barks with true/uncertain pairs, lines for every water-cat, 144 rumors, 34 Ripples, letters, system copy |
 | `06-IMPLEMENTATION-GUIDE.md` | Module map against the real code, content-v2 data, save v2 + migration, formulas, the procedural art plan, a 3 GB memory budget, testing |
 | `07-TICKETS.md` | 44 ordered tickets, model-tagged, mirrored as GitHub issues |
@@ -37,7 +37,7 @@ and recorded in the decision log below.
 | D1 | **Cozy is the default and is truly no-fail.** Needs are positive choices (catnap clues, meal buffs). **Old Salt** is opt-in light routine with no blackout, no sickness, no stranding | The Gemini survival rules (12 h blackout, 80% spoilage, starvation tow priced at 15% of boat value) broke the cozy pillar and could strand a broke player. This keeps the second review's two-mode direction |
 | D2 | **Start in the existing jon boat** ("Grandmother's old boat"), not the Cedar Log Raft. Tier-1 pioneer craft become cheap specialty boats | Existing saves and tuning start in the jon boat. A paddle-only raft made the first hour slower and duller |
 | D3 | **Boats are sidegrades with traits** in 8 parametric families (24 boats) | A strict 24-step ladder is content debt with little play value. Traits (shallow, silent, galley, hammock…) create real choices |
-| D4 | **144 = existing 36 + 6 Cedar + 34 × 3 new lakes.** Real species keep real names; protected species are always released | Gemini's per-lake counts (28/30/29/29/28) summed to 144 but conflicted with the 36 species already shared by Briar and Cedar |
+| D4 | **144 = existing 36 + 6 Cedar + 34 × 3 new lakes.** Real species keep real names; protected species are always released | Gemini's per-lake counts (28/30/29/29/28) summed to 144 but conflated the 36 existing game species with species shared by both lakes; six Briar specialties are intentionally absent from Cedar |
 | D5 | **12 legendaries, distributed 2/3/3/2/2**, with two *witnessed* (Guardian, Star-Whale) | Gemini's table listed only 9. Witnessed legendaries put wu wei into the mechanics |
 | D6 | **The Whiskered Guardian stays at Cedar deep** (as implemented) | Gemini moved it to Briar. That would have broken shipped V3 behavior |
 | D7 | **Story spine: *The Book of Five Waters*.** The second review's inherited-book spine, finished with five concrete chapters, a collar arc and an ending | The drafts had no connected journey |

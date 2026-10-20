@@ -12,6 +12,7 @@ tracked as GitHub issues labeled `v1.0`.
 
 | | |
 | --- | --- |
+| **Repository** | [`AventurineDream/Trotline-Purridise`](https://github.com/AventurineDream/Trotline-Purridise) |
 | **Design packet** (source of truth) | [`docs/v1/`](docs/v1/): [Final review](docs/v1/00-FINAL-REVIEW.md) · [Canon](docs/v1/01-CANON.md) · [Gameplay spec](docs/v1/02-GAMEPLAY-SPEC.md) · [Content tables](docs/v1/03-CONTENT-TABLES.md) · [Characters](docs/v1/04-CHARACTERS.md) · [Script](docs/v1/05-SCRIPT.md) · [Implementation guide](docs/v1/06-IMPLEMENTATION-GUIDE.md) · [Tickets](docs/v1/07-TICKETS.md) |
 | **Implemented baseline** | V3 narrative layer: [`docs/narrative/`](docs/narrative/) (12 quests, Ripples, Whiskered Guardian) |
 | **Review policy** | [`docs/PR-REVIEW-POLICY.md`](docs/PR-REVIEW-POLICY.md) |
