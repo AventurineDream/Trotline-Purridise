@@ -196,6 +196,22 @@ class ContentV2Checks(unittest.TestCase):
         for field in ("speed_factor", "turn_factor", "acceleration"):
             self.assertIn(f"boats.json:boats[0](jon).{field}: must be greater than zero", str(caught.exception))
 
+    def test_protected_species_may_have_no_sale_price(self):
+        protected = deepcopy(CONTENT_V2_RAW)
+        species = protected["species.json"]["species"][0]
+        species["price"] = 0
+        species["tags"].append("protected")
+        validate_content_v2(protected)
+
+        unprotected = deepcopy(CONTENT_V2_RAW)
+        unprotected["species.json"]["species"][0]["price"] = 0
+        with self.assertRaises(ContentError) as caught:
+            validate_content_v2(unprotected)
+        self.assertIn(
+            "species.json:species[0](bluegill).price: must be greater than zero",
+            str(caught.exception),
+        )
+
     def test_runtime_validation_reports_structural_errors_before_building_objects(self):
         broken = deepcopy(CONTENT_V2_RAW)
         del broken["baits.json"]["baits"][0]["matches"]
@@ -224,7 +240,7 @@ class ContentV2Checks(unittest.TestCase):
 
             narrative_path = package / "assets/narrative_v1.json"
             narrative = json.loads(narrative_path.read_text(encoding="utf-8"))
-            narrative.pop("sources")
+            narrative["quests"][0]["objective"]["zone_id"] = "briar:shore"
             narrative_path.write_text(json.dumps(narrative), encoding="utf-8")
 
             species_path = package / "assets/content_v2/species.json"
@@ -241,7 +257,8 @@ class ContentV2Checks(unittest.TestCase):
 
         combined = result.stdout + result.stderr
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("narrative_v1.json:root: missing required field 'sources'", combined)
+        self.assertIn("narrative_v1.json:q01_tea_leaves_deep_holes.objective.zone_id", combined)
+        self.assertIn("unknown reference/value 'briar:shore'", combined)
         self.assertIn("species.json:species[0](bluegill): missing required field 'name'", combined)
 
     def test_duplicate_and_non_string_ids_do_not_skip_row_value_checks(self):
