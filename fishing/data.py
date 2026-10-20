@@ -39,6 +39,22 @@ def _read_content_file(filename: str) -> dict:
 CONTENT_V2_RAW = {filename: _read_content_file(filename) for filename in _CONTENT_FILES}
 
 
+def _validate_content_v2_files(raw_files: dict) -> None:
+    # Validate before building typed runtime objects so malformed rows fail with
+    # their source file and content ID instead of a bare KeyError or TypeError.
+    from .content import validate_content_v2
+
+    validate_content_v2(raw_files)
+
+
+_validate_content_v2_files(CONTENT_V2_RAW)
+
+_TIER_DEFAULTS = {
+    row["tier"]: {key: row[key] for key in ("rate", "trophy")}
+    for row in CONTENT_V2_RAW["species.json"]["tier_defaults"]
+}
+
+
 @dataclass(frozen=True)
 class Species:
     id: str
@@ -58,8 +74,16 @@ class Species:
     shiny: str = "albino"
 
 
+def _species_values(row: dict) -> dict:
+    """Apply tier defaults while allowing row-level rate and trophy overrides."""
+    values = dict(_TIER_DEFAULTS.get(row.get("tier"), {}))
+    values.update(row)
+    values.pop("tier", None)
+    return values
+
+
 SPECIES: tuple[Species, ...] = tuple(
-    Species(**{**row, "depth": tuple(row["depth"]), "lakes": tuple(row["lakes"]),
+    Species(**{**_species_values(row), "depth": tuple(row["depth"]), "lakes": tuple(row["lakes"]),
                "tags": tuple(row["tags"])})
     for row in CONTENT_V2_RAW["species.json"]["species"]
 )

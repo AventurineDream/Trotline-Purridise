@@ -8,10 +8,11 @@ import unittest
 from unittest.mock import patch
 
 from .boat import BOATS
-from .content import ContentError, load_content_v2, validate_content_v2
+from .content import (ContentError, _load_all_content, load_content_v2,
+                      validate_content_v2)
 from .data import (BAITS, BAIT_BY_ID, BAIT_MATCH, CEDAR_FISH, LINE_TIERS,
                    CONTENT_V2_RAW, LAKE_RATE_MULTIPLIERS, SPECIES, SPECIES_BY_ID, ZONE_MATCH, ZONE_ORDER,
-                   bait_mult, zone_mult)
+                   _species_values, _validate_content_v2_files, bait_mult, zone_mult)
 from .sim import Hook, SetLine, State, species_rates
 from .world import World
 
@@ -64,7 +65,20 @@ class ContentV2Checks(unittest.TestCase):
         ):
             with self.subTest(location=location):
                 self.assertIn(location, message)
-        self.assertGreaterEqual(len(message.splitlines()), 4)
+        self.assertEqual(sorted(message.splitlines()), sorted([
+            "species.json:species[0](bluegill).price: expected finite number >= 0",
+            "species.json:species[0](bluegill).price: must be greater than zero",
+            "species.json:species[1](bullhead).lakes: expected a list",
+            "species.json:species[1](bullhead).lakes: species must belong to at least one lake",
+            "species.json:species[1](bullhead).lakes: must retain baseline lake membership 'briar'",
+            "species.json:species[1](bullhead).lakes: must retain baseline lake membership 'cedar'",
+            "baits.json:baits[0](worm).matches.missing_fish: unknown reference 'missing_fish'",
+            "boats.json:boats[0](jon).bow: expected finite number >= 0",
+            "boats.json:boats[0](jon).bow: must be forward of stern",
+            "lakes.json:lakes[0](briar).species_count: declares 999, but lists 36 species",
+            "lakes.json:lakes[1](cedar).rate_multipliers(blue): must be positive exactly when the species is listed in species_ids",
+            "lakes.json:lakes[1](cedar).rate_multipliers(smallmouth): must be positive exactly when the species is listed in species_ids",
+        ]))
 
     def test_validator_preserves_save_referenced_ids(self):
         tables = (
@@ -72,6 +86,7 @@ class ContentV2Checks(unittest.TestCase):
             ("baits.json", "baits", "worm", "worm_renamed"),
             ("boats.json", "boats", "jon", "jon_renamed"),
             ("lakes.json", "lakes", "briar", "briar_renamed"),
+            ("lakes.json", "zones", "landing", "landing_renamed"),
         )
         for filename, group, old_id, new_id in tables:
             with self.subTest(group=group, id=old_id):
@@ -82,6 +97,118 @@ class ContentV2Checks(unittest.TestCase):
                     validate_content_v2(broken)
                 self.assertIn(f"{filename}:{group}({old_id}): missing save-referenced ID",
                               str(caught.exception))
+
+    def test_rate_map_missing_entry_names_the_species(self):
+        broken = deepcopy(CONTENT_V2_RAW)
+        del broken["lakes.json"]["lakes"][1]["rate_multipliers"]["carp"]
+
+        with self.assertRaises(ContentError) as caught:
+            validate_content_v2(broken)
+
+        self.assertIn(
+            "lakes.json:lakes[1](cedar).rate_multipliers(carp): missing rate entry for species 'carp'",
+            str(caught.exception),
+        )
+
+    def test_zone_order_and_label_errors_name_the_zone(self):
+        broken = deepcopy(CONTENT_V2_RAW)
+        broken["lakes.json"]["zone_order"].remove("rocks")
+        del broken["lakes.json"]["lakes"][1]["zone_labels"]["rocks"]
+
+        with self.assertRaises(ContentError) as caught:
+            validate_content_v2(broken)
+
+        message = str(caught.exception)
+        self.assertIn("lakes.json:zone_order(rocks): missing fishing zone from zone_order", message)
+        self.assertIn("lakes.json:lakes[1](cedar).zone_labels.rocks: missing label for zone 'rocks'", message)
+
+    def test_species_keep_baseline_lake_memberships(self):
+        broken = deepcopy(CONTENT_V2_RAW)
+        bluegill = next(row for row in broken["species.json"]["species"] if row["id"] == "bluegill")
+        bluegill["lakes"].remove("cedar")
+        cedar = broken["lakes.json"]["lakes"][1]
+        cedar["species_ids"].remove("bluegill")
+        cedar["species_count"] -= 1
+        cedar["rate_multipliers"]["bluegill"] = 0.0
+
+        with self.assertRaises(ContentError) as caught:
+            validate_content_v2(broken)
+
+        self.assertIn(
+            "species.json:species[0](bluegill).lakes: must retain baseline lake membership 'cedar'",
+            str(caught.exception),
+        )
+
+    def test_species_must_belong_to_at_least_one_lake(self):
+        broken = deepcopy(CONTENT_V2_RAW)
+        new_species = deepcopy(broken["species.json"]["species"][0])
+        new_species["id"] = "new_fish"
+        new_species["name"] = "New Fish"
+        new_species["lakes"] = []
+        broken["species.json"]["species"].append(new_species)
+        broken["lakes.json"]["lakes"][1]["rate_multipliers"]["new_fish"] = 0.0
+
+        with self.assertRaises(ContentError) as caught:
+            validate_content_v2(broken)
+
+        self.assertIn(
+            "species.json:species[36](new_fish).lakes: species must belong to at least one lake",
+            str(caught.exception),
+        )
+
+    def test_species_rows_use_tier_defaults_with_explicit_overrides(self):
+        content = deepcopy(CONTENT_V2_RAW)
+        defaulted = content["species.json"]["species"][0]
+        defaulted["tier"] = "C"
+        defaulted.pop("rate")
+        defaulted.pop("trophy")
+        overridden = content["species.json"]["species"][1]
+        overridden["tier"] = "R"
+        overridden.pop("rate")
+        overridden["trophy"] = 0.2
+
+        validate_content_v2(content)
+        defaulted_values = _species_values(defaulted)
+        overridden_values = _species_values(overridden)
+        self.assertEqual((defaulted_values["rate"], defaulted_values["trophy"]), (0.03, 0.04))
+        self.assertEqual((overridden_values["rate"], overridden_values["trophy"]), (0.005, 0.2))
+
+        no_default = deepcopy(CONTENT_V2_RAW)
+        no_default["species.json"]["species"][0].pop("rate")
+        no_default["species.json"]["species"][0].pop("trophy")
+        with self.assertRaises(ContentError) as caught:
+            validate_content_v2(no_default)
+        self.assertIn("species.json:species[0](bluegill).rate: missing required field 'rate'", str(caught.exception))
+        self.assertIn("species.json:species[0](bluegill).trophy: missing required field 'trophy'", str(caught.exception))
+
+    def test_boat_handling_factors_must_be_positive(self):
+        broken = deepcopy(CONTENT_V2_RAW)
+        jon = broken["boats.json"]["boats"][0]
+        for field in ("speed_factor", "turn_factor", "acceleration"):
+            jon[field] = 0
+
+        with self.assertRaises(ContentError) as caught:
+            validate_content_v2(broken)
+
+        for field in ("speed_factor", "turn_factor", "acceleration"):
+            self.assertIn(f"boats.json:boats[0](jon).{field}: must be greater than zero", str(caught.exception))
+
+    def test_runtime_validation_reports_structural_errors_before_building_objects(self):
+        broken = deepcopy(CONTENT_V2_RAW)
+        del broken["baits.json"]["baits"][0]["matches"]
+
+        with self.assertRaises(ContentError) as caught:
+            _validate_content_v2_files(broken)
+
+        self.assertIn("baits.json:baits[0](worm): missing required field 'matches'", str(caught.exception))
+
+    def test_cli_reports_v1_and_v2_errors_together(self):
+        with patch("fishing.content.load_content", side_effect=ContentError("narrative.json:root: bad v1")), \
+                patch("fishing.content.load_content_v2", side_effect=ContentError("species.json:root: bad v2")):
+            with self.assertRaises(ContentError) as caught:
+                _load_all_content()
+
+        self.assertEqual(str(caught.exception), "narrative.json:root: bad v1\nspecies.json:root: bad v2")
 
     def test_duplicate_and_non_string_ids_do_not_skip_row_value_checks(self):
         broken = deepcopy(CONTENT_V2_RAW)
