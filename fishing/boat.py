@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .data import BOAT_DATA
+
 HULL_BOW = 2.86
 HULL_STERN = -0.80
 HULL_HALF_BEAM = 0.70
@@ -41,6 +43,7 @@ class BoatModel:
     acceleration: float
     well_bonus: float = 0.0
     sail_speed: float = 0.0
+    traits: tuple[str, ...] = ()
 
     @property
     def length(self):
@@ -48,14 +51,8 @@ class BoatModel:
 
 
 BOATS = {
-    "jon": BoatModel("jon", "12 ft Jon boat", HULL_BOW, HULL_STERN, HULL_HALF_BEAM,
-                     0.47, 1.22, 0, 12, 1.8, 1.0, 1.0, 1.3),
-    "sail": BoatModel("sail", "12 ft Daysailer", 2.63, -1.03, 0.86,
-                      0.72, 1.30, 650, 6, 0.45, 0.57, 0.72, 0.65, sail_speed=4.6),
-    "pontoon": BoatModel("pontoon", "15 ft Pontoon", 3.37, -1.20, 1.20,
-                         0.44, 1.65, 1450, 36, 2.6, 0.83, 0.52, 0.72, well_bonus=40),
-    "rowboat": BoatModel("rowboat", "10 ft Plastic Rowboat", 1.64, -1.41, 0.68,
-                         0.22, 1.12, 325, 0, 0.0, 1.0, 0.88, 0.78),
+    row["id"]: BoatModel(**{**row, "traits": tuple(row["traits"])})
+    for row in BOAT_DATA
 }
 
 # Perimeter and interior samples, including every corner. Narrow solid props

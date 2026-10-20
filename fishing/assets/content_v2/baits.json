@@ -1,0 +1,128 @@
+{
+  "schema_version": 2,
+  "fallback_multiplier": 0.05,
+  "baits": [
+    {
+      "id": "worm",
+      "name": "Nightcrawlers",
+      "price": 6.0,
+      "blurb": "Panfish, bullheads, and carp.",
+      "matches": {
+        "bluegill": 1.0,
+        "bullhead": 1.0,
+        "carp": 0.9,
+        "buffalo": 0.65,
+        "channel": 0.4,
+        "crappie": 0.22,
+        "drum": 0.2,
+        "largemouth": 0.18,
+        "smallmouth": 0.12,
+        "blue": 0.12,
+        "redear": 1.0,
+        "green_sunfish": 1.0,
+        "redbreast": 1.0,
+        "longear": 1.0,
+        "golden_shiner": 1.0,
+        "warmouth": 0.3,
+        "white_crappie": 0.3,
+        "chain_pickerel": 0.3,
+        "black_bullhead": 0.9,
+        "brown_bullhead": 0.9,
+        "blue_sucker": 0.8,
+        "bigmouth_buffalo": 0.8,
+        "black_buffalo": 0.8,
+        "gizzard_shad": 0.3,
+        "threadfin_shad": 0.3
+      }
+    },
+    {
+      "id": "liver",
+      "name": "Chicken liver",
+      "price": 8.0,
+      "blurb": "Channel cats and bullheads.",
+      "matches": {
+        "channel": 1.0,
+        "bullhead": 0.95,
+        "blue": 0.72,
+        "flathead": 0.22,
+        "drum": 0.18,
+        "gar": 0.12,
+        "buffalo": 0.2,
+        "black_bullhead": 1.0,
+        "brown_bullhead": 1.0
+      }
+    },
+    {
+      "id": "shad",
+      "name": "Cut shad",
+      "price": 10.0,
+      "blurb": "Blue cats, drum, and gar.",
+      "matches": {
+        "blue": 1.0,
+        "channel": 0.85,
+        "gar": 0.95,
+        "drum": 0.8,
+        "flathead": 0.32,
+        "buffalo": 0.45,
+        "carp": 0.15,
+        "white_bass": 0.8,
+        "yellow_bass": 0.8,
+        "hybrid_striper": 0.8,
+        "striped_bass": 0.8,
+        "bowfin": 1.0,
+        "spotted_gar": 1.0,
+        "shortnose_gar": 1.0,
+        "alligator_gar": 1.0,
+        "blue_sucker": 0.35,
+        "bigmouth_buffalo": 0.35,
+        "black_buffalo": 0.35
+      }
+    },
+    {
+      "id": "minnow",
+      "name": "Live minnows",
+      "price": 14.0,
+      "blurb": "Bass, crappie, and flatheads.",
+      "matches": {
+        "flathead": 1.0,
+        "largemouth": 1.0,
+        "crappie": 1.0,
+        "smallmouth": 0.7,
+        "channel": 0.28,
+        "bluegill": 0.15,
+        "warmouth": 1.0,
+        "white_crappie": 1.0,
+        "chain_pickerel": 1.0,
+        "spotted_bass": 1.0,
+        "white_bass": 1.0,
+        "yellow_bass": 1.0,
+        "hybrid_striper": 1.0,
+        "striped_bass": 1.0,
+        "bowfin": 0.8,
+        "spotted_gar": 0.8,
+        "shortnose_gar": 0.8,
+        "alligator_gar": 0.8
+      }
+    },
+    {
+      "id": "craw",
+      "name": "Crawfish",
+      "price": 16.0,
+      "blurb": "Smallmouth, largemouth, and drum.",
+      "matches": {
+        "smallmouth": 1.0,
+        "largemouth": 0.85,
+        "drum": 0.75,
+        "channel": 0.3,
+        "flathead": 0.2,
+        "bullhead": 0.25,
+        "redear": 0.35,
+        "green_sunfish": 0.35,
+        "redbreast": 0.35,
+        "longear": 0.35,
+        "golden_shiner": 0.35,
+        "spotted_bass": 0.9
+      }
+    }
+  ]
+}

@@ -1,0 +1,879 @@
+{
+  "schema_version": 2,
+  "tier_defaults": [
+    {
+      "tier": "C",
+      "rate": 0.03,
+      "trophy": 0.04
+    },
+    {
+      "tier": "U",
+      "rate": 0.012,
+      "trophy": 0.04
+    },
+    {
+      "tier": "R",
+      "rate": 0.005,
+      "trophy": 0.05
+    },
+    {
+      "tier": "V",
+      "rate": 0.0015,
+      "trophy": 0.05
+    }
+  ],
+  "species": [
+    {
+      "id": "bluegill",
+      "name": "Bluegill",
+      "price": 1.4,
+      "min_lb": 0.12,
+      "max_lb": 0.9,
+      "trophy": 0.03,
+      "rate": 0.055,
+      "pref_time": "day",
+      "depth": [
+        0.4,
+        3.2
+      ],
+      "blurb": "Worms on the flats. A sweet fillet, and they keep a line busy.",
+      "folk_name": "Sunny",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "panfish",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "golden"
+    },
+    {
+      "id": "bullhead",
+      "name": "Yellow bullhead",
+      "price": 1.55,
+      "min_lb": 0.3,
+      "max_lb": 2.2,
+      "trophy": 0.04,
+      "rate": 0.04,
+      "pref_time": "dusk",
+      "depth": [
+        0.4,
+        4.5
+      ],
+      "blurb": "Small cat, big mouth. Dusk, worms, and skinny water.",
+      "folk_name": "Mud Kitten",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "catfish",
+      "tags": [],
+      "shiny": "albino"
+    },
+    {
+      "id": "crappie",
+      "name": "Black crappie",
+      "price": 3.1,
+      "min_lb": 0.25,
+      "max_lb": 2.0,
+      "trophy": 0.05,
+      "rate": 0.022,
+      "pref_time": "dawn",
+      "depth": [
+        1.0,
+        6.0
+      ],
+      "blurb": "Papermouth. Minnows at dawn around brush and lilies.",
+      "folk_name": "Papermouth",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "panfish",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "starry"
+    },
+    {
+      "id": "carp",
+      "name": "Common carp",
+      "price": 0.72,
+      "min_lb": 2.0,
+      "max_lb": 18.0,
+      "trophy": 0.04,
+      "rate": 0.016,
+      "pref_time": "day",
+      "depth": [
+        0.8,
+        8.0
+      ],
+      "blurb": "They will pull a jug under. Worms on the warm flats.",
+      "folk_name": "Golden Bucket",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "golden"
+    },
+    {
+      "id": "drum",
+      "name": "Freshwater drum",
+      "price": 1.15,
+      "min_lb": 1.0,
+      "max_lb": 12.0,
+      "trophy": 0.04,
+      "rate": 0.012,
+      "pref_time": "day",
+      "depth": [
+        2.0,
+        14.0
+      ],
+      "blurb": "Croaker. Crawfish and cut bait over deep mud.",
+      "folk_name": "Grunter",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "glow"
+    },
+    {
+      "id": "channel",
+      "name": "Channel catfish",
+      "price": 2.55,
+      "min_lb": 1.0,
+      "max_lb": 16.0,
+      "trophy": 0.05,
+      "rate": 0.026,
+      "pref_time": "night",
+      "depth": [
+        1.5,
+        12.0
+      ],
+      "blurb": "The lake's wage. Liver at night along cypress and the creek.",
+      "folk_name": "The Wage",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "catfish",
+      "tags": [],
+      "shiny": "albino"
+    },
+    {
+      "id": "blue",
+      "name": "Blue catfish",
+      "price": 3.15,
+      "min_lb": 3.0,
+      "max_lb": 30.0,
+      "trophy": 0.06,
+      "rate": 0.0065,
+      "pref_time": "night",
+      "depth": [
+        6.0,
+        18.0
+      ],
+      "blurb": "The big one. Cut shad, the deep hole, after dark.",
+      "folk_name": "Old Blue",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "catfish",
+      "tags": [],
+      "shiny": "glow"
+    },
+    {
+      "id": "flathead",
+      "name": "Flathead catfish",
+      "price": 3.4,
+      "min_lb": 2.0,
+      "max_lb": 28.0,
+      "trophy": 0.06,
+      "rate": 0.007,
+      "pref_time": "night",
+      "depth": [
+        2.0,
+        10.0
+      ],
+      "blurb": "They want it alive. Minnows on the south rocks at night.",
+      "folk_name": "Yellow Cat",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "catfish",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "golden"
+    },
+    {
+      "id": "largemouth",
+      "name": "Largemouth bass",
+      "price": 4.1,
+      "min_lb": 0.8,
+      "max_lb": 8.5,
+      "trophy": 0.05,
+      "rate": 0.01,
+      "pref_time": "dawn",
+      "depth": [
+        0.6,
+        5.0
+      ],
+      "blurb": "A bass will take a trotline minnow at dawn in the lilies.",
+      "folk_name": "Bucketmouth",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "bass",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "golden"
+    },
+    {
+      "id": "smallmouth",
+      "name": "Smallmouth bass",
+      "price": 5.0,
+      "min_lb": 0.7,
+      "max_lb": 5.5,
+      "trophy": 0.05,
+      "rate": 0.008,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        6.5
+      ],
+      "blurb": "Bronze and mean. Crawfish along the south rocks.",
+      "folk_name": "Bronzeback",
+      "lakes": [
+        "briar"
+      ],
+      "food": "bass",
+      "tags": [],
+      "shiny": "rose"
+    },
+    {
+      "id": "gar",
+      "name": "Longnose gar",
+      "price": 0.95,
+      "min_lb": 2.0,
+      "max_lb": 16.0,
+      "trophy": 0.04,
+      "rate": 0.007,
+      "pref_time": "night",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Long teeth. Cut bait in the cypress after sunset.",
+      "folk_name": "Needle-Nose",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "starry"
+    },
+    {
+      "id": "buffalo",
+      "name": "Smallmouth buffalo",
+      "price": 1.05,
+      "min_lb": 2.0,
+      "max_lb": 22.0,
+      "trophy": 0.04,
+      "rate": 0.01,
+      "pref_time": "day",
+      "depth": [
+        4.0,
+        16.0
+      ],
+      "blurb": "A deep-water drifter. Not prized, but they fill a well.",
+      "folk_name": "Drifter",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "albino"
+    },
+    {
+      "id": "white_crappie",
+      "name": "White crappie",
+      "price": 3.15,
+      "min_lb": 0.25,
+      "max_lb": 2.4,
+      "trophy": 0.05,
+      "rate": 0.014,
+      "pref_time": "dawn",
+      "depth": [
+        1.0,
+        7.0
+      ],
+      "blurb": "Minnows beside brush and creek channels. Cedar Creek's other papermouth.",
+      "folk_name": "Silver Paper",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "panfish",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "starry"
+    },
+    {
+      "id": "redear",
+      "name": "Redear sunfish",
+      "price": 1.85,
+      "min_lb": 0.15,
+      "max_lb": 1.5,
+      "trophy": 0.04,
+      "rate": 0.012,
+      "pref_time": "day",
+      "depth": [
+        0.6,
+        4.5
+      ],
+      "blurb": "Shellcracker. Worms and small crawfish on a firm, shallow bottom.",
+      "folk_name": "Shellcracker",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "panfish",
+      "tags": [],
+      "shiny": "rose"
+    },
+    {
+      "id": "green_sunfish",
+      "name": "Green sunfish",
+      "price": 1.1,
+      "min_lb": 0.08,
+      "max_lb": 0.8,
+      "trophy": 0.04,
+      "rate": 0.009,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "A hungry little creek fish. Worms near rocks and flooded banks.",
+      "folk_name": "Green Grump",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "panfish",
+      "tags": [],
+      "shiny": "golden"
+    },
+    {
+      "id": "warmouth",
+      "name": "Warmouth",
+      "price": 1.75,
+      "min_lb": 0.15,
+      "max_lb": 1.2,
+      "trophy": 0.04,
+      "rate": 0.009,
+      "pref_time": "dusk",
+      "depth": [
+        0.4,
+        4.0
+      ],
+      "blurb": "Big mouth, small fish. Minnows and worms in brushy coves.",
+      "folk_name": "Goggle-Eye",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "panfish",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "ink"
+    },
+    {
+      "id": "redbreast",
+      "name": "Redbreast sunfish",
+      "price": 1.55,
+      "min_lb": 0.1,
+      "max_lb": 1.0,
+      "trophy": 0.04,
+      "rate": 0.008,
+      "pref_time": "day",
+      "depth": [
+        0.4,
+        3.5
+      ],
+      "blurb": "Long ear flap and a copper belly. Worms in creek mouths.",
+      "folk_name": "Copper Belly",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "panfish",
+      "tags": [],
+      "shiny": "rose"
+    },
+    {
+      "id": "longear",
+      "name": "Longear sunfish",
+      "price": 1.45,
+      "min_lb": 0.08,
+      "max_lb": 0.7,
+      "trophy": 0.04,
+      "rate": 0.008,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "Bright colors in clear shallows. Worms along rocky banks.",
+      "folk_name": "Painted Ear",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "panfish",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "starry"
+    },
+    {
+      "id": "spotted_bass",
+      "name": "Spotted bass",
+      "price": 4.35,
+      "min_lb": 0.6,
+      "max_lb": 5.5,
+      "trophy": 0.05,
+      "rate": 0.006,
+      "pref_time": "dawn",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "A creek-channel hunter. Minnows or crawfish around rock and drops.",
+      "folk_name": "Spot",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "bass",
+      "tags": [],
+      "shiny": "golden"
+    },
+    {
+      "id": "white_bass",
+      "name": "White bass",
+      "price": 2.95,
+      "min_lb": 0.4,
+      "max_lb": 3.2,
+      "trophy": 0.05,
+      "rate": 0.01,
+      "pref_time": "dawn",
+      "depth": [
+        2.0,
+        12.0
+      ],
+      "blurb": "Schooling sand bass. Minnows where the creek channel meets open water.",
+      "folk_name": "Sand Bass",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "bass",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "starry"
+    },
+    {
+      "id": "yellow_bass",
+      "name": "Yellow bass",
+      "price": 1.95,
+      "min_lb": 0.2,
+      "max_lb": 1.6,
+      "trophy": 0.04,
+      "rate": 0.007,
+      "pref_time": "day",
+      "depth": [
+        1.5,
+        10.0
+      ],
+      "blurb": "Golden schooling bass. Small minnows over submerged humps.",
+      "folk_name": "Stripey",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "bass",
+      "tags": [],
+      "shiny": "golden"
+    },
+    {
+      "id": "hybrid_striper",
+      "name": "Hybrid striped bass",
+      "price": 5.2,
+      "min_lb": 1.2,
+      "max_lb": 13.0,
+      "trophy": 0.05,
+      "rate": 0.004,
+      "pref_time": "dawn",
+      "depth": [
+        3.0,
+        16.5
+      ],
+      "blurb": "Cedar Creek's stocked powerhouse. Shad and minnows over deep humps.",
+      "folk_name": "The Wiper",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "bass",
+      "tags": [],
+      "shiny": "starry"
+    },
+    {
+      "id": "striped_bass",
+      "name": "Striped bass",
+      "price": 5.35,
+      "min_lb": 2.0,
+      "max_lb": 22.0,
+      "trophy": 0.05,
+      "rate": 0.0025,
+      "pref_time": "dawn",
+      "depth": [
+        5.0,
+        18.0
+      ],
+      "blurb": "A rare Little Briar stocking. Cut shad in deep, open water.",
+      "folk_name": "Rockfish",
+      "lakes": [
+        "briar"
+      ],
+      "food": "bass",
+      "tags": [],
+      "shiny": "glow"
+    },
+    {
+      "id": "bowfin",
+      "name": "Bowfin",
+      "price": 1.3,
+      "min_lb": 1.0,
+      "max_lb": 11.0,
+      "trophy": 0.04,
+      "rate": 0.004,
+      "pref_time": "night",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "An old swamp predator. Cut bait in warm, weedy backwaters.",
+      "folk_name": "Grinnel",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "ink"
+    },
+    {
+      "id": "spotted_gar",
+      "name": "Spotted gar",
+      "price": 1.15,
+      "min_lb": 0.8,
+      "max_lb": 9.0,
+      "trophy": 0.04,
+      "rate": 0.004,
+      "pref_time": "dusk",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "A spotted ambush fish. Shad and minnows beside flooded timber.",
+      "folk_name": "Spotted Stick",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "starry"
+    },
+    {
+      "id": "shortnose_gar",
+      "name": "Shortnose gar",
+      "price": 1.1,
+      "min_lb": 0.6,
+      "max_lb": 7.5,
+      "trophy": 0.04,
+      "rate": 0.0025,
+      "pref_time": "dusk",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "A short, broad snout. Cut bait near muddy creek mouths.",
+      "folk_name": "Stubby Snout",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "rose"
+    },
+    {
+      "id": "alligator_gar",
+      "name": "Alligator gar",
+      "price": 1.7,
+      "min_lb": 5.0,
+      "max_lb": 65.0,
+      "trophy": 0.025,
+      "rate": 0.0008,
+      "pref_time": "night",
+      "depth": [
+        2.0,
+        12.0
+      ],
+      "blurb": "The heavyweight. Cut shad in creek channels; a big one needs a big well.",
+      "folk_name": "Gator",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "glow"
+    },
+    {
+      "id": "black_bullhead",
+      "name": "Black bullhead",
+      "price": 1.55,
+      "min_lb": 0.3,
+      "max_lb": 3.0,
+      "trophy": 0.04,
+      "rate": 0.006,
+      "pref_time": "night",
+      "depth": [
+        0.5,
+        5.0
+      ],
+      "blurb": "A small cat from quiet, muddy water. Liver or worms after dark.",
+      "folk_name": "Inky",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "catfish",
+      "tags": [],
+      "shiny": "ink"
+    },
+    {
+      "id": "brown_bullhead",
+      "name": "Brown bullhead",
+      "price": 1.7,
+      "min_lb": 0.4,
+      "max_lb": 4.0,
+      "trophy": 0.04,
+      "rate": 0.004,
+      "pref_time": "night",
+      "depth": [
+        0.6,
+        6.0
+      ],
+      "blurb": "A mottled Little Briar catfish. Liver beside flooded brush.",
+      "folk_name": "Horned Pout",
+      "lakes": [
+        "briar"
+      ],
+      "food": "catfish",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "golden"
+    },
+    {
+      "id": "blue_sucker",
+      "name": "Blue sucker",
+      "price": 1.6,
+      "min_lb": 1.5,
+      "max_lb": 12.0,
+      "trophy": 0.04,
+      "rate": 0.002,
+      "pref_time": "day",
+      "depth": [
+        4.0,
+        15.0
+      ],
+      "blurb": "A rare channel-bottom visitor in Little Briar. Worms on deeper gravel.",
+      "folk_name": "Blue Racer",
+      "lakes": [
+        "briar"
+      ],
+      "food": "hearty",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "glow"
+    },
+    {
+      "id": "bigmouth_buffalo",
+      "name": "Bigmouth buffalo",
+      "price": 0.95,
+      "min_lb": 3.0,
+      "max_lb": 35.0,
+      "trophy": 0.04,
+      "rate": 0.003,
+      "pref_time": "day",
+      "depth": [
+        3.0,
+        14.0
+      ],
+      "blurb": "A broad-backed drifter. An occasional worm catch over deep mud.",
+      "folk_name": "Gourdhead",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "albino"
+    },
+    {
+      "id": "black_buffalo",
+      "name": "Black buffalo",
+      "price": 1.15,
+      "min_lb": 3.0,
+      "max_lb": 30.0,
+      "trophy": 0.04,
+      "rate": 0.002,
+      "pref_time": "day",
+      "depth": [
+        4.0,
+        16.0
+      ],
+      "blurb": "A scarce Little Briar bottom fish. Worms or cut bait on the deep shelf.",
+      "folk_name": "Shadow Drifter",
+      "lakes": [
+        "briar"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "ink"
+    },
+    {
+      "id": "golden_shiner",
+      "name": "Golden shiner",
+      "price": 0.8,
+      "min_lb": 0.04,
+      "max_lb": 0.35,
+      "trophy": 0.03,
+      "rate": 0.006,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "A flashing gold forage fish. Tiny worm bites among the weeds.",
+      "folk_name": "Gold Flash",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "none",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "golden"
+    },
+    {
+      "id": "gizzard_shad",
+      "name": "Gizzard shad",
+      "price": 0.7,
+      "min_lb": 0.15,
+      "max_lb": 1.8,
+      "trophy": 0.03,
+      "rate": 0.002,
+      "pref_time": "day",
+      "depth": [
+        1.5,
+        10.0
+      ],
+      "blurb": "Broad schools over open water. An occasional small worm catch.",
+      "folk_name": "Hickory",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "starry"
+    },
+    {
+      "id": "threadfin_shad",
+      "name": "Threadfin shad",
+      "price": 0.6,
+      "min_lb": 0.02,
+      "max_lb": 0.25,
+      "trophy": 0.02,
+      "rate": 0.002,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "A tiny forage fish, rarely caught on a baited hook. Warm open water.",
+      "folk_name": "Thread",
+      "lakes": [
+        "briar",
+        "cedar"
+      ],
+      "food": "none",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "starry"
+    },
+    {
+      "id": "chain_pickerel",
+      "name": "Chain pickerel",
+      "price": 3.4,
+      "min_lb": 0.6,
+      "max_lb": 5.0,
+      "trophy": 0.04,
+      "rate": 0.003,
+      "pref_time": "dawn",
+      "depth": [
+        0.4,
+        5.0
+      ],
+      "blurb": "A toothy Little Briar weed hunter. Live minnows in the lily cove.",
+      "folk_name": "Jack",
+      "lakes": [
+        "briar"
+      ],
+      "food": "hearty",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "golden"
+    }
+  ]
+}
