@@ -447,7 +447,5 @@ nothing more than to dawdle.
 | nebula | 9 | 9 | nebula_paws, comet, lyra, vega, selene, andi, rigel | orion_cat, twinkle | 36–44 | 9 |
 | **Total** | **45** + 5 hosts + 2 travelers = **52** | 44 | | | **44** | **44** |
 
-New objective fields used here: `attend_event` (`{lake_id, event: "cookout"}`),
-`line_check.in_cold_band` (bool), and `catch_species` with `count`, `distinct`,
-`zone_id`, `time_band`. Add them to the `02 §12.3` type table in the same PR that
-implements them.
+The objective fields used here are defined in the `02 §12.3` type table. V1-31
+implements and validates these shapes before the authored quest data is loaded.

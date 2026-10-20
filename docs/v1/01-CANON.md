@@ -32,8 +32,9 @@ Words in this packet:
 
 ## 1. Identity
 
-- **Player-facing title:** *Trotline Purridise*. The repository and Drive project
-  stay **TrotLineSim**. "Little Briar" is now the name of the first lake only.
+- **Player-facing title:** *Trotline Purridise*. The GitHub repository is
+  **`AventurineDream/Trotline-Purridise`**; the Drive project retains the
+  **TrotLineSim** name. "Little Briar" is now the name of the first lake only.
 - **Story title:** *The Book of Five Waters*.
 - **Genre:** a cozy, first-person trotline-fishing and boating game with a gentle,
   optional story. There is no rod and reel. You set lines, let them soak, and run
