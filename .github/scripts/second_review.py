@@ -46,7 +46,7 @@ def get_initial_review_signal(reviews, comments, head_sha):
         body = c.get('body') or ''
         if 'Second Review Pass' in body or 'Automated PR Scope' in body:
             continue
-        if ('review' in body.lower() or 'VERDICT' in body or 'Amaranth' in body) and short_sha in body:
+        if ('review' in body.lower() or 'VERDICT' in body) and short_sha in body:
             initial_reviews.append({
                 'type': 'comment_review',
                 'author': c.get('user', {}).get('login', 'unknown'),

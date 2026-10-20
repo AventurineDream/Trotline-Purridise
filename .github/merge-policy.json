@@ -1,7 +1,6 @@
 {
-  "version": 3,
-  "repository": "AventurineDream/TrotLineSim",
-  "review_wait_seconds": 1800,
+  "version": 4,
+  "repository": "AventurineDream/Trotline-Purridise",
   "required_checks": [
     {
       "name": "gameplay-tests",
@@ -13,20 +12,14 @@
   ],
   "merge_method": "merge",
   "required_reviewers": [
-    "Amaranth"
+    "Codex",
+    "Claude"
   ],
   "review_identity": "named_agent_not_github_account",
   "shared_github_accounts_allowed": true,
-  "accepted_review": "head_bound_agent_verdict",
-  "required_verdict": "GREEN",
-  "supplementary_reviewers": [
-    "Codex"
-  ],
+  "accepted_review": "completed_exact_head_agent_review",
+  "required_verdict": "CLEAR",
   "excluded_review_signals": [
-    "second-review-pass",
     "implementing_agent_self_review"
-  ],
-  "temporarily_suspended_reviewers": [
-    "Jules"
   ]
 }
