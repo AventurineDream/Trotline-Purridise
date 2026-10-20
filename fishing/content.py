@@ -447,6 +447,9 @@ _BASELINE_CEDAR_EXCLUSIONS = frozenset({
     "smallmouth", "striped_bass", "brown_bullhead", "blue_sucker", "black_buffalo",
     "chain_pickerel",
 })
+_FALLBACK_FISHING_ZONE_ORDER = (
+    "landing", "inlet", "flats", "lilies", "cypress", "rocks", "deep", "open",
+)
 _BASELINE_LAKE_MEMBERSHIPS = {
     species_id: frozenset({"briar"} | (set() if species_id in _BASELINE_CEDAR_EXCLUSIONS else {"cedar"}))
     for species_id in _SAVE_REFERENCED_IDS["species"]
@@ -464,7 +467,7 @@ def _set_fallback_gameplay_refs():
         "heavy": {"hooks": 24},
     }
     SPECIES_BY_ID = {item_id: None for item_id in _SAVE_REFERENCED_IDS["species"]}
-    ZONE_ORDER = tuple(_SAVE_REFERENCED_IDS["zones"])
+    ZONE_ORDER = _FALLBACK_FISHING_ZONE_ORDER
     _GAMEPLAY_REFS_LOADED = True
 
 
@@ -662,12 +665,15 @@ class _ContentV2Validator:
         lake_refs = lake_ids if lakes_file not in self.unavailable_files else None
         species_refs = species_ids if species_file not in self.unavailable_files else None
         for sid, row, where in self.rows(species_file, "species"):
+            tags = row.get("tags")
+            protected = isinstance(tags, list) and "protected" in tags
             self.text(species_file, where + ".name", row.get("name"))
             self.text(species_file, where + ".blurb", row.get("blurb"))
             self.text(species_file, where + ".folk_name", row.get("folk_name"))
             for key in ("price", "min_lb", "max_lb"):
                 self.number(species_file, where + "." + key, row.get(key), minimum=0)
-            if (type(row.get("price")) in (int, float) and row.get("price", 0) <= 0):
+            if (type(row.get("price")) in (int, float) and row.get("price", 0) <= 0
+                    and not protected):
                 self.error(species_file, where + ".price", "must be greater than zero")
             if (type(row.get("max_lb")) in (int, float) and type(row.get("min_lb")) in (int, float)
                     and row["max_lb"] <= row["min_lb"]):
@@ -705,7 +711,6 @@ class _ContentV2Validator:
                 self.error(species_file, where + ".lakes",
                            f"must retain baseline lake membership {lake_id!r}")
             self.enum(species_file, where + ".food", row.get("food"), _SPECIES_FOODS)
-            tags = row.get("tags")
             if not isinstance(tags, list):
                 self.error(species_file, where + ".tags", "expected a list")
             else:
