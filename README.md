@@ -22,7 +22,8 @@ tracked as GitHub issues labeled `v1.0`.
   the Starlight Nebula Lagoon.
 - **144 species + 12 legendaries**, in an inherited book that grows from cat
   folklore (*What we heard*) to verified notes (*What we found*).
-- **52 visible cat neighbors**, each with a want, a quirk and two quests.
+- **52 visible cat neighbors**: 5 hosts with errands, 2 travelers, and 45
+  water-cats (44 encounters, each with a want, a quirk and two quests).
 - **The Book of Five Waters:** a short, optional story (10–12 h). Free play
   continues afterward.
 - **24 boats** in eight families, with traits instead of a strict ladder.

@@ -5,13 +5,23 @@ has a **want** (small, specific, achievable with the player's help) and a
 **contradiction** (the endearing thing that makes them a person). Changed greeting
 and return lines live in `05-SCRIPT.md`.*
 
-**Quest id scheme:** existing V3 ids `q01`–`q12` are kept. New: story steps
+**Quest id scheme:** the 12 existing V3 quests keep their full shipped ids
+(`fishing/narrative.py` `QUEST_IDS`): `q01_tea_leaves_deep_holes`,
+`q02_lonely_star_current`, `q03_unstrung_line`, `q04_great_contour_chart`,
+`q05_moonlight_trotlines`, `q06_unrepeatable_sunrise`, `q07_art_of_the_nap`,
+`q08_channel_run`, `q09_quiet_channel`, `q10_ballad_lonely_star`,
+`q11_deep_water_drift`, `q12_first_voyage`. Short forms like "q03" in this packet
+are reading aids only. Data files, prerequisites and migrations must use the full
+ids. New: story steps
 `story_c<chapter>_s<step>`, host errands `host_<lake>`, and water-cat quests
 `wc_<npc_id>_a` / `wc_<npc_id>_b`. Keepsake id: `ks_<npc_id>`. Cash: quest A pays
 Briar $45 · Cedar $55 · Flathead $80 · Crater $110 · Nebula $140. Quest B pays
 1.5× that. Existing V3 rewards are unchanged.
 
-**Objective shorthand** uses the types in `02 §12.3`.
+**Objective shorthand** uses the types and fields in `02 §12.3`. Notation:
+`prem+` means `min_tier: prem`. "Then `talk_to`" means a second step. "(after
+ch. N)" or "(needs Flathead travel)" means `requires`. "Any Briar zone" means
+`lake_id: briar`.
 
 ---
 

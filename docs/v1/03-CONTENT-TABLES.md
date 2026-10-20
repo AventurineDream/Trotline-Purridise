@@ -257,9 +257,9 @@ legendary (`02 §7.2`).
 
 | id | Name | Lake · zone | Window | Weather | Bait | Other gate | lb | Kind | Clue teller |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| old_lantern | Old Lantern | briar · landing (within 60 m of the dock) | 20:00–24:00 | any | lantern_liver | Spotlight owned and on | 38 | caught | Grandmother Whiskers |
+| old_lantern | Old Lantern | briar · `area: landing_edge`: a line whose midpoint is 50–150 m from the Briar Landing slip (just outside the existing no-line zone, `sim.py` 46 m slip radius / 50 m landing zone) | 20:00–24:00 | any | lantern_liver | Spotlight owned and on | 38 | caught | Grandmother Whiskers |
 | lily_queen | The Lily Queen | briar · lilies or reeds | 05:00–08:00 | mist or rain | queens_breakfast | Ch. 1 complete | 14 | caught | Willow |
-| spillway_monster | The Spillway Monster | cedar · Marked Pool (rocks) | 20:00–04:00 | any | shad | Heavy line only. **No other gate; day-one** | 95 | caught | Doc Barnaby |
+| spillway_monster | The Spillway Monster | cedar · `area: marked_pool` (inside cedar:rocks) | 20:00–04:00 | any | shad | Heavy line only. **No other gate; day-one** | 95 | caught | Doc Barnaby |
 | channel_leviathan | The Channel Leviathan | cedar · inlet | 22:00–02:00 | rain within the last 6 game h | pecan_smoked_shad | Ch. 2 complete | 120 | caught | Hank Mudpaw |
 | whiskered_guardian | The Whiskered Guardian | cedar · deep | 18:00–20:00 | any | — | Existing: any 8 of the 10 V3 Ripples | — | witnessed | Quill |
 | glacial_phantom | The Glacial Phantom | flathead · inlet | 05:00–09:00 | snow mist | phantom_roe | Line in the cold band | 22 | caught (protected) | Freya |
@@ -270,9 +270,11 @@ legendary (`02 §7.2`).
 | nebula_weaver | The Nebula Weaver | nebula · current | 20:00–24:00 | aurora | moonmilk_stardust | Zero-G Winch owned | 26 | caught | Nebula-Paws |
 | star_whale | The Celestial Star-Whale | nebula · open (the reflection) | Ch. 5; afterward any clear night 20:00–04:00 while settled | clear | — | Ch. 5 | — | witnessed | Professor Astra-9 |
 
-Weather scheduling: each lake's weather generator must produce each weather state a
-legendary needs at least once every 3 game days, overlapping that legendary's
-window at least once every 4 game days (`02 §3.6`).
+Weather scheduling: once a legendary is eligible, the planner must produce a window
+where its required weather overlaps its clock window within **3 game days**
+(`02 §3.6`, tested by V1-16). Areas such as `landing_edge` and `marked_pool` are
+named regions defined in `lakes.json` (`06 §5`). The validator checks that each
+one contains water where a line can legally be set.
 
 ---
 
@@ -314,35 +316,37 @@ I inboard, S sail + auxiliary (existing sail rules), ★ starlight (no fuel).
 
 | id | Name | Tier · family | ft | Price | Power | Speed | Well | Lines | Traits |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| log_raft | Cedar Log Raft | 1 Pioneer | 10 | $150 | P | 1.2 | 30 | 3 | shallow, silent, hammock |
-| birch_skiff | Birch Bark Skiff | 1 Pioneer | 12 | $260 | P | 1.6 | 40 | 3 | shallow, silent |
-| reed_dugout | Reed Dugout | 1 Pioneer | 11 | $220 | P | 1.4 | 35 | 3 | shallow, silent; may set lines in `reeds` without the Reed Anchor |
+| log_raft | Cedar Log Raft | 1 Pioneer | 10 | $300 | P | 1.2 | 30 | 3 | shallow, silent, hammock |
+| birch_skiff | Birch Bark Skiff | 1 Pioneer | 12 | $420 | P | 1.6 | 40 | 3 | shallow, silent |
+| reed_dugout | Reed Dugout | 1 Pioneer | 11 | $360 | P | 1.4 | 35 | 3 | shallow, silent; may set lines in `reeds` without the Reed Anchor |
 | dory | Classic Wooden Dory | 2 Rowed | 14 | $480 | O | 1.7 | 60 | 4 | wind_steady |
 | rowboat | Reinforced Rowboat *(existing "10 ft Plastic Rowboat")* | 2 Rowed | 10 | $325 | O | existing | existing | 5 | — |
 | flat_skiff | Flat-Bottom Skiff | 2 Rowed | 14 | $560 | O | 1.6 | 80 | 5 | shallow |
 | jon | Aluminum Jon Boat *(existing; starting boat)* | 3 Jon | 12 | start | T | existing | existing | 5 | — |
 | river_runner | River Runner Skiff | 3 Jon | 14 | $900 | T | +0.3 vs jon | 80 | 5 | shallow |
 | duck_jon | Duck Hunter Jon | 3 Jon | 14 | $1,100 | T | jon | 90 | 6 | silent |
-| marsh_runner | Marsh Runner | 4 Utility | 16 | $1,600 | C | 6.5 | 120 | 6 | shallow, wind_steady |
-| deepv_skiff | Deep-V Bass Skiff | 4 Utility | 17 | $2,200 | C | 7.5 | 140 | 6 | wind_steady, trophy_rail |
-| coastal_craft | Coastal Craft | 4 Utility | 18 | $2,600 | C | 7.0 | 160 | 7 | wind_steady, ice_hull |
-| mahogany_runabout | Classic Mahogany Runabout | 5 Runabout | 17 | $3,400 | I | 9.5 | 60 | 4 | trophy_rail, glow |
-| fiberglass_cruiser | Fiberglass Cruiser | 5 Runabout | 20 | $4,200 | I | 8.5 | 120 | 5 | galley, hammock |
-| lake_taxi | Lake Taxi | 5 Runabout | 19 | $3,000 | I | 7.5 | 100 | 5 | wind_steady |
-| daysailer | Cat-Rigged Daysailer *(existing "12 ft Daysailer")* | 6 Sail & trawler | 12 | $650 | S | existing | existing | 5 | — |
-| small_sloop | Small Sloop | 6 Sail & trawler | 18 | $2,800 | S | sail ×1.2 | 110 | 5 | hammock, trophy_rail |
-| tug_skiff | Wooden Tug-Skiff | 6 Sail & trawler | 18 | $3,600 | I | 4.5 | 260 | 7 | galley, ice_hull |
+| marsh_runner | Marsh Runner | 4 Utility | 16 | $1,200 | C | 6.5 | 120 | 6 | shallow, wind_steady |
+| deepv_skiff | Deep-V Bass Skiff | 4 Utility | 17 | $1,600 | C | 7.5 | 140 | 6 | wind_steady, trophy_rail |
+| coastal_craft | Coastal Craft | 4 Utility | 18 | $1,900 | C | 7.0 | 160 | 7 | wind_steady, ice_hull |
+| mahogany_runabout | Classic Mahogany Runabout | 5 Runabout | 17 | $2,600 | I | 9.5 | 60 | 4 | trophy_rail, glow |
+| fiberglass_cruiser | Fiberglass Cruiser | 5 Runabout | 20 | $3,000 | I | 8.5 | 120 | 5 | galley, hammock |
+| lake_taxi | Lake Taxi | 5 Runabout | 19 | $2,000 | I | 7.5 | 100 | 5 | wind_steady |
+| sail | Cat-Rigged Daysailer *(existing "12 ft Daysailer")* | 6 Sail & trawler | 12 | $650 | S | existing | existing | 5 | — |
+| small_sloop | Small Sloop | 6 Sail & trawler | 18 | $2,200 | S | sail ×1.2 | 110 | 5 | hammock, trophy_rail |
+| tug_skiff | Wooden Tug-Skiff | 6 Sail & trawler | 18 | $2,800 | I | 4.5 | 260 | 7 | galley, ice_hull |
 | pontoon | Classic Pontoon *(existing "15 ft Pontoon")* | 7 Pontoon | 15 | $1,450 | T | existing | existing | 6 | hammock |
-| party_barge | Triple-Hull Party Barge | 7 Pontoon | 24 | $6,500 | C | 6.0 | 220 | 8 | galley, hammock, trophy_rail |
-| houseboat | Lake Houseboat | 7 Pontoon | 32 | $9,800 | I | 4.0 | 300 | 8 | galley, hammock, trophy_rail, wind_steady |
-| steam_barge | Astral Steam-Barge | 8 Cosmic | 22 | $12,000 | ★ | 6.5 | 240 | 8 | galley, glow, ice_hull |
-| nebula_cruiser | Nebula Cruiser | 8 Cosmic | 20 | $16,000 | ★ | 10.0 | 160 | 7 | glow, silent, trophy_rail |
-| celestial_flagship | Celestial Flagship | 8 Cosmic | 30 | $24,000 | ★ | 8.0 | 320 | 8 | galley, hammock, trophy_rail, wind_steady, ice_hull, glow, silent |
+| party_barge | Triple-Hull Party Barge | 7 Pontoon | 24 | $3,400 | C | 6.0 | 220 | 8 | galley, hammock, trophy_rail |
+| houseboat | Lake Houseboat | 7 Pontoon | 32 | $5,200 | I | 4.0 | 300 | 8 | galley, hammock, trophy_rail, wind_steady |
+| steam_barge | Astral Steam-Barge | 8 Cosmic | 22 | $5,000 | ★ | 6.5 | 240 | 8 | galley, glow, ice_hull |
+| nebula_cruiser | Nebula Cruiser | 8 Cosmic | 20 | $7,000 | ★ | 10.0 | 160 | 7 | glow, silent, trophy_rail |
+| celestial_flagship | Celestial Flagship | 8 Cosmic | 30 | $11,000 | ★ | 8.0 | 320 | 8 | galley, hammock, trophy_rail, wind_steady, ice_hull, glow, silent |
 
 Tier 8 is sold only at Cosmic Drift Station and works on every lake. Existing ids
-`jon`, `rowboat`, `daysailer` and `pontoon` keep their physics, collision, saved
-fuel and battery state. Only display names change (and the pontoon gains +1 line
-and `hammock`).
+`jon`, `rowboat`, `sail` (the daysailer's id in `fishing/boat.py`) and `pontoon`
+keep their physics, collision, saved fuel and battery state. Only display names
+change (and the pontoon gains +1 line and `hammock`). Tier unlocks and the pacing
+rule are in `02 §9` and `02 §15.3`. Prices follow that rule: the cheapest new boat
+of each tier costs 3.3–5.7 days of the income midpoint at the stage it unlocks.
 
 ---
 

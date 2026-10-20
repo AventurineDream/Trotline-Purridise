@@ -61,7 +61,8 @@ fishing/assets/content_v2/
   bot.json           # prefixes, shells, tools (03 §7)
   lakes.json         # 5 lakes: labels, zones, Lake Days, weather sets, palettes
   npcs.json          # 52 cats: appearance params, boat, slot, anchor, quests
-  quests.json        # 108 quests: objectives, rewards, prerequisites
+  quests.json        # 96 new quests (15 story + 3 host + 34 quest A + 44 quest B);
+                     # 108 in total with the 12 in narrative_v1.json
   dialogue/*.json    # one file per lake + story.json + bot.json + system.json
   book.json          # rumors, legendary stories, folk names
   ripples.json       # 44
@@ -76,8 +77,10 @@ v2 loader rejects any id that collides with a v1 id unless the row is marked
 ids; every reference resolves; numbers finite and in range; every lake has ≥ 2
 legendaries; every legendary window ≥ 120 game min; every NPC's quests point to
 its lake (cross-lake objectives allowed and listed explicitly); every dialogue
-graph reachable and acyclic; every `[F]` line has a condition key and a `[U]`
-sibling; species counts per lake match `03 §1` (36/36/34/34/34, total 144). Run
+graph reachable and acyclic; every `[F]` line has a condition key and exactly
+one declared fallback (`[U]` sibling, `silent` or `report`, `05 §0`); every
+objective uses only the fields in `02 §12.3`; the 12 V3 quest ids appear only as
+`extends` targets, never as new rows; v1 + v2 total 108 quests; species counts per lake match `03 §1` (36/36/34/34/34, total 144). Run
 with `python -m fishing.content`.
 
 ## 3. Save v2
@@ -91,13 +94,24 @@ with `python -m fishing.content`.
   the original untouched.
 - Writes stay atomic (temp file + rename) and keep the existing autosave cadence.
 
-### 3.2 Schema (top level)
+### 3.2 Schema
+
+**One authority per domain.** Save v2 is the existing flat `State` JSON
+(`sim.State.to_json`) with `"version": 2` and **one new key, `v2`**, that holds
+only domains that didn't exist before. Existing fields stay where they are and
+remain the single source of truth: money, lines, well, `journal` (catch count,
+best, zone, bait, band), `narrative_v1` (quests, Ripples, reward claims,
+schedule seed, Bot notes), `boat_id`, `owned_boats`, and the fuel and battery
+fields. Nothing in `v2` duplicates them. Derived values (a book stage from a
+journal count, a friendship state from quest status) are computed on load, never
+stored. New V1.0 quests extend `narrative_v1`'s quest map and claim ledger with
+their new ids, rather than starting a second ledger.
 
 ```json
 {
   "version": 2,
-  "fishing": { "...": "existing v1 State fields, unchanged names" },
-  "narrative_v1": { "...": "existing ledger, unchanged" },
+  "...": "every existing v1 State field, unchanged names and meaning",
+  "narrative_v1": { "...": "existing ledger; V1.0 quest ids and claims are added here" },
   "v2": {
     "mode": "cozy",
     "profile": {"bot_name": "Copper-316", "shell": "tin", "shells": ["tin"],
@@ -107,14 +121,12 @@ with `python -m fishing.content`.
     "buff": null,
     "pantry": {"herbs": 0},
     "recipes": [], "dishes_known": [],
-    "boats": {"owned": ["jon"], "active": "jon", "per_boat": {}},
-    "book": {"species": {"bluegill": {"count": 3, "stage": 3, "found": [], "shiny": 0,
-                                       "since_shiny": 3}},
+    "boat_extras": {"<boat id>": {"paint": {}}},
+    "book": {"species": {"bluegill": {"found": [], "shiny": 0, "since_shiny": 3}},
              "tracked": null, "title": "fishypedia", "dream_clue": null},
     "legendaries": {"spillway_monster": {"records": [], "clues": ["teller"]}},
     "story": {"chapter": 0, "steps": {}, "scenes_seen": [], "pending_rewards": []},
-    "npcs": {"friend": {"willow": "acquaintance"}, "letters": [], "talk_days": {}},
-    "quests_v2": {"<quest id>": {"status": "available", "progress": {}}},
+    "npcs": {"letters": [], "talk_days": {}},
     "keepsakes": [], "ripples_v2": [],
     "calendar": {"weather_windows": {}},
     "settings": {"text_size": 1, "haul_speed": "normal", "reduced_motion": false}
@@ -124,9 +136,11 @@ with `python -m fishing.content`.
 
 ### 3.3 Rules
 
-- **Migration of v1 → v2:** the journal `count` sets the book stage (`02 §6.1`);
-  `found` gets the saved zone, bait and band. Owned boats map by id (`jon`,
-  `rowboat`, `daysailer`, `pontoon`). The Bot name comes from the schedule seed.
+- **Migration of v1 → v2:** the migrated save, written to the new path (§3.1)
+  while the v1 file stays untouched, is the v1 JSON with `version: 2` and a
+  default `v2` object. The book stage is derived from the existing journal
+  `count` (`02 §6.1`); `found` is seeded from the saved zone, bait and band. Boat
+  fields are untouched (ids `jon`, `rowboat`, `sail`, `pontoon`). The Bot name comes from the schedule seed.
   Mode is `cozy`. Story chapter is 0, but the **prologue is marked seen** for any
   save with catches, so a veteran isn't asked to set a first line. Unlocks: Cedar
   is open. Guardian sightings carry over.
@@ -168,8 +182,14 @@ with `python -m fishing.content`.
   that would have rolled any species instead becomes the legendary. Record, then
   release.
 - **Weather windows:** `calendar.py` pre-plans each lake's weather for the next 7
-  game days from the seed. The planner guarantees the legendary coverage rule in
-  `03 §3`, then blends with the existing weather system. The journal reads the plan
+  game days from the seed. The planner guarantees the single 3-game-day bound in
+  `02 §3.6` / `03 §3`, then blends with the existing weather system.
+- **Named areas and waypoints:** `lakes.json` defines circles or polygons with ids
+  (`marked_pool`, `landing_edge`, `reed_edge_1..3`, `drift_buoy_1..3`,
+  `practice_buoy_1..4`, `lamp_buoy_1..3`, `survey_marker`, `calm_reflection`, the
+  three chapter-4 coves). Objectives reference them with `area_id` or
+  `waypoint_ids`. Areas used by fishing objectives must contain legal line water
+  (checked by the validator). The journal reads the plan
   to show the "next eligible window".
 - **Line capacity:** `boat.lines` from `boats.json`. Setting a line checks the
   number of deployed lines against the active boat.
@@ -290,8 +310,9 @@ with an LRU; the `--benchmark` run logs per-subsystem estimates
 ## 8. Performance targets
 
 - GPU path: 60 fps at 1440×810 on mid-range integrated graphics (existing class
-  of target). The benchmark reports p50 and p95 frame time. A p95 above 25 ms is a
-  failure.
+  of target). The benchmark reports p50 and p95 frame time. It fails if p50 is
+  over 16.7 ms (60 fps) or p95 is over 20 ms. That 3.3 ms of tolerance covers GC
+  and driver hitches, not a lower target.
 - Lake load: ≤ 6 s on GPU, ≤ 15 s on software.
 - Software renderer: ≥ 20 fps at 640×360 with cats as impostors.
 
