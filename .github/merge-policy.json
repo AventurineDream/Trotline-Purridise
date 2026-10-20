@@ -18,7 +18,7 @@
   "review_identity": "named_agent_not_github_account",
   "shared_github_accounts_allowed": true,
   "accepted_review": "completed_exact_head_agent_review",
-  "required_verdict": "CLEAR",
+  "required_verdict": "GREEN",
   "excluded_review_signals": [
     "implementing_agent_self_review"
   ]
