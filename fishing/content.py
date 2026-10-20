@@ -665,6 +665,17 @@ class _ContentV2Validator:
                                             row.get("rate_multipliers"), species_ids)
                 if set(rates) != species_ids:
                     self.error(lakes_file, where + ".rate_multipliers", "must declare one rate for every species")
+                listed = row.get("species_ids")
+                listed_ids = {sid for sid in listed if isinstance(sid, str)} if isinstance(listed, list) else set()
+                for sid in species_ids.intersection(rates):
+                    rate = rates[sid]
+                    if type(rate) in (int, float) and _is_finite(rate) and rate >= 0:
+                        if (sid in listed_ids) != (rate > 0):
+                            self.error(
+                                lakes_file,
+                                f"{where}.rate_multipliers({sid})",
+                                "must be positive exactly when the species is listed in species_ids",
+                            )
             if "zone_labels" in row:
                 labels = row.get("zone_labels")
                 if not isinstance(labels, dict):

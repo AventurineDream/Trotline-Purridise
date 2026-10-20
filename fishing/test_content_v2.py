@@ -43,6 +43,8 @@ class ContentV2Checks(unittest.TestCase):
         broken["baits.json"]["baits"][0]["matches"]["missing_fish"] = 0.5
         broken["boats.json"]["boats"][0]["bow"] = -2
         broken["lakes.json"]["lakes"][0]["species_count"] = 999
+        broken["lakes.json"]["lakes"][1]["rate_multipliers"]["smallmouth"] = 1.0
+        broken["lakes.json"]["lakes"][1]["rate_multipliers"]["blue"] = 0.0
 
         with tempfile.TemporaryDirectory() as directory:
             for filename, raw in broken.items():
@@ -56,6 +58,8 @@ class ContentV2Checks(unittest.TestCase):
             "baits.json:baits(worm).matches.missing_fish",
             "boats.json:boats(jon).bow",
             "lakes.json:lakes(briar).species_count",
+            "lakes.json:lakes(cedar).rate_multipliers(smallmouth)",
+            "lakes.json:lakes(cedar).rate_multipliers(blue)",
         ):
             with self.subTest(location=location):
                 self.assertIn(location, message)
