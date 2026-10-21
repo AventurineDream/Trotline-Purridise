@@ -24,7 +24,11 @@ class TitleBrandingChecks(unittest.TestCase):
         self.assertTrue(all(GAME_TITLE in _help_title(topic) for topic, _ in _HELP))
 
     def test_ui_strings_only_use_little_briar_as_a_lake_name(self):
-        ui_paths = (ROOT / "fishing" / "ui.py", ROOT / "fishing" / "game.py")
+        ui_paths = (
+            ROOT / "fishing" / "ui.py",
+            ROOT / "fishing" / "game.py",
+            ROOT / "fishing" / "verify.py",
+        )
         little_briar_strings = set()
         for path in ui_paths:
             tree = ast.parse(path.read_text(), filename=str(path))
@@ -38,6 +42,9 @@ class TitleBrandingChecks(unittest.TestCase):
             "Little Briar Lake",
             "Find this one on Little Briar.",
         })
+        verify_source = (ROOT / "fishing" / "verify.py").read_text()
+        self.assertIn('Platform(1280,720,f"{GAME_TITLE} — visual check"',
+                      verify_source)
 
     def test_platform_save_namespace_remains_stable(self):
         self.assertEqual(SDL_ORGANIZATION, "TrotLineSim")

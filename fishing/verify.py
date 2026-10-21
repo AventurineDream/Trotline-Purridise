@@ -18,7 +18,7 @@ from .imageops import resize_rgb
 from .platform import Text
 from .render import Renderer
 from .sim import Catch, Hook, SetLine, State
-from .ui import UI, UIState, SHOP_TABS, HELP_N
+from .ui import UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE
 from .narrative import QUEST_IDS
 from .boat import BOATS, ROWBOAT_BATTERY_KWH
 from .world import World
@@ -279,7 +279,7 @@ def window_smoke():
     from .platform import Platform
     from .pngsave import write_png
     world = World()
-    platform = Platform(1280,720,"Little Briar — visual check",verify_pixels=True)
+    platform = Platform(1280,720,f"{GAME_TITLE} — visual check",verify_pixels=True)
     text = Text()
     renderer = Renderer(world,1280,720,software=platform.context is None,context=platform.context)
     audio = Audio()
