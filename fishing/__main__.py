@@ -16,6 +16,7 @@ from .game import Keys, Session
 from .imageops import resize_rgb
 from .pngsave import write_png
 from .render import Renderer
+from .savepaths import parse_save_option
 from .sim import HeldLine, State
 from .ui import UI, UIState
 from .world import World, shore_sd
@@ -25,6 +26,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        argv, save_path = parse_save_option(argv)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
     if "--selftest" in argv:
         return selftest(software="--software" in argv)
     if "--benchmark" in argv:
@@ -44,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
         dest = argv[i + 1] if i + 1 < len(argv) else str(ROOT / "shots")
         return shots(dest)
     from .game import run
-    run(software="--software" in argv)
+    run(software="--software" in argv, save_path=save_path)
     return 0
 
 

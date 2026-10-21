@@ -495,6 +495,7 @@ class UI:
             draw_sighting(frame, state, camera)
         if mode == "title":
             self._title(frame, state, ui)
+            self._toasts(frame, state)
             return
         if mode == "play":
             self._hud(frame, state)
