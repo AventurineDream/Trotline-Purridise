@@ -142,6 +142,28 @@ class WorldPauseChecks(unittest.TestCase):
         self.assertEqual(self.session.state.game_minutes, before + 103)
         self.assertEqual(self.session.state.stamp, 1_100.0)
 
+    def test_title_autosave_persists_catch_up_before_refreshing_timestamp(self):
+        self.state.stamp = 1_000.0
+        self.state.save(self.path, update_stamp=False)
+        with patch("fishing.game.time.time", return_value=1_100.0):
+            loaded = State.load(self.path, self.world)
+            self.session = Session(self.world, self.path, loaded, True)
+        self.session.ui.mode = "title"
+        before = self.session.state.game_minutes
+        self.tick_for_five_minutes()
+
+        with patch("fishing.game.time.time", return_value=1_400.0):
+            self.session.save()
+
+        self.assertEqual(self.session.state.game_minutes, before + 100)
+        self.assertEqual(self.session.state.stamp, 1_400.0)
+        self.assertFalse(self.session._title_catchup_pending)
+
+        with patch("fishing.game.time.time", return_value=1_700.0):
+            self.session.tick(Keys(pressed=("return",)), 0.25)
+        self.assertEqual(self.session.state.game_minutes, before + 103)
+        self.assertEqual(self.session.state.stamp, 1_400.0)
+
     def test_quitting_from_title_help_saves_offline_catch_up_without_title_time(self):
         self.state.stamp = 1_000.0
         self.state.save(self.path, update_stamp=False)
