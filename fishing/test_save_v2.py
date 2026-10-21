@@ -406,7 +406,7 @@ class SaveV2Checks(unittest.TestCase):
                 patch.object(ui, "_toasts") as draw_toasts:
             ui.draw(frame, state, ui_state)
         draw_title.assert_called_once_with(frame, state, ui_state)
-        draw_toasts.assert_called_once_with(frame, state)
+        draw_toasts.assert_called_once_with(frame, state, ui_state.input_device)
 
     def test_save_override_and_sdl_pref_path_selection(self):
         args, override = savepaths.parse_save_option(["--software", "--save", "folder/my save.json"])
