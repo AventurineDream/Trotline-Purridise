@@ -102,7 +102,12 @@ with `python -m fishing.content`.
   Override with `--save PATH` for tests.
 - On first launch, if `saves/briar.json` (v1) exists and no v2 save does: copy it
   to `<prefpath>/backup/briar.v1.<timestamp>.json`, migrate, write v2, and leave
-  the original untouched.
+  the original untouched. Do not make another backup on later launches after a
+  v2 save has been written. `--save PATH` selects an explicit save file for
+  tests and portable runs; its backup folder is next to that file.
+- If the v2 file is corrupt, try timestamped backups newest first. Restore the
+  first valid backup and show a toast; leave the corrupt file alone if no backup
+  can be loaded.
 - Writes stay atomic (temp file + rename) and keep the existing autosave cadence.
 
 ### 3.2 Schema
@@ -136,14 +141,23 @@ their new ids, rather than starting a second ledger.
     "book": {"species": {"bluegill": {"found": [], "shiny": 0, "since_shiny": 3}},
              "tracked": null, "title": "fishypedia", "dream_clue": null},
     "legendaries": {"spillway_monster": {"records": [], "clues": ["teller"]}},
-    "story": {"chapter": 0, "steps": {}, "scenes_seen": [], "pending_rewards": []},
+    "story": {"chapter": 0, "steps": {}, "scenes_seen": [], "pending_rewards": [],
+              "scene_states": {}},
     "npcs": {"letters": [], "talk_days": {}},
     "keepsakes": [], "ripples_v2": [],
     "calendar": {"weather_windows": {}},
-    "settings": {"text_size": 1, "haul_speed": "normal", "reduced_motion": false}
+    "settings": {"text_size": 1, "haul_speed": "normal", "reduced_motion": false},
+    "reward_claims": {"story": [], "legendary_record": [], "book_stage_up": []}
   }
 }
 ```
+
+`narrative_v1.reward_claims` remains the single authority for quest rewards.
+The v2 `reward_claims` lists hold keys for the new story, legendary-record and
+book-stage-up rewards. A scene state is `pending` or `done`; pending scenes
+replay from their start and do not grant rewards, while done scenes also appear
+in `scenes_seen`. Unknown JSON keys at the save root, inside the v1 narrative
+ledger, and throughout `v2` are kept when a save is written.
 
 ### 3.3 Rules
 
@@ -153,11 +167,15 @@ their new ids, rather than starting a second ledger.
   `count` (`02 §6.1`); `found` is seeded from the saved zone, bait and band. Boat
   fields are untouched (ids `jon`, `rowboat`, `sail`, `pontoon`). The Bot name comes from the schedule seed.
   Mode is `cozy`. Story chapter is 0, but the **prologue is marked seen** for any
-  save with catches, so a veteran isn't asked to set a first line. Unlocks: Cedar
-  is open. Guardian sightings carry over.
+  save with catches, so a veteran isn't asked to set a first line. Existing
+  counts derive the book stage at 0/1/3/5/10 catches; a saved zone, bait and band
+  seed the first `found` condition. The Bot name is `Copper-` followed by the
+  absolute schedule seed modulo 1000, padded to three digits. Unlocks: Cedar is
+  open. Guardian sightings carry over.
 - **Exactly once:** each reward (quest, story, legendary record, book stage-up) has
   a claim key in the ledger. Credit and reward are written in the same save
-  transaction. Re-entering a scene never re-grants.
+  transaction. Re-entering a scene never re-grants. For v2 rewards, add the key
+  before applying the credit, then save both changes together.
 - **Interrupted scenes:** a story scene is either *pending* (it replays from its
   start on load, with no rewards granted yet) or *done*. Never half.
 - **Unknown fields** are preserved on save (forward compatibility) and ignored on

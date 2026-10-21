@@ -92,7 +92,7 @@ class NarrativeChecks(unittest.TestCase):
         self.assertEqual(loaded.narrative.to_json(), NarrativeState().to_json())
         self.assertEqual(len(loaded.narrative.quests), 12)
         self.assertTrue(all(q.status == "available" for q in loaded.narrative.quests.values()))
-        self.assertEqual(result["version"], 1)
+        self.assertEqual(result["version"], 2)
         migrated_id = loaded.lines[0].line_id
         UUID(migrated_id)
         loaded.save(self.path)

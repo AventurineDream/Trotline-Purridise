@@ -1,0 +1,422 @@
+{
+  "anchored": true,
+  "bait": {
+    "craw": 0,
+    "liver": 0,
+    "minnow": 0,
+    "shad": 0,
+    "worm": 24
+  },
+  "boat_id": "jon",
+  "bot": {
+    "phase": "home",
+    "target_line_id": null,
+    "tx": 0.0,
+    "tz": 0.0,
+    "x": 0.0,
+    "yaw": 0.0,
+    "z": 0.0
+  },
+  "box_tier": 0,
+  "earned": 0.0,
+  "finder": false,
+  "fuel_tanks": {
+    "jon": 12.0
+  },
+  "game_minutes": 0.0,
+  "held": [
+    "std"
+  ],
+  "hooked_total": 0,
+  "journal": {
+    "alligator_gar": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "bigmouth_buffalo": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "black_buffalo": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "black_bullhead": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "blue": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "blue_sucker": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "bluegill": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "bowfin": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "brown_bullhead": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "buffalo": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "bullhead": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "carp": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "chain_pickerel": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "channel": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "crappie": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "drum": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "flathead": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "gar": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "gizzard_shad": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "golden_shiner": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "green_sunfish": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "hybrid_striper": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "largemouth": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "longear": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "redbreast": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "redear": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "shortnose_gar": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "smallmouth": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "spotted_bass": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "spotted_gar": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "striped_bass": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "threadfin_shad": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "warmouth": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "white_bass": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "white_crappie": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    },
+    "yellow_bass": {
+      "bait": "",
+      "band": "",
+      "best": 0.0,
+      "count": 0,
+      "zone": ""
+    }
+  },
+  "lake_id": "briar",
+  "light": false,
+  "lines": [],
+  "look": {
+    "buoy": "orange",
+    "deck": "aluminum",
+    "hull": "aluminum",
+    "motor": "black"
+  },
+  "money": 46.0,
+  "motor": 0,
+  "muted": false,
+  "narrative_v1": {
+    "active_play_game_minutes": 0.0,
+    "bot_journal": [],
+    "bot_notes": [],
+    "bot_reactions": {},
+    "day_npc_by_lake": {
+      "briar": null,
+      "cedar": null
+    },
+    "guardian_seen": false,
+    "quests": {
+      "q01_tea_leaves_deep_holes": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q02_lonely_star_current": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q03_unstrung_line": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q04_great_contour_chart": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q05_moonlight_trotlines": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q06_unrepeatable_sunrise": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q07_art_of_the_nap": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q08_channel_run": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q09_quiet_channel": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q10_ballad_lonely_star": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q11_deep_water_drift": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      },
+      "q12_first_voyage": {
+        "accepted_game_minute": null,
+        "declined": false,
+        "progress": {},
+        "status": "available"
+      }
+    },
+    "reward_claims": [],
+    "ripples": [],
+    "schedule_day_by_lake": {
+      "briar": null,
+      "cedar": null
+    },
+    "schedule_seed": 0
+  },
+  "owned": {
+    "buoy": [
+      "orange"
+    ],
+    "deck": [
+      "aluminum"
+    ],
+    "hull": [
+      "aluminum"
+    ],
+    "motor": [
+      "black"
+    ]
+  },
+  "owned_boats": [
+    "jon"
+  ],
+  "preferred_bait": "worm",
+  "rowboat_battery_kwh": 0.0,
+  "rowboat_charge_kwh_this_visit": 0.0,
+  "rowboat_trolling_motor": false,
+  "seed": 123,
+  "spent": 0.0,
+  "stamp": 1792540671.8604703,
+  "time_scale": 1,
+  "traveled": 0.0,
+  "tutorial": 0,
+  "version": 1,
+  "well": [],
+  "well_tier": 0,
+  "x": -439.67,
+  "yaw": 1.8124,
+  "z": 108.34
+}
