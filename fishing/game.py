@@ -96,8 +96,6 @@ class Session:
         self.sound = None
         self.focused = bool(getattr(keys, "focused", True))
         if keys.quit:
-            if self._title_catchup_pending and self.ui.has_save:
-                self.state.catch_up(now=self._continue_catchup_at)
             if self.ui.mode != "title" or self.ui.has_save:
                 self.save()
             self.quit = True
@@ -119,6 +117,9 @@ class Session:
             self._npc_key = key
 
     def save(self) -> None:
+        if self._title_catchup_pending and self.ui.has_save:
+            self.state.catch_up(now=self._continue_catchup_at)
+            self._title_catchup_pending = False
         self._refresh_npcs()
         self.state.save(self.save_path)
         self.ui.has_save = True
@@ -277,8 +278,9 @@ class Session:
                     self.state.toast("That save could not be read.")
                     return
                 self._attach_quest_manager()
-                self.state.catch_up(now=self._continue_catchup_at)
-                self._title_catchup_pending = False
+                if self._title_catchup_pending:
+                    self.state.catch_up(now=self._continue_catchup_at)
+                    self._title_catchup_pending = False
                 self.ui.mode = "play"
             elif choice == "New morning":
                 self.ui.confirm_new = True
@@ -786,7 +788,7 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
                                  and (not session.state.rowboat_trolling_motor
                                       or session.state.rowboat_battery_kwh<=0)
                                  and abs(session.state.throttle)>0.01))
-            if session.ui.mode != "title":
+            if session.ui.mode != "title" or session.ui.has_save:
                 save_acc += dt
                 if save_acc >= 45.0:
                     session.save()
