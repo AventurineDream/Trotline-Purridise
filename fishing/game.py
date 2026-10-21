@@ -21,7 +21,8 @@ from .guardian import maybe_start_sighting, pause_sighting_clock
 from .bot import reset as reset_bot
 from .bot import summon as summon_bot
 from .bot import tick as tick_bot
-from .sim import State, saved_lake
+from .sim import State
+from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
 from .ui import UI, UIState, SHOP_TABS, HELP_N, check_rows, shop_rows, title_options
 from .world import World
 
@@ -31,6 +32,16 @@ MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
 NAVIGATION_KEYS = set(MENU_DIRECTIONS) | set(MENU_DIRECTIONS.values())
 DRIVING_KEYS = {"w", "s", "a", "d", "up", "down", "left", "right"}
 PAUSE_N = 4
+
+
+def _save_target(root: Path, override: str | Path | None) -> tuple[Path, bool]:
+    """Use a local compatibility path if SDL cannot provide the user folder."""
+    try:
+        return resolve_save_path(override), False
+    except RuntimeError:
+        if override is not None:
+            raise
+        return root / "saves" / "save.json", True
 
 
 class Keys:
@@ -676,19 +687,14 @@ def _window_size(display_w: int, display_h: int) -> tuple[int, int]:
     return width, width * 9 // 16
 
 
-def run(*,software=False) -> None:
+def run(*,software=False, save_path: str | Path | None = None) -> None:
     root = Path(__file__).resolve().parents[1]
-    save_path = root / "saves" / "briar.json"
-    has_save = save_path.exists()
-    world = World(saved_lake(save_path) if has_save else "briar")
-    state = None
-    if has_save:
-        try:
-            state = State.load(save_path, world)
-        except (OSError, ValueError, KeyError):
-            has_save = False
-    if state is None:
-        state = State.new(world)
+    legacy_path = root / LEGACY_SAVE if save_path is None else None
+    save_path, used_local_fallback = _save_target(root, save_path)
+    world, state, has_save = load_game_save(
+        save_path, State, World, legacy_path=legacy_path)
+    if used_local_fallback:
+        state.toast("Platform save folder unavailable; using the local save folder.")
     session = Session(world, save_path, state, has_save)
 
     dw, dh = Platform.display_size()
