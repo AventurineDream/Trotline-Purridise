@@ -13,6 +13,7 @@ from unittest.mock import patch
 import numpy as np
 
 from . import savepaths
+from .gamepad import default_key_bindings
 from .narrative import QUEST_IDS
 from .savepaths import (UnsupportedSaveVersionError, book_stage,
                         load_game_save)
@@ -116,6 +117,7 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(defaults["calendar"], {"weather_windows": {}})
         self.assertEqual(defaults["settings"], {
             "text_size": 1, "haul_speed": "normal", "reduced_motion": False,
+            "key_bindings": default_key_bindings(),
         })
         self.assertEqual(defaults["reward_claims"], {
             "story": [], "legendary_record": [], "book_stage_up": [],

@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 
 from .platform import Text, find_font
-from .ui import UI, UIState, _HELP, _help_title
+from .ui import UI, UIState, _GAMEPAD_HELP_CONTROLS, _HELP, _help_title
 
 
 class GuideLayoutChecks(unittest.TestCase):
@@ -42,34 +42,39 @@ class GuideLayoutChecks(unittest.TestCase):
 
         ui._text, ui._panel = text, panel
         for width, height in ((480, 270), (640, 360), (960, 540), (1280, 720), (1920, 1080)):
-            for page, (title, lines) in enumerate(_HELP):
-                with self.subTest(width=width, height=height, page=page):
-                    records.clear()
-                    panels.clear()
-                    frame = np.zeros((height, width, 3), np.uint8)
-                    ui._help(frame, UIState(help_page=page))
-                    self.assertEqual(len(panels), 1)
-                    px, py, pw, ph = panels[0]
-                    self.assertGreaterEqual(px, 0)
-                    self.assertGreaterEqual(py, 0)
-                    self.assertLessEqual(px + pw, width)
-                    self.assertLessEqual(py + ph, height)
-                    self.assertEqual([r[0] for r in records[2:-1]], [line for line in lines if line])
-                    self.assertEqual(records[0][0], _help_title(title))
-                    self.assertIn('Esc closes', records[-1][0])
-                    for label, x, y, tw, th, size in records:
-                        self.assertGreaterEqual(size, 12, label)
-                        self.assertGreaterEqual(x, px, label)
-                        self.assertGreaterEqual(y, py, label)
-                        self.assertLessEqual(x + tw, px + pw, label)
-                        self.assertLessEqual(y + th, py + ph, label)
-                    for i, first in enumerate(records):
-                        for second in records[i+1:]:
-                            _, x, y, tw, th, _ = first
-                            _, xx, yy, ww, hh, _ = second
-                            overlap = x < xx + ww and xx < x + tw and y < yy + hh and yy < y + th
-                            self.assertFalse(overlap, f'{first[0]!r} overlaps {second[0]!r}')
-                    self.assertGreater(np.count_nonzero(frame), 0)
+            for device in ("keyboard", "gamepad"):
+                for page, (title, original_lines) in enumerate(_HELP):
+                    lines = original_lines
+                    if device == "gamepad":
+                        lines = tuple(_GAMEPAD_HELP_CONTROLS.get(line, line)
+                                      for line in original_lines)
+                    with self.subTest(width=width, height=height, page=page, device=device):
+                        records.clear()
+                        panels.clear()
+                        frame = np.zeros((height, width, 3), np.uint8)
+                        ui._help(frame, UIState(help_page=page, input_device=device))
+                        self.assertEqual(len(panels), 1)
+                        px, py, pw, ph = panels[0]
+                        self.assertGreaterEqual(px, 0)
+                        self.assertGreaterEqual(py, 0)
+                        self.assertLessEqual(px + pw, width)
+                        self.assertLessEqual(py + ph, height)
+                        self.assertEqual([r[0] for r in records[2:-1]], [line for line in lines if line])
+                        self.assertEqual(records[0][0], _help_title(title))
+                        self.assertIn('Esc closes' if device == 'keyboard' else 'B closes', records[-1][0])
+                        for label, x, y, tw, th, size in records:
+                            self.assertGreaterEqual(size, 12, label)
+                            self.assertGreaterEqual(x, px, label)
+                            self.assertGreaterEqual(y, py, label)
+                            self.assertLessEqual(x + tw, px + pw, label)
+                            self.assertLessEqual(y + th, py + ph, label)
+                        for i, first in enumerate(records):
+                            for second in records[i+1:]:
+                                _, x, y, tw, th, _ = first
+                                _, xx, yy, ww, hh, _ = second
+                                overlap = x < xx + ww and xx < x + tw and y < yy + hh and yy < y + th
+                                self.assertFalse(overlap, f'{first[0]!r} overlaps {second[0]!r}')
+                        self.assertGreater(np.count_nonzero(frame), 0)
 
 
 if __name__ == '__main__':
