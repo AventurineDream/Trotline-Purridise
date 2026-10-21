@@ -48,6 +48,7 @@ DIM = (169, 183, 175)
 GOLD = (218, 187, 124)
 WARN = (220, 126, 96)
 GOOD = (150, 196, 140)
+GAME_TITLE = "Trotline Purridise"
 
 SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes")
 _TABS = SHOP_TABS
@@ -950,7 +951,7 @@ class UI:
         small = max(11,int(h/60))
         x,y = int(w*0.075),int(h*(0.20 if h<480 else 0.43))
         self._text(frame,"A   T R O T L I N E   L A K E",x,y,small,GOLD,False,"sans")
-        self._text(frame,"Little Briar",x,y+small+10,title,INK,True,"serif")
+        self._text(frame,GAME_TITLE,x,y+small+10,title,INK,True,"serif")
         self._text(frame,"Set your lines. Stay a while.",x,y+title+small+20,body,DIM,False,"sans")
         options = title_options(ui.has_save)
         ui.title_i %= len(options)
@@ -1349,6 +1350,7 @@ class UI:
         pages = _HELP
         ui.help_page %= len(pages)
         title, lines = pages[ui.help_page]
+        title = _help_title(title)
         h, w = frame.shape[:2]
         head = self._size(frame, "head")
         body = self._size(frame, "small")
@@ -1461,6 +1463,12 @@ _HELP = (
         "Money, catches, gear, boats, and journal come with you.",
     )),
 )
+
+
+def _help_title(topic: str) -> str:
+    return f"{topic}  ·  {GAME_TITLE}"
+
+
 HELP_N = len(_HELP)
 
 
