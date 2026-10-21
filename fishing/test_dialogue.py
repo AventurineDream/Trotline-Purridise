@@ -113,7 +113,7 @@ class DialogueChecks(unittest.TestCase):
         self.assertEqual(self.session.ui.mode, 'map')
         with patch.object(self.state, 'drive') as drive:
             self.session.tick(Keys(held=['s']), .1)
-            self.assertEqual(drive.call_args.args[1], 0)
+            drive.assert_not_called()
         self.key('tab')
         with patch.object(self.state, 'drive') as drive:
             self.key('w', dt=.1)
@@ -121,16 +121,15 @@ class DialogueChecks(unittest.TestCase):
         self.state._park(self.world)
         self.key('e'); self.assertEqual(self.session.ui.mode, 'shop')
 
-    def test_dialogue_ticks_clock_lines_and_bot_without_driving(self):
+    def test_dialogue_pauses_clock_lines_and_bot_without_driving(self):
         self.key('c')
         before = self.state.game_minutes
         with patch.object(self.state, 'drive', wraps=self.state.drive) as drive, patch('fishing.game.tick_bot') as bot:
             bot.return_value = None
             self.session.tick(Keys(held=['w', 'a']), 2)
-            self.assertEqual(drive.call_args.args[1:3], (0, 0))
-            self.assertTrue(drive.call_args.kwargs['idle'])
-            bot.assert_called_once()
-        self.assertGreater(self.state.game_minutes, before)
+            drive.assert_not_called()
+            bot.assert_not_called()
+        self.assertEqual(self.state.game_minutes, before)
         self.assertEqual(self.state.narrative.quests[self.npc.quest_id].progress, {})
 
     def test_ready_wait_does_not_pay_until_explicit_turn_in(self):

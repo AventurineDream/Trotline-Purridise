@@ -266,9 +266,9 @@ class NarrativeChecks(unittest.TestCase):
 
         session.tick(Keys(), 2.0)
 
-        self.assertEqual(state.anim, 5.0)
-        self.assertEqual(state.guardian_sighting_started_at, 4.0)
-        self.assertEqual(state.guardian_sighting_last_anim, 5.0)
+        self.assertEqual(state.anim, 3.0)
+        self.assertEqual(state.guardian_sighting_started_at, 2.0)
+        self.assertEqual(state.guardian_sighting_last_anim, 3.0)
 
         session.ui.mode = "play"
         session.tick(Keys(), 1.0)
@@ -433,12 +433,20 @@ class NarrativeChecks(unittest.TestCase):
         self.assertIsNone(s.tow_to_landing(self.world))
         self.assertEqual(s.narrative.active_play_game_minutes, 241)
 
-    def test_session_menus_count_only_when_clock_advances(self):
+    def test_session_menus_keep_the_active_clock_frozen(self):
         session = Session(self.world, self.path, self.state, False)
-        for mode, expected in (("pause", 0), ("help", 0), ("journal", 1), ("shop", 2)):
+        self.state.x, self.state.z = self.state.npcs[1].anchor.position
+        session._hail()
+        self.assertEqual(session.ui.mode, "dialogue")
+        session.tick(Keys(), 1)
+        self.assertEqual(self.state.narrative.active_play_game_minutes, 0, "dialogue")
+        session._close_dialogue()
+        self.state.lines = [self.line()]
+        for mode in ("shop", "journal", "map", "pause", "help", "well", "setbait",
+                     "check", "settings", "kitchen", "scene"):
             session.ui.mode = mode
             session.tick(Keys(), 1)
-            self.assertEqual(self.state.narrative.active_play_game_minutes, expected)
+            self.assertEqual(self.state.narrative.active_play_game_minutes, 0, mode)
 
     def test_lake_travel_and_offline_keep_shared_ledger_and_saved_selection(self):
         self.state.lines = [self.line()]
