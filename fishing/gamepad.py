@@ -190,6 +190,11 @@ def session_input(keys, saved_bindings, repeat_state: dict[str, float]):
     )
     pressed = keyboard_pressed | gamepad_pressed_source
     held = keyboard_held | gamepad_held_source
+    # A menu may stop asking about a direction while another screen is open.
+    # Expire its repeat timer from the complete current held set every tick,
+    # rather than waiting for a later tap() call to notice the release.
+    for name in repeat_state.keys() - held:
+        repeat_state.pop(name, None)
 
     class ActionInput:
         def __init__(self):
@@ -228,7 +233,6 @@ class Gamepad:
         self.controller = None
         self.instance_id: int | None = None
         self.buttons: set[int] = set()
-        self.axes: dict[int, int] = {}
         self._axis_actions: dict[int, set[str]] = {}
         self._pressed: set[str] = set()
         self._y_down = False
@@ -293,7 +297,6 @@ class Gamepad:
 
     def clear_input(self):
         self.buttons.clear()
-        self.axes.clear()
         self._axis_actions.clear()
         self._pressed.clear()
         self._y_down = False
@@ -303,38 +306,58 @@ class Gamepad:
         self._y_release_pulse = False
         self.activity = False
 
-    def handle_event(self, event):
+    def handle_event(self, event) -> bool:
+        """Apply one SDL event and report whether it was controller activity."""
         event_type = int(event.type)
         if event_type == SDL_CONTROLLERDEVICEADDED:
             self._open(int(event.cdevice.which))
-            return
+            return False
         if event_type == SDL_CONTROLLERDEVICEREMOVED:
             removed = int(event.cdevice.which)
             if self.instance_id is None or removed == self.instance_id:
                 self._close()
                 self._open_existing()
-            return
+            return False
         if event_type == SDL_CONTROLLERDEVICEREMAPPED:
-            return
+            return False
         if event_type == SDL_CONTROLLERAXISMOTION:
             if self.instance_id is not None and int(event.caxis.which) != self.instance_id:
-                return
+                return False
             axis = int(event.caxis.axis)
             if axis not in (AXIS_LEFTX, AXIS_LEFTY, AXIS_TRIGGERLEFT, AXIS_TRIGGERRIGHT):
-                return
-            self.axes[axis] = int(event.caxis.value)
-            if self._axis_value_active(axis, self.axes[axis]):
+                return False
+            value = int(event.caxis.value)
+            before = (
+                set().union(*self._axis_actions.values())
+                if self._axis_actions else set()
+            )
+            actions = self._actions_for_axis(
+                axis, value, self._axis_actions.get(axis, set()),
+            )
+            if actions:
+                self._axis_actions[axis] = actions
+            else:
+                self._axis_actions.pop(axis, None)
+            after = (
+                set().union(*self._axis_actions.values())
+                if self._axis_actions else set()
+            )
+            # Capture an action edge even if another axis event returns to
+            # neutral before the next poll samples the controller.
+            self._pressed.update(after - before)
+            active = bool(actions) or self._axis_value_active(axis, value)
+            if active:
                 self.activity = True
-            return
+            return active
         if event_type not in (SDL_CONTROLLERBUTTONDOWN, SDL_CONTROLLERBUTTONUP):
-            return
+            return False
         if self.instance_id is not None and int(event.cbutton.which) != self.instance_id:
-            return
+            return False
         button = int(event.cbutton.button)
         down = event_type == SDL_CONTROLLERBUTTONDOWN
         already_down = button in self.buttons
         if down == already_down:
-            return
+            return False
         if down:
             self.buttons.add(button)
             self.activity = True
@@ -343,8 +366,9 @@ class Gamepad:
                 self._y_elapsed = 0.0
                 self._y_started_ms = int(event.cbutton.timestamp)
                 self._y_long = False
-                return
+                return True
             self._pressed.update(BUTTON_ACTIONS.get(button, ()))
+            return True
         else:
             self.buttons.discard(button)
             if button == BUTTON_Y:
@@ -358,7 +382,7 @@ class Gamepad:
                 elif self._y_down:
                     self._pressed.add("b")
                 self._y_down = False
-                return
+            return False
 
     def _timestamp_delta(self, now: int) -> float:
         if not now or not self._y_started_ms:
@@ -388,6 +412,21 @@ class Gamepad:
         threshold = TRIGGER_RELEASE_ZONE if action in prior else TRIGGER_DEADZONE
         return {action} if fraction >= threshold else set()
 
+    def _actions_for_axis(self, axis: int, value: int, prior: set[str]) -> set[str]:
+        if axis == AXIS_LEFTX:
+            return self._signed_axis(
+                value, "a", "d", prior, STICK_DEADZONE, STICK_RELEASE_ZONE,
+            )
+        if axis == AXIS_LEFTY:
+            return self._signed_axis(
+                value, "w", "s", prior, STICK_DEADZONE, STICK_RELEASE_ZONE,
+            )
+        if axis == AXIS_TRIGGERLEFT:
+            return self._trigger_axis(value, "s", prior)
+        if axis == AXIS_TRIGGERRIGHT:
+            return self._trigger_axis(value, "w", prior)
+        return set()
+
     def sample(self, dt: float) -> tuple[set[str], set[str], bool]:
         dt = max(0.0, min(0.5, float(dt)))
         if self._y_down:
@@ -396,31 +435,8 @@ class Gamepad:
                 self._y_long = True
                 self._pressed.add("z")
 
-        prior_by_axis = self._axis_actions
-        axes = self.axes
-        next_by_axis = {
-            AXIS_LEFTX: self._signed_axis(
-                axes.get(AXIS_LEFTX, 0), "a", "d", prior_by_axis.get(AXIS_LEFTX, set()),
-                STICK_DEADZONE, STICK_RELEASE_ZONE,
-            ),
-            AXIS_LEFTY: self._signed_axis(
-                axes.get(AXIS_LEFTY, 0), "w", "s", prior_by_axis.get(AXIS_LEFTY, set()),
-                STICK_DEADZONE, STICK_RELEASE_ZONE,
-            ),
-            AXIS_TRIGGERLEFT: self._trigger_axis(
-                axes.get(AXIS_TRIGGERLEFT, 0), "s",
-                prior_by_axis.get(AXIS_TRIGGERLEFT, set()),
-            ),
-            AXIS_TRIGGERRIGHT: self._trigger_axis(
-                axes.get(AXIS_TRIGGERRIGHT, 0), "w",
-                prior_by_axis.get(AXIS_TRIGGERRIGHT, set()),
-            ),
-        }
-        next_by_axis = {axis: actions for axis, actions in next_by_axis.items() if actions}
-        prior = set().union(*prior_by_axis.values()) if prior_by_axis else set()
-        next_axes = set().union(*next_by_axis.values()) if next_by_axis else set()
-        self._pressed.update(next_axes - prior)
-        self._axis_actions = next_by_axis
+        next_axes = (set().union(*self._axis_actions.values())
+                     if self._axis_actions else set())
 
         held = set(next_axes)
         for button in self.buttons:
@@ -434,6 +450,8 @@ class Gamepad:
             self._y_release_pulse = False
         pressed = set(self._pressed)
         self._pressed.clear()
-        activity = self.activity or bool(next_axes) or (self._y_down and self._y_long)
+        # Activity is event-driven. A held stick/button must not continually
+        # override a later keyboard event when updating the prompt device.
+        activity = self.activity
         self.activity = False
         return pressed, held, activity

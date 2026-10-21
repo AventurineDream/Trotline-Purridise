@@ -427,7 +427,6 @@ class Platform:
         inp = self._input
         inp.quit = False
         keyboard_pressed: set[str] = set()
-        keyboard_activity = False
         event = SDL_Event()
         while self.sdl.SDL_PollEvent(ctypes.byref(event)):
             if event.type == SDL_QUIT:
@@ -446,12 +445,13 @@ class Platform:
                     # A press and release can both arrive between slow frames.
                     # Keep that edge even though the final keyboard state is up.
                     keyboard_pressed.add(name)
-                    keyboard_activity = True
+                    self._last_device = "keyboard"
             elif self._focused or event.type in (
                 SDL_CONTROLLERDEVICEADDED, SDL_CONTROLLERDEVICEREMOVED,
                 SDL_CONTROLLERDEVICEREMAPPED,
             ):
-                self.gamepad.handle_event(event)
+                if self.gamepad.handle_event(event):
+                    self._last_device = "gamepad"
         n = c_int()
         state = self.sdl.SDL_GetKeyboardState(ctypes.byref(n))
         keyboard_held: set[str] = set()
@@ -459,17 +459,13 @@ class Platform:
             for name, code in SCAN.items():
                 if code < n.value and state[code]:
                     keyboard_held.add(name)
-        gamepad_pressed, gamepad_held, gamepad_activity = self.gamepad.sample(dt)
+        gamepad_pressed, gamepad_held, _gamepad_activity = self.gamepad.sample(dt)
         inp.keyboard_pressed = keyboard_pressed
         inp.keyboard_held = keyboard_held
         inp.gamepad_pressed = gamepad_pressed
         inp.gamepad_held = gamepad_held
         inp.pressed = keyboard_pressed | gamepad_pressed
         inp.held = keyboard_held | gamepad_held
-        if keyboard_activity:
-            self._last_device = "keyboard"
-        if gamepad_activity:
-            self._last_device = "gamepad"
         inp.device = self._last_device
         # SDL's held snapshot still controls throttle/steering and menu repeat.
         # OS key-repeat events must never become additional one-shot actions.

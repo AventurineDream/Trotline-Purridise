@@ -19,7 +19,7 @@ from .gamepad import (
     default_key_bindings, remap_keyboard, session_input,
 )
 from .game import Session
-from .platform import Input, Platform, SDL_Event
+from .platform import Input, Platform, SCAN, SDL_Event, SDL_KEYDOWN
 from .sim import State
 from .ui import check_rows
 from .world import World
@@ -60,6 +60,13 @@ class GamepadChecks(unittest.TestCase):
         event.caxis.axis = axis
         event.caxis.value = value
         self.timestamp += 50
+        self.push(event)
+
+    def key(self, name):
+        event = SDL_Event()
+        event.key.type = SDL_KEYDOWN
+        event.key.state = 1
+        event.key.keysym.scancode = SCAN[name]
         self.push(event)
 
     def tap(self, button, session=None):
@@ -194,6 +201,41 @@ class GamepadChecks(unittest.TestCase):
         self.axis(AXIS_TRIGGERRIGHT, 0)
         keys = self.platform.poll()
         self.assertNotIn("w", keys.gamepad_held)
+
+    def test_axis_flick_edges_survive_until_the_next_poll(self):
+        self.axis(AXIS_LEFTY, -20000)
+        self.axis(AXIS_LEFTY, 0)
+        keys = self.platform.poll()
+        self.assertIn("w", keys.gamepad_pressed)
+        self.assertNotIn("w", keys.gamepad_held)
+        self.assertNotIn("w", self.platform.poll().gamepad_pressed)
+
+        self.axis(AXIS_TRIGGERRIGHT, 24000)
+        self.axis(AXIS_TRIGGERRIGHT, 0)
+        keys = self.platform.poll()
+        self.assertIn("w", keys.gamepad_pressed)
+        self.assertNotIn("w", keys.gamepad_held)
+
+    def test_last_used_device_follows_event_order_without_stick_lock(self):
+        self.axis(AXIS_LEFTY, -20000)
+        self.key("e")
+        self.assertEqual(self.platform.poll().device, "keyboard")
+        self.assertEqual(self.platform.poll().device, "keyboard")
+
+        self.key("e")
+        self.axis(AXIS_LEFTY, -21000)
+        self.assertEqual(self.platform.poll().device, "gamepad")
+
+    def test_session_input_clears_repeat_for_released_actions_each_tick(self):
+        repeat = {"down": 0.37, "w": 0.2}
+        keys = SimpleNamespace(
+            keyboard_pressed=set(), keyboard_held={"w"},
+            gamepad_pressed=set(), gamepad_held=set(),
+            pressed={"w"}, held={"w"}, quit=False, focused=True,
+            device="keyboard",
+        )
+        session_input(keys, default_key_bindings(), repeat)
+        self.assertEqual(repeat, {"w": 0.2})
 
     def test_virtual_controller_hotplug_opens_and_closes(self):
         joystick, set_button, update, detach_device = self.attach_virtual_controller()
