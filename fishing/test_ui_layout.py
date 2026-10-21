@@ -6,7 +6,48 @@ from unittest.mock import patch
 import numpy as np
 
 from .platform import Text, find_font
-from .ui import UI, UIState, _GAMEPAD_HELP_CONTROLS, _HELP, _help_title
+from .ui import (
+    UI, UIState, _GAMEPAD_HELP_CONTROLS, _HELP, _help_title,
+    _prompt_for_device, _toast_for_device,
+)
+
+
+class DevicePromptChecks(unittest.TestCase):
+    def test_tutorial_prompts_follow_the_active_input_device(self):
+        keyboard = "W/S row or power    Shift idle    A/D steer"
+        self.assertEqual(_prompt_for_device(keyboard, "keyboard"), keyboard)
+        self.assertEqual(
+            _prompt_for_device(keyboard, "gamepad"),
+            "Left stick rows or steers    LT/RT set throttle",
+        )
+        self.assertEqual(
+            _prompt_for_device("Stop, then F to set a trotline", "gamepad"),
+            "Stop, then X to set a trotline",
+        )
+        self.assertEqual(
+            _prompt_for_device("T changes time while anchored    E checks a line", "gamepad"),
+            "Wait for a bite, then A checks a line",
+        )
+        self.assertEqual(_prompt_for_device("E  Check the line", "gamepad"),
+                         "A  Check the line")
+
+    def test_tutorial_toasts_use_gamepad_actions(self):
+        self.assertEqual(
+            _toast_for_device("Stop the boat and press F to set a trotline.", "gamepad"),
+            "Stop the boat and press X to set a trotline.",
+        )
+        self.assertEqual(
+            _toast_for_device("Anchor and press T to let time run. E checks a line.", "gamepad"),
+            "After setting a line, wait for a bite; A checks it.",
+        )
+        self.assertEqual(
+            _toast_for_device("Nose into the landing and press E to sell.", "gamepad"),
+            "Nose into the landing and press A to sell.",
+        )
+        self.assertEqual(
+            _toast_for_device("Nose into the landing and press E to sell.", "keyboard"),
+            "Nose into the landing and press E to sell.",
+        )
 
 
 class GuideLayoutChecks(unittest.TestCase):

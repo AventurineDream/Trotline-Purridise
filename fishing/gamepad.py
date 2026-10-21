@@ -240,7 +240,6 @@ class Gamepad:
         self._y_started_ms = 0
         self._y_long = False
         self._y_release_pulse = False
-        self.activity = False
         self._bind_sdl()
         self._open_existing()
 
@@ -304,7 +303,6 @@ class Gamepad:
         self._y_started_ms = 0
         self._y_long = False
         self._y_release_pulse = False
-        self.activity = False
 
     def handle_event(self, event) -> bool:
         """Apply one SDL event and report whether it was controller activity."""
@@ -346,8 +344,6 @@ class Gamepad:
             # neutral before the next poll samples the controller.
             self._pressed.update(after - before)
             active = bool(actions) or self._axis_value_active(axis, value)
-            if active:
-                self.activity = True
             return active
         if event_type not in (SDL_CONTROLLERBUTTONDOWN, SDL_CONTROLLERBUTTONUP):
             return False
@@ -360,7 +356,6 @@ class Gamepad:
             return False
         if down:
             self.buttons.add(button)
-            self.activity = True
             if button == BUTTON_Y:
                 self._y_down = True
                 self._y_elapsed = 0.0
@@ -374,19 +369,21 @@ class Gamepad:
             if button == BUTTON_Y:
                 duration = max(self._y_elapsed,
                                self._timestamp_delta(int(event.cbutton.timestamp)))
+                action_generated = False
                 if duration >= Y_TAP_LIMIT_MS:
                     if not self._y_long:
                         self._y_long = True
                         self._pressed.add("z")
                         self._y_release_pulse = True
+                        action_generated = True
                 elif self._y_down:
                     self._pressed.add("b")
+                    action_generated = True
                 self._y_down = False
+                return action_generated
             return False
 
     def _timestamp_delta(self, now: int) -> float:
-        if not now or not self._y_started_ms:
-            return 0.0
         return float((now - self._y_started_ms) & 0xFFFFFFFF)
 
     def _axis_value_active(self, axis: int, value: int) -> bool:
@@ -427,13 +424,20 @@ class Gamepad:
             return self._trigger_axis(value, "w", prior)
         return set()
 
-    def sample(self, dt: float) -> tuple[set[str], set[str], bool]:
-        dt = max(0.0, min(0.5, float(dt)))
+    def sample(self, dt: float, now_ms: int | None = None) -> tuple[set[str], set[str], bool]:
+        # Keep dt for API compatibility; the Y hold uses SDL's event clock.
+        activity = False
         if self._y_down:
-            self._y_elapsed += dt * 1000.0
+            if now_ms is None:
+                now_ms = int(self.sdl.SDL_GetTicks64())
+            self._y_elapsed = max(
+                self._y_elapsed,
+                self._timestamp_delta(int(now_ms) & 0xFFFFFFFF),
+            )
             if not self._y_long and self._y_elapsed >= Y_TAP_LIMIT_MS:
                 self._y_long = True
                 self._pressed.add("z")
+                activity = True
 
         next_axes = (set().union(*self._axis_actions.values())
                      if self._axis_actions else set())
@@ -450,8 +454,7 @@ class Gamepad:
             self._y_release_pulse = False
         pressed = set(self._pressed)
         self._pressed.clear()
-        # Activity is event-driven. A held stick/button must not continually
-        # override a later keyboard event when updating the prompt device.
-        activity = self.activity
-        self.activity = False
+        # Only report activity synthesized during sampling. Physical events
+        # are handled in poll order so they cannot override a later keyboard
+        # event from the same queue drain.
         return pressed, held, activity

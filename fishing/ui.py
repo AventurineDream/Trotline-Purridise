@@ -497,21 +497,21 @@ class UI:
             draw_sighting(frame, state, camera)
         if mode == "title":
             self._title(frame, state, ui)
-            self._toasts(frame, state)
+            self._toasts(frame, state, ui.input_device)
             return
         if mode == "play":
             self._hud(frame, state, ui)
-            self._toasts(frame, state)
+            self._toasts(frame, state, ui.input_device)
             return
         if mode == "map":
             self._hud(frame, state, ui)
             self._map(frame, state, ui, big=True)
-            self._toasts(frame, state)
+            self._toasts(frame, state, ui.input_device)
             return
         if mode == "dialogue":
             self._hud(frame, state, ui, interactions=False)
             self._dialogue(frame, state, ui)
-            self._toasts(frame, state)
+            self._toasts(frame, state, ui.input_device)
         elif mode == "shop":
             self._shop(frame, state, ui)
         elif mode == "setbait":
@@ -762,9 +762,7 @@ class UI:
             for dx, dy in ((7, 9), (13, 5), (20, 6), (26, 11)):
                 self._round_fill(frame, px+dx, py+dy, 5, 6, GOLD, 1.0)
             self._text(frame, label, px+38, py+7, small, INK, False, "sans")
-        prompt = state.prompt(self.world)
-        if prompt and ui.input_device == "gamepad":
-            prompt = prompt.replace("E  ", "A  ", 1)
+        prompt = _prompt_for_device(state.prompt(self.world), ui.input_device)
         if prompt:
             pw = self._measure(prompt,small+2)+32
             px,py = (w-pw)//2,h-m-max(map_h,stat_h+lines_h)-int(35*unit)-8
@@ -941,14 +939,15 @@ class UI:
             return
         frame[y0:y1, x0:x1] = np.array(rgb, np.uint8)
 
-    def _toasts(self, frame, state):
+    def _toasts(self, frame, state, input_device="keyboard"):
         if not state.toasts:
             return
         size = self._size(frame, "small")
         _cw, ch = self.cell(size)
         w = frame.shape[1]
         y = max(8, frame.shape[0] // 7)
-        for text, _ttl in state.toasts[-3:]:
+        for raw_text, _ttl in state.toasts[-3:]:
+            text = _toast_for_device(raw_text, input_device)
             tw = len(text) * _cw + 16
             x = (w - tw) // 2
             self._panel(frame, x, y, tw, ch + 8, 0.72)
@@ -1542,6 +1541,38 @@ _GAMEPAD_HELP_CONTROLS = {
     "Idle, then R calls a tow if you get stranded.":
         "Press R (keyboard) to call a tow if you get stranded.",
 }
+
+_GAMEPAD_TUTORIAL_PROMPTS = {
+    "W/S row or power    Shift idle    A/D steer":
+        "Left stick rows or steers    LT/RT set throttle",
+    "Stop, then F to set a trotline":
+        "Stop, then X to set a trotline",
+    "T changes time while anchored    E checks a line":
+        "Wait for a bite, then A checks a line",
+}
+
+_GAMEPAD_TUTORIAL_TOASTS = {
+    "Stop the boat and press F to set a trotline.":
+        "Stop the boat and press X to set a trotline.",
+    "Anchor and press T to let time run. E checks a line.":
+        "After setting a line, wait for a bite; A checks it.",
+    "Nose into the landing and press E to sell.":
+        "Nose into the landing and press A to sell.",
+}
+
+
+def _prompt_for_device(prompt: str | None, input_device: str) -> str | None:
+    if prompt and input_device == "gamepad":
+        if prompt.startswith("E  "):
+            return prompt.replace("E  ", "A  ", 1)
+        return _GAMEPAD_TUTORIAL_PROMPTS.get(prompt, prompt)
+    return prompt
+
+
+def _toast_for_device(text: str, input_device: str) -> str:
+    if input_device == "gamepad":
+        return _GAMEPAD_TUTORIAL_TOASTS.get(text, text)
+    return text
 
 
 def _help_title(topic: str) -> str:

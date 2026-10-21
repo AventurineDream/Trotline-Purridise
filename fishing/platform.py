@@ -459,7 +459,11 @@ class Platform:
             for name, code in SCAN.items():
                 if code < n.value and state[code]:
                     keyboard_held.add(name)
-        gamepad_pressed, gamepad_held, _gamepad_activity = self.gamepad.sample(dt)
+        gamepad_pressed, gamepad_held, gamepad_activity = self.gamepad.sample(
+            dt, now_ms=self.ticks(),
+        )
+        if gamepad_activity:
+            self._last_device = "gamepad"
         inp.keyboard_pressed = keyboard_pressed
         inp.keyboard_held = keyboard_held
         inp.gamepad_pressed = gamepad_pressed

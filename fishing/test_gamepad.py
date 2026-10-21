@@ -141,23 +141,88 @@ class GamepadChecks(unittest.TestCase):
         self.assertEqual(keys.gamepad_held, set())
         self.assertEqual(keys.device, "gamepad")
 
+        self.now_ms = 1000
+        self.platform.ticks = lambda: self.now_ms
+        self.timestamp = self.now_ms
         self.button(BUTTON_Y, True)
         self.button(BUTTON_Y, False)
+        self.now_ms += 50
         keys = self.platform.poll(0.05)
         self.assertEqual(keys.gamepad_pressed, {"b"})
         self.assertNotIn("z", keys.gamepad_held)
 
+        # A slow frame began well before the physical press. The held action
+        # must be measured from SDL's button timestamp, not the whole frame dt.
+        self.now_ms = 2000
+        self.timestamp = self.now_ms + 240
         self.button(BUTTON_Y, True)
-        keys = self.platform.poll(0.16)
+        self.now_ms += 250
+        keys = self.platform.poll(0.25)
         self.assertNotIn("b", keys.gamepad_pressed)
         self.assertNotIn("z", keys.gamepad_held)
+        self.now_ms += 70
+        self.timestamp = self.now_ms
+        self.button(BUTTON_Y, False)
+        keys = self.platform.poll(0.07)
+        self.assertEqual(keys.gamepad_pressed, {"b"})
+        self.assertNotIn("z", keys.gamepad_held)
+
+        self.now_ms = 3000
+        self.timestamp = self.now_ms
+        self.button(BUTTON_Y, True)
+        keys = self.platform.poll(0.0)
+        self.now_ms += 160
+        keys = self.platform.poll(0.16)
+        self.assertNotIn("z", keys.gamepad_pressed)
+        self.now_ms += 160
         keys = self.platform.poll(0.16)
         self.assertIn("z", keys.gamepad_pressed)
         self.assertIn("z", keys.gamepad_held)
+        self.timestamp = self.now_ms
         self.button(BUTTON_Y, False)
         keys = self.platform.poll(0.05)
         self.assertNotIn("b", keys.gamepad_pressed)
         self.assertNotIn("z", keys.gamepad_held)
+
+    def test_y_action_release_and_long_press_restore_gamepad_prompt_device(self):
+        self.now_ms = 4000
+        self.platform.ticks = lambda: self.now_ms
+        self.timestamp = self.now_ms
+        self.button(BUTTON_Y, True)
+        self.platform.poll()
+
+        self.key("e")
+        self.now_ms += 40
+        self.assertEqual(self.platform.poll(0.04).device, "keyboard")
+
+        self.now_ms += 60
+        self.timestamp = self.now_ms
+        self.button(BUTTON_Y, False)
+        keys = self.platform.poll(0.06)
+        self.assertIn("b", keys.gamepad_pressed)
+        self.assertEqual(keys.device, "gamepad")
+
+        self.timestamp = self.now_ms
+        self.button(BUTTON_A, True)
+        self.platform.poll()
+        self.key("e")
+        self.now_ms += 10
+        self.assertEqual(self.platform.poll(0.01).device, "keyboard")
+        self.timestamp = self.now_ms
+        self.button(BUTTON_A, False)
+        self.assertEqual(self.platform.poll().device, "keyboard")
+
+        self.now_ms += 100
+        self.timestamp = self.now_ms
+        self.button(BUTTON_Y, True)
+        self.platform.poll()
+        self.key("e")
+        self.now_ms += 10
+        self.assertEqual(self.platform.poll(0.01).device, "keyboard")
+        self.now_ms += 290
+        keys = self.platform.poll(0.29)
+        self.assertIn("z", keys.gamepad_pressed)
+        self.assertEqual(keys.device, "gamepad")
 
     def test_stick_deadzone_trigger_lever_and_hotplug_events(self):
         self.axis(AXIS_LEFTX, -5000)
