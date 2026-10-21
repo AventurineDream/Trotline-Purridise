@@ -13,7 +13,7 @@ import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, ClassVar
 from uuid import uuid4
 
 from .data import (
@@ -58,7 +58,8 @@ from .boat import (
 from .weather import wind_at
 from .lakes import LAKES
 from .narrative import NarrativeState, deployment_id
-from .savepaths import V2_REWARD_KINDS, merge_v2_defaults
+from .savepaths import (UnsupportedSaveVersionError, V2_REWARD_KINDS,
+                        merge_v2_defaults)
 
 MASK = (1 << 64) - 1
 SAVE_VERSION = 2
@@ -360,11 +361,14 @@ def _buyer_line(catches) -> str:
 
 @dataclass
 class State:
+    SAVE_VERSION: ClassVar[int] = SAVE_VERSION
     rng: RNG
     lake_id: str = "briar"
     boat_id: str = "jon"
     owned_boats: list[str] = field(default_factory=lambda:["jon"])
     fuel_tanks: dict[str,float] = field(default_factory=lambda:{"jon":12.0})
+    unknown_owned_boats: list = field(default_factory=list, repr=False)
+    unknown_fuel_tanks: dict = field(default_factory=dict, repr=False)
     rowboat_trolling_motor: bool = False
     rowboat_battery_kwh: float = 0.0
     rowboat_charge_kwh_this_visit: float = 0.0
@@ -1328,10 +1332,14 @@ class State:
             "target_line_id": self.bot_target_line_id,
         })
         result = deepcopy(self.unknown_save_fields)
+        owned_boats = list(self.owned_boats) + deepcopy(self.unknown_owned_boats)
+        fuel_tanks = deepcopy(self.unknown_fuel_tanks)
+        fuel_tanks.update({key: round(value, 6)
+                           for key, value in self.fuel_tanks.items()})
         result.update({
             "version": SAVE_VERSION,
-            "lake_id":self.lake_id,"boat_id":self.boat_id,"owned_boats":self.owned_boats,
-            "fuel_tanks":{key:round(value,6) for key,value in self.fuel_tanks.items()},
+            "lake_id":self.lake_id,"boat_id":self.boat_id,"owned_boats":owned_boats,
+            "fuel_tanks":fuel_tanks,
             "rowboat_trolling_motor":self.rowboat_trolling_motor,
             "rowboat_battery_kwh":round(self.rowboat_battery_kwh,6),
             "rowboat_charge_kwh_this_visit":round(self.rowboat_charge_kwh_this_visit,6),
@@ -1375,6 +1383,8 @@ class State:
         if not isinstance(raw, dict):
             raise ValueError("save root")
         version = raw.get("version")
+        if type(version) is int and version > SAVE_VERSION:
+            raise UnsupportedSaveVersionError(version, SAVE_VERSION)
         if type(version) is not int or version not in (1, SAVE_VERSION):
             raise ValueError("save version")
         if version == SAVE_VERSION and "v2" not in raw:
@@ -1389,11 +1399,20 @@ class State:
         st.boat_id = raw.get("boat_id","jon")
         if st.boat_id not in BOATS:
             raise ValueError("unknown saved boat")
-        st.owned_boats = [key for key in raw.get("owned_boats",["jon"]) if key in BOATS]
+        raw_owned_boats = raw.get("owned_boats", ["jon"])
+        st.owned_boats = [key for key in raw_owned_boats
+                          if isinstance(key, str) and key in BOATS]
+        st.unknown_owned_boats = [deepcopy(key) for key in raw_owned_boats
+                                  if isinstance(key, str) and key not in BOATS]
         if st.boat_id not in st.owned_boats:
             st.owned_boats.append(st.boat_id)
+        raw_fuel_tanks = raw.get("fuel_tanks", {"jon": 12.0})
+        st.unknown_fuel_tanks = {
+            key: deepcopy(value) for key, value in raw_fuel_tanks.items()
+            if key not in BOATS
+        }
         st.fuel_tanks = {key:max(0.0,min(BOATS[key].tank,float(value)))
-                         for key,value in raw.get("fuel_tanks",{"jon":12.0}).items() if key in BOATS}
+                         for key,value in raw_fuel_tanks.items() if key in BOATS}
         st.rowboat_trolling_motor = (bool(raw.get("rowboat_trolling_motor", False))
                                      and "rowboat" in st.owned_boats)
         battery = raw.get("rowboat_battery_kwh", 0.0)

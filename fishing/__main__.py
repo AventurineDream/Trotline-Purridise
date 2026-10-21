@@ -16,7 +16,7 @@ from .game import Keys, Session
 from .imageops import resize_rgb
 from .pngsave import write_png
 from .render import Renderer
-from .savepaths import parse_save_option
+from .savepaths import UnsupportedSaveVersionError, parse_save_option
 from .sim import HeldLine, State
 from .ui import UI, UIState
 from .world import World, shore_sd
@@ -50,7 +50,11 @@ def main(argv: list[str] | None = None) -> int:
         dest = argv[i + 1] if i + 1 < len(argv) else str(ROOT / "shots")
         return shots(dest)
     from .game import run
-    run(software="--software" in argv, save_path=save_path)
+    try:
+        run(software="--software" in argv, save_path=save_path)
+    except UnsupportedSaveVersionError as exc:
+        print(exc, file=sys.stderr)
+        return 1
     return 0
 
 

@@ -99,15 +99,20 @@ with `python -m fishing.content`.
 - New path: the platform user-data directory, via SDL `SDL_GetPrefPath("TrotLineSim",
   "TrotlinePurridise")`, file `save.json`. Keep `TrotLineSim` as the stable SDL
   organization identifier; the GitHub repository is `AventurineDream/Trotline-Purridise`.
-  Override with `--save PATH` for tests.
+  If SDL cannot provide that folder, use the install-local `saves/save.json` and
+  show a toast. Override with `--save PATH` for tests.
 - On first launch, if `saves/briar.json` (v1) exists and no v2 save does: copy it
   to `<prefpath>/backup/briar.v1.<timestamp>.json`, migrate, write v2, and leave
   the original untouched. Do not make another backup on later launches after a
   v2 save has been written. `--save PATH` selects an explicit save file for
   tests and portable runs; its backup folder is next to that file.
-- If the v2 file is corrupt, try timestamped backups newest first. Restore the
-  first valid backup and show a toast; leave the corrupt file alone if no backup
-  can be loaded.
+- If the active save is corrupt, try timestamped backups newest first. Before
+  restoring the first valid backup, preserve the rejected bytes beside the save
+  as `save.rejected.<timestamp>.json`; this file is not a load candidate. Show a
+  toast after recovery. If no backup can be loaded, leave the active file alone.
+  Refuse to load a save written by a newer game version and do not fall back to
+  an older backup. Invalid known v2 values use their defaults; unknown fields
+  remain available for a later compatible build.
 - Writes stay atomic (temp file + rename) and keep the existing autosave cadence.
 
 ### 3.2 Schema
@@ -157,7 +162,8 @@ The v2 `reward_claims` lists hold keys for the new story, legendary-record and
 book-stage-up rewards. A scene state is `pending` or `done`; pending scenes
 replay from their start and do not grant rewards, while done scenes also appear
 in `scenes_seen`. Unknown JSON keys at the save root, inside the v1 narrative
-ledger, and throughout `v2` are kept when a save is written.
+ledger, throughout `v2`, and in the boat ownership and fuel tank maps are kept
+when a save is written.
 
 ### 3.3 Rules
 

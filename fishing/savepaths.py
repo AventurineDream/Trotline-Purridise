@@ -21,8 +21,20 @@ SDL_APPLICATION = "TrotlinePurridise"
 V2_REWARD_KINDS = ("story", "legendary_record", "book_stage_up")
 BOOK_STAGES = ((10, "mastered"), (5, "verified"), (3, "bait_known"),
                (1, "identified"), (0, "rumor"))
-_LOAD_ERRORS = (OSError, ValueError, KeyError, TypeError, OverflowError,
+_LOAD_ERRORS = (ValueError, KeyError, TypeError, OverflowError,
                 IndexError, AttributeError)
+
+
+class UnsupportedSaveVersionError(ValueError):
+    """Raised when this build sees a save written by a newer build."""
+
+    def __init__(self, saved_version: int, current_version: int):
+        self.saved_version = saved_version
+        self.current_version = current_version
+        super().__init__(
+            f"Save version {saved_version} is newer than this game supports "
+            f"(version {current_version}); update the game before loading it."
+        )
 
 
 def parse_save_option(argv: Sequence[str]) -> tuple[list[str], Path | None]:
@@ -129,8 +141,6 @@ def save_candidates(save_path: str | Path,
     if target.is_file():
         candidates.append(target)
         candidates.extend(backup_candidates(target))
-        if legacy is not None and legacy.is_file():
-            candidates.append(legacy)
     else:
         if legacy is not None and legacy.is_file():
             candidates.append(legacy)
@@ -181,15 +191,33 @@ def _write_backup(source: Path, save_path: Path) -> Path:
             temporary.unlink(missing_ok=True)
 
 
-def _merge_defaults(default: dict, saved: dict) -> dict:
-    """Fill missing v2 fields while preserving unknown fields at every depth."""
-    merged = deepcopy(saved)
-    for key, value in default.items():
-        if key not in saved:
-            merged[key] = deepcopy(value)
-        elif isinstance(value, dict) and isinstance(saved[key], dict):
-            merged[key] = _merge_defaults(value, saved[key])
-    return merged
+def _preserve_rejected_save(save_path: Path) -> Path:
+    """Keep rejected active-save bytes before a backup replaces the file."""
+    raw = save_path.read_bytes()
+    instant = datetime.now(timezone.utc)
+    timestamp = instant.strftime("%Y%m%dT%H%M%S%fZ")
+    destination = save_path.with_name(f"save.rejected.{timestamp}.json")
+    while destination.exists():
+        instant += timedelta(microseconds=1)
+        timestamp = instant.strftime("%Y%m%dT%H%M%S%fZ")
+        destination = save_path.with_name(f"save.rejected.{timestamp}.json")
+
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=save_path.parent,
+                                         prefix=".save-rejected-", suffix=".tmp",
+                                         delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, destination)
+        if destination.read_bytes() != raw:
+            raise OSError("rejected save copy did not match the original")
+        return destination
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def book_stage(count: int) -> str:
@@ -266,54 +294,51 @@ def merge_v2_defaults(state, saved_v2: object) -> dict:
     if saved_v2 is None:
         saved_v2 = {}
     if not isinstance(saved_v2, dict):
-        raise ValueError("save v2 must be an object")
+        # The legacy envelope is still usable if only its v2 extension is
+        # malformed. Preserve all legacy progress and start v2 from defaults.
+        saved_v2 = {}
     defaults = default_v2(state)
-    merged = _merge_defaults(defaults, saved_v2)
-    _validate_v2(merged, defaults)
-    return merged
+    return _normalize_known_v2(defaults, saved_v2, "v2")
 
 
-def _validate_shape(value, default, path: str) -> None:
-    if isinstance(default, dict):
-        if not isinstance(value, dict):
-            raise ValueError(f"save {path} must be an object")
-        for key, child_default in default.items():
-            if key in value:
-                _validate_shape(value[key], child_default, f"{path}.{key}")
-        return
-    if isinstance(default, list):
-        if not isinstance(value, list):
-            raise ValueError(f"save {path} must be a list")
-        return
-    if default is None:
-        return
-    if type(default) is bool:
-        valid = type(value) is bool
-    elif type(default) is int:
-        valid = type(value) is int
-    elif type(default) is float:
+def _valid_leaf(value, default, path: str) -> bool:
+    if path == "v2.buff":
+        return value is None or isinstance(value, dict)
+    if path == "v2.needs.last_prompt_real_s":
         try:
-            valid = type(value) in (int, float) and math.isfinite(value)
+            return type(value) in (int, float) and math.isfinite(value)
         except OverflowError:
-            valid = False
-    else:
-        valid = isinstance(value, type(default))
-    if not valid:
-        raise ValueError(f"save {path} has an invalid value")
+            return False
+    if default is None:
+        return True
+    if type(default) is bool:
+        return type(value) is bool
+    if type(default) is int:
+        return type(value) is int
+    if type(default) is float:
+        try:
+            return type(value) in (int, float) and math.isfinite(value)
+        except OverflowError:
+            return False
+    return isinstance(value, type(default))
 
 
-def _validate_v2(v2: dict, defaults: dict) -> None:
-    _validate_shape(v2, defaults, "v2")
-    if v2.get("buff") is not None and not isinstance(v2.get("buff"), dict):
-        raise ValueError("save v2.buff must be an object or null")
-    story = v2["story"]
-    if any(status not in ("pending", "done")
-           for status in story["scene_states"].values()):
-        raise ValueError("save v2 story scenes must be pending or done")
-    claims = v2["reward_claims"]
-    for kind in V2_REWARD_KINDS:
-        if any(not isinstance(key, str) for key in claims[kind]):
-            raise ValueError(f"save v2.reward_claims.{kind} keys must be text")
+def _normalize_known_v2(default, saved, path: str):
+    """Default malformed known fields while retaining unknown JSON fields."""
+    if isinstance(default, dict):
+        if not isinstance(saved, dict):
+            return deepcopy(default)
+        normalized = deepcopy(saved)
+        for key, child_default in default.items():
+            if key in saved:
+                normalized[key] = _normalize_known_v2(
+                    child_default, saved[key], f"{path}.{key}")
+            else:
+                normalized[key] = deepcopy(child_default)
+        return normalized
+    if isinstance(default, list):
+        return deepcopy(saved) if isinstance(saved, list) else deepcopy(default)
+    return deepcopy(saved) if _valid_leaf(saved, default, path) else deepcopy(default)
 
 
 def load_game_save(save_path: str | Path, state_type: Type,
@@ -329,24 +354,33 @@ def load_game_save(save_path: str | Path, state_type: Type,
             if not isinstance(raw, dict):
                 raise ValueError("save root must be an object")
             version = raw.get("version")
+            current_version = getattr(state_type, "SAVE_VERSION", 2)
+            if type(version) is int and version > current_version:
+                raise UnsupportedSaveVersionError(version, current_version)
             lake_id = raw.get("lake_id", "briar")
             if not isinstance(lake_id, str):
                 raise ValueError("saved lake id must be text")
             world = world_factory(lake_id)
             state = state_type.load(source, world)
-            from_backup = is_backup_path(source, target)
-            is_v1 = version == 1
-            if is_v1:
-                if not from_backup:
-                    _write_backup(source, target)
-                state.save(target, update_stamp=False)
-            elif source.resolve() != target.resolve():
-                state.save(target)
-            if from_backup or (active_existed and source.resolve() != target.resolve()):
-                state.toast("Your save was restored from a backup.")
-            return world, state, True
+        except UnsupportedSaveVersionError:
+            raise
         except _LOAD_ERRORS:
             continue
+
+        from_backup = is_backup_path(source, target)
+        is_v1 = version == 1
+        is_other_source = source.resolve() != target.resolve()
+        if active_existed and is_other_source:
+            _preserve_rejected_save(target)
+        if is_v1:
+            if not from_backup:
+                _write_backup(source, target)
+            state.save(target, update_stamp=False)
+        elif is_other_source:
+            state.save(target)
+        if from_backup or (active_existed and is_other_source):
+            state.toast("Your save was restored from a backup.")
+        return world, state, True
 
     world = world_factory("briar")
     state = state_type.new(world)
