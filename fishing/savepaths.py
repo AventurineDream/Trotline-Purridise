@@ -350,7 +350,14 @@ def load_game_save(save_path: str | Path, state_type: Type,
     candidates = save_candidates(target, legacy_path)
     for source in candidates:
         try:
-            raw = json.loads(source.read_text(encoding="utf-8"))
+            source_text = source.read_text(encoding="utf-8")
+        except OSError:
+            if is_backup_path(source, target):
+                continue
+            raise
+
+        try:
+            raw = json.loads(source_text)
             if not isinstance(raw, dict):
                 raise ValueError("save root must be an object")
             version = raw.get("version")
@@ -363,6 +370,10 @@ def load_game_save(save_path: str | Path, state_type: Type,
             world = world_factory(lake_id)
             state = state_type.load(source, world)
         except UnsupportedSaveVersionError:
+            raise
+        except OSError:
+            if is_backup_path(source, target):
+                continue
             raise
         except _LOAD_ERRORS:
             continue
@@ -385,5 +396,9 @@ def load_game_save(save_path: str | Path, state_type: Type,
     world = world_factory("briar")
     state = state_type.new(world)
     if candidates:
-        state.toast("The saved game could not be restored. Your files are still available in the save folder.")
+        if active_existed:
+            _preserve_rejected_save(target)
+            state.toast("The saved game could not be restored. A copy was kept for recovery.")
+        else:
+            state.toast("The saved game could not be restored. Your files are still available in the save folder.")
     return world, state, False

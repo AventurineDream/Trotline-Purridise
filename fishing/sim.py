@@ -365,6 +365,7 @@ class State:
     rng: RNG
     lake_id: str = "briar"
     boat_id: str = "jon"
+    unknown_boat_id: str | None = field(default=None, repr=False)
     owned_boats: list[str] = field(default_factory=lambda:["jon"])
     fuel_tanks: dict[str,float] = field(default_factory=lambda:{"jon":12.0})
     unknown_owned_boats: list = field(default_factory=list, repr=False)
@@ -533,6 +534,7 @@ class State:
                 return f"Need {dollars(model.price)}."
             self.owned_boats.append(boat_id)
             self.fuel_tanks[boat_id] = model.tank
+        self.unknown_boat_id = None
         self.boat_id = boat_id
         self._park(world)
         self.toast(f"Aboard the {model.name}.")
@@ -1336,9 +1338,10 @@ class State:
         fuel_tanks = deepcopy(self.unknown_fuel_tanks)
         fuel_tanks.update({key: round(value, 6)
                            for key, value in self.fuel_tanks.items()})
+        saved_boat_id = self.unknown_boat_id or self.boat_id
         result.update({
             "version": SAVE_VERSION,
-            "lake_id":self.lake_id,"boat_id":self.boat_id,"owned_boats":owned_boats,
+            "lake_id":self.lake_id,"boat_id":saved_boat_id,"owned_boats":owned_boats,
             "fuel_tanks":fuel_tanks,
             "rowboat_trolling_motor":self.rowboat_trolling_motor,
             "rowboat_battery_kwh":round(self.rowboat_battery_kwh,6),
@@ -1396,9 +1399,16 @@ class State:
         }
         if raw.get("lake_id","briar")!=world.id:
             raise ValueError("save belongs to a different lake")
-        st.boat_id = raw.get("boat_id","jon")
-        if st.boat_id not in BOATS:
-            raise ValueError("unknown saved boat")
+        saved_boat_id = raw.get("boat_id", "jon")
+        if not isinstance(saved_boat_id, str):
+            raise ValueError("saved boat id must be text")
+        if saved_boat_id in BOATS:
+            st.boat_id = saved_boat_id
+        else:
+            # Use a supported boat in this build while keeping the future ID
+            # intact for the build that can interpret it.
+            st.boat_id = "jon"
+            st.unknown_boat_id = saved_boat_id
         raw_owned_boats = raw.get("owned_boats", ["jon"])
         st.owned_boats = [key for key in raw_owned_boats
                           if isinstance(key, str) and key in BOATS]
