@@ -150,12 +150,14 @@ class SaveV2Checks(unittest.TestCase):
         raw["v2"]["needs"]["last_prompt_real_s"] = 1729.5
         raw["v2"]["story"]["scene_states"]["future_scene"] = "skipped"
         raw["v2"]["settings"]["text_size"] = "large"
+        raw["boat_id"] = "future_skiff"
         raw["owned_boats"].append("future_skiff")
         raw["fuel_tanks"]["future_skiff"] = 6.75
         self.save_path.write_text(json.dumps(raw), encoding="utf-8")
 
-        world = World("briar")
-        state = State.load(self.save_path, world)
+        world, state, has_save = load_game_save(self.save_path, State, World)
+        self.assertTrue(has_save)
+        self.assertEqual(state.boat_id, "jon")
         state.save(self.save_path)
         roundtrip = self.read(self.save_path)
         self.assertEqual(roundtrip["future_v1_marker"], {"source": "fixture", "keep": True})
@@ -183,6 +185,7 @@ class SaveV2Checks(unittest.TestCase):
                          "skipped")
         self.assertEqual(roundtrip["v2"]["settings"]["text_size"], 1)
         self.assertIn("future_skiff", roundtrip["owned_boats"])
+        self.assertEqual(roundtrip["boat_id"], "future_skiff")
         self.assertEqual(roundtrip["fuel_tanks"]["future_skiff"], 6.75)
 
     def test_v2_reward_claims_and_pending_done_scenes_are_idempotent(self):
@@ -252,6 +255,35 @@ class SaveV2Checks(unittest.TestCase):
                              for toast in next_launch.toasts))
         self.assertEqual(len(savepaths.backup_candidates(self.save_path)), 2)
 
+    def test_unreadable_newest_backup_is_skipped_for_older_valid_backup(self):
+        backup_dir = savepaths.backup_directory(self.save_path)
+        backup_dir.mkdir(parents=True)
+        older = json.loads((FIXTURES / "fresh.json").read_text(encoding="utf-8"))
+        newer = json.loads((FIXTURES / "mid_game.json").read_text(encoding="utf-8"))
+        older_path = backup_dir / "briar.v1.20260101T000000000000Z.json"
+        newer_path = backup_dir / "briar.v1.20260102T000000000000Z.json"
+        older_path.write_text(json.dumps(older), encoding="utf-8")
+        newer_path.write_text(json.dumps(newer), encoding="utf-8")
+        self.save_path.parent.mkdir(parents=True, exist_ok=True)
+        active_bytes = b"invalid active save"
+        self.save_path.write_bytes(active_bytes)
+        read_text = Path.read_text
+
+        def fail_newest(path, *args, **kwargs):
+            if path == newer_path:
+                raise PermissionError("simulated unreadable backup")
+            return read_text(path, *args, **kwargs)
+
+        with patch.object(Path, "read_text", new=fail_newest):
+            world, restored, has_save = load_game_save(self.save_path, State, World)
+
+        self.assertTrue(has_save)
+        self.assertEqual(world.id, "briar")
+        self.assertEqual(restored.money, older["money"])
+        rejected = list(self.save_path.parent.glob("save.rejected.*.json"))
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0].read_bytes(), active_bytes)
+
     def test_corrupt_active_save_without_backup_does_not_overwrite_from_legacy(self):
         self.save_path.parent.mkdir(parents=True)
         active_bytes = b"corrupt active save"
@@ -268,8 +300,17 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(self.save_path.read_bytes(), active_bytes)
         self.assertEqual(self.legacy_path.read_bytes(), legacy_bytes)
         self.assertEqual(savepaths.backup_candidates(self.save_path), [])
+        rejected = list(self.save_path.parent.glob("save.rejected.*.json"))
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0].read_bytes(), active_bytes)
         self.assertTrue(any("could not be restored" in toast[0]
                             for toast in state.toasts))
+
+        # A later autosave for the new game may replace the active path, but
+        # it cannot destroy the only copy of the rejected bytes.
+        state.save(self.save_path)
+        self.assertEqual(self.read(self.save_path)["version"], 2)
+        self.assertEqual(rejected[0].read_bytes(), active_bytes)
 
     def test_future_save_version_fails_without_downgrading_or_replacing_files(self):
         self.migrate_fixture("mid_game.json")

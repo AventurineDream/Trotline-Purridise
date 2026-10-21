@@ -109,7 +109,8 @@ with `python -m fishing.content`.
 - If the active save is corrupt, try timestamped backups newest first. Before
   restoring the first valid backup, preserve the rejected bytes beside the save
   as `save.rejected.<timestamp>.json`; this file is not a load candidate. Show a
-  toast after recovery. If no backup can be loaded, leave the active file alone.
+  toast after recovery. If no backup can be loaded, keep a rejected copy before
+  starting a fresh game, since its later autosave can replace the active file.
   Refuse to load a save written by a newer game version and do not fall back to
   an older backup. Invalid known v2 values use their defaults; unknown fields
   remain available for a later compatible build.
@@ -163,7 +164,8 @@ book-stage-up rewards. A scene state is `pending` or `done`; pending scenes
 replay from their start and do not grant rewards, while done scenes also appear
 in `scenes_seen`. Unknown JSON keys at the save root, inside the v1 narrative
 ledger, throughout `v2`, and in the boat ownership and fuel tank maps are kept
-when a save is written.
+when a save is written. An unrecognized active boat ID runs as `jon` in this
+build and remains serialized until a recognized boat is selected.
 
 ### 3.3 Rules
 
