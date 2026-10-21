@@ -1414,7 +1414,7 @@ class State:
                           if isinstance(key, str) and key in BOATS]
         st.unknown_owned_boats = [deepcopy(key) for key in raw_owned_boats
                                   if isinstance(key, str) and key not in BOATS]
-        if st.boat_id not in st.owned_boats:
+        if saved_boat_id in BOATS and st.boat_id not in st.owned_boats:
             st.owned_boats.append(st.boat_id)
         raw_fuel_tanks = raw.get("fuel_tanks", {"jon": 12.0})
         st.unknown_fuel_tanks = {

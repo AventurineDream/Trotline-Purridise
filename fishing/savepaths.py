@@ -355,6 +355,10 @@ def load_game_save(save_path: str | Path, state_type: Type,
             if is_backup_path(source, target):
                 continue
             raise
+        except UnicodeDecodeError:
+            # Invalid text makes this candidate corrupt, just like malformed
+            # JSON. Keep checking backups so a readable older save can load.
+            continue
 
         try:
             raw = json.loads(source_text)

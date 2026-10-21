@@ -111,6 +111,8 @@ with `python -m fishing.content`.
   as `save.rejected.<timestamp>.json`; this file is not a load candidate. Show a
   toast after recovery. If no backup can be loaded, keep a rejected copy before
   starting a fresh game, since its later autosave can replace the active file.
+  Treat invalid UTF-8 contents as corrupt data, and skip unreadable or malformed
+  backup candidates while checking older backups.
   Refuse to load a save written by a newer game version and do not fall back to
   an older backup. Invalid known v2 values use their defaults; unknown fields
   remain available for a later compatible build.

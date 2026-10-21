@@ -151,6 +151,7 @@ class SaveV2Checks(unittest.TestCase):
         raw["v2"]["story"]["scene_states"]["future_scene"] = "skipped"
         raw["v2"]["settings"]["text_size"] = "large"
         raw["boat_id"] = "future_skiff"
+        raw["owned_boats"].remove("jon")
         raw["owned_boats"].append("future_skiff")
         raw["fuel_tanks"]["future_skiff"] = 6.75
         self.save_path.write_text(json.dumps(raw), encoding="utf-8")
@@ -184,7 +185,7 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(roundtrip["v2"]["story"]["scene_states"]["future_scene"],
                          "skipped")
         self.assertEqual(roundtrip["v2"]["settings"]["text_size"], 1)
-        self.assertIn("future_skiff", roundtrip["owned_boats"])
+        self.assertEqual(roundtrip["owned_boats"], ["sail", "future_skiff"])
         self.assertEqual(roundtrip["boat_id"], "future_skiff")
         self.assertEqual(roundtrip["fuel_tanks"]["future_skiff"], 6.75)
 
@@ -280,6 +281,49 @@ class SaveV2Checks(unittest.TestCase):
         self.assertTrue(has_save)
         self.assertEqual(world.id, "briar")
         self.assertEqual(restored.money, older["money"])
+        rejected = list(self.save_path.parent.glob("save.rejected.*.json"))
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0].read_bytes(), active_bytes)
+
+    def test_invalid_utf8_active_save_recovers_from_backup_and_preserves_bytes(self):
+        backup_dir = savepaths.backup_directory(self.save_path)
+        backup_dir.mkdir(parents=True)
+        backup = json.loads((FIXTURES / "mid_game.json").read_text(encoding="utf-8"))
+        backup_path = backup_dir / "briar.v1.20260102T000000000000Z.json"
+        backup_path.write_text(json.dumps(backup), encoding="utf-8")
+        self.save_path.parent.mkdir(parents=True, exist_ok=True)
+        invalid_bytes = b'{"version": 2, \xff\xfe broken save'
+        self.save_path.write_bytes(invalid_bytes)
+
+        world, restored, has_save = load_game_save(self.save_path, State, World)
+
+        self.assertTrue(has_save)
+        self.assertEqual(world.id, "briar")
+        self.assertEqual(restored.money, backup["money"])
+        rejected = list(self.save_path.parent.glob("save.rejected.*.json"))
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0].read_bytes(), invalid_bytes)
+        self.assertEqual(self.read(self.save_path)["version"], 2)
+
+    def test_invalid_utf8_newest_backup_is_skipped_for_older_valid_backup(self):
+        backup_dir = savepaths.backup_directory(self.save_path)
+        backup_dir.mkdir(parents=True)
+        older = json.loads((FIXTURES / "fresh.json").read_text(encoding="utf-8"))
+        older_path = backup_dir / "briar.v1.20260101T000000000000Z.json"
+        newer_path = backup_dir / "briar.v1.20260102T000000000000Z.json"
+        older_path.write_text(json.dumps(older), encoding="utf-8")
+        invalid_backup = b"\xff\xfe not utf-8"
+        newer_path.write_bytes(invalid_backup)
+        self.save_path.parent.mkdir(parents=True, exist_ok=True)
+        active_bytes = b"corrupt active save"
+        self.save_path.write_bytes(active_bytes)
+
+        world, restored, has_save = load_game_save(self.save_path, State, World)
+
+        self.assertTrue(has_save)
+        self.assertEqual(world.id, "briar")
+        self.assertEqual(restored.money, older["money"])
+        self.assertEqual(newer_path.read_bytes(), invalid_backup)
         rejected = list(self.save_path.parent.glob("save.rejected.*.json"))
         self.assertEqual(len(rejected), 1)
         self.assertEqual(rejected[0].read_bytes(), active_bytes)
