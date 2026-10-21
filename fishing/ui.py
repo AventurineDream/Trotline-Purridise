@@ -773,7 +773,7 @@ class UI:
             self._panel(frame,px,py,pw,int(30*unit)+8,0.72)
             self._text(frame,prompt,px+16,py+5,small+2,INK,False,"sans")
         if ui.input_device == "gamepad":
-            hint = "LS steer/throttle  LT/RT lever  Y Bot / hold Nap  LB Tool  X Set  A Check/Land  RB Hail  Start Pause"
+            hint = "LS drive  LT/RT lever  Y Bot  X Set  A Check  RB Hail  Back Chart  Start Pause"
         else:
             hint = "B Bot  Shift Idle  Q Sail  F Set  E Landing  C Hail  H Help" if state.boat_id=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  C Hail  H Help"
         hint_w = self._measure(hint,small)

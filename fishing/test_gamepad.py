@@ -224,6 +224,18 @@ class GamepadChecks(unittest.TestCase):
                 session.tick(keys, 0.1)
             self.assertGreaterEqual(session.ui.journal_i, 3)
 
+    def test_custom_key_bindings_roundtrip_with_the_save(self):
+        world = World()
+        state = State.new(world, seed=1708)
+        state.v2["settings"]["key_bindings"]["throttle_up"] = "p"
+        with tempfile.TemporaryDirectory(prefix="trotline-key-bindings-") as temp:
+            path = Path(temp) / "save.json"
+            state.save(path)
+            loaded = State.load(path, world)
+        self.assertEqual(
+            loaded.v2["settings"]["key_bindings"]["throttle_up"], "p",
+        )
+
     def test_menu_stick_direction_requires_release_before_driving(self):
         world = World()
         state = State.new(world, seed=1706)
