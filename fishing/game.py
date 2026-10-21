@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+import time
 
 import numpy as np
 
@@ -26,7 +27,7 @@ from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
 from .ui import UI, UIState, SHOP_TABS, HELP_N, check_rows, shop_rows, title_options
 from .world import World
 
-DRIVING = {"play", "map"}
+DRIVING = {"play"}
 MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
 NAVIGATION_KEYS = set(MENU_DIRECTIONS) | set(MENU_DIRECTIONS.values())
 DRIVING_KEYS = {"w", "s", "a", "d", "up", "down", "left", "right"}
@@ -75,6 +76,10 @@ class Session:
         self.world = world
         self.save_path = Path(save_path)
         self.state = state
+        # Offline catch-up ends when this process opens the title screen. Time
+        # spent reading there must not be added when Continue is selected.
+        self._continue_catchup_at = time.time()
+        self._title_catchup_pending = bool(has_save)
         self.focused = True
         self.ui = UIState(has_save=has_save)
         self.quit = False
@@ -90,11 +95,11 @@ class Session:
     def tick(self, keys, dt: float) -> None:
         self.sound = None
         self.focused = bool(getattr(keys, "focused", True))
-        if keys.quit and self.ui.mode != "title":
-            self.save()
-            self.quit = True
-            return
         if keys.quit:
+            if self._title_catchup_pending and self.ui.has_save:
+                self.state.catch_up(now=self._continue_catchup_at)
+            if self.ui.mode != "title" or self.ui.has_save:
+                self.save()
             self.quit = True
             return
         driving_presses = keys.pressed & DRIVING_KEYS if self.ui.mode in DRIVING else set()
@@ -250,6 +255,7 @@ class Session:
             elif "return" in keys.pressed or "space" in keys.pressed:
                 self.state = State.new(self.world)
                 self._attach_quest_manager()
+                self._title_catchup_pending = False
                 self.ui.confirm_new = False
                 self.ui.mode = "play"
                 self.ui.note = ""
@@ -271,11 +277,13 @@ class Session:
                     self.state.toast("That save could not be read.")
                     return
                 self._attach_quest_manager()
-                self.state.catch_up()
+                self.state.catch_up(now=self._continue_catchup_at)
+                self._title_catchup_pending = False
                 self.ui.mode = "play"
             elif choice == "New morning":
                 self.ui.confirm_new = True
             else:
+                self._title_catchup_pending = False
                 self.ui.mode = "play"
 
     def _play_keys(self, keys):
@@ -665,6 +673,8 @@ class Session:
                 self._open_help("pause")
             elif choice == 2:
                 self.save()
+                self._continue_catchup_at = self.state.stamp
+                self._title_catchup_pending = True
                 self.ui.mode = "title"
                 self.ui.title_i = 0
                 self.ui.confirm_new = False
@@ -762,7 +772,8 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
             big = resize_rgb(low, width, height)
             ui.draw(big, session.state, session.ui, cam)
             platform.present(big)
-            renderer.poke_splashes(session.state)
+            if session.world_running():
+                renderer.poke_splashes(session.state)
             minutes = session.state.game_minutes
             audio.update(dt, session.state.throttle, session.state.speed, session.state.muted,
                          hour=hour_of_day(minutes),

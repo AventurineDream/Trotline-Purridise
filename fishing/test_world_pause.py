@@ -4,6 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from .game import Keys, Session
 from .narrative import QUEST_IDS
@@ -109,6 +110,57 @@ class WorldPauseChecks(unittest.TestCase):
         before = self.snapshot()
         self.session.tick(Keys(pressed=("r",)), 0.25)
         self.assertEqual(self.snapshot(), before)
+
+    def test_chart_closing_frame_does_not_apply_held_driving_keys(self):
+        self.session.ui.mode = "map"
+        self.session.tick(
+            Keys(pressed=("tab", "w"), held=("tab", "w")),
+            0.25,
+        )
+        self.assertEqual(self.session.ui.mode, "play")
+        self.assertTrue(self.state.anchored)
+        self.assertEqual(self.state.throttle_setting, 0.0)
+
+    def test_continue_excludes_time_spent_on_title_from_offline_catch_up(self):
+        self.state.stamp = 1_000.0
+        self.state.save(self.path, update_stamp=False)
+        with patch("fishing.game.time.time", return_value=1_100.0):
+            loaded = State.load(self.path, self.world)
+            self.session = Session(self.world, self.path, loaded, True)
+
+        self.session.ui.mode = "title"
+        before = self.state.game_minutes
+        self.tick_for_five_minutes()
+        self.assertEqual(self.session.state.game_minutes, before)
+
+        with patch("fishing.game.time.time", return_value=1_400.0):
+            self.session.tick(Keys(pressed=("return",)), 0.25)
+
+        # Catch up the 100 seconds that elapsed before opening the title
+        # screen, then simulate this resumed 0.25-second play frame. The
+        # following 300 seconds on the title screen are excluded.
+        self.assertEqual(self.session.state.game_minutes, before + 103)
+        self.assertEqual(self.session.state.stamp, 1_100.0)
+
+    def test_quitting_from_title_help_saves_offline_catch_up_without_title_time(self):
+        self.state.stamp = 1_000.0
+        self.state.save(self.path, update_stamp=False)
+        with patch("fishing.game.time.time", return_value=1_100.0):
+            loaded = State.load(self.path, self.world)
+            self.session = Session(self.world, self.path, loaded, True)
+        self.session.ui.mode = "help"
+        self.session.ui.help_from = "title"
+        before = self.session.state.game_minutes
+
+        with patch("fishing.game.time.time", return_value=1_400.0):
+            self.session.tick(Keys(quit=True), 0.25)
+
+        self.assertTrue(self.session.quit)
+        self.assertEqual(self.session.state.game_minutes, before + 100)
+        self.assertEqual(self.session.state.stamp, 1_400.0)
+        saved = State.load(self.path, self.world)
+        self.assertEqual(saved.game_minutes, before + 100)
+        self.assertEqual(saved.stamp, 1_400.0)
 
 
 if __name__ == "__main__":
