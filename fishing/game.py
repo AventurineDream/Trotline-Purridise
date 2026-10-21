@@ -24,7 +24,7 @@ from .bot import summon as summon_bot
 from .bot import tick as tick_bot
 from .sim import State
 from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
-from .ui import UI, UIState, SHOP_TABS, HELP_N, check_rows, shop_rows, title_options
+from .ui import UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, check_rows, shop_rows, title_options
 from .world import World
 
 DRIVING = {"play"}
@@ -730,13 +730,13 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
 
     dw, dh = Platform.display_size()
     width, height = _window_size(dw, dh)
-    platform = Platform(width, height, "Little Briar",graphics=not software)
+    platform = Platform(width, height, GAME_TITLE,graphics=not software)
     text = Text()
     ui = UI(text, world)
     # Show a real first frame while the forest and shaders initialize.
     loading = np.empty((height,width,3),np.uint8)
     loading[:] = (17,31,32)
-    ui._center(loading,"Little Briar",width/2,int(height*0.40),
+    ui._center(loading,GAME_TITLE,width/2,int(height*0.40),
                max(36,height//12),(238,233,216),"serif")
     ui._center(loading,"Opening the lake...",width/2,int(height*0.58),
                max(14,height//40),(218,187,124))

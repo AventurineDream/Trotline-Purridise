@@ -1,4 +1,4 @@
-"""Little Briar. `python -m fishing` plays. `--selftest` never opens a window."""
+"""Trotline Purridise. `python -m fishing` plays. `--selftest` never opens a window."""
 
 from __future__ import annotations
 

@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 
 from .platform import Text, find_font
-from .ui import UI, UIState, _HELP
+from .ui import UI, UIState, _HELP, _help_title
 
 
 class GuideLayoutChecks(unittest.TestCase):
@@ -55,7 +55,7 @@ class GuideLayoutChecks(unittest.TestCase):
                     self.assertLessEqual(px + pw, width)
                     self.assertLessEqual(py + ph, height)
                     self.assertEqual([r[0] for r in records[2:-1]], [line for line in lines if line])
-                    self.assertEqual(records[0][0], title)
+                    self.assertEqual(records[0][0], _help_title(title))
                     self.assertIn('Esc closes', records[-1][0])
                     for label, x, y, tw, th, size in records:
                         self.assertGreaterEqual(size, 12, label)
