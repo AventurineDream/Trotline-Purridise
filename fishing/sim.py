@@ -618,11 +618,24 @@ class State:
         self._park(world)
         if self.fuel<0.75:
             self.fuel = 0.75
-        before = self.game_minutes
-        self._advance_hours(1,toast=False)
-        self.narrative.active_play_game_minutes += max(0.0, self.game_minutes - before)
+        self.advance_bulk(60)
         self.toast(f"Tow to {world.landing}: {dollars(fee)}. Lines kept soaking.")
         return None
+
+    def advance_bulk(self, game_minutes: int) -> tuple[int, int]:
+        """Advance an exact amount of online game time and count it as active play."""
+        if type(game_minutes) is not int or game_minutes < 0:
+            raise ValueError("bulk game time must be a non-negative whole number of minutes")
+        before = self.game_minutes
+        hours, remainder = divmod(game_minutes, 60)
+        hooked, spoiled = self._advance_hours(hours, toast=False)
+        for _ in range(remainder):
+            h, s, _events = self._one_span(1.0 / 60.0, collect=True, announce=False)
+            hooked += h
+            spoiled += s
+            self.game_minutes += 1.0
+        self.narrative.active_play_game_minutes += max(0.0, self.game_minutes - before)
+        return hooked, spoiled
 
     def advance(self, dt: float, frozen: bool):
         self.anim += dt

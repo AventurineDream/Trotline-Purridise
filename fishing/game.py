@@ -26,7 +26,6 @@ from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
 from .ui import UI, UIState, SHOP_TABS, HELP_N, check_rows, shop_rows, title_options
 from .world import World
 
-FROZEN = {"title", "setbait", "check", "pause", "help"}
 DRIVING = {"play", "map"}
 MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
 NAVIGATION_KEYS = set(MENU_DIRECTIONS) | set(MENU_DIRECTIONS.values())
@@ -47,10 +46,11 @@ def _save_target(root: Path, override: str | Path | None) -> tuple[Path, bool]:
 class Keys:
     """Enough of Input for a headless tick. `pressed` is the edge set."""
 
-    def __init__(self, pressed=(), held=(), quit=False):
+    def __init__(self, pressed=(), held=(), quit=False, focused=True):
         self.pressed = set(pressed)
         self.held = set(held) | set(pressed)
         self.quit = quit
+        self.focused = bool(focused)
 
     def tap(self, name: str, dt: float) -> bool:
         return name in self.pressed
@@ -75,6 +75,7 @@ class Session:
         self.world = world
         self.save_path = Path(save_path)
         self.state = state
+        self.focused = True
         self.ui = UIState(has_save=has_save)
         self.quit = False
         self._menu_held: set[str] = set()
@@ -88,6 +89,7 @@ class Session:
 
     def tick(self, keys, dt: float) -> None:
         self.sound = None
+        self.focused = bool(getattr(keys, "focused", True))
         if keys.quit and self.ui.mode != "title":
             self.save()
             self.quit = True
@@ -119,40 +121,22 @@ class Session:
     def _attach_quest_manager(self) -> None:
         self.state._quest_event_handler = self.quest_manager.handle_event
 
-    def _simulate(self, keys, dt: float, driving_presses=()):
-        mode = self.ui.mode
+    def world_running(self) -> bool:
+        """Whether this frame may advance the shared world simulation."""
+        return self.focused and self.ui.mode == "play"
+
+    def advance_bulk(self, game_minutes: int) -> tuple[int, int]:
+        """Advance online world time for actions such as a future catnap."""
+        if not self.world_running():
+            return 0, 0
+        before = self.state.game_minutes
+        result = self.state.advance_bulk(game_minutes)
+        self._record_world_advance(before)
+        return result
+
+    def _record_world_advance(self, before: float) -> None:
         state = self.state
-        if mode in DRIVING:
-            # A held menu direction must be released before it drives or looks
-            # around, even when Enter/Esc closes the menu in this same tick.
-            driving_keys = Keys(
-                pressed=set(driving_presses) - self._menu_held,
-                held=keys.held - self._menu_held,
-            )
-            state.drive(dt,_throttle(driving_keys,mode),_steer(driving_keys,mode),self.world,
-                        idle=bool((driving_keys.held | keys.pressed) & {"shift","rshift"}),
-                        player_controlled=True)
-            if mode == "play":
-                look = 0.0
-                if "up" in driving_keys.held:
-                    look += 1.0
-                if "down" in driving_keys.held:
-                    look -= 1.0
-                state.look = max(-0.45, min(0.62, state.look + look * 0.55 * dt))
-        elif mode not in FROZEN:
-            state.sail_raised = False
-            state.drive(dt,0.0,0.0,self.world,idle=True)
-        if mode in DRIVING or mode == "dialogue":
-            sound = tick_bot(state, self.world, dt)
-            if sound:
-                self.sound = sound
-        hooked_before = state.hooked_total
-        game_minute_before = state.game_minutes
-        state.advance(dt, mode in FROZEN)
-        maybe_start_sighting(state, self.world, mode)
-        if mode != "play":
-            pause_sighting_clock(state)
-        elapsed = max(0.0, state.game_minutes - game_minute_before)
+        elapsed = max(0.0, state.game_minutes - before)
         zone = self.world.zone_at(state.x, state.z)
         state.emit_quest_event({
             "type": "anchor.sample",
@@ -164,13 +148,46 @@ class Session:
             "engine_idle": (not state.sail_raised and abs(state.throttle) <= 0.01
                             and abs(state.throttle_setting) <= 0.01),
         })
-        if state.hooked_total > hooked_before:
-            self.sound = "bite"
         self._refresh_npcs()
-        if mode in DRIVING:
+
+    def _simulate(self, keys, dt: float, driving_presses=()):
+        mode = self.ui.mode
+        state = self.state
+        if self.world_running():
+            # A held menu direction must be released before it drives or looks
+            # around, even when Enter/Esc closes the menu in this same tick.
+            driving_keys = Keys(
+                pressed=set(driving_presses) - self._menu_held,
+                held=keys.held - self._menu_held,
+                focused=self.focused,
+            )
+            state.drive(dt,_throttle(driving_keys,mode),_steer(driving_keys,mode),self.world,
+                        idle=bool((driving_keys.held | keys.pressed) & {"shift","rshift"}),
+                        player_controlled=True)
+            sound = tick_bot(state, self.world, dt)
+            if sound:
+                self.sound = sound
+            look = 0.0
+            if "up" in driving_keys.held:
+                look += 1.0
+            if "down" in driving_keys.held:
+                look -= 1.0
+            state.look = max(-0.45, min(0.62, state.look + look * 0.55 * dt))
+            hooked_before = state.hooked_total
+            game_minute_before = state.game_minutes
+            state.advance(dt, frozen=False)
+            maybe_start_sighting(state, self.world, mode)
+            self._record_world_advance(game_minute_before)
+            if state.hooked_total > hooked_before:
+                self.sound = "bite"
             self._react_to_nearby_npc()
-        if self.conversation and not any(n.id == self.conversation.npc_id for n in state.npcs):
-            self._close_dialogue()
+            if self.conversation and not any(n.id == self.conversation.npc_id for n in state.npcs):
+                self._close_dialogue()
+        else:
+            pause_sighting_clock(state)
+            self._refresh_npcs()
+            if self.conversation and not any(n.id == self.conversation.npc_id for n in state.npcs):
+                self._close_dialogue()
         state.tick_toasts(dt)
 
     def _react_to_nearby_npc(self):
@@ -362,6 +379,8 @@ class Session:
             self.sound = sound
 
     def _tow(self):
+        if not self.world_running():
+            return
         error = self.state.tow_to_landing(self.world)
         if error:
             self.state.toast(error)
