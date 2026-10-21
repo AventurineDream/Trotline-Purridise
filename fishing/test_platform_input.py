@@ -133,6 +133,7 @@ class PlatformInputChecks(unittest.TestCase):
         self.focus(False)
         self.key('e')
         inp = self.platform.poll()
+        self.assertFalse(inp.focused)
         self.assertEqual(inp.pressed, set())
         self.assertEqual(inp.held, set())
         self.assertEqual(inp._rep, {})
@@ -140,6 +141,7 @@ class PlatformInputChecks(unittest.TestCase):
         self.focus(True)
         self.key('w', repeat=True)
         inp = self.platform.poll()
+        self.assertTrue(inp.focused)
         self.assertEqual(inp.pressed, set())
         self.assertEqual(inp.held, {'w'})
         self.assertFalse(inp.tap('w', .1))  # No stale repeat from before focus loss.

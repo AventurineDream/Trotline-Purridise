@@ -225,6 +225,7 @@ class Input:
         self.held: set[str] = set()
         self.pressed: set[str] = set()
         self.quit = False
+        self.focused = True
         self._rep: dict[str, float] = {}
 
     def tap(self, name: str, dt: float) -> bool:
@@ -436,6 +437,7 @@ class Platform:
         # OS key-repeat events must never become additional one-shot actions.
         for name in inp._rep.keys() - held:
             inp._rep.pop(name, None)
+        inp.focused = self._focused
         return inp
 
     def present(self, rgb: np.ndarray):

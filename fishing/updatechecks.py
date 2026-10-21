@@ -128,10 +128,11 @@ def interface_checks(world):
         if state.throttle_setting <= 0:
             raise AssertionError("W did not resume driving after being released")
         session.tick(Keys(held={"shift"}), 0.05)
+        chart_world = (state.to_json(), state.anim, state.minute_acc)
         session.ui.mode = "map"
         session.tick(Keys(held={"w"}), 0.1)
-        if state.throttle_setting <= 0:
-            raise AssertionError("chart mode lost its boat throttle controls")
+        if (state.to_json(), state.anim, state.minute_acc) != chart_world:
+            raise AssertionError("chart mode advanced the world")
 
         state.anchored = True
         state.speed = state.throttle = state.throttle_setting = 0.0
@@ -161,7 +162,7 @@ def interface_checks(world):
         session.save()
         if State.load(session.save_path, world).time_scale != 12:
             raise AssertionError("12x did not survive a save roundtrip")
-    print("menus/time ok  WASD, arrows, repeat, held keys on exit, chart driving, "
+    print("menus/time ok  WASD, arrows, repeat, held keys on exit, chart pause, "
           "12x cycle, clock, driving restriction and saves")
 
 
