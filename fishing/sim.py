@@ -10,9 +10,10 @@ from __future__ import annotations
 import json
 import math
 import time
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, ClassVar
 from uuid import uuid4
 
 from .data import (
@@ -57,9 +58,24 @@ from .boat import (
 from .weather import wind_at
 from .lakes import LAKES
 from .narrative import NarrativeState, deployment_id
+from .savepaths import (UnsupportedSaveVersionError, V2_REWARD_KINDS,
+                        merge_v2_defaults)
 
 MASK = (1 << 64) - 1
-SAVE_VERSION = 1
+SAVE_VERSION = 2
+
+_SAVE_FIELDS = frozenset({
+    "version", "lake_id", "boat_id", "owned_boats", "fuel_tanks",
+    "rowboat_trolling_motor", "rowboat_battery_kwh",
+    "rowboat_charge_kwh_this_visit", "seed", "game_minutes", "money",
+    "earned", "spent", "bait", "held", "lines", "well", "x", "z",
+    "yaw", "anchored", "motor", "well_tier", "box_tier", "finder",
+    "light", "owned", "look", "journal", "narrative_v1", "tutorial",
+    "traveled", "time_scale", "muted", "preferred_bait", "hooked_total",
+    "stamp", "bot", "v2",
+})
+_BOT_FIELDS = frozenset({"phase", "x", "z", "yaw", "tx", "tz",
+                         "target_line_id"})
 
 
 class RNG:
@@ -102,12 +118,14 @@ class Catch:
     lake_id: str = "briar"
     noted_tired: bool = False
     catch_game_minute: float | None = None
+    extra_fields: dict = field(default_factory=dict, repr=False)
 
     def value(self) -> float:
         return fish_value(self.species, self.weight, self.quality)
 
     def to_json(self) -> dict:
-        return {
+        result = deepcopy(self.extra_fields)
+        result.update({
             "species": self.species,
             "weight": round(self.weight, 3),
             "quality": round(self.quality, 3),
@@ -119,7 +137,8 @@ class Catch:
             "noted_tired": self.noted_tired,
             "catch_game_minute": (None if self.catch_game_minute is None
                                   else round(self.catch_game_minute, 3)),
-        }
+        })
+        return result
 
     @classmethod
     def from_json(cls, raw: dict) -> "Catch":
@@ -131,11 +150,14 @@ class Catch:
             catch_minute_valid = False
         if not catch_minute_valid:
             catch_minute = None
+        known = {"species", "weight", "quality", "age", "zone", "bait", "hour",
+                 "lake_id", "noted_tired", "catch_game_minute"}
         return cls(
             raw["species"], float(raw["weight"]), float(raw["quality"]),
             float(raw["age"]), raw["zone"], raw["bait"], float(raw["hour"]),raw.get("lake_id","briar"),
             bool(raw.get("noted_tired", False)),
             float(catch_minute) if catch_minute is not None else None,
+            {key: deepcopy(value) for key, value in raw.items() if key not in known},
         )
 
 
@@ -143,14 +165,20 @@ class Catch:
 class Hook:
     baited: bool
     catch: Catch | None = None
+    extra_fields: dict = field(default_factory=dict, repr=False)
 
     def to_json(self) -> dict:
-        return {"baited": self.baited, "catch": None if self.catch is None else self.catch.to_json()}
+        result = deepcopy(self.extra_fields)
+        result.update({"baited": self.baited,
+                       "catch": None if self.catch is None else self.catch.to_json()})
+        return result
 
     @classmethod
     def from_json(cls, raw: dict) -> "Hook":
         catch = None if raw.get("catch") is None else Catch.from_json(raw["catch"])
-        return cls(bool(raw["baited"]), catch)
+        return cls(bool(raw["baited"]), catch,
+                   {key: deepcopy(value) for key, value in raw.items()
+                    if key not in {"baited", "catch"}})
 
 
 @dataclass
@@ -174,6 +202,7 @@ class SetLine:
     hooks: list[Hook]
     snag_minute: float = -999.0
     line_id: str = field(default_factory=lambda: str(uuid4()))
+    extra_fields: dict = field(default_factory=dict, repr=False)
 
     def fish_on(self) -> int:
         return sum(1 for h in self.hooks if h.catch is not None)
@@ -193,7 +222,8 @@ class SetLine:
         return pts
 
     def to_json(self) -> dict:
-        return {
+        result = deepcopy(self.extra_fields)
+        result.update({
             "tier": self.tier, "bait": self.bait,
             "x0": round(self.x0, 2), "z0": round(self.z0, 2),
             "x1": round(self.x1, 2), "z1": round(self.z1, 2),
@@ -201,16 +231,20 @@ class SetLine:
             "hooks": [h.to_json() for h in self.hooks],
             "snag_minute": self.snag_minute,
             "line_id": self.line_id,
-        }
+        })
+        return result
 
     @classmethod
     def from_json(cls, raw: dict) -> "SetLine":
+        known = {"tier", "bait", "x0", "z0", "x1", "z1", "zone", "hooks",
+                 "snag_minute", "line_id"}
         return cls(
             raw["tier"], raw["bait"], float(raw["x0"]), float(raw["z0"]),
             float(raw["x1"]), float(raw["z1"]), raw["zone"],
             [Hook.from_json(h) for h in raw["hooks"]],
             float(raw.get("snag_minute", -999)),
             deployment_id(raw.get("line_id")) or str(uuid4()),
+            {key: deepcopy(value) for key, value in raw.items() if key not in known},
         )
 
 
@@ -327,11 +361,15 @@ def _buyer_line(catches) -> str:
 
 @dataclass
 class State:
+    SAVE_VERSION: ClassVar[int] = SAVE_VERSION
     rng: RNG
     lake_id: str = "briar"
     boat_id: str = "jon"
+    unknown_boat_id: str | None = field(default=None, repr=False)
     owned_boats: list[str] = field(default_factory=lambda:["jon"])
     fuel_tanks: dict[str,float] = field(default_factory=lambda:{"jon":12.0})
+    unknown_owned_boats: list = field(default_factory=list, repr=False)
+    unknown_fuel_tanks: dict = field(default_factory=dict, repr=False)
     rowboat_trolling_motor: bool = False
     rowboat_battery_kwh: float = 0.0
     rowboat_charge_kwh_this_visit: float = 0.0
@@ -364,6 +402,9 @@ class State:
     look_paint: dict = field(default_factory=dict)
     journal: dict = field(default_factory=dict)
     narrative: NarrativeState = field(default_factory=NarrativeState)
+    v2: dict = field(default_factory=dict)
+    unknown_save_fields: dict = field(default_factory=dict, repr=False)
+    unknown_bot_fields: dict = field(default_factory=dict, repr=False)
     # Runtime actors for the loaded lake only; definitions are never serialized.
     npcs: tuple = field(default_factory=tuple, repr=False)
     tutorial: int = 0
@@ -404,6 +445,7 @@ class State:
         st.owned = {"hull": ["aluminum"], "deck": ["aluminum"], "buoy": ["orange"], "motor": ["black"]}
         st.look_paint = {"hull": "aluminum", "deck": "aluminum", "buoy": "orange", "motor": "black"}
         st.journal = {sp.id: {"count": 0, "best": 0.0, "zone": "", "bait": "", "band": ""} for sp in SPECIES}
+        st.v2 = merge_v2_defaults(st, {})
         st._park(world)
         st.bind(world)
         st.stamp = time.time()
@@ -492,6 +534,7 @@ class State:
                 return f"Need {dollars(model.price)}."
             self.owned_boats.append(boat_id)
             self.fuel_tanks[boat_id] = model.tank
+        self.unknown_boat_id = None
         self.boat_id = boat_id
         self._park(world)
         self.toast(f"Aboard the {model.name}.")
@@ -1282,10 +1325,24 @@ class State:
     # --- save -----------------------------------------------------------
 
     def to_json(self) -> dict:
-        return {
+        bot = deepcopy(self.unknown_bot_fields)
+        bot.update({
+            "phase": self.bot_phase,
+            "x": round(self.bot_x, 2), "z": round(self.bot_z, 2),
+            "yaw": round(self.bot_yaw, 4),
+            "tx": round(self.bot_tx, 2), "tz": round(self.bot_tz, 2),
+            "target_line_id": self.bot_target_line_id,
+        })
+        result = deepcopy(self.unknown_save_fields)
+        owned_boats = list(self.owned_boats) + deepcopy(self.unknown_owned_boats)
+        fuel_tanks = deepcopy(self.unknown_fuel_tanks)
+        fuel_tanks.update({key: round(value, 6)
+                           for key, value in self.fuel_tanks.items()})
+        saved_boat_id = self.unknown_boat_id or self.boat_id
+        result.update({
             "version": SAVE_VERSION,
-            "lake_id":self.lake_id,"boat_id":self.boat_id,"owned_boats":self.owned_boats,
-            "fuel_tanks":{key:round(value,6) for key,value in self.fuel_tanks.items()},
+            "lake_id":self.lake_id,"boat_id":saved_boat_id,"owned_boats":owned_boats,
+            "fuel_tanks":fuel_tanks,
             "rowboat_trolling_motor":self.rowboat_trolling_motor,
             "rowboat_battery_kwh":round(self.rowboat_battery_kwh,6),
             "rowboat_charge_kwh_this_visit":round(self.rowboat_charge_kwh_this_visit,6),
@@ -1309,18 +1366,16 @@ class State:
             "time_scale": self.time_scale, "muted": self.muted,
             "preferred_bait": self.preferred_bait,
             "hooked_total": self.hooked_total,
-            "stamp": time.time(),
-            "bot": {
-                "phase": self.bot_phase,
-                "x": round(self.bot_x, 2), "z": round(self.bot_z, 2),
-                "yaw": round(self.bot_yaw, 4),
-                "tx": round(self.bot_tx, 2), "tz": round(self.bot_tz, 2),
-                "target_line_id": self.bot_target_line_id,
-            },
-        }
+            "stamp": self.stamp,
+            "bot": bot,
+            "v2": merge_v2_defaults(self, self.v2),
+        })
+        return result
 
-    def save(self, path: Path):
+    def save(self, path: Path, *, update_stamp: bool = True):
         path.parent.mkdir(parents=True, exist_ok=True)
+        if update_stamp:
+            self.stamp = time.time()
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.to_json()))
         tmp.replace(path)
@@ -1328,19 +1383,46 @@ class State:
     @classmethod
     def load(cls, path: Path, world: World) -> "State":
         raw = json.loads(path.read_text())
-        if raw.get("version") != SAVE_VERSION:
+        if not isinstance(raw, dict):
+            raise ValueError("save root")
+        version = raw.get("version")
+        if type(version) is int and version > SAVE_VERSION:
+            raise UnsupportedSaveVersionError(version, SAVE_VERSION)
+        if type(version) is not int or version not in (1, SAVE_VERSION):
             raise ValueError("save version")
+        if version == SAVE_VERSION and "v2" not in raw:
+            raise ValueError("save v2 missing v2 object")
         st = cls(rng=RNG(int(raw["seed"])))
+        st.unknown_save_fields = {
+            key: deepcopy(value) for key, value in raw.items()
+            if key not in _SAVE_FIELDS
+        }
         if raw.get("lake_id","briar")!=world.id:
             raise ValueError("save belongs to a different lake")
-        st.boat_id = raw.get("boat_id","jon")
-        if st.boat_id not in BOATS:
-            raise ValueError("unknown saved boat")
-        st.owned_boats = [key for key in raw.get("owned_boats",["jon"]) if key in BOATS]
-        if st.boat_id not in st.owned_boats:
+        saved_boat_id = raw.get("boat_id", "jon")
+        if not isinstance(saved_boat_id, str):
+            raise ValueError("saved boat id must be text")
+        if saved_boat_id in BOATS:
+            st.boat_id = saved_boat_id
+        else:
+            # Use a supported boat in this build while keeping the future ID
+            # intact for the build that can interpret it.
+            st.boat_id = "jon"
+            st.unknown_boat_id = saved_boat_id
+        raw_owned_boats = raw.get("owned_boats", ["jon"])
+        st.owned_boats = [key for key in raw_owned_boats
+                          if isinstance(key, str) and key in BOATS]
+        st.unknown_owned_boats = [deepcopy(key) for key in raw_owned_boats
+                                  if isinstance(key, str) and key not in BOATS]
+        if saved_boat_id in BOATS and st.boat_id not in st.owned_boats:
             st.owned_boats.append(st.boat_id)
+        raw_fuel_tanks = raw.get("fuel_tanks", {"jon": 12.0})
+        st.unknown_fuel_tanks = {
+            key: deepcopy(value) for key, value in raw_fuel_tanks.items()
+            if key not in BOATS
+        }
         st.fuel_tanks = {key:max(0.0,min(BOATS[key].tank,float(value)))
-                         for key,value in raw.get("fuel_tanks",{"jon":12.0}).items() if key in BOATS}
+                         for key,value in raw_fuel_tanks.items() if key in BOATS}
         st.rowboat_trolling_motor = (bool(raw.get("rowboat_trolling_motor", False))
                                      and "rowboat" in st.owned_boats)
         battery = raw.get("rowboat_battery_kwh", 0.0)
@@ -1383,6 +1465,12 @@ class State:
         st.look_paint = raw["look"]
         st.journal = raw["journal"]
         st.narrative = NarrativeState.from_json(raw.get("narrative_v1"))
+        raw_bot_fields = raw.get("bot")
+        if isinstance(raw_bot_fields, dict):
+            st.unknown_bot_fields = {
+                key: deepcopy(value) for key, value in raw_bot_fields.items()
+                if key not in _BOT_FIELDS
+            }
         for sp in SPECIES:
             st.journal.setdefault(sp.id, {"count": 0, "best": 0.0, "zone": "", "bait": "", "band": ""})
         st.tutorial = int(raw.get("tutorial", 4))
@@ -1392,7 +1480,7 @@ class State:
         st.preferred_bait = raw.get("preferred_bait", "worm")
         st.hooked_total = int(raw.get("hooked_total", 0))
         st.stamp = float(raw.get("stamp", time.time()))
-        raw_bot = raw.get("bot")
+        raw_bot = raw_bot_fields
         if isinstance(raw_bot, dict) and raw_bot.get("phase") in ("home", "go", "out", "back"):
             st.bot_phase = raw_bot["phase"]
             st.bot_x = float(raw_bot.get("x", 0.0))
@@ -1413,7 +1501,34 @@ class State:
             st.toast("Boat eased back into clear water.")
         if st.slip_status(world) != "docked":
             st.rowboat_charge_kwh_this_visit = 0.0
+        st.v2 = merge_v2_defaults(st, raw.get("v2") if version == SAVE_VERSION else None)
         return st
+
+    def claim_reward(self, kind: str, key: str) -> bool:
+        """Persist an idempotency key for one new v2 reward kind."""
+        if kind not in V2_REWARD_KINDS or not isinstance(key, str) or not key.strip():
+            return False
+        claims = self.v2["reward_claims"][kind]
+        if key in claims:
+            return False
+        claims.append(key)
+        return True
+
+    def set_scene_status(self, scene_id: str, status: str) -> bool:
+        """Latch a scene as pending or done; pending scenes never grant rewards."""
+        if not isinstance(scene_id, str) or not scene_id.strip():
+            return False
+        if status not in ("pending", "done"):
+            return False
+        scene_states = self.v2["story"]["scene_states"]
+        if scene_states.get(scene_id) == "done" and status == "pending":
+            return False
+        scene_states[scene_id] = status
+        if status == "done":
+            seen = self.v2["story"]["scenes_seen"]
+            if scene_id not in seen:
+                seen.append(scene_id)
+        return True
 
 
 def shore_sd_safe(world: World, x: float, z: float) -> float:
