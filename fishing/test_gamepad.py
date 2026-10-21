@@ -183,6 +183,18 @@ class GamepadChecks(unittest.TestCase):
         self.push(removed)
         self.assertEqual(self.platform.poll().gamepad_held, set())
 
+    def test_trigger_hysteresis_does_not_latch_the_vertical_stick(self):
+        self.axis(AXIS_TRIGGERRIGHT, 24000)
+        self.assertIn("w", self.platform.poll().gamepad_held)
+
+        # This stick value is below its entry zone but above its release zone.
+        self.axis(AXIS_LEFTY, -6000)
+        self.assertIn("w", self.platform.poll().gamepad_held)  # RT still holds it.
+
+        self.axis(AXIS_TRIGGERRIGHT, 0)
+        keys = self.platform.poll()
+        self.assertNotIn("w", keys.gamepad_held)
+
     def test_virtual_controller_hotplug_opens_and_closes(self):
         joystick, set_button, update, detach_device = self.attach_virtual_controller()
         keys = self.virtual_button(joystick, set_button, update, BUTTON_A, True)
@@ -209,6 +221,17 @@ class GamepadChecks(unittest.TestCase):
         self.assertIn("w", mapped.pressed)
         self.assertIn("e", mapped.pressed)
         self.assertEqual(mapped.device, "gamepad")
+
+    def test_context_aliases_follow_a_rebound_physical_key(self):
+        saved = default_key_bindings()
+        saved["hail"] = "p"
+        saved["pause"] = "b"
+        saved["anchor"] = "n"
+
+        old_keys, _ = remap_keyboard({"c", "esc", "space"}, set(), saved)
+        self.assertFalse(old_keys & {"c", "esc", "space"})
+        new_keys, _ = remap_keyboard({"p", "b", "n"}, set(), saved)
+        self.assertTrue({"c", "esc", "space"} <= new_keys)
 
     def test_session_accepts_legacy_input_aggregate_fields(self):
         world = World()

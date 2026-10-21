@@ -77,5 +77,26 @@ class GuideLayoutChecks(unittest.TestCase):
                         self.assertGreater(np.count_nonzero(frame), 0)
 
 
+class MinimapControlChecks(unittest.TestCase):
+    def test_shortcut_label_matches_the_active_input_device(self):
+        ui = UI.__new__(UI)
+        ui.world = type("WorldMap", (), {
+            "map_small": np.zeros((24, 36, 3), dtype=np.uint8),
+        })()
+        labels = []
+        ui._text = lambda _frame, label, *args, **kwargs: labels.append(label)
+        ui._panel = lambda *args, **kwargs: None
+        for method in ("_plot_trinidad_cove", "_plot_npcs", "_plot_boat", "_plot_bot"):
+            setattr(ui, method, lambda *args, **kwargs: None)
+        frame = np.zeros((360, 640, 3), dtype=np.uint8)
+        state = type("MapState", (), {"lines": []})()
+
+        for device, expected in (("keyboard", "TAB"), ("gamepad", "BACK")):
+            with self.subTest(device=device):
+                labels.clear()
+                ui._minimap(frame, state, 16, frame.shape[0] - 16, device)
+                self.assertIn(expected, labels)
+
+
 if __name__ == '__main__':
     unittest.main()

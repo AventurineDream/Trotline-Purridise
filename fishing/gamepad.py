@@ -94,6 +94,15 @@ DEFAULT_KEY_BINDINGS = {
     "select": "return", "alternate_select": "space", "cancel": "esc",
 }
 
+# These actions share the same canonical game key in different contexts. Keep
+# their physical bindings aligned so rebinding one context cannot leave its
+# old key active through another alias.
+ACTION_ALIASES = (
+    ("hail", "dialogue_continue"),
+    ("pause", "cancel"),
+    ("anchor", "alternate_select"),
+)
+
 KEY_NAMES = frozenset({
     "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "m",
     "n", "p", "q", "r", "s", "t", "w", "z", "1", "2", "3", "4",
@@ -126,6 +135,16 @@ def _bindings(saved) -> dict[str, str]:
         for action in bindings:
             key = saved.get(action)
             if isinstance(key, str) and key in KEY_NAMES:
+                bindings[action] = key
+        # Prefer an alias whose saved value differs from its default. This
+        # handles existing full settings maps where a user changed only one
+        # member of a context-shared action pair. If conflicting non-default
+        # values are present, the stable alias order above wins.
+        for aliases in ACTION_ALIASES:
+            changed = [action for action in aliases
+                       if bindings[action] != DEFAULT_KEY_BINDINGS[action]]
+            key = bindings[changed[0] if changed else aliases[0]]
+            for action in aliases:
                 bindings[action] = key
     return bindings
 
@@ -210,7 +229,7 @@ class Gamepad:
         self.instance_id: int | None = None
         self.buttons: set[int] = set()
         self.axes: dict[int, int] = {}
-        self._axis_actions: set[str] = set()
+        self._axis_actions: dict[int, set[str]] = {}
         self._pressed: set[str] = set()
         self._y_down = False
         self._y_elapsed = 0.0
@@ -377,19 +396,31 @@ class Gamepad:
                 self._y_long = True
                 self._pressed.add("z")
 
-        prior = self._axis_actions
+        prior_by_axis = self._axis_actions
         axes = self.axes
-        next_axes: set[str] = set()
-        next_axes |= self._signed_axis(
-            axes.get(AXIS_LEFTX, 0), "a", "d", prior, STICK_DEADZONE, STICK_RELEASE_ZONE,
-        )
-        next_axes |= self._signed_axis(
-            axes.get(AXIS_LEFTY, 0), "w", "s", prior, STICK_DEADZONE, STICK_RELEASE_ZONE,
-        )
-        next_axes |= self._trigger_axis(axes.get(AXIS_TRIGGERLEFT, 0), "s", prior)
-        next_axes |= self._trigger_axis(axes.get(AXIS_TRIGGERRIGHT, 0), "w", prior)
+        next_by_axis = {
+            AXIS_LEFTX: self._signed_axis(
+                axes.get(AXIS_LEFTX, 0), "a", "d", prior_by_axis.get(AXIS_LEFTX, set()),
+                STICK_DEADZONE, STICK_RELEASE_ZONE,
+            ),
+            AXIS_LEFTY: self._signed_axis(
+                axes.get(AXIS_LEFTY, 0), "w", "s", prior_by_axis.get(AXIS_LEFTY, set()),
+                STICK_DEADZONE, STICK_RELEASE_ZONE,
+            ),
+            AXIS_TRIGGERLEFT: self._trigger_axis(
+                axes.get(AXIS_TRIGGERLEFT, 0), "s",
+                prior_by_axis.get(AXIS_TRIGGERLEFT, set()),
+            ),
+            AXIS_TRIGGERRIGHT: self._trigger_axis(
+                axes.get(AXIS_TRIGGERRIGHT, 0), "w",
+                prior_by_axis.get(AXIS_TRIGGERRIGHT, set()),
+            ),
+        }
+        next_by_axis = {axis: actions for axis, actions in next_by_axis.items() if actions}
+        prior = set().union(*prior_by_axis.values()) if prior_by_axis else set()
+        next_axes = set().union(*next_by_axis.values()) if next_by_axis else set()
         self._pressed.update(next_axes - prior)
-        self._axis_actions = next_axes
+        self._axis_actions = next_by_axis
 
         held = set(next_axes)
         for button in self.buttons:

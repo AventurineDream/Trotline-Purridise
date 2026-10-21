@@ -748,7 +748,7 @@ class UI:
         self._text(frame,f"{bait}  {state.bait.get(state.preferred_bait,0)}",
                    sx+16,sy+int(95*unit),small,DIM,False,"sans")
         lines_h = self._lines_panel(frame, state, sx, sy - 8, sw, small)
-        map_h = self._minimap(frame, state, m, h - m)
+        map_h = self._minimap(frame, state, m, h - m, ui.input_device)
         if not interactions:
             return
         npc = nearby_npc(state)
@@ -782,7 +782,7 @@ class UI:
         self._panel(frame,hint_x,hint_y,hint_w+24,hint_h,0.88)
         self._center(frame,hint,w/2,hint_y+6,small,INK)
 
-    def _minimap(self, frame, state, margin, bottom) -> int:
+    def _minimap(self, frame, state, margin, bottom, input_device="keyboard") -> int:
         chart = self.world.map_small
         w = frame.shape[1]
         mw = max(96, int(w * 0.14))
@@ -793,7 +793,8 @@ class UI:
         self._panel(frame, x, y-28, mw+16, mh+35, 0.80)
         self._text(frame,"LAKE CHART",x+8,y-21,max(10,frame.shape[0]//65),GOLD,False,"sans")
         size = max(10,frame.shape[0]//65)
-        self._text(frame,"TAB",x+mw-22,y-21,size,DIM,False,"sans")
+        shortcut = "BACK" if input_device == "gamepad" else "TAB"
+        self._text(frame,shortcut,x+mw-22,y-21,size,DIM,False,"sans")
         x += 8
         frame[y:y + mh, x:x + mw] = scaled
         for line in state.lines:
