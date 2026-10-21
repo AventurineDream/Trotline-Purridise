@@ -37,7 +37,6 @@ class GamepadChecks(unittest.TestCase):
         self.platform.sdl.SDL_PushEvent.argtypes = [ctypes.POINTER(SDL_Event)]
         self.platform.sdl.SDL_PushEvent.restype = ctypes.c_int
         self.platform.poll()  # Drain window events before each event assertion.
-        self.timestamp = 100
 
     def push(self, event):
         self.assertEqual(self.platform.sdl.SDL_PushEvent(ctypes.byref(event)), 1)
@@ -45,21 +44,31 @@ class GamepadChecks(unittest.TestCase):
     def button(self, button, down, timestamp=None):
         event = SDL_Event()
         event.cbutton.type = SDL_CONTROLLERBUTTONDOWN if down else SDL_CONTROLLERBUTTONUP
-        event.cbutton.timestamp = self.timestamp if timestamp is None else timestamp
+        event.cbutton.timestamp = (
+            self.platform.ticks() if timestamp is None else timestamp
+        ) & 0xFFFFFFFF
         event.cbutton.which = 77
         event.cbutton.button = button
         event.cbutton.state = int(down)
         self.push(event)
-        self.timestamp += 50
+
+    @staticmethod
+    def direct_button_event(button, down, timestamp):
+        event_type = SDL_CONTROLLERBUTTONDOWN if down else SDL_CONTROLLERBUTTONUP
+        return SimpleNamespace(
+            type=event_type,
+            cbutton=SimpleNamespace(
+                timestamp=timestamp & 0xFFFFFFFF, which=77, button=button,
+            ),
+        )
 
     def axis(self, axis, value):
         event = SDL_Event()
         event.caxis.type = SDL_CONTROLLERAXISMOTION
-        event.caxis.timestamp = self.timestamp
+        event.caxis.timestamp = self.platform.ticks() & 0xFFFFFFFF
         event.caxis.which = 77
         event.caxis.axis = axis
         event.caxis.value = value
-        self.timestamp += 50
         self.push(event)
 
     def key(self, name):
@@ -141,85 +150,65 @@ class GamepadChecks(unittest.TestCase):
         self.assertEqual(keys.gamepad_held, set())
         self.assertEqual(keys.device, "gamepad")
 
-        self.now_ms = 1000
-        self.platform.ticks = lambda: self.now_ms
-        self.timestamp = self.now_ms
-        self.button(BUTTON_Y, True)
-        self.button(BUTTON_Y, False)
-        self.now_ms += 50
-        keys = self.platform.poll(0.05)
-        self.assertEqual(keys.gamepad_pressed, {"b"})
-        self.assertNotIn("z", keys.gamepad_held)
+        gamepad = self.platform.gamepad
+        gamepad.handle_event(self.direct_button_event(BUTTON_Y, True, 1000))
+        gamepad.handle_event(self.direct_button_event(BUTTON_Y, False, 1050))
+        pressed, held, _activity = gamepad.sample(0.05, now_ms=1050)
+        self.assertEqual(pressed, {"b"})
+        self.assertNotIn("z", held)
 
         # A slow frame began well before the physical press. The held action
         # must be measured from SDL's button timestamp, not the whole frame dt.
-        self.now_ms = 2000
-        self.timestamp = self.now_ms + 240
-        self.button(BUTTON_Y, True)
-        self.now_ms += 250
-        keys = self.platform.poll(0.25)
-        self.assertNotIn("b", keys.gamepad_pressed)
-        self.assertNotIn("z", keys.gamepad_held)
-        self.now_ms += 70
-        self.timestamp = self.now_ms
-        self.button(BUTTON_Y, False)
-        keys = self.platform.poll(0.07)
-        self.assertEqual(keys.gamepad_pressed, {"b"})
-        self.assertNotIn("z", keys.gamepad_held)
+        gamepad.handle_event(self.direct_button_event(BUTTON_Y, True, 2240))
+        pressed, held, _activity = gamepad.sample(0.25, now_ms=2250)
+        self.assertNotIn("b", pressed)
+        self.assertNotIn("z", held)
+        gamepad.handle_event(self.direct_button_event(BUTTON_Y, False, 2320))
+        pressed, held, _activity = gamepad.sample(0.07, now_ms=2320)
+        self.assertEqual(pressed, {"b"})
+        self.assertNotIn("z", held)
 
-        self.now_ms = 3000
-        self.timestamp = self.now_ms
-        self.button(BUTTON_Y, True)
-        keys = self.platform.poll(0.0)
-        self.now_ms += 160
-        keys = self.platform.poll(0.16)
-        self.assertNotIn("z", keys.gamepad_pressed)
-        self.now_ms += 160
-        keys = self.platform.poll(0.16)
-        self.assertIn("z", keys.gamepad_pressed)
-        self.assertIn("z", keys.gamepad_held)
-        self.timestamp = self.now_ms
-        self.button(BUTTON_Y, False)
-        keys = self.platform.poll(0.05)
-        self.assertNotIn("b", keys.gamepad_pressed)
-        self.assertNotIn("z", keys.gamepad_held)
+        gamepad.handle_event(self.direct_button_event(BUTTON_Y, True, 3000))
+        pressed, held, _activity = gamepad.sample(0.0, now_ms=3000)
+        self.assertNotIn("z", pressed)
+        pressed, held, _activity = gamepad.sample(0.16, now_ms=3160)
+        self.assertNotIn("z", pressed)
+        pressed, held, activity = gamepad.sample(0.16, now_ms=3320)
+        self.assertIn("z", pressed)
+        self.assertIn("z", held)
+        self.assertTrue(activity)
+        gamepad.handle_event(self.direct_button_event(BUTTON_Y, False, 3320))
+        pressed, held, _activity = gamepad.sample(0.05, now_ms=3370)
+        self.assertNotIn("b", pressed)
+        self.assertNotIn("z", held)
 
     def test_y_action_release_and_long_press_restore_gamepad_prompt_device(self):
-        self.now_ms = 4000
-        self.platform.ticks = lambda: self.now_ms
-        self.timestamp = self.now_ms
-        self.button(BUTTON_Y, True)
+        start_ms = self.platform.ticks() & 0xFFFFFFFF
+        self.button(BUTTON_Y, True, timestamp=start_ms)
         self.platform.poll()
 
         self.key("e")
-        self.now_ms += 40
         self.assertEqual(self.platform.poll(0.04).device, "keyboard")
 
-        self.now_ms += 60
-        self.timestamp = self.now_ms
-        self.button(BUTTON_Y, False)
+        self.button(BUTTON_Y, False, timestamp=(start_ms + 100) & 0xFFFFFFFF)
         keys = self.platform.poll(0.06)
         self.assertIn("b", keys.gamepad_pressed)
         self.assertEqual(keys.device, "gamepad")
 
-        self.timestamp = self.now_ms
         self.button(BUTTON_A, True)
         self.platform.poll()
         self.key("e")
-        self.now_ms += 10
         self.assertEqual(self.platform.poll(0.01).device, "keyboard")
-        self.timestamp = self.now_ms
         self.button(BUTTON_A, False)
         self.assertEqual(self.platform.poll().device, "keyboard")
 
-        self.now_ms += 100
-        self.timestamp = self.now_ms
         self.button(BUTTON_Y, True)
         self.platform.poll()
         self.key("e")
-        self.now_ms += 10
         self.assertEqual(self.platform.poll(0.01).device, "keyboard")
-        self.now_ms += 290
+        self.platform.gamepad._y_started_ms = (
+            self.platform.ticks() - 300
+        ) & 0xFFFFFFFF
         keys = self.platform.poll(0.29)
         self.assertIn("z", keys.gamepad_pressed)
         self.assertEqual(keys.device, "gamepad")
