@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
-import numpy as np
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
+import numpy as np
+
 from . import savepaths
 from .narrative import QUEST_IDS
-from .savepaths import book_stage, load_game_save
+from .savepaths import (UnsupportedSaveVersionError, book_stage,
+                        load_game_save)
 from .sim import State
 from .ui import UI, UIState
 from .world import World
@@ -143,6 +147,11 @@ class SaveV2Checks(unittest.TestCase):
         raw["v2"]["future_domain"] = {"version": 9}
         raw["v2"]["profile"]["future_profile_field"] = {"kept": True}
         raw["v2"]["settings"]["future_setting"] = ["large", "text"]
+        raw["v2"]["needs"]["last_prompt_real_s"] = 1729.5
+        raw["v2"]["story"]["scene_states"]["future_scene"] = "skipped"
+        raw["v2"]["settings"]["text_size"] = "large"
+        raw["owned_boats"].append("future_skiff")
+        raw["fuel_tanks"]["future_skiff"] = 6.75
         self.save_path.write_text(json.dumps(raw), encoding="utf-8")
 
         world = World("briar")
@@ -169,6 +178,12 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(roundtrip["v2"]["future_domain"], {"version": 9})
         self.assertEqual(roundtrip["v2"]["profile"]["future_profile_field"], {"kept": True})
         self.assertEqual(roundtrip["v2"]["settings"]["future_setting"], ["large", "text"])
+        self.assertEqual(roundtrip["v2"]["needs"]["last_prompt_real_s"], 1729.5)
+        self.assertEqual(roundtrip["v2"]["story"]["scene_states"]["future_scene"],
+                         "skipped")
+        self.assertEqual(roundtrip["v2"]["settings"]["text_size"], 1)
+        self.assertIn("future_skiff", roundtrip["owned_boats"])
+        self.assertEqual(roundtrip["fuel_tanks"]["future_skiff"], 6.75)
 
     def test_v2_reward_claims_and_pending_done_scenes_are_idempotent(self):
         world = World()
@@ -215,10 +230,8 @@ class SaveV2Checks(unittest.TestCase):
         older_path.write_text(json.dumps(older), encoding="utf-8")
         newer_path.write_text(json.dumps(newer), encoding="utf-8")
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
-        invalid = dict(older)
-        invalid["version"] = 2
-        invalid["v2"] = []
-        self.save_path.write_text(json.dumps(invalid), encoding="utf-8")
+        invalid_bytes = b'{ "version": 2, "v2": [broken active save'
+        self.save_path.write_bytes(invalid_bytes)
 
         world, restored, has_save = load_game_save(self.save_path, State, World)
         self.assertTrue(has_save)
@@ -228,12 +241,72 @@ class SaveV2Checks(unittest.TestCase):
                             for toast in restored.toasts))
         self.assertEqual(self.read(self.save_path)["version"], 2)
         self.assertEqual(len(savepaths.backup_candidates(self.save_path)), 2)
+        rejected = list(self.save_path.parent.glob("save.rejected.*.json"))
+        self.assertEqual(len(rejected), 1)
+        self.assertEqual(rejected[0].read_bytes(), invalid_bytes)
+        self.assertNotIn(rejected[0], savepaths.backup_candidates(self.save_path))
 
         _, next_launch, has_save = load_game_save(self.save_path, State, World)
         self.assertTrue(has_save)
         self.assertFalse(any("restored from a backup" in toast[0]
                              for toast in next_launch.toasts))
         self.assertEqual(len(savepaths.backup_candidates(self.save_path)), 2)
+
+    def test_corrupt_active_save_without_backup_does_not_overwrite_from_legacy(self):
+        self.save_path.parent.mkdir(parents=True)
+        active_bytes = b"corrupt active save"
+        self.save_path.write_bytes(active_bytes)
+        legacy_bytes = (FIXTURES / "mid_game.json").read_bytes()
+        self.legacy_path.parent.mkdir(parents=True)
+        self.legacy_path.write_bytes(legacy_bytes)
+
+        world, state, has_save = load_game_save(
+            self.save_path, State, World, legacy_path=self.legacy_path)
+
+        self.assertFalse(has_save)
+        self.assertEqual(world.id, "briar")
+        self.assertEqual(self.save_path.read_bytes(), active_bytes)
+        self.assertEqual(self.legacy_path.read_bytes(), legacy_bytes)
+        self.assertEqual(savepaths.backup_candidates(self.save_path), [])
+        self.assertTrue(any("could not be restored" in toast[0]
+                            for toast in state.toasts))
+
+    def test_future_save_version_fails_without_downgrading_or_replacing_files(self):
+        self.migrate_fixture("mid_game.json")
+        active = self.read(self.save_path)
+        active["money"] = 99999
+        active["version"] = 3
+        active_bytes = json.dumps(active).encode("utf-8")
+        self.save_path.write_bytes(active_bytes)
+        backups_before = {path: path.read_bytes()
+                          for path in savepaths.backup_candidates(self.save_path)}
+        legacy_before = self.legacy_path.read_bytes()
+
+        with self.assertRaisesRegex(UnsupportedSaveVersionError,
+                                    "update the game before loading"):
+            load_game_save(self.save_path, State, World,
+                           legacy_path=self.legacy_path)
+
+        self.assertEqual(self.save_path.read_bytes(), active_bytes)
+        self.assertEqual({path: path.read_bytes() for path in backups_before},
+                         backups_before)
+        self.assertEqual(self.legacy_path.read_bytes(), legacy_before)
+        self.assertEqual(list(self.save_path.parent.glob("save.rejected.*.json")), [])
+
+    def test_malformed_v2_envelope_defaults_without_discarding_legacy_progress(self):
+        self.migrate_fixture("mid_game.json")
+        raw = self.read(self.save_path)
+        raw["money"] = 9876.5
+        raw["v2"] = []
+        self.save_path.write_text(json.dumps(raw), encoding="utf-8")
+
+        world, state, has_save = load_game_save(self.save_path, State, World)
+
+        self.assertTrue(has_save)
+        self.assertEqual(world.id, "briar")
+        self.assertEqual(state.money, 9876.5)
+        self.assertEqual(state.v2["mode"], "cozy")
+        self.assertEqual(state.v2["story"]["scene_states"], {"prologue": "done"})
 
     def test_recovery_toast_is_rendered_on_the_title_screen(self):
         world = World()
@@ -268,6 +341,19 @@ class SaveV2Checks(unittest.TestCase):
         with patch("fishing.game.run") as run:
             self.assertEqual(main(["--software", "--save", str(self.save_path)]), 0)
         run.assert_called_once_with(software=True, save_path=self.save_path)
+
+        from .game import _save_target
+        with patch("fishing.game.resolve_save_path", side_effect=RuntimeError("SDL failed")):
+            self.assertEqual(_save_target(self.root, None),
+                             (self.root / "saves" / "save.json", True))
+            with self.assertRaisesRegex(RuntimeError, "SDL failed"):
+                _save_target(self.root, self.save_path)
+
+        output = StringIO()
+        with patch("fishing.game.run", side_effect=UnsupportedSaveVersionError(3, 2)), \
+                redirect_stderr(output):
+            self.assertEqual(main([]), 1)
+        self.assertIn("update the game before loading", output.getvalue())
 
     def test_explicit_v1_save_override_gets_backed_up_before_replacement(self):
         override = self.root / "override" / "save.json"
