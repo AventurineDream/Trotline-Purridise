@@ -1,15 +1,18 @@
 """Guide layout checks using the native font metrics used by the game."""
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
 
 from .platform import Text, find_font
+from .sim import State
 from .ui import (
     UI, UIState, _GAMEPAD_HELP_CONTROLS, _HELP, _help_title,
     _prompt_for_device, _toast_for_device,
 )
+from .world import World
 
 
 class DevicePromptChecks(unittest.TestCase):
@@ -63,6 +66,110 @@ class GuideLayoutChecks(unittest.TestCase):
         # fallback. Its ascenders/descenders can have different surface heights.
         with patch('fishing.platform.find_font', side_effect=lambda family: find_font('sans')):
             self._check_pages()
+
+    def test_settings_screen_fits_at_1280x720_with_large_dyslexia_font(self):
+        ui = UI.__new__(UI)
+        ui.text, ui._cw, ui._ch = self.text, {}, {}
+        ui._text_scale = 1.0
+        ui._dyslexia_font = False
+        settings = {
+            "mode": "cozy", "text_size": 2, "dyslexia_font": True,
+            "reduced_motion": True, "haul_speed": "instant", "captions": True,
+            "volumes": {"master": 0.8, "music": 0.7,
+                        "ambience": 0.6, "sfx": 0.5},
+            "collar_visible": False,
+        }
+        state = SimpleNamespace(v2={
+            "mode": "cozy", "settings": settings,
+            "profile": {"collar": {"visible": False}},
+        })
+        records, panels = [], []
+        text_draw, panel_draw = ui._text, ui._panel
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            image = ui._render(label, size, color, family)
+            records.append((label, x, y, image.shape[1], image.shape[0]))
+            return text_draw(frame, label, x, y, size, color, shadow, family)
+
+        def panel(frame, x, y, width, height, alpha):
+            panels.append((x, y, width, height))
+            panel_draw(frame, x, y, width, height, alpha)
+
+        ui._text, ui._panel = text, panel
+        frame = np.zeros((720, 1280, 3), np.uint8)
+        ui.draw(frame, state, UIState(mode="settings"))
+        self.assertEqual(len(panels), 1)
+        px, py, pw, ph = panels[0]
+        self.assertGreaterEqual(px, 0)
+        self.assertGreaterEqual(py, 0)
+        self.assertLessEqual(px + pw, frame.shape[1])
+        self.assertLessEqual(py + ph, frame.shape[0])
+        for label, x, y, tw, th in records:
+            with self.subTest(label=label):
+                self.assertGreaterEqual(x, px)
+                self.assertGreaterEqual(y, py)
+                self.assertLessEqual(x + tw, px + pw)
+                self.assertLessEqual(y + th, py + ph)
+        self.assertGreaterEqual(len(records), 14)
+
+    def test_every_existing_screen_fits_at_1280x720_with_largest_text(self):
+        world = World()
+        state = State.new(world, seed=51)
+        state.v2["settings"]["text_size"] = 2
+        state.v2["settings"]["dyslexia_font"] = True
+        ui = UI(self.text, world)
+        ui._cw, ui._ch = {}, {}
+        text_draw = ui._text
+        records = []
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            image = ui._render(label, size, color, family)
+            records.append((label, int(x), int(y), image.shape[1], image.shape[0]))
+            return text_draw(frame, label, x, y, size, color, shadow, family)
+
+        ui._text = text
+        width, height = 1280, 720
+        cases = [
+            ("title", UIState(mode="title", has_save=True)),
+            ("play", UIState(mode="play")),
+            ("map", UIState(mode="map")),
+            ("dialogue", UIState(
+                mode="dialogue",
+                conversation=SimpleNamespace(
+                    npc_id=next(iter(ui.narrative_content.npcs)),
+                    node_id=next(iter(ui.narrative_content.dialogue)),
+                    selected=0,
+                ),
+                dialogue_content=ui.narrative_content,
+            )),
+            ("shop", UIState(mode="shop")),
+            ("setbait", UIState(mode="setbait")),
+            ("check", UIState(mode="check")),
+            ("journal", UIState(mode="journal")),
+            ("narrative journal", UIState(mode="journal", journal_page=1)),
+            ("well", UIState(mode="well")),
+            ("pause", UIState(mode="pause")),
+            ("settings", UIState(mode="settings")),
+            ("keyboard controls", UIState(
+                mode="settings", settings_page="keys", key_binding_i=0)),
+            ("keyboard controls scrolled", UIState(
+                mode="settings", settings_page="keys", key_binding_i=29)),
+        ]
+        for page in range(len(_HELP)):
+            cases.append((f"help page {page + 1}", UIState(mode="help", help_page=page)))
+
+        for name, screen in cases:
+            with self.subTest(screen=name):
+                records.clear()
+                frame = np.zeros((height, width, 3), np.uint8)
+                ui.draw(frame, state, screen)
+                self.assertTrue(records, f"{name} rendered no text")
+                for label, x, y, tw, th in records:
+                    with self.subTest(screen=name, label=label):
+                        self.assertGreaterEqual(x, 0)
+                        self.assertGreaterEqual(y, 0)
+                        self.assertLessEqual(x + tw, width)
+                        self.assertLessEqual(y + th, height)
 
     def _check_pages(self):
         # The guide needs no world or save. Keep the actual font rasterizer and

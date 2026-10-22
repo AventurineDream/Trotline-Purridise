@@ -13,7 +13,7 @@ from pathlib import Path
 import tempfile
 from typing import Callable, Sequence, Type
 
-from .gamepad import default_key_bindings
+from .gamepad import KEY_NAMES, default_key_bindings
 
 
 SAVE_FILENAME = "save.json"
@@ -283,9 +283,18 @@ def default_v2(state=None) -> dict:
         "npcs": {"letters": [], "talk_days": {}},
         "keepsakes": [], "ripples_v2": [],
         "calendar": {"weather_windows": {}},
-        "settings": {"text_size": 1, "haul_speed": "normal",
-                     "reduced_motion": False,
-                     "key_bindings": default_key_bindings()},
+        "settings": {
+            "mode": "cozy",
+            "text_size": 1,
+            "dyslexia_font": False,
+            "reduced_motion": False,
+            "haul_speed": "normal",
+            "captions": True,
+            "volumes": {"master": 1.0, "music": 1.0,
+                        "ambience": 1.0, "sfx": 1.0},
+            "collar_visible": True,
+            "key_bindings": default_key_bindings(),
+        },
         # Quest claims remain in narrative_v1.reward_claims, the existing
         # authority. This ledger covers the three reward kinds introduced with v2.
         "reward_claims": {"story": [], "legendary_record": [],
@@ -301,10 +310,55 @@ def merge_v2_defaults(state, saved_v2: object) -> dict:
         # malformed. Preserve all legacy progress and start v2 from defaults.
         saved_v2 = {}
     defaults = default_v2(state)
-    return _normalize_known_v2(defaults, saved_v2, "v2")
+    normalized = _normalize_known_v2(defaults, saved_v2, "v2")
+
+    # Mode and collar visibility predate this settings page in the v2 save
+    # envelope. Keep those existing fields and the settings controls in sync
+    # while allowing older saves to acquire the new settings keys safely.
+    saved_settings = saved_v2.get("settings")
+    if not isinstance(saved_settings, dict):
+        saved_settings = {}
+    mode = saved_settings.get("mode")
+    if mode not in ("cozy", "old_salt"):
+        mode = saved_v2.get("mode")
+    if mode not in ("cozy", "old_salt"):
+        mode = "cozy"
+    normalized["mode"] = mode
+    normalized["settings"]["mode"] = mode
+
+    saved_profile = saved_v2.get("profile")
+    saved_collar = saved_profile.get("collar") if isinstance(saved_profile, dict) else None
+    if not isinstance(saved_collar, dict):
+        saved_collar = {}
+    collar_visible = saved_settings.get("collar_visible")
+    if type(collar_visible) is not bool:
+        collar_visible = saved_collar.get("visible")
+    if type(collar_visible) is not bool:
+        collar_visible = True
+    normalized["settings"]["collar_visible"] = collar_visible
+    normalized["profile"]["collar"]["visible"] = collar_visible
+    return normalized
 
 
 def _valid_leaf(value, default, path: str) -> bool:
+    if path in ("v2.mode", "v2.settings.mode"):
+        return value in ("cozy", "old_salt")
+    if path == "v2.settings.text_size":
+        return type(value) is int and value in (0, 1, 2)
+    if path == "v2.settings.haul_speed":
+        return value in ("normal", "quick", "instant")
+    if path in ("v2.settings.dyslexia_font", "v2.settings.reduced_motion",
+                "v2.settings.captions", "v2.settings.collar_visible",
+                "v2.profile.collar.visible"):
+        return type(value) is bool
+    if path.startswith("v2.settings.volumes."):
+        try:
+            return (type(value) in (int, float) and math.isfinite(value)
+                    and 0.0 <= value <= 1.0)
+        except OverflowError:
+            return False
+    if path.startswith("v2.settings.key_bindings."):
+        return isinstance(value, str) and value in KEY_NAMES
     if path == "v2.buff":
         return value is None or isinstance(value, dict)
     if path == "v2.needs.last_prompt_real_s":

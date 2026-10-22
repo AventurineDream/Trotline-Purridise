@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 from collections import OrderedDict
 from ctypes import c_char_p, c_int, c_uint8, c_uint16, c_uint32, c_void_p
+from pathlib import Path
 
 import numpy as np
 
@@ -35,7 +36,7 @@ SCAN = {
     "m": 16, "n": 17, "p": 19, "q": 20, "r": 21, "s": 22, "t": 23, "w": 26,
     "z": 29,
     "1": 30, "2": 31, "3": 32, "4": 33, "5": 34,
-    "return": 40, "esc": 41, "tab": 43, "space": 44,
+    "return": 40, "esc": 41, "backspace": 42, "tab": 43, "space": 44,
     "right": 79, "left": 80, "down": 81, "up": 82,
     "shift": 225, "rshift": 229,
 }
@@ -134,7 +135,9 @@ def _load(name: str):
 
 def find_font(family="mono") -> str:
     import os
+    bundled_dyslexia = Path(__file__).with_name("assets") / "fonts" / "AtkinsonHyperlegible-Regular.ttf"
     preferred = {
+        "dyslexia": (str(bundled_dyslexia),),
         "sans": ("/usr/share/fonts/noto/NotoSans-Regular.ttf",
                  "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
                  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),

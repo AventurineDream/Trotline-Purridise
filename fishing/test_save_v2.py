@@ -116,7 +116,11 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(defaults["ripples_v2"], [])
         self.assertEqual(defaults["calendar"], {"weather_windows": {}})
         self.assertEqual(defaults["settings"], {
-            "text_size": 1, "haul_speed": "normal", "reduced_motion": False,
+            "mode": "cozy", "text_size": 1, "dyslexia_font": False,
+            "reduced_motion": False, "haul_speed": "normal", "captions": True,
+            "volumes": {"master": 1.0, "music": 1.0,
+                        "ambience": 1.0, "sfx": 1.0},
+            "collar_visible": True,
             "key_bindings": default_key_bindings(),
         })
         self.assertEqual(defaults["reward_claims"], {

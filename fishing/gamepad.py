@@ -149,6 +149,19 @@ def _bindings(saved) -> dict[str, str]:
     return bindings
 
 
+def set_key_binding(saved, action: str, key: str) -> dict[str, str]:
+    """Return a normalized binding map with one action (and its aliases) changed."""
+    if action not in ACTION_SYMBOLS:
+        raise KeyError(action)
+    if key not in KEY_NAMES:
+        raise ValueError(f"Unsupported key: {key}")
+    bindings = _bindings(saved)
+    aliases = next((group for group in ACTION_ALIASES if action in group), (action,))
+    for alias in aliases:
+        bindings[alias] = key
+    return bindings
+
+
 def remap_keyboard(pressed, held, saved=None) -> tuple[set[str], set[str]]:
     """Translate physical keyboard keys to canonical game actions."""
     pressed, held = set(pressed), set(held)
@@ -188,6 +201,8 @@ def session_input(keys, saved_bindings, repeat_state: dict[str, float]):
     keyboard_pressed, keyboard_held = remap_keyboard(
         keyboard_pressed_source, keyboard_held_source, saved_bindings,
     )
+    physical_keyboard_pressed = set(keyboard_pressed_source)
+    physical_keyboard_held = set(keyboard_held_source)
     pressed = keyboard_pressed | gamepad_pressed_source
     held = keyboard_held | gamepad_held_source
     # A menu may stop asking about a direction while another screen is open.
@@ -205,6 +220,8 @@ def session_input(keys, saved_bindings, repeat_state: dict[str, float]):
             self.device = keys.device
             self.keyboard_pressed = keyboard_pressed
             self.keyboard_held = keyboard_held
+            self.physical_keyboard_pressed = physical_keyboard_pressed
+            self.physical_keyboard_held = physical_keyboard_held
             self.gamepad_pressed = gamepad_pressed_source
             self.gamepad_held = gamepad_held_source
             self._rep = repeat_state

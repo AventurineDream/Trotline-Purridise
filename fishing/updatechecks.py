@@ -30,7 +30,7 @@ def interface_checks(world):
 
         # Every selectable menu accepts W/S and wraps just like the arrows.
         for mode, field, count in (
-            ("title", "title_i", 2), ("pause", "pause_i", 4),
+            ("title", "title_i", 2), ("pause", "pause_i", 5),
             ("shop", "shop_i", len(BAITS)), ("setbait", "set_bait", len(BAITS)),
             ("check", "check_i", len(check_rows(state, 0))),
             ("journal", "journal_i", len(SPECIES)), ("well", "well_i", 2),
