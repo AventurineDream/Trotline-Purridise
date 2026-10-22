@@ -297,6 +297,7 @@ class Row:
 @dataclass
 class UIState:
     mode: str = "title"
+    input_device: str = "keyboard"
     shop_tab: int = 0
     shop_i: int = 0
     set_line: int = 0
@@ -496,21 +497,21 @@ class UI:
             draw_sighting(frame, state, camera)
         if mode == "title":
             self._title(frame, state, ui)
-            self._toasts(frame, state)
+            self._toasts(frame, state, ui.input_device)
             return
         if mode == "play":
-            self._hud(frame, state)
-            self._toasts(frame, state)
+            self._hud(frame, state, ui)
+            self._toasts(frame, state, ui.input_device)
             return
         if mode == "map":
-            self._hud(frame, state)
-            self._map(frame, state, big=True)
-            self._toasts(frame, state)
+            self._hud(frame, state, ui)
+            self._map(frame, state, ui, big=True)
+            self._toasts(frame, state, ui.input_device)
             return
         if mode == "dialogue":
-            self._hud(frame, state, interactions=False)
+            self._hud(frame, state, ui, interactions=False)
             self._dialogue(frame, state, ui)
-            self._toasts(frame, state)
+            self._toasts(frame, state, ui.input_device)
         elif mode == "shop":
             self._shop(frame, state, ui)
         elif mode == "setbait":
@@ -550,9 +551,14 @@ class UI:
             wrapped = textwrap.wrap(label, cols)
             rows.extend(wrapped)
             colors.extend([GOLD if i == chat.selected else DIM] * len(wrapped))
-        foot = "W/S or arrows choose / Enter Space C select / Esc leave / H Help"
+        foot = self._controls(
+            ui,
+            "W/S or arrows choose / Enter Space C select / Esc leave / H Help",
+            "D-pad choose / A select / B leave / RB continue",
+        )
         if not choices:
-            foot = "C / Enter / Space continue    Esc leave    H Help"
+            foot = self._controls(ui, "C / Enter / Space continue    Esc leave    H Help",
+                                  "A continue    B leave    RB continue")
         footer = textwrap.wrap(foot, cols)
         height = (len(rows) + len(footer) + 2) * (ch + 3) + margin*2
         x, y = (w-width)//2, h-height-12
@@ -657,9 +663,13 @@ class UI:
             return s
         return s[: max(1, n - 2)] + ".."
 
+    @staticmethod
+    def _controls(ui: UIState, keyboard: str, gamepad: str) -> str:
+        return gamepad if ui.input_device == "gamepad" else keyboard
+
     # --- play ------------------------------------------------------------
 
-    def _hud(self, frame, state, *, interactions=True):
+    def _hud(self, frame, state, ui: UIState, *, interactions=True):
         h, w = frame.shape[:2]
         unit = h / 720
         size,small = max(16,int(22*unit)),max(11,int(12*unit))
@@ -738,12 +748,13 @@ class UI:
         self._text(frame,f"{bait}  {state.bait.get(state.preferred_bait,0)}",
                    sx+16,sy+int(95*unit),small,DIM,False,"sans")
         lines_h = self._lines_panel(frame, state, sx, sy - 8, sw, small)
-        map_h = self._minimap(frame, state, m, h - m)
+        map_h = self._minimap(frame, state, m, h - m, ui.input_device)
         if not interactions:
             return
         npc = nearby_npc(state)
         if npc is not None:
-            label = f"C  Hail {npc.name}"
+            hail = "RB" if ui.input_device == "gamepad" else "C"
+            label = f"{hail}  Hail {npc.name}"
             px, py = m, h - m - max(map_h, stat_h + lines_h) - 34 - 8
             self._panel(frame, px, py, self._measure(label, small) + 56, 34)
             # A small procedural paw wave avoids a font-dependent emoji.
@@ -751,7 +762,7 @@ class UI:
             for dx, dy in ((7, 9), (13, 5), (20, 6), (26, 11)):
                 self._round_fill(frame, px+dx, py+dy, 5, 6, GOLD, 1.0)
             self._text(frame, label, px+38, py+7, small, INK, False, "sans")
-        prompt = state.prompt(self.world)
+        prompt = _prompt_for_device(state.prompt(self.world), ui.input_device)
         if prompt:
             pw = self._measure(prompt,small+2)+32
             px,py = (w-pw)//2,h-m-max(map_h,stat_h+lines_h)-int(35*unit)-8
@@ -759,14 +770,17 @@ class UI:
                 py -= 42
             self._panel(frame,px,py,pw,int(30*unit)+8,0.72)
             self._text(frame,prompt,px+16,py+5,small+2,INK,False,"sans")
-        hint = "B Bot  Shift Idle  Q Sail  F Set  E Landing  C Hail  H Help" if state.boat_id=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  C Hail  H Help"
+        if ui.input_device == "gamepad":
+            hint = "LS drive  LT/RT lever  Y Bot  X Set  A Check  RB Hail  Back Chart  Start Pause"
+        else:
+            hint = "B Bot  Shift Idle  Q Sail  F Set  E Landing  C Hail  H Help" if state.boat_id=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  C Hail  H Help"
         hint_w = self._measure(hint,small)
         hint_h = small + 16
         hint_x, hint_y = (w-hint_w-24)//2, h-m-hint_h
         self._panel(frame,hint_x,hint_y,hint_w+24,hint_h,0.88)
         self._center(frame,hint,w/2,hint_y+6,small,INK)
 
-    def _minimap(self, frame, state, margin, bottom) -> int:
+    def _minimap(self, frame, state, margin, bottom, input_device="keyboard") -> int:
         chart = self.world.map_small
         w = frame.shape[1]
         mw = max(96, int(w * 0.14))
@@ -777,7 +791,8 @@ class UI:
         self._panel(frame, x, y-28, mw+16, mh+35, 0.80)
         self._text(frame,"LAKE CHART",x+8,y-21,max(10,frame.shape[0]//65),GOLD,False,"sans")
         size = max(10,frame.shape[0]//65)
-        self._text(frame,"TAB",x+mw-22,y-21,size,DIM,False,"sans")
+        shortcut = "BACK" if input_device == "gamepad" else "TAB"
+        self._text(frame,shortcut,x+mw-22,y-21,size,DIM,False,"sans")
         x += 8
         frame[y:y + mh, x:x + mw] = scaled
         for line in state.lines:
@@ -819,7 +834,7 @@ class UI:
             self._text(frame, status, right + width - 16 - len(status) * self.cell(size)[0], ry, size, color, False, "sans")
         return height + 8
 
-    def _map(self, frame, state, big=True):
+    def _map(self, frame, state, ui: UIState, big=True):
         h, w = frame.shape[:2]
         self._fill(frame, 0, 0, w, h, (8, 10, 8), 0.45)
         chart = self.world.map_rgb
@@ -858,7 +873,8 @@ class UI:
         size = self._size(frame, "small")
         self._text(frame, self.world.name, x, y - self.cell(size)[1] - 14, size, INK)
         self._text(frame, "Fish gold   soak green   tired red   NPC blue", x, y + mh + 12, size, DIM, shadow=False)
-        self._text(frame, "Tab closes the chart", x + mw - 20 * self.cell(size)[0], y + mh + 14 + self.cell(size)[1], size, DIM, shadow=False)
+        close_hint = self._controls(ui, "Tab closes the chart", "B closes the chart")
+        self._text(frame, close_hint, x + mw - 20 * self.cell(size)[0], y + mh + 14 + self.cell(size)[1], size, DIM, shadow=False)
 
     def _plot_trinidad_cove(self, frame, x, y, mw, mh, labels=False):
         if self.world.id != "cedar":
@@ -923,14 +939,15 @@ class UI:
             return
         frame[y0:y1, x0:x1] = np.array(rgb, np.uint8)
 
-    def _toasts(self, frame, state):
+    def _toasts(self, frame, state, input_device="keyboard"):
         if not state.toasts:
             return
         size = self._size(frame, "small")
         _cw, ch = self.cell(size)
         w = frame.shape[1]
         y = max(8, frame.shape[0] // 7)
-        for text, _ttl in state.toasts[-3:]:
+        for raw_text, _ttl in state.toasts[-3:]:
+            text = _toast_for_device(raw_text, input_device)
             tw = len(text) * _cw + 16
             x = (w - tw) // 2
             self._panel(frame, x, y, tw, ch + 8, 0.72)
@@ -959,7 +976,8 @@ class UI:
         if ui.confirm_new:
             msg = "New morning? The save on disk stays until you overwrite it."
             self._text(frame,self._trim(msg,small,w-x*2),x,y2,small,WARN,False)
-            hint = "Enter starts over     Esc cancels"
+            hint = self._controls(ui, "Enter starts over     Esc cancels",
+                                  "A starts over     B cancels")
             self._text(frame,hint,x,y2+small+12,small,DIM,False,"sans")
             return
         for i, label in enumerate(options):
@@ -967,10 +985,13 @@ class UI:
             if i==ui.title_i:
                 self._round_fill(frame,x,oy-4,max(210,int(w*0.21)),body+24,GOLD,0.95)
                 self._text(frame,label,x+15,oy+4,body,(22,39,39),False,"sans")
-                self._text(frame,"ENTER",x+max(210,int(w*0.21))-55,oy+9,small,(42,56,50),False,"sans")
+                select = "A" if ui.input_device == "gamepad" else "ENTER"
+                self._text(frame,select,x+max(210,int(w*0.21))-55,oy+9,small,(42,56,50),False,"sans")
             else:
                 self._text(frame,label,x+15,oy+4,body,INK,False,"sans")
-        self._text(frame,"H  Field guide     W / S  Choose",x,h-small-24,small,DIM,False,"sans")
+        controls = self._controls(ui, "H  Field guide     W / S  Choose",
+                                  "D-pad / stick choose     A select")
+        self._text(frame,controls,x,h-small-24,small,DIM,False,"sans")
         mark = "ONE LAKE. NO HURRY."
         self._text(frame,mark,w-x-self._measure(mark,small),h-small-24,small,DIM,False,"sans")
 
@@ -1020,7 +1041,9 @@ class UI:
         if ui.note:
             blurb = ui.note
         self._text(frame, self._trim(blurb, small, pw - m * 2), x + m, y + ph - ch - 28, small, WARN if ui.note else DIM, shadow=False)
-        self._text(frame, "W/S choose  A/D tabs  Arrows too  Enter buys  Esc", x + m, y + ph - self.cell(small)[1] - 8, small, DIM, shadow=False)
+        foot = self._controls(ui, "W/S choose  A/D tabs  Arrows too  Enter buys  Esc",
+                              "D-pad / stick choose  D-pad tabs  A buys  B back")
+        self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 8, small, DIM, shadow=False)
 
     def _setbait(self, frame, state, ui: UIState):
         h, w = frame.shape[:2]
@@ -1062,7 +1085,9 @@ class UI:
         bait = BAITS[ui.set_bait]
         note = ui.note or f"Needs {spec['hooks']}. {bait.blurb}"
         self._text(frame, self._trim(note, small, pw - m * 2), x + m, y + ph - ch - 28, small, WARN if ui.note else DIM, shadow=False)
-        self._text(frame, "W/S bait  A/D line  Arrows too  1-5 bait  Enter sets  Esc", x + m, y + ph - self.cell(small)[1] - 8, small, DIM, shadow=False)
+        foot = self._controls(ui, "W/S bait  A/D line  Arrows too  1-5 bait  Enter sets  Esc",
+                              "D-pad / stick choose bait or line  A sets  B back")
+        self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 8, small, DIM, shadow=False)
 
     def _check(self, frame, state, ui: UIState):
         rows = check_rows(state, ui.check_line)
@@ -1103,7 +1128,10 @@ class UI:
             if row.right:
                 rw = len(row.right) * self.cell(body)[0]
                 self._text(frame, row.right, x + pw - m - rw, ry, body, color, shadow=False)
-        foot = ui.note or "W/S or arrows choose  Enter takes  Esc leaves it fishing"
+        foot = ui.note or self._controls(
+            ui, "W/S or arrows choose  Enter takes  Esc leaves it fishing",
+            "D-pad / stick choose  A takes  B leaves it fishing",
+        )
         self._text(frame, self._trim(foot, small, pw - m * 2), x + m, y + ph - self.cell(small)[1] - 10, small, WARN if ui.note else DIM, shadow=False)
 
     def _journal(self, frame, state, ui: UIState):
@@ -1119,7 +1147,8 @@ class UI:
         seen = sum(1 for sp in SPECIES if state.journal.get(sp.id, {}).get("count", 0) > 0)
         self._text(frame, "JOURNAL", x + m, y + 12, head, INK)
         self._text(frame, f"{seen} of {len(SPECIES)} species", x + m + len("JOURNAL") * self.cell(head)[0] + 16, y + 18, small, GOLD, shadow=False)
-        self._text(frame, "1/2 · A/D pages", x + pw - m - 18 * self.cell(small)[0], y + 18, small, DIM, shadow=False)
+        page_hint = "1/2 · D-pad pages" if ui.input_device == "gamepad" else "1/2 · A/D pages"
+        self._text(frame, page_hint, x + pw - m - 18 * self.cell(small)[0], y + 18, small, DIM, shadow=False)
         sp = SPECIES[ui.journal_i]
         rec = state.journal.get(sp.id, {})
         count = int(rec.get("count", 0))
@@ -1157,7 +1186,9 @@ class UI:
             where = "  ".join(p for p in (zone, bait, band) if p)
             self._text(frame, where, dx, top + ch + self.cell(small)[1] + 12, small, INK, shadow=False)
             self._wrap(frame, sp.blurb, dx, top + ch + self.cell(small)[1] * 2 + 24, small, DIM, pw - (dx - x) - m)
-        self._text(frame, "W/S or arrows choose    A/D pages    J or Esc closes", x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
+        foot = self._controls(ui, "W/S or arrows choose    A/D pages    J or Esc closes",
+                              "D-pad / stick choose    D-pad pages    B closes")
+        self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
 
     def _draw_journal_text(self, frame, value, x, y, width, size, color,
                            max_lines=4, bottom=None):
@@ -1193,7 +1224,8 @@ class UI:
         counter = f"{ripple_count}/10 Ripples"
         counter_w = len(counter) * self.cell(small)[0]
         self._text(frame, counter, x + pw - m - counter_w, y + 16, small, GOLD, shadow=False)
-        page_line = "2/2 · W/S · A/D pages · J closes"
+        page_line = self._controls(ui, "2/2 · W/S · A/D pages · J closes",
+                                   "2/2 · D-pad / stick · D-pad pages · B closes")
         page_w = len(page_line) * self.cell(small)[0]
         self._text(frame, page_line, x + pw - m - page_w, y + 16 + self.cell(small)[1], small, DIM, shadow=False)
 
@@ -1325,7 +1357,9 @@ class UI:
                 self._text(frame, self._trim(label, body, int(pw * 0.68)), x + m, ry, body, color, shadow=False)
                 right = dollars(catch.value())
                 self._text(frame, right, x + pw - m - len(right) * self.cell(body)[0], ry, body, color, shadow=False)
-        self._text(frame, "W/S or arrows choose    I closes", x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
+        foot = self._controls(ui, "W/S or arrows choose    I closes",
+                              "D-pad / stick choose    B closes")
+        self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
 
     def _pause(self, frame, ui: UIState):
         h, w = frame.shape[:2]
@@ -1344,12 +1378,16 @@ class UI:
             color = GOLD if i == ui.pause_i else INK
             prefix = "> " if i == ui.pause_i else "  "
             self._text(frame, prefix + label, x + 18, y + 24 + self.cell(head)[1] + i * (self.cell(body)[1] + 8), body, color)
-        self._text(frame, "W/S or arrows   Enter selects", x + 18, y + ph - self.cell(small)[1] - 12, small, DIM, shadow=False)
+        foot = self._controls(ui, "W/S or arrows   Enter selects",
+                              "D-pad / stick choose   A selects   B resumes")
+        self._text(frame, foot, x + 18, y + ph - self.cell(small)[1] - 12, small, DIM, shadow=False)
 
     def _help(self, frame, ui: UIState):
         pages = _HELP
         ui.help_page %= len(pages)
         title, lines = pages[ui.help_page]
+        if ui.input_device == "gamepad":
+            lines = tuple(_GAMEPAD_HELP_CONTROLS.get(line, line) for line in lines)
         title = _help_title(title)
         h, w = frame.shape[:2]
         head = self._size(frame, "head")
@@ -1358,7 +1396,8 @@ class UI:
             head = body
         m = 12 if w < 800 else 18
         page = f"{ui.help_page + 1} / {len(pages)}"
-        foot = "WASD or arrows turn pages    Esc closes"
+        foot = self._controls(ui, "WASD or arrows turn pages    Esc closes",
+                              "D-pad / stick turn pages    B closes")
         page_w = self._measure(page, body, "mono")
         content_w = max(self._measure(line, body, "mono") for line in (*lines, foot) if line)
         content_w = max(content_w, self._measure(title, head, "mono") + page_w + 16)
@@ -1463,6 +1502,77 @@ _HELP = (
         "Money, catches, gear, boats, and journal come with you.",
     )),
 )
+
+_GAMEPAD_HELP_CONTROLS = {
+    "W/S row, or run the motor when one is installed":
+        "Left stick / LT / RT row or run the motor",
+    "Power stays set       Shift returns it to idle":
+        "Power stays set       Shift idles (keyboard)",
+    "A D or arrows steer   arrows look up and down":
+        "Left stick steers; D-pad / stick move through menus",
+    "Space drops or raises the anchor":
+        "Space anchors (keyboard)",
+    "W / S also pull the anchor when you mean to go":
+        "Use the left stick or triggers to set the throttle",
+    "F sets a trotline       E checks one, or opens the landing":
+        "X sets a trotline       A checks one or opens the landing",
+    "Tab chart    J journal    I livewell":
+        "Back chart    J journal / I livewell (keyboard)",
+    "C hails a paw-wave NPC: within 20 m, below 3 knots":
+        "RB hails a paw-wave NPC: within 20 m, below 3 knots",
+    "T changes time: 1x 3x 6x 12x, while you are still":
+        "T changes time (keyboard): 1x 3x 6x 12x while still",
+    "B sends Bot ahead, or out to a line. B calls him back.":
+        "Tap Y sends Bot ahead or to a line; tap again to recall",
+    "H help    M mute    Esc pause":
+        "H help / M mute (keyboard)    Start pauses",
+    "Nose into the slip and press E.":
+        "Nose into the slip and press A.",
+    "At the landing: A/D tabs, W/S rows, Enter selects.":
+        "At landing: D-pad tabs / rows, A selects, B returns",
+    "Q raises or lowers the daysailer's sail.":
+        "Q raises or lowers the daysailer's sail (keyboard).",
+    "A/D steers. Sail across the wind; tack to go upwind.":
+        "Left stick steers. Sail across the wind; tack to go upwind.",
+    "W/S controls its small auxiliary. Shift idles it.":
+        "Stick / triggers control the auxiliary; Shift idles (keyboard).",
+    "Space anchors and lowers the sail.":
+        "Space anchors and lowers the sail (keyboard).",
+    "Idle, then R calls a tow if you get stranded.":
+        "Press R (keyboard) to call a tow if you get stranded.",
+}
+
+_GAMEPAD_TUTORIAL_PROMPTS = {
+    "W/S row or power    Shift idle    A/D steer":
+        "Left stick rows or steers    LT/RT set throttle",
+    "Stop, then F to set a trotline":
+        "Stop, then X to set a trotline",
+    "T changes time while anchored    E checks a line":
+        "Wait for a bite, then A checks a line",
+}
+
+_GAMEPAD_TUTORIAL_TOASTS = {
+    "Stop the boat and press F to set a trotline.":
+        "Stop the boat and press X to set a trotline.",
+    "Anchor and press T to let time run. E checks a line.":
+        "After setting a line, wait for a bite; A checks it.",
+    "Nose into the landing and press E to sell.":
+        "Nose into the landing and press A to sell.",
+}
+
+
+def _prompt_for_device(prompt: str | None, input_device: str) -> str | None:
+    if prompt and input_device == "gamepad":
+        if prompt.startswith("E  "):
+            return prompt.replace("E  ", "A  ", 1)
+        return _GAMEPAD_TUTORIAL_PROMPTS.get(prompt, prompt)
+    return prompt
+
+
+def _toast_for_device(text: str, input_device: str) -> str:
+    if input_device == "gamepad":
+        return _GAMEPAD_TUTORIAL_TOASTS.get(text, text)
+    return text
 
 
 def _help_title(topic: str) -> str:
