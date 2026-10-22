@@ -117,7 +117,7 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(defaults["calendar"], {"weather_windows": {}})
         self.assertEqual(defaults["settings"], {
             "mode": "cozy", "text_size": 1, "dyslexia_font": False,
-            "reduced_motion": False, "haul_speed": "normal", "captions": True,
+            "reduced_motion": False, "captions": True,
             "volumes": {"master": 1.0, "music": 1.0,
                         "ambience": 1.0, "sfx": 1.0},
             "collar_visible": True,

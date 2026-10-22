@@ -37,8 +37,8 @@ from .platform import Text
 from .dialogue import nearby_npc
 from .world import ZONE_NAME, World
 from .gamepad import (
-    ACTION_ALIASES, ACTION_SYMBOLS, KEY_NAMES, default_key_bindings,
-    set_key_binding,
+    ACTION_ALIASES, ACTION_SYMBOLS, default_key_bindings,
+    normalize_key_bindings,
 )
 from .boat import (
     BOATS, FUEL_PRICE, ROWBOAT_MOTOR_PRICE, ROWBOAT_BATTERY_KWH,
@@ -57,7 +57,6 @@ GAME_TITLE = "Trotline Purridise"
 SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes")
 _TABS = SHOP_TABS
 TEXT_SIZE_SCALES = (0.9, 1.0, 1.15)
-HAUL_SPEEDS = ("normal", "quick", "instant")
 MODES = ("cozy", "old_salt")
 VOLUME_NAMES = ("master", "music", "ambience", "sfx")
 VOLUME_LABELS = {
@@ -1468,16 +1467,12 @@ class UI:
         mode = settings.get("mode", v2.get("mode", "cozy"))
         if mode not in MODES:
             mode = "cozy"
-        speed = settings.get("haul_speed", "normal")
-        if speed not in HAUL_SPEEDS:
-            speed = "normal"
         collar_visible = settings.get("collar_visible", collar.get("visible", True))
         rows = [
             ("Mode", "Cozy" if mode == "cozy" else "Old Salt"),
             ("Text size", ("Small", "Standard", "Large")[text_size]),
             ("Dyslexia-friendly font", "Atkinson Hyperlegible" if settings.get("dyslexia_font") else "Off"),
             ("Reduced motion", "On" if settings.get("reduced_motion") else "Off"),
-            ("Haul speed", speed.title()),
             ("Captions", "On" if settings.get("captions", True) else "Off"),
         ]
         for name in VOLUME_NAMES:
@@ -1542,6 +1537,10 @@ class UI:
             "esc": "Escape", "return": "Enter", "space": "Space",
             "tab": "Tab", "shift": "Left Shift", "rshift": "Right Shift",
             "up": "Up", "down": "Down", "left": "Left", "right": "Right",
+            "minus": "-", "equals": "=", "left_bracket": "[",
+            "right_bracket": "]", "backslash": "Backslash", "semicolon": ";",
+            "apostrophe": "Apostrophe", "grave": "Grave", "comma": ",",
+            "period": ".", "slash": "/",
         }.get(key, key.upper())
 
     def _keybinding_actions(self):
@@ -1557,14 +1556,12 @@ class UI:
         ui.key_binding_i = _clamp(ui.key_binding_i, len(rows))
         v2 = getattr(state, "v2", {})
         settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
-        bindings = settings.get("key_bindings", {})
-        if not isinstance(bindings, dict):
-            bindings = default_key_bindings()
+        bindings = normalize_key_bindings(settings.get("key_bindings"))
         head, body, small = (self._size(frame, key) for key in ("head", "body", "small"))
         head_h, body_h, small_h = self.cell(head)[1], self.cell(body)[1], self.cell(small)[1]
         m = max(14, min(24, int(w * 0.025)))
         pw = min(w - 20, max(int(w * 0.74), 760))
-        foot = ("Press a key to bind  ·  Backspace cancels  ·  Esc returns" if ui.capturing_key
+        foot = ("Press a key to bind  ·  Backspace or Esc cancels" if ui.capturing_key
                 else "W/S choose  ·  Enter rebinds  ·  Esc returns")
         if ui.input_device == "gamepad" and not ui.capturing_key:
             foot = "D-pad choose  ·  A rebinds a keyboard key  ·  B returns"

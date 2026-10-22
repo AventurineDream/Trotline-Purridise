@@ -104,10 +104,11 @@ ACTION_ALIASES = (
 )
 
 KEY_NAMES = frozenset({
-    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "m",
-    "n", "p", "q", "r", "s", "t", "w", "z", "1", "2", "3", "4",
-    "5", "return", "esc", "tab", "space", "right", "left", "down", "up",
+    *"abcdefghijklmnopqrstuvwxyz", *"0123456789",
+    "return", "esc", "tab", "space", "right", "left", "down", "up",
     "shift", "rshift",
+    "minus", "equals", "left_bracket", "right_bracket", "backslash",
+    "semicolon", "apostrophe", "grave", "comma", "period", "slash",
 })
 
 BUTTON_ACTIONS = {
@@ -149,14 +150,33 @@ def _bindings(saved) -> dict[str, str]:
     return bindings
 
 
+def normalize_key_bindings(saved=None) -> dict[str, str]:
+    """Return validated bindings with context-shared actions reconciled."""
+    return _bindings(saved)
+
+
+def _action_groups():
+    grouped = {action for aliases in ACTION_ALIASES for action in aliases}
+    return (*ACTION_ALIASES,
+            *((action,) for action in ACTION_SYMBOLS if action not in grouped))
+
+
 def set_key_binding(saved, action: str, key: str) -> dict[str, str]:
-    """Return a normalized binding map with one action (and its aliases) changed."""
+    """Return normalized bindings, swapping any existing use of the new key."""
     if action not in ACTION_SYMBOLS:
         raise KeyError(action)
     if key not in KEY_NAMES:
         raise ValueError(f"Unsupported key: {key}")
     bindings = _bindings(saved)
     aliases = next((group for group in ACTION_ALIASES if action in group), (action,))
+    old_key = bindings[action]
+    if key != old_key:
+        for group in _action_groups():
+            if group == aliases or bindings[group[0]] != key:
+                continue
+            for member in group:
+                bindings[member] = old_key
+            break
     for alias in aliases:
         bindings[alias] = key
     return bindings
@@ -175,10 +195,13 @@ def remap_keyboard(pressed, held, saved=None) -> tuple[set[str], set[str]]:
         if key in held:
             translated_held.add(symbol)
     # Bait selection and dialogue choice numbers are not remapped.
+    # Number keys remain the bait shortcuts unless the player deliberately
+    # assigns one to an action.
+    bound = set(bindings.values())
     for key in "12345":
-        if key in pressed:
+        if key in pressed and key not in bound:
             translated_pressed.add(key)
-        if key in held:
+        if key in held and key not in bound:
             translated_held.add(key)
     return translated_pressed, translated_held
 
@@ -203,6 +226,7 @@ def session_input(keys, saved_bindings, repeat_state: dict[str, float]):
     )
     physical_keyboard_pressed = set(keyboard_pressed_source)
     physical_keyboard_held = set(keyboard_held_source)
+    physical_keyboard_press_order = list(getattr(keys, "keyboard_press_order", ()))
     pressed = keyboard_pressed | gamepad_pressed_source
     held = keyboard_held | gamepad_held_source
     # A menu may stop asking about a direction while another screen is open.
@@ -222,6 +246,7 @@ def session_input(keys, saved_bindings, repeat_state: dict[str, float]):
             self.keyboard_held = keyboard_held
             self.physical_keyboard_pressed = physical_keyboard_pressed
             self.physical_keyboard_held = physical_keyboard_held
+            self.physical_keyboard_press_order = physical_keyboard_press_order
             self.gamepad_pressed = gamepad_pressed_source
             self.gamepad_held = gamepad_held_source
             self._rep = repeat_state

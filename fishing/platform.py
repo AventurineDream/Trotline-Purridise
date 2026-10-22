@@ -32,11 +32,15 @@ ARGB8888 = 0x16362004
 
 SCAN = {
     "a": 4, "b": 5, "c": 6, "d": 7, "e": 8, "f": 9, "g": 10,
-    "h": 11, "i": 12, "j": 13, "k": 14,
-    "m": 16, "n": 17, "p": 19, "q": 20, "r": 21, "s": 22, "t": 23, "w": 26,
-    "z": 29,
+    "h": 11, "i": 12, "j": 13, "k": 14, "l": 15, "m": 16,
+    "n": 17, "o": 18, "p": 19, "q": 20, "r": 21, "s": 22,
+    "t": 23, "u": 24, "v": 25, "w": 26, "x": 27, "y": 28, "z": 29,
     "1": 30, "2": 31, "3": 32, "4": 33, "5": 34,
+    "6": 35, "7": 36, "8": 37, "9": 38, "0": 39,
     "return": 40, "esc": 41, "backspace": 42, "tab": 43, "space": 44,
+    "minus": 45, "equals": 46, "left_bracket": 47,
+    "right_bracket": 48, "backslash": 49, "semicolon": 51,
+    "apostrophe": 52, "grave": 53, "comma": 54, "period": 55, "slash": 56,
     "right": 79, "left": 80, "down": 81, "up": 82,
     "shift": 225, "rshift": 229,
 }
@@ -240,6 +244,7 @@ class Input:
         self.pressed: set[str] = set()
         self.keyboard_held: set[str] = set()
         self.keyboard_pressed: set[str] = set()
+        self.keyboard_press_order: list[str] = []
         self.gamepad_held: set[str] = set()
         self.gamepad_pressed: set[str] = set()
         self.device = "keyboard"
@@ -430,6 +435,7 @@ class Platform:
         inp = self._input
         inp.quit = False
         keyboard_pressed: set[str] = set()
+        keyboard_press_order: list[str] = []
         event = SDL_Event()
         while self.sdl.SDL_PollEvent(ctypes.byref(event)):
             if event.type == SDL_QUIT:
@@ -438,6 +444,7 @@ class Platform:
                 if event.window.event == SDL_WINDOWEVENT_FOCUS_LOST:
                     self._focused = False
                     keyboard_pressed.clear()
+                    keyboard_press_order.clear()
                     inp._rep.clear()
                     self.gamepad.clear_input()
                 elif event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED:
@@ -448,6 +455,7 @@ class Platform:
                     # A press and release can both arrive between slow frames.
                     # Keep that edge even though the final keyboard state is up.
                     keyboard_pressed.add(name)
+                    keyboard_press_order.append(name)
                     self._last_device = "keyboard"
             elif self._focused or event.type in (
                 SDL_CONTROLLERDEVICEADDED, SDL_CONTROLLERDEVICEREMOVED,
@@ -469,6 +477,7 @@ class Platform:
             self._last_device = "gamepad"
         inp.keyboard_pressed = keyboard_pressed
         inp.keyboard_held = keyboard_held
+        inp.keyboard_press_order = keyboard_press_order
         inp.gamepad_pressed = gamepad_pressed
         inp.gamepad_held = gamepad_held
         inp.pressed = keyboard_pressed | gamepad_pressed
