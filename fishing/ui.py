@@ -36,6 +36,10 @@ from .narrative import QUEST_IDS
 from .platform import Text
 from .dialogue import nearby_npc
 from .world import ZONE_NAME, World
+from .gamepad import (
+    ACTION_ALIASES, ACTION_SYMBOLS, KEY_NAMES, default_key_bindings,
+    set_key_binding,
+)
 from .boat import (
     BOATS, FUEL_PRICE, ROWBOAT_MOTOR_PRICE, ROWBOAT_BATTERY_KWH,
     BATTERY_CHARGE_KWH, ELECTRICITY_PRICE,
@@ -52,6 +56,31 @@ GAME_TITLE = "Trotline Purridise"
 
 SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes")
 _TABS = SHOP_TABS
+TEXT_SIZE_SCALES = (0.9, 1.0, 1.15)
+HAUL_SPEEDS = ("normal", "quick", "instant")
+MODES = ("cozy", "old_salt")
+VOLUME_NAMES = ("master", "music", "ambience", "sfx")
+VOLUME_LABELS = {
+    "master": "Master volume", "music": "Music volume",
+    "ambience": "Ambience volume", "sfx": "SFX volume",
+}
+KEY_ACTION_LABELS = {
+    "throttle_up": "Throttle up / row forward",
+    "throttle_down": "Throttle down / row reverse",
+    "steer_left": "Steer left", "steer_right": "Steer right",
+    "idle": "Return to idle", "idle_right": "Return to idle (right Shift)",
+    "anchor": "Anchor / alternate select", "set_line": "Set a trotline",
+    "check_or_land": "Check a line / landing", "help": "Help",
+    "pause": "Pause / cancel", "mute": "Mute audio", "hail": "Hail / continue",
+    "chart": "Chart", "journal": "Journal", "livewell": "Livewell",
+    "bot": "Send / recall Bot", "time_scale": "Time scale",
+    "sail": "Raise / lower sail", "tow": "Call a tow",
+    "new_game": "New morning", "catnap": "Catnap",
+    "bot_tool": "Bot tool", "galley": "Galley",
+    "menu_up": "Menu up", "menu_down": "Menu down",
+    "menu_left": "Menu left", "menu_right": "Menu right",
+    "select": "Select",
+}
 
 _ZONE_LABELS = {
     "briar:landing": "Briar Landing",
@@ -309,6 +338,12 @@ class UIState:
     journal_quest_i: int = 0
     well_i: int = 0
     pause_i: int = 0
+    settings_page: str = "main"
+    settings_i: int = 0
+    key_binding_i: int = 0
+    capturing_key: bool = False
+    caption: str = ""
+    caption_timer: float = 0.0
     help_page: int = 0
     help_from: str = "play"
     title_i: int = 0
@@ -481,31 +516,46 @@ class UI:
         self.text = text
         self.world = world
         self.narrative_content = load_content()
-        self._cw: dict[int, int] = {}
-        self._ch: dict[int, int] = {}
+        self._cw: dict[tuple[int, str], int] = {}
+        self._ch: dict[tuple[int, str], int] = {}
+        self._text_scale = 1.0
+        self._dyslexia_font = False
 
     def cell(self, size: int) -> tuple[int, int]:
-        if size not in self._cw:
-            img = self.text.render("M", size, INK)
-            self._cw[size] = max(1, img.shape[1])
-            self._ch[size] = max(1, img.shape[0])
-        return self._cw[size], self._ch[size]
+        actual = self._actual_size(size)
+        family = self._font_family("mono")
+        key = (actual, family)
+        if key not in self._cw:
+            img = self.text.render("M", actual, INK, family)
+            self._cw[key] = max(1, img.shape[1])
+            self._ch[key] = max(1, img.shape[0])
+        return self._cw[key], self._ch[key]
 
     def draw(self, frame: np.ndarray, state, ui: UIState, camera=None) -> None:
+        v2 = getattr(state, "v2", {})
+        settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
+        text_size = settings.get("text_size", 1)
+        if type(text_size) is not int or text_size not in range(len(TEXT_SIZE_SCALES)):
+            text_size = 1
+        self._text_scale = TEXT_SIZE_SCALES[text_size]
+        self._dyslexia_font = bool(settings.get("dyslexia_font", False))
         mode = ui.mode
         if mode == "play":
             draw_sighting(frame, state, camera)
         if mode == "title":
             self._title(frame, state, ui)
+            self._caption(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
             return
         if mode == "play":
             self._hud(frame, state, ui)
+            self._caption(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
             return
         if mode == "map":
             self._hud(frame, state, ui)
             self._map(frame, state, ui, big=True)
+            self._caption(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
             return
         if mode == "dialogue":
@@ -527,8 +577,14 @@ class UI:
             self._well(frame, state, ui)
         elif mode == "pause":
             self._pause(frame, ui)
+        elif mode == "settings":
+            if ui.settings_page == "keys":
+                self._keybindings(frame, state, ui)
+            else:
+                self._settings(frame, state, ui)
         elif mode == "help":
             self._help(frame, ui)
+        self._caption(frame, state, ui)
 
     def _dialogue(self, frame, state, ui):
         chat = ui.conversation
@@ -569,6 +625,18 @@ class UI:
             self._text(frame, line, x+margin, top+i*(ch+3), size, color, False)
 
     # --- primitives -----------------------------------------------------
+
+    def _actual_size(self, size: int) -> int:
+        return max(8, int(round(size * getattr(self, "_text_scale", 1.0))))
+
+    def _font_family(self, family: str) -> str:
+        if getattr(self, "_dyslexia_font", False):
+            return "dyslexia"
+        return family
+
+    def _render(self, text: str, size: int, color, family="mono"):
+        return self.text.render(text, self._actual_size(size), color,
+                                self._font_family(family))
 
     def _size(self, frame, kind: str) -> int:
         h = frame.shape[0]
@@ -644,14 +712,14 @@ class UI:
         if not s:
             return 0
         if shadow:
-            shade = self.text.render(s, size, (8, 12, 10), family)
+            shade = self._render(s, size, (8, 12, 10), family)
             self._blit(frame, shade, x + 1, y + 1)
-        img = self.text.render(s, size, color, family)
+        img = self._render(s, size, color, family)
         self._blit(frame, img, x, y)
         return img.shape[1]
 
     def _measure(self, s, size, family="sans"):
-        return self.text.render(s,size,INK,family).shape[1]
+        return self._render(s, size, INK, family).shape[1]
 
     def _center(self, frame, s, x, y, size, color, family="sans"):
         return self._text(frame,s,x-self._measure(s,size,family)/2,y,size,color,family=family)
@@ -671,8 +739,9 @@ class UI:
 
     def _hud(self, frame, state, ui: UIState, *, interactions=True):
         h, w = frame.shape[:2]
-        unit = h / 720
-        size,small = max(16,int(22*unit)),max(11,int(12*unit))
+        scale = getattr(self, "_text_scale", 1.0)
+        unit = h / 720 * scale
+        size,small = max(16,int(22*unit/scale)),max(11,int(12*unit/scale))
         m = max(12,int(26*unit))
         weather = weather_at(state.game_minutes).upper()
         clock = clock_string(state.game_minutes)
@@ -966,34 +1035,37 @@ class UI:
         title = max(38,min(96,int(h*0.117)))
         body = max(15,int(h/38))
         small = max(11,int(h/60))
+        title_h, body_h, small_h = (self._actual_size(value)
+                                    for value in (title, body, small))
+        gap_scale = getattr(self, "_text_scale", 1.0)
         x,y = int(w*0.075),int(h*(0.20 if h<480 else 0.43))
         self._text(frame,"A   T R O T L I N E   L A K E",x,y,small,GOLD,False,"sans")
-        self._text(frame,GAME_TITLE,x,y+small+10,title,INK,True,"serif")
-        self._text(frame,"Set your lines. Stay a while.",x,y+title+small+20,body,DIM,False,"sans")
+        self._text(frame,GAME_TITLE,x,y+small_h+10*gap_scale,title,INK,True,"serif")
+        self._text(frame,"Set your lines. Stay a while.",x,y+title_h+small_h+20*gap_scale,body,DIM,False,"sans")
         options = title_options(ui.has_save)
         ui.title_i %= len(options)
-        y2 = y+title+small+body+(30 if h<480 else 48)
+        y2 = y+title_h+small_h+body_h+(30 if h<480 else 48)*gap_scale
         if ui.confirm_new:
             msg = "New morning? The save on disk stays until you overwrite it."
             self._text(frame,self._trim(msg,small,w-x*2),x,y2,small,WARN,False)
             hint = self._controls(ui, "Enter starts over     Esc cancels",
                                   "A starts over     B cancels")
-            self._text(frame,hint,x,y2+small+12,small,DIM,False,"sans")
+            self._text(frame,hint,x,y2+small_h+12*gap_scale,small,DIM,False,"sans")
             return
         for i, label in enumerate(options):
-            oy = y2+i*(body+27)
+            oy = y2+i*(body_h+27*gap_scale)
             if i==ui.title_i:
-                self._round_fill(frame,x,oy-4,max(210,int(w*0.21)),body+24,GOLD,0.95)
+                self._round_fill(frame,x,oy-4*gap_scale,max(210,int(w*0.21)),body_h+24*gap_scale,GOLD,0.95)
                 self._text(frame,label,x+15,oy+4,body,(22,39,39),False,"sans")
                 select = "A" if ui.input_device == "gamepad" else "ENTER"
-                self._text(frame,select,x+max(210,int(w*0.21))-55,oy+9,small,(42,56,50),False,"sans")
+                self._text(frame,select,x+max(210,int(w*0.21))-55*gap_scale,oy+9*gap_scale,small,(42,56,50),False,"sans")
             else:
                 self._text(frame,label,x+15,oy+4,body,INK,False,"sans")
         controls = self._controls(ui, "H  Field guide     W / S  Choose",
                                   "D-pad / stick choose     A select")
-        self._text(frame,controls,x,h-small-24,small,DIM,False,"sans")
+        self._text(frame,controls,x,h-small_h-24*gap_scale,small,DIM,False,"sans")
         mark = "ONE LAKE. NO HURRY."
-        self._text(frame,mark,w-x-self._measure(mark,small),h-small-24,small,DIM,False,"sans")
+        self._text(frame,mark,w-x-self._measure(mark,small),h-small_h-24*gap_scale,small,DIM,False,"sans")
 
     def _shop(self, frame, state, ui: UIState):
         rows = shop_rows(state, ui.shop_tab)
@@ -1364,7 +1436,7 @@ class UI:
     def _pause(self, frame, ui: UIState):
         h, w = frame.shape[:2]
         self._fill(frame, 0, 0, w, h, (6, 8, 8), 0.35)
-        labels = ["Resume", "Help", "Main menu", "Quit"]
+        labels = ["Resume", "Settings", "Help", "Main menu", "Quit"]
         body = self._size(frame, "body")
         head = self._size(frame, "head")
         small = self._size(frame, "small")
@@ -1381,6 +1453,169 @@ class UI:
         foot = self._controls(ui, "W/S or arrows   Enter selects",
                               "D-pad / stick choose   A selects   B resumes")
         self._text(frame, foot, x + 18, y + ph - self.cell(small)[1] - 12, small, DIM, shadow=False)
+
+    def _settings_rows(self, state):
+        v2 = getattr(state, "v2", {})
+        settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
+        profile = v2.get("profile", {}) if isinstance(v2, dict) else {}
+        collar = profile.get("collar", {}) if isinstance(profile, dict) else {}
+        text_size = settings.get("text_size", 1)
+        if type(text_size) is not int or text_size not in range(3):
+            text_size = 1
+        volumes = settings.get("volumes", {})
+        if not isinstance(volumes, dict):
+            volumes = {}
+        mode = settings.get("mode", v2.get("mode", "cozy"))
+        if mode not in MODES:
+            mode = "cozy"
+        speed = settings.get("haul_speed", "normal")
+        if speed not in HAUL_SPEEDS:
+            speed = "normal"
+        collar_visible = settings.get("collar_visible", collar.get("visible", True))
+        rows = [
+            ("Mode", "Cozy" if mode == "cozy" else "Old Salt"),
+            ("Text size", ("Small", "Standard", "Large")[text_size]),
+            ("Dyslexia-friendly font", "Atkinson Hyperlegible" if settings.get("dyslexia_font") else "Off"),
+            ("Reduced motion", "On" if settings.get("reduced_motion") else "Off"),
+            ("Haul speed", speed.title()),
+            ("Captions", "On" if settings.get("captions", True) else "Off"),
+        ]
+        for name in VOLUME_NAMES:
+            value = volumes.get(name, 1.0)
+            try:
+                value = float(value)
+            except (TypeError, ValueError, OverflowError):
+                value = 1.0
+            if not math.isfinite(value):
+                value = 1.0
+            rows.append((VOLUME_LABELS[name], f"{round(max(0.0, min(1.0, value)) * 100):.0f}%"))
+        rows.extend([
+            ("Collar visibility", "Visible" if collar_visible else "Hidden"),
+            ("Keyboard controls", "Open  >"),
+        ])
+        return rows
+
+    def _settings(self, frame, state, ui: UIState):
+        h, w = frame.shape[:2]
+        rows = self._settings_rows(state)
+        ui.settings_i = _clamp(ui.settings_i, len(rows))
+        head, body, small = (self._size(frame, key) for key in ("head", "body", "small"))
+        head_h, body_h, small_h = self.cell(head)[1], self.cell(body)[1], self.cell(small)[1]
+        m = max(14, min(24, int(w * 0.025)))
+        pw = min(w - 20, max(int(w * 0.74), 760))
+        foot = self._controls(
+            ui, "W/S choose  ·  A/D change  ·  Enter changes  ·  Esc returns",
+            "D-pad choose  ·  D-pad change  ·  A changes  ·  B returns",
+        )
+        foot_lines = textwrap.wrap(foot, max(12, (pw - 2 * m) // self.cell(small)[0]))
+        foot_h = len(foot_lines) * (small_h + 2)
+        row_h = body_h + max(4, int(h * 0.008))
+        rows_top_offset = m + head_h + 14
+        available = h - 24 - (2 * m + rows_top_offset + foot_h + 12)
+        visible = max(1, min(len(rows), available // max(1, row_h)))
+        start = _window(ui.settings_i, len(rows), visible)
+        ph = 2 * m + head_h + 14 + visible * row_h + foot_h + 12
+        x, y = (w - pw) // 2, (h - ph) // 2
+        self._panel(frame, x, y, pw, ph, 0.96)
+        self._text(frame, "SETTINGS & ACCESSIBILITY", x + m, y + m, head, INK)
+        list_top = y + rows_top_offset
+        left_width = int((pw - 2 * m) * 0.63)
+        value_width = pw - 2 * m - left_width
+        for offset, (label, value) in enumerate(rows[start:start + visible]):
+            index = start + offset
+            ry = list_top + offset * row_h
+            if index == ui.settings_i:
+                self._fill(frame, x + m - 4, ry - 1, pw - 2 * m + 8, row_h, (46, 42, 28), 0.86)
+            color = GOLD if index == ui.settings_i else INK
+            prefix = "> " if index == ui.settings_i else "  "
+            self._text(frame, prefix + self._trim(label, body, left_width - 10), x + m, ry, body, color, shadow=False)
+            value = self._trim(value, body, value_width - 4)
+            self._text(frame, value, x + pw - m - self._measure(value, body), ry, body, color, shadow=False)
+        foot_y = y + ph - m - foot_h
+        for line in foot_lines:
+            self._text(frame, line, x + m, foot_y, small, DIM, shadow=False)
+            foot_y += small_h + 2
+
+    @staticmethod
+    def _key_name(key: str) -> str:
+        return {
+            "esc": "Escape", "return": "Enter", "space": "Space",
+            "tab": "Tab", "shift": "Left Shift", "rshift": "Right Shift",
+            "up": "Up", "down": "Down", "left": "Left", "right": "Right",
+        }.get(key, key.upper())
+
+    def _keybinding_actions(self):
+        alias_actions = {alias for group in ACTION_ALIASES for alias in group[1:]}
+        return [action for action in ACTION_SYMBOLS if action not in alias_actions]
+
+    def _keybindings(self, frame, state, ui: UIState):
+        h, w = frame.shape[:2]
+        actions = self._keybinding_actions()
+        rows = [(action, KEY_ACTION_LABELS.get(action, action.replace("_", " ").title()))
+                for action in actions]
+        rows.append(("__reset__", "Reset keyboard controls"))
+        ui.key_binding_i = _clamp(ui.key_binding_i, len(rows))
+        v2 = getattr(state, "v2", {})
+        settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
+        bindings = settings.get("key_bindings", {})
+        if not isinstance(bindings, dict):
+            bindings = default_key_bindings()
+        head, body, small = (self._size(frame, key) for key in ("head", "body", "small"))
+        head_h, body_h, small_h = self.cell(head)[1], self.cell(body)[1], self.cell(small)[1]
+        m = max(14, min(24, int(w * 0.025)))
+        pw = min(w - 20, max(int(w * 0.74), 760))
+        foot = ("Press a key to bind  ·  Backspace cancels  ·  Esc returns" if ui.capturing_key
+                else "W/S choose  ·  Enter rebinds  ·  Esc returns")
+        if ui.input_device == "gamepad" and not ui.capturing_key:
+            foot = "D-pad choose  ·  A rebinds a keyboard key  ·  B returns"
+        foot_lines = textwrap.wrap(foot, max(12, (pw - 2 * m) // self.cell(small)[0]))
+        foot_h = len(foot_lines) * (small_h + 2)
+        row_h = body_h + max(4, int(h * 0.008))
+        rows_top_offset = m + head_h + 14
+        available = h - 24 - (2 * m + rows_top_offset + foot_h + 12)
+        visible = max(1, min(len(rows), available // max(1, row_h)))
+        start = _window(ui.key_binding_i, len(rows), visible)
+        ph = 2 * m + head_h + 14 + visible * row_h + foot_h + 12
+        x, y = (w - pw) // 2, (h - ph) // 2
+        self._panel(frame, x, y, pw, ph, 0.96)
+        self._text(frame, "KEYBOARD CONTROLS", x + m, y + m, head, INK)
+        list_top = y + rows_top_offset
+        value_width = int((pw - 2 * m) * 0.24)
+        for offset, (action, label) in enumerate(rows[start:start + visible]):
+            index = start + offset
+            ry = list_top + offset * row_h
+            if index == ui.key_binding_i:
+                self._fill(frame, x + m - 4, ry - 1, pw - 2 * m + 8, row_h, (46, 42, 28), 0.86)
+            color = GOLD if index == ui.key_binding_i else INK
+            prefix = "> " if index == ui.key_binding_i else "  "
+            self._text(frame, prefix + self._trim(label, body, pw - 2 * m - value_width - 12), x + m, ry, body, color, shadow=False)
+            if action == "__reset__":
+                value = "Defaults"
+            elif ui.capturing_key and index == ui.key_binding_i:
+                value = "Press a key…"
+            else:
+                value = self._key_name(bindings.get(action, default_key_bindings()[action]))
+            value = self._trim(value, body, value_width)
+            self._text(frame, value, x + pw - m - self._measure(value, body), ry, body, color, shadow=False)
+        foot_y = y + ph - m - foot_h
+        for line in foot_lines:
+            self._text(frame, line, x + m, foot_y, small, DIM, shadow=False)
+            foot_y += small_h + 2
+
+    def _caption(self, frame, state, ui: UIState):
+        v2 = getattr(state, "v2", {})
+        settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
+        if not settings.get("captions", True) or ui.caption_timer <= 0 or not ui.caption:
+            return
+        h, w = frame.shape[:2]
+        size = self._size(frame, "body")
+        text_w = self._measure(ui.caption, size)
+        pw = min(w - 24, text_w + 32)
+        ph = self.cell(size)[1] + 16
+        x, y = (w - pw) // 2, max(4, h - ph - 18)
+        self._panel(frame, x, y, pw, ph, 0.94)
+        self._center(frame, self._trim(ui.caption, size, pw - 24), w / 2,
+                     y + 8, size, INK, family="sans")
 
     def _help(self, frame, ui: UIState):
         pages = _HELP
@@ -1404,8 +1639,8 @@ class UI:
         pw = min(w - 16, max(int(w * 0.70), content_w + m * 2))
         # Fallback fonts may give descenders a taller surface than "M".
         # Space rows using the actual authored strings on this machine.
-        ch = max(self.text.render(line, body, INK).shape[0] for line in (*lines, foot) if line)
-        hh = self.text.render(title, head, INK).shape[0]
+        ch = max(self._render(line, body, INK).shape[0] for line in (*lines, foot) if line)
+        hh = self._render(title, head, INK).shape[0]
         header = 2 if h < 300 else 4 if h < 400 else 14
         top = header + hh + (2 if h < 300 else 4 if h < 400 else 10)
         bottom = 2 if h < 300 else 6 if h < 400 else 12
