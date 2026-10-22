@@ -8,8 +8,10 @@ from types import SimpleNamespace
 import numpy as np
 
 from .audio import Audio
+from .bot import _COLLAR_WOOL, faces as bot_faces
 from .game import Keys, Session, _camera
-from .platform import Input, find_font
+from .gamepad import KEY_NAMES, normalize_key_bindings
+from .platform import Input, SCAN, find_font
 from .savepaths import merge_v2_defaults
 from .sim import State
 from .ui import UI, UIState, TEXT_SIZE_SCALES
@@ -27,15 +29,15 @@ class SettingsChecks(unittest.TestCase):
         path = Path(temp.name) / "save.json"
         return Session(self.world, path, State.new(self.world, seed=31), False)
 
-    def test_settings_menu_updates_and_roundtrips_all_options(self):
+    def test_settings_menu_updates_and_roundtrips_visible_options(self):
         session = self.make_session()
         session.ui.mode = "settings"
 
         # Values that cycle forward once reach a visibly different option.
-        for index in (0, 1, 2, 3, 4, 5, 10):
+        for index in (0, 1, 2, 3, 4, 9):
             session.ui.settings_i = index
             session.tick(Keys(pressed={"right"}), 0.05)
-        for index in (6, 7, 8, 9):
+        for index in (5, 6, 7, 8):
             session.ui.settings_i = index
             session.tick(Keys(pressed={"left"}), 0.05)
 
@@ -46,7 +48,6 @@ class SettingsChecks(unittest.TestCase):
         self.assertEqual(settings["text_size"], 2)
         self.assertTrue(settings["dyslexia_font"])
         self.assertTrue(settings["reduced_motion"])
-        self.assertEqual(settings["haul_speed"], "quick")
         self.assertFalse(settings["captions"])
         self.assertEqual(settings["volumes"], {
             "master": 0.9, "music": 0.9, "ambience": 0.9, "sfx": 0.9,
@@ -98,6 +99,127 @@ class SettingsChecks(unittest.TestCase):
         session.tick(keys, 0.05)
         self.assertFalse(session.ui.capturing_key)
         self.assertEqual(session.state.v2["settings"]["key_bindings"], before)
+
+    def test_escape_cancels_key_capture_without_binding_escape(self):
+        session = self.make_session()
+        session.ui.mode = "settings"
+        session.ui.settings_page = "keys"
+        session.ui.key_binding_i = 0
+        before = dict(session.state.v2["settings"]["key_bindings"])
+        session.tick(Keys(pressed={"return"}), 0.05)
+        keys = Input()
+        keys.keyboard_pressed = {"esc"}
+        keys.pressed = {"esc"}
+        session.tick(keys, 0.05)
+        self.assertFalse(session.ui.capturing_key)
+        self.assertEqual(session.state.v2["settings"]["key_bindings"], before)
+
+    def test_rebinding_to_a_used_key_swaps_the_other_action(self):
+        session = self.make_session()
+        session.ui.mode = "settings"
+        session.ui.settings_page = "keys"
+        session.ui.key_binding_i = 0  # throttle up
+        session.tick(Keys(pressed={"return"}), 0.05)
+        captured = Input()
+        captured.keyboard_pressed = {"s"}
+        captured.keyboard_held = {"s"}
+        captured.pressed = {"s"}
+        captured.held = {"s"}
+        session.tick(captured, 0.05)
+        bindings = session.state.v2["settings"]["key_bindings"]
+        self.assertEqual(bindings["throttle_up"], "s")
+        self.assertEqual(bindings["throttle_down"], "w")
+
+        session.ui.mode = "play"
+        session.state.anchored = False
+        session.tick(captured, 0.05)
+        self.assertGreater(session.state.throttle_setting, 0)
+
+    def test_capture_uses_the_first_physical_key_pressed(self):
+        session = self.make_session()
+        session.ui.mode = "settings"
+        session.ui.settings_page = "keys"
+        session.ui.key_binding_i = 0
+        session.tick(Keys(pressed={"return"}), 0.05)
+        captured = Input()
+        captured.keyboard_pressed = {"w", "rshift"}
+        captured.keyboard_press_order = ["w", "rshift"]
+        captured.pressed = {"w", "rshift"}
+        session.tick(captured, 0.05)
+        self.assertEqual(session.state.v2["settings"]["key_bindings"]["throttle_up"], "w")
+
+    def test_common_letters_and_digits_are_exposed_and_bindable(self):
+        for key in ("x", "l", "u", "0"):
+            with self.subTest(key=key):
+                self.assertIn(key, KEY_NAMES)
+                self.assertIn(key, SCAN)
+                self.assertEqual(normalize_key_bindings(
+                    {"throttle_up": key})["throttle_up"], key)
+
+    def test_normalized_alias_bindings_are_available_for_display(self):
+        bindings = normalize_key_bindings({
+            "cancel": "x", "alternate_select": "u",
+            "dialogue_continue": "0",
+        })
+        self.assertEqual(bindings["pause"], "x")
+        self.assertEqual(bindings["anchor"], "u")
+        self.assertEqual(bindings["hail"], "0")
+        self.assertEqual(UI._key_name(bindings["pause"]), "X")
+
+    def test_keybinding_screen_displays_normalized_pause_alias(self):
+        class TextRecorder:
+            def __init__(self):
+                self.calls = []
+
+            def render(self, text, size, color, family):
+                self.calls.append(text)
+                return np.zeros((size, max(1, len(text) * size // 2), 4), np.uint8)
+
+        ui = UI.__new__(UI)
+        ui.text, ui._cw, ui._ch = TextRecorder(), {}, {}
+        ui._text_scale = 1.0
+        ui._dyslexia_font = False
+        state = SimpleNamespace(v2={"settings": {"key_bindings": {"cancel": "x"}}})
+        ui_state = UIState(key_binding_i=10)
+        ui._keybindings(np.zeros((720, 1280, 3), np.uint8), state, ui_state)
+        self.assertIn("X", ui.text.calls)
+
+    def test_haul_speed_is_hidden_until_haul_view_exists(self):
+        state = SimpleNamespace(v2={
+            "settings": {"haul_speed": "instant"},
+            "profile": {"collar": {"visible": True}},
+        })
+        labels = [label for label, _value
+                  in UI.__new__(UI)._settings_rows(state)]
+        self.assertNotIn("Haul speed", labels)
+
+    def test_collar_visibility_controls_bot_rendering(self):
+        state = State.new(self.world, seed=17)
+        state.v2["settings"]["collar_visible"] = True
+        visible = bot_faces(state)
+        self.assertTrue(any(np.allclose(face.color, _COLLAR_WOOL) for face in visible))
+        state.v2["settings"]["collar_visible"] = False
+        hidden = bot_faces(state)
+        self.assertFalse(any(np.allclose(face.color, _COLLAR_WOOL) for face in hidden))
+
+    def test_new_morning_preserves_accessibility_and_control_preferences(self):
+        session = self.make_session()
+        settings = session.state.v2["settings"]
+        settings.update({
+            "mode": "old_salt", "text_size": 2, "dyslexia_font": True,
+            "reduced_motion": True, "captions": False, "collar_visible": False,
+            "key_bindings": {**settings["key_bindings"], "throttle_up": "x"},
+        })
+        session.state.v2["mode"] = "old_salt"
+        session.ui.mode = "title"
+        session.ui.confirm_new = True
+        session.tick(Keys(pressed={"return"}), 0.05)
+        self.assertEqual(session.state.v2["settings"], settings)
+        self.assertEqual(session.state.v2["mode"], "old_salt")
+        self.assertFalse(session.state.v2["profile"]["collar"]["visible"])
+        session.save()
+        loaded = State.load(session.save_path, self.world)
+        self.assertEqual(loaded.v2["settings"], settings)
 
 class MixerVolumeChecks(unittest.TestCase):
     @staticmethod
@@ -212,7 +334,6 @@ class SettingsPresentationChecks(unittest.TestCase):
             ("Text size", "Large"),
             ("Dyslexia-friendly font", "Atkinson Hyperlegible"),
             ("Reduced motion", "On"),
-            ("Haul speed", "Quick"),
             ("Captions", "Off"),
             ("Master volume", "80%"),
             ("Music volume", "70%"),

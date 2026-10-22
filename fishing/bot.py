@@ -21,6 +21,7 @@ _PERCH = {
     "rowboat": (0.0, -0.36, 1.05),
 }
 _SPEED = 7.5  # metres per real second
+_COLLAR_WOOL = (0.72, 0.20, 0.28)
 
 
 def reset(state) -> None:
@@ -129,18 +130,25 @@ def tick(state, world, dt: float) -> str | None:
 
 
 def faces(state) -> list[Face]:
+    v2 = getattr(state, "v2", {})
+    settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
+    profile = v2.get("profile", {}) if isinstance(v2, dict) else {}
+    collar = profile.get("collar", {}) if isinstance(profile, dict) else {}
+    collar_visible = settings.get("collar_visible", collar.get("visible", True))
     if state.bot_phase == "home":
         eye, right, up, forward = _boat_basis(state)
         lx, ly, lz = _PERCH.get(state.boat_id, _PERCH["jon"])
         origin = eye + right * lx + up * ly + forward * lz
         # Look back at the skipper so the lamp is in view.
-        return _mesh(origin, -right, up, -forward, bob=0.0)
+        return _mesh(origin, -right, up, -forward, bob=0.0,
+                     collar_visible=collar_visible)
     y = 0.05 + math.sin(state.anim * 5.0) * 0.018
     origin = np.array([state.bot_x, y, state.bot_z], np.float32)
     facing = np.array([math.sin(state.bot_yaw), 0.0, math.cos(state.bot_yaw)], np.float32)
     right = np.array([math.cos(state.bot_yaw), 0.0, -math.sin(state.bot_yaw)], np.float32)
     up = np.array([0.0, 1.0, 0.0], np.float32)
-    mesh = _mesh(origin, right, up, facing, bob=0.0, scale=1.7)
+    mesh = _mesh(origin, right, up, facing, bob=0.0, scale=1.7,
+                 collar_visible=collar_visible)
     try:
         from .life import extra_faces
         mesh.extend(extra_faces(state))
@@ -312,7 +320,8 @@ def _report(state, world) -> str:
     return f"Bot: {where}, the {place}. {bait.capitalize()} for {fish}."
 
 
-def _mesh(origin, right, up, facing, bob: float, scale: float = 1.0) -> list[Face]:
+def _mesh(origin, right, up, facing, bob: float, scale: float = 1.0,
+          collar_visible: bool = True) -> list[Face]:
     basis = np.stack([
         np.asarray(right, np.float32),
         np.asarray(up, np.float32),
@@ -346,6 +355,8 @@ def _mesh(origin, right, up, facing, bob: float, scale: float = 1.0) -> list[Fac
 
     # Body, lamp face, antenna and bobber, skids, and a little propeller.
     box((0.0, 0.11, 0.0), (0.16, 0.14, 0.18), tin)
+    if collar_visible:
+        box((0.0, 0.19, 0.0), (0.17, 0.035, 0.19), _COLLAR_WOOL)
     box((0.0, 0.22, 0.02), (0.11, 0.09, 0.11), tin)
     put([(-0.028, 0.19, 0.08), (0.028, 0.19, 0.08), (0.028, 0.25, 0.08), (-0.028, 0.25, 0.08)], lamp)
     box((0.0, 0.36, 0.0), (0.012, 0.16, 0.012), dark)

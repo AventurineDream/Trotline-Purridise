@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 from pathlib import Path
 import time
 
@@ -80,6 +81,9 @@ class MenuKeys:
             keys, "physical_keyboard_pressed", getattr(keys, "keyboard_pressed", keys.pressed))
         self.physical_keyboard_held = getattr(
             keys, "physical_keyboard_held", getattr(keys, "keyboard_held", keys.held))
+        self.physical_keyboard_press_order = getattr(
+            keys, "physical_keyboard_press_order",
+            getattr(keys, "keyboard_press_order", ()))
 
     def tap(self, name: str, dt: float) -> bool:
         arrow = self.keys.tap(name, dt)
@@ -303,7 +307,17 @@ class Session:
             if "esc" in keys.pressed:
                 self.ui.confirm_new = False
             elif "return" in keys.pressed or "space" in keys.pressed:
-                self.state = State.new(self.world)
+                previous_settings = deepcopy(
+                    self.state.v2.get("settings", {})
+                    if isinstance(self.state.v2, dict) else {}
+                )
+                new_state = State.new(self.world)
+                new_state.v2["settings"] = previous_settings
+                new_state.v2["mode"] = previous_settings.get(
+                    "mode", new_state.v2.get("mode", "cozy"))
+                new_state.v2["profile"]["collar"]["visible"] = previous_settings.get(
+                    "collar_visible", True)
+                self.state = new_state
                 self._attach_quest_manager()
                 self._title_catchup_pending = False
                 self.ui.confirm_new = False
@@ -747,15 +761,15 @@ class Session:
         rows = self.ui.settings_i
         settings = self.state.v2.setdefault("settings", {})
         if keys.tap("up", dt):
-            self.ui.settings_i = (self.ui.settings_i - 1) % 12
+            self.ui.settings_i = (self.ui.settings_i - 1) % 11
         elif keys.tap("down", dt):
-            self.ui.settings_i = (self.ui.settings_i + 1) % 12
+            self.ui.settings_i = (self.ui.settings_i + 1) % 11
         elif keys.tap("left", dt):
             self._adjust_setting(rows, -1)
         elif keys.tap("right", dt):
             self._adjust_setting(rows, 1)
         elif "return" in keys.pressed or "space" in keys.pressed:
-            if rows == 11:
+            if rows == 10:
                 self.ui.settings_page = "keys"
                 self.ui.key_binding_i = 0
                 self.ui.capturing_key = False
@@ -779,14 +793,9 @@ class Session:
         elif row == 3:
             settings["reduced_motion"] = not bool(settings.get("reduced_motion", False))
         elif row == 4:
-            speeds = ("normal", "quick", "instant")
-            current = settings.get("haul_speed", "normal")
-            index = speeds.index(current) if current in speeds else 0
-            settings["haul_speed"] = speeds[(index + direction) % len(speeds)]
-        elif row == 5:
             settings["captions"] = not bool(settings.get("captions", True))
-        elif 6 <= row <= 9:
-            name = ("master", "music", "ambience", "sfx")[row - 6]
+        elif 5 <= row <= 8:
+            name = ("master", "music", "ambience", "sfx")[row - 5]
             volumes = settings.get("volumes")
             if not isinstance(volumes, dict):
                 volumes = {}
@@ -799,7 +808,7 @@ class Session:
             if not math.isfinite(current):
                 current = 1.0
             volumes[name] = round(max(0.0, min(1.0, current + direction * 0.1)), 2)
-        elif row == 10:
+        elif row == 9:
             profile = self.state.v2.setdefault("profile", {})
             collar = profile.setdefault("collar", {})
             visible = not bool(settings.get("collar_visible", collar.get("visible", True)))
@@ -818,13 +827,16 @@ class Session:
             physical = getattr(keys, "physical_keyboard_pressed", None)
             if physical is None:
                 physical = getattr(keys, "keyboard_pressed", keys.pressed)
-            if "backspace" in physical:
+            if "esc" in physical or "backspace" in physical:
                 self.ui.capturing_key = False
                 return
-            pressed = sorted(key for key in physical if key in KEY_NAMES)
-            if pressed:
+            order = getattr(keys, "physical_keyboard_press_order", ())
+            ordered = [key for key in order if key in physical and key in KEY_NAMES]
+            if not ordered:
+                ordered = sorted(key for key in physical if key in KEY_NAMES)
+            if ordered:
                 action = actions[self.ui.key_binding_i]
-                bindings = set_key_binding(bindings, action, pressed[0])
+                bindings = set_key_binding(bindings, action, ordered[0])
                 settings["key_bindings"] = bindings
                 self.ui.capturing_key = False
                 self.save()
