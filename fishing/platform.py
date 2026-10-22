@@ -8,6 +8,13 @@ from ctypes import c_char_p, c_int, c_uint8, c_uint16, c_uint32, c_void_p
 
 import numpy as np
 
+from .gamepad import (
+    Gamepad, SDL_ControllerAxisEvent, SDL_ControllerButtonEvent,
+    SDL_ControllerDeviceEvent, SDL_CONTROLLERDEVICEADDED,
+    SDL_CONTROLLERDEVICEREMAPPED, SDL_CONTROLLERDEVICEREMOVED,
+    SDL_INIT_GAMECONTROLLER, SDL_INIT_JOYSTICK,
+)
+
 SDL_INIT_AUDIO = 0x00000010
 SDL_INIT_VIDEO = 0x00000020
 SDL_WINDOWPOS_CENTERED = 0x2FFF0000
@@ -23,8 +30,10 @@ RGB24 = 0x17101803
 ARGB8888 = 0x16362004
 
 SCAN = {
-    "a": 4, "b": 5, "c": 6, "d": 7, "e": 8, "f": 9, "h": 11, "i": 12, "j": 13,
+    "a": 4, "b": 5, "c": 6, "d": 7, "e": 8, "f": 9, "g": 10,
+    "h": 11, "i": 12, "j": 13, "k": 14,
     "m": 16, "n": 17, "p": 19, "q": 20, "r": 21, "s": 22, "t": 23, "w": 26,
+    "z": 29,
     "1": 30, "2": 31, "3": 32, "4": 33, "5": 34,
     "return": 40, "esc": 41, "tab": 43, "space": 44,
     "right": 79, "left": 80, "down": 81, "up": 82,
@@ -99,7 +108,9 @@ class SDL_WindowEvent(ctypes.Structure):
 class SDL_Event(ctypes.Union):
     _fields_ = [
         ("type", c_uint32), ("key", SDL_KeyboardEvent), ("window", SDL_WindowEvent),
-        ("pad", c_uint8 * 56),
+        ("caxis", SDL_ControllerAxisEvent),
+        ("cbutton", SDL_ControllerButtonEvent),
+        ("cdevice", SDL_ControllerDeviceEvent), ("pad", c_uint8 * 56),
     ]
 
 
@@ -224,6 +235,11 @@ class Input:
     def __init__(self):
         self.held: set[str] = set()
         self.pressed: set[str] = set()
+        self.keyboard_held: set[str] = set()
+        self.keyboard_pressed: set[str] = set()
+        self.gamepad_held: set[str] = set()
+        self.gamepad_pressed: set[str] = set()
+        self.device = "keyboard"
         self.quit = False
         self.focused = True
         self._rep: dict[str, float] = {}
@@ -293,8 +309,11 @@ class Platform:
         self.verify_pixels = verify_pixels
         self.w,self.h = w,h
         # Video and audio initialization are idempotent.
-        if s.SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0:
+        if s.SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK
+                      | SDL_INIT_GAMECONTROLLER) < 0:
             raise RuntimeError(self._err())
+        self.gamepad = Gamepad(s)
+        self._last_device = "keyboard"
         self.window = None
         if graphics:
             try:
@@ -403,11 +422,11 @@ class Platform:
         if ms > 0:
             self.sdl.SDL_Delay(ms)
 
-    def poll(self) -> Input:
+    def poll(self, dt: float = 0.0) -> Input:
         # Reuse one Input so key-repeat timers survive across frames.
         inp = self._input
         inp.quit = False
-        inp.pressed.clear()
+        keyboard_pressed: set[str] = set()
         event = SDL_Event()
         while self.sdl.SDL_PollEvent(ctypes.byref(event)):
             if event.type == SDL_QUIT:
@@ -415,8 +434,9 @@ class Platform:
             elif event.type == SDL_WINDOWEVENT:
                 if event.window.event == SDL_WINDOWEVENT_FOCUS_LOST:
                     self._focused = False
-                    inp.pressed.clear()
+                    keyboard_pressed.clear()
                     inp._rep.clear()
+                    self.gamepad.clear_input()
                 elif event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED:
                     self._focused = True
             elif event.type == SDL_KEYDOWN and self._focused and not event.key.repeat:
@@ -424,18 +444,36 @@ class Platform:
                 if name is not None:
                     # A press and release can both arrive between slow frames.
                     # Keep that edge even though the final keyboard state is up.
-                    inp.pressed.add(name)
+                    keyboard_pressed.add(name)
+                    self._last_device = "keyboard"
+            elif self._focused or event.type in (
+                SDL_CONTROLLERDEVICEADDED, SDL_CONTROLLERDEVICEREMOVED,
+                SDL_CONTROLLERDEVICEREMAPPED,
+            ):
+                if self.gamepad.handle_event(event):
+                    self._last_device = "gamepad"
         n = c_int()
         state = self.sdl.SDL_GetKeyboardState(ctypes.byref(n))
-        held = set()
+        keyboard_held: set[str] = set()
         if state and self._focused:
             for name, code in SCAN.items():
                 if code < n.value and state[code]:
-                    held.add(name)
-        inp.held = held
+                    keyboard_held.add(name)
+        gamepad_pressed, gamepad_held, gamepad_activity = self.gamepad.sample(
+            dt, now_ms=self.ticks(),
+        )
+        if gamepad_activity:
+            self._last_device = "gamepad"
+        inp.keyboard_pressed = keyboard_pressed
+        inp.keyboard_held = keyboard_held
+        inp.gamepad_pressed = gamepad_pressed
+        inp.gamepad_held = gamepad_held
+        inp.pressed = keyboard_pressed | gamepad_pressed
+        inp.held = keyboard_held | gamepad_held
+        inp.device = self._last_device
         # SDL's held snapshot still controls throttle/steering and menu repeat.
         # OS key-repeat events must never become additional one-shot actions.
-        for name in inp._rep.keys() - held:
+        for name in inp._rep.keys() - inp.held:
             inp._rep.pop(name, None)
         inp.focused = self._focused
         return inp
@@ -508,6 +546,7 @@ class Platform:
             self.sdl.SDL_FreeSurface(converted)
 
     def close(self):
+        self.gamepad.close()
         self._close_graphics()
         if self.window:
             self.sdl.SDL_DestroyWindow(self.window)

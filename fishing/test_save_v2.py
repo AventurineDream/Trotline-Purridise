@@ -13,6 +13,7 @@ from unittest.mock import patch
 import numpy as np
 
 from . import savepaths
+from .gamepad import default_key_bindings
 from .narrative import QUEST_IDS
 from .savepaths import (UnsupportedSaveVersionError, book_stage,
                         load_game_save)
@@ -116,6 +117,7 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(defaults["calendar"], {"weather_windows": {}})
         self.assertEqual(defaults["settings"], {
             "text_size": 1, "haul_speed": "normal", "reduced_motion": False,
+            "key_bindings": default_key_bindings(),
         })
         self.assertEqual(defaults["reward_claims"], {
             "story": [], "legendary_record": [], "book_stage_up": [],
@@ -404,7 +406,7 @@ class SaveV2Checks(unittest.TestCase):
                 patch.object(ui, "_toasts") as draw_toasts:
             ui.draw(frame, state, ui_state)
         draw_title.assert_called_once_with(frame, state, ui_state)
-        draw_toasts.assert_called_once_with(frame, state)
+        draw_toasts.assert_called_once_with(frame, state, ui_state.input_device)
 
     def test_save_override_and_sdl_pref_path_selection(self):
         args, override = savepaths.parse_save_option(["--software", "--save", "folder/my save.json"])

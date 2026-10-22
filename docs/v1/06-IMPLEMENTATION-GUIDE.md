@@ -154,7 +154,21 @@ their new ids, rather than starting a second ledger.
     "npcs": {"letters": [], "talk_days": {}},
     "keepsakes": [], "ripples_v2": [],
     "calendar": {"weather_windows": {}},
-    "settings": {"text_size": 1, "haul_speed": "normal", "reduced_motion": false},
+    "settings": {"text_size": 1, "haul_speed": "normal", "reduced_motion": false,
+                  "key_bindings": {"throttle_up": "w", "throttle_down": "s",
+                                   "steer_left": "a", "steer_right": "d",
+                                   "idle": "shift", "idle_right": "rshift",
+                                   "anchor": "space", "set_line": "f",
+                                   "check_or_land": "e", "help": "h", "pause": "esc",
+                                   "mute": "m", "hail": "c", "chart": "tab",
+                                   "journal": "j", "livewell": "i", "bot": "b",
+                                   "time_scale": "t", "sail": "q", "tow": "r",
+                                   "new_game": "n", "dialogue_continue": "c",
+                                   "catnap": "z", "bot_tool": "g", "galley": "k",
+                                   "menu_up": "up", "menu_down": "down",
+                                   "menu_left": "left", "menu_right": "right",
+                                   "select": "return", "alternate_select": "space",
+                                   "cancel": "esc"}},
     "reward_claims": {"story": [], "legendary_record": [], "book_stage_up": []}
   }
 }

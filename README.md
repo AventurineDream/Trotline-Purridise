@@ -134,27 +134,33 @@ One real second is one minute on the lake. A day is 24 minutes. `T` cycles 1×, 
 
 **Bot** is the tin deckhand on the bow. `B` sends him to the nearest trotline, or a short way ahead if nothing is set. He calls back the depth (a range, unless you own the finder), the ground, and what he would bait. `B` again brings him home. He does not change what bites or what fish are worth. A tow or a change of lake puts him back on deck.
 
-| Key | Action |
-| --- | --- |
-| W / S | Raise / lower the throttle lever; S past idle selects reverse |
-| Shift (either key) | Return the throttle to idle; the boat coasts |
-| A D, arrows | Steer. Arrows also look up and down |
-| Space | Drop or raise the anchor |
-| F | Set a trotline |
-| E | Check a line, or open the current landing |
-| Q | Raise / lower the daysailer's sail |
-| R | Call a tow while idling, with the sail lowered |
-| B | Send Bot ahead or out to a line. Press again to call him back |
-| Tab | Chart |
-| J / I | Journal / livewell |
-| T | Time scale, while you are still |
-| C | Hail a nearby NPC (within 20 m, below 3 knots) |
-| H / M / Esc | Help / mute / pause |
+| Key | Pad | Action |
+| --- | --- | --- |
+| W / S | Left stick up/down, RT/LT | Raise / lower the throttle lever; S past idle selects reverse |
+| Shift (either key) | — | Return the throttle to idle; the boat coasts |
+| A / D, arrows | Left stick left/right | Steer. Keyboard arrows also look up and down |
+| Space | — | Drop or raise the anchor |
+| F | X | Set a trotline |
+| E | A | Check a line, or open the current landing |
+| Q | — | Raise / lower the daysailer's sail |
+| R | — | Call a tow while idling, with the sail lowered |
+| B | Y tap | Send Bot ahead or out to a line. Press again to call him back |
+| Z | Y hold | Catnap (reserved until its gameplay ticket lands) |
+| G | LB | Use the active Bot tool (reserved until its gameplay ticket lands) |
+| K | — | Galley (reserved until its gameplay ticket lands) |
+| Tab | Back | Chart |
+| J / I | — | Journal / livewell |
+| T | — | Time scale, while you are still |
+| C | RB | Hail a nearby NPC (within 20 m, below 3 knots) |
+| H / M / Esc | — / — / B or Start | Help / mute / pause |
 
 Menus accept **W/S** to move through items and **A/D** to change tabs, lines, or
 pages. Arrow keys also work, including held-key repeat. Enter or Space selects;
-Esc closes. The field guide accepts all four WASD keys to turn pages. Release a
-direction used in a menu before using it to drive the boat again.
+Esc closes. On a controller, the D-pad or left stick moves through menus, the
+D-pad changes tabs or pages, A selects, and B returns. The on-screen hints switch
+to controller glyphs after the last controller input, and back to keyboard hints
+after the last keyboard input. Release a direction used in a menu before using it
+to drive the boat again.
 
 Short taps are retained even when pressed and released between rendered frames.
 Losing window focus clears pending input and menu repeat, while held steering

@@ -13,6 +13,8 @@ from pathlib import Path
 import tempfile
 from typing import Callable, Sequence, Type
 
+from .gamepad import default_key_bindings
+
 
 SAVE_FILENAME = "save.json"
 LEGACY_SAVE = Path("saves") / "briar.json"
@@ -282,7 +284,8 @@ def default_v2(state=None) -> dict:
         "keepsakes": [], "ripples_v2": [],
         "calendar": {"weather_windows": {}},
         "settings": {"text_size": 1, "haul_speed": "normal",
-                     "reduced_motion": False},
+                     "reduced_motion": False,
+                     "key_bindings": default_key_bindings()},
         # Quest claims remain in narrative_v1.reward_claims, the existing
         # authority. This ledger covers the three reward kinds introduced with v2.
         "reward_claims": {"story": [], "legendary_record": [],

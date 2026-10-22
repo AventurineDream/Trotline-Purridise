@@ -16,6 +16,7 @@ from .audio import Audio
 from .data import BAITS, SPECIES, hour_of_day
 from .weather import weather_visuals
 from .platform import Platform, Text
+from .gamepad import session_input
 from .render import Renderer
 from .imageops import resize_rgb
 from .guardian import maybe_start_sighting, pause_sighting_clock
@@ -84,6 +85,7 @@ class Session:
         self.ui = UIState(has_save=has_save)
         self.quit = False
         self._menu_held: set[str] = set()
+        self._input_repeat: dict[str, float] = {}
         self._npc_content = load_content()
         self.quest_manager = QuestManager(self._npc_content)
         self._attach_quest_manager()
@@ -94,6 +96,9 @@ class Session:
 
     def tick(self, keys, dt: float) -> None:
         self.sound = None
+        self.ui.input_device = getattr(keys, "device", self.ui.input_device)
+        settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
+        keys = session_input(keys, settings.get("key_bindings"), self._input_repeat)
         self.focused = bool(getattr(keys, "focused", True))
         if keys.quit:
             if self.ui.mode != "title" or self.ui.has_save:
@@ -162,9 +167,21 @@ class Session:
         if self.world_running():
             # A held menu direction must be released before it drives or looks
             # around, even when Enter/Esc closes the menu in this same tick.
+            driving_pressed = set(driving_presses)
+            driving_held = set(keys.held)
+            # The controller D-pad is navigation only. The left stick supplies
+            # W/S/A/D equivalents for throttle and steering while playing.
+            pad_navigation = (set(getattr(keys, "gamepad_held", ()))
+                              | set(getattr(keys, "gamepad_pressed", ())))
+            keyboard_navigation = (set(getattr(keys, "keyboard_held", ()))
+                                   | set(getattr(keys, "keyboard_pressed", ())))
+            for name in ("up", "down", "left", "right"):
+                if name in pad_navigation and name not in keyboard_navigation:
+                    driving_held.discard(name)
+                    driving_pressed.discard(name)
             driving_keys = Keys(
-                pressed=set(driving_presses) - self._menu_held,
-                held=keys.held - self._menu_held,
+                pressed=driving_pressed - self._menu_held,
+                held=driving_held - self._menu_held,
                 focused=self.focused,
             )
             state.drive(dt,_throttle(driving_keys,mode),_steer(driving_keys,mode),self.world,
@@ -752,7 +769,7 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
             now = platform.ticks()
             dt = min(0.25, max(0.0, (now - last) / 1000.0))
             last = now
-            keys = platform.poll()
+            keys = platform.poll(dt)
             session.tick(keys, dt)
             if session.sound:
                 audio.blip(session.sound)
