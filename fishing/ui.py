@@ -330,6 +330,9 @@ class UIState:
     shop_i: int = 0
     set_line: int = 0
     set_bait: int = 0
+    set_sections: int = 1
+    set_section: int = 0
+    set_section_baits: tuple[int, int, int] = (0, 0, 0)
     check_line: int = 0
     check_i: int = 0
     journal_i: int = 0
@@ -410,7 +413,7 @@ def shop_rows(state, tab: int) -> list[Row]:
         for tier, spec in LINE_TIERS.items():
             rows.append(Row(
                 spec["name"], dollars(spec["price"]), spec["blurb"],
-                state.owned_lines() < 5, "line", tier,
+                True, "line", tier,
             ))
     elif tab==3:
         for slot, items in PAINT.items():
@@ -487,19 +490,22 @@ def check_rows(state, line_index: int) -> list[Row]:
     line = state.lines[line_index]
     rows: list[Row] = []
     for i, hook in enumerate(line.hooks):
+        section = line.section_for_hook(i)
+        bait_name = BAIT_BY_ID.get(line.bait_for_hook(i), BAIT_BY_ID["worm"]).name
+        section_label = f"S{section + 1} {bait_name}"
         if hook.catch is None:
             label = "baited" if hook.baited else "bare"
-            rows.append(Row(f"{i + 1:2d}   {label}", "", "", False, "hook", str(i)))
+            rows.append(Row(f"{i + 1:2d}  {section_label}  {label}", "", "", False, "hook", str(i)))
         else:
             catch = hook.catch
             name = SPECIES_BY_ID[catch.species].name
             q = quality_name(catch.quality)
             rows.append(Row(
-                f"{i + 1:2d}   {catch.weight:.1f} lb {name}, {q}", dollars(catch.value()),
+                f"{i + 1:2d}  {section_label}  {catch.weight:.1f} lb {name}, {q}", dollars(catch.value()),
                 "", True, "hook", str(i),
             ))
     rows.append(Row("Take all", "", "Moves what the livewell can hold.", True, "take_all"))
-    rows.append(Row("Rebait bare hooks", "", f"Uses {BAIT_BY_ID[line.bait].name.lower()} from the box.", True, "rebait"))
+    rows.append(Row("Rebait bare hooks", "", "Uses each section's bait from the box.", True, "rebait"))
     rows.append(Row("Pull the line", "", "Coils it aboard. The well must hold every fish.", True, "pull"))
     return rows
 
@@ -883,11 +889,11 @@ class UI:
         if not state.lines:
             return 0
         row_h = size + 6
-        height = 12 + row_h * (len(state.lines[:5]) + 1)
+        height = 12 + row_h * (len(state.lines) + 1)
         y = above - height
         self._panel(frame, right, y, width, height, 0.80)
         self._text(frame, "LINES", right + 16, y + 8, size, GOLD, False, "sans")
-        for i, line in enumerate(state.lines[:5]):
+        for i, line in enumerate(state.lines):
             fish = line.fish_on()
             tired = any(h.catch is not None and h.catch.age >= 9.0 for h in line.hooks)
             if tired:
@@ -1132,32 +1138,46 @@ class UI:
             return
         ui.set_line %= len(state.held)
         ui.set_bait %= len(BAITS)
+        ui.set_sections = max(1, min(3, int(ui.set_sections)))
+        ui.set_section %= ui.set_sections
+        section_baits = [index % len(BAITS) for index in ui.set_section_baits]
+        if ui.set_section_baits == (0, 0, 0) and ui.set_bait:
+            section_baits = [ui.set_bait] * 3
+        ui.set_bait = section_baits[ui.set_section]
         held = state.held[ui.set_line]
         spec = LINE_TIERS[held.tier]
-        which = f"Line {ui.set_line + 1} of {len(state.held)}    {spec['hooks']} hooks"
+        which = (f"Line {ui.set_line + 1} of {len(state.held)}    {spec['hooks']} hooks"
+                 f"    {len(state.lines)}/{state.boat.lines} deployed")
         self._text(frame, which, x + m, y + 16 + self.cell(head)[1], small, GOLD, shadow=False)
-        top = y + 28 + self.cell(head)[1] + self.cell(small)[1]
+        section_summary = " / ".join(
+            f"S{i + 1} {BAITS[section_baits[i]].name}"
+            for i in range(ui.set_sections)
+        )
+        self._text(frame, self._trim(section_summary, small, pw - m * 2),
+                   x + m, y + 17 + self.cell(head)[1] + self.cell(small)[1],
+                   small, DIM, shadow=False)
+        top = y + 30 + self.cell(head)[1] + self.cell(small)[1] * 2
         for i, bait in enumerate(BAITS):
             have = state.bait.get(bait.id, 0)
-            need = spec["hooks"]
+            need = sum(1 for hook_index in range(spec["hooks"])
+                       if hook_index * ui.set_sections // spec["hooks"] == ui.set_section)
             label = f"{i + 1}  {bait.name}"
             right = f"{have} aboard"
-            color = GOLD if i == ui.set_bait else INK
-            if have < need and i == ui.set_bait:
+            selected = i == section_baits[ui.set_section]
+            color = GOLD if selected else INK
+            if have < need and selected:
                 color = WARN
-            elif have < need:
-                color = DIM
             ry = top + i * (ch + 4)
-            if i == ui.set_bait:
+            if selected:
                 self._fill(frame, x + 8, ry - 1, pw - 16, ch + 2, (46, 42, 28), 0.85)
             self._text(frame, label, x + m, ry, body, color, shadow=False)
             rw = len(right) * self.cell(body)[0]
             self._text(frame, right, x + pw - m - rw, ry, body, color, shadow=False)
-        bait = BAITS[ui.set_bait]
-        note = ui.note or f"Needs {spec['hooks']}. {bait.blurb}"
+        bait = BAITS[section_baits[ui.set_section]]
+        note = ui.note or f"Editing section {ui.set_section + 1}: needs {need}. {bait.blurb}"
         self._text(frame, self._trim(note, small, pw - m * 2), x + m, y + ph - ch - 28, small, WARN if ui.note else DIM, shadow=False)
-        foot = self._controls(ui, "W/S bait  A/D line  Arrows too  1-5 bait  Enter sets  Esc",
-                              "D-pad / stick choose bait or line  A sets  B back")
+        foot = self._controls(ui, "W/S bait  A/D line  Q sections  Tab section  1-5 bait  Enter sets",
+                              "D-pad / stick choose  LB sections  Back section  A sets  B back")
         self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 8, small, DIM, shadow=False)
 
     def _check(self, frame, state, ui: UIState):
@@ -1177,7 +1197,10 @@ class UI:
         line = state.lines[ui.check_line]
         title = state.line_label(ui.check_line).upper()
         self._text(frame, title, x + m, y + 12, head, INK)
-        sub = f"{BAIT_BY_ID[line.bait].name}    {line.fish_on()} fish    {line.bare_hooks()} bare"
+        section_names = " / ".join(
+            BAIT_BY_ID.get(bait, BAIT_BY_ID["worm"]).name for bait in line.bait_sections
+        )
+        sub = f"{section_names}    {line.fish_on()} fish    {line.bare_hooks()} bare"
         self._text(frame, sub, x + m, y + 14 + self.cell(head)[1], small, GOLD, shadow=False)
         ui.check_i = _clamp(ui.check_i, len(rows))
         list_top = y + 24 + self.cell(head)[1] + self.cell(small)[1]
@@ -1711,7 +1734,8 @@ _HELP = (
         "Hull, deck, buoy, and tiller colors are yours once you",
         "buy them. Wearing one you own is free.",
         "",
-        "Five deployed lines is the limit on either lake.",
+        "Your active boat sets the deployed-line limit.",
+        "Lines already out stay out if you switch to a smaller boat.",
         "Worms on the flats keep the boat in bait.",
         "Liver, cut shad, and the deep hole are where the",
         "heavy fish live, and they fill a small livewell fast.",

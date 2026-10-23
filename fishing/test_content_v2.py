@@ -38,6 +38,9 @@ class ContentV2Checks(unittest.TestCase):
         self.assertEqual(CEDAR_FISH["smallmouth"], 0.0)
         self.assertEqual(LINE_TIERS["std"]["hooks"], 12)
         self.assertEqual(BOATS["pontoon"].traits, ("hammock",))
+        self.assertEqual({boat_id: boat.lines for boat_id, boat in BOATS.items()}, {
+            "jon": 5, "rowboat": 5, "sail": 5, "pontoon": 6,
+        })
         self.assertEqual(bait_mult("unlisted", "bluegill"), 0.05)
         self.assertEqual(zone_mult("unlisted", "bluegill"), 0.07)
 
@@ -195,6 +198,16 @@ class ContentV2Checks(unittest.TestCase):
 
         for field in ("speed_factor", "turn_factor", "acceleration"):
             self.assertIn(f"boats.json:boats[0](jon).{field}: must be greater than zero", str(caught.exception))
+
+    def test_boat_line_capacity_must_be_an_integer_from_three_to_eight(self):
+        for value in (2, 9, 4.5):
+            with self.subTest(value=value):
+                broken = deepcopy(CONTENT_V2_RAW)
+                broken["boats.json"]["boats"][0]["lines"] = value
+                with self.assertRaises(ContentError) as caught:
+                    validate_content_v2(broken)
+                self.assertIn("boats.json:boats[0](jon).lines: expected finite integer >= 3 and <= 8",
+                              str(caught.exception))
 
     def test_protected_species_may_have_no_sale_price(self):
         protected = deepcopy(CONTENT_V2_RAW)

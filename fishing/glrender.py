@@ -121,10 +121,10 @@ class LakeRenderer(SoftwareRenderer):
         self.prop_data = self._props()
         self.prop_buf = self.own(ctx.buffer(self.prop_data.tobytes()))
         self.prop_vao = self.tree_vao(self.prop_buf)
-        self.buoy_buf = self.own(ctx.buffer(reserve=7*4*15,dynamic=True))
+        self.buoy_buf = self.own(ctx.buffer(reserve=7*4*24,dynamic=True))
         self.buoy_vao = self.tree_vao(self.buoy_buf)
-        # One cork per hook, built once. Five heavy lines is 120.
-        self.cork_buf = self.own(ctx.buffer(reserve=7*4*120,dynamic=True))
+        # One cork per hook, built once. Eight heavy lines is 192.
+        self.cork_buf = self.own(ctx.buffer(reserve=7*4*192,dynamic=True))
         self.cork_vao = self.tree_vao(self.cork_buf)
         self.tree_p["atlas"] = 0
         self.water_p["reflection"] = 1
@@ -305,7 +305,7 @@ class LakeRenderer(SoftwareRenderer):
                 self.atlas.write(img.tobytes(),viewport=(0,0,self.layers[name],ATLAS_W,ATLAS_H,1))
             self._buoy_id = bid
         rows = []
-        for line in state.lines[:5]:
+        for line in state.lines:
             name = "buoy_flag" if line.fish_on() else "buoy"
             for x,z in line.buoys():
                 bob = math.sin(state.anim*1.7+x)*0.025
@@ -316,7 +316,7 @@ class LakeRenderer(SoftwareRenderer):
 
     def _corks(self, state):
         rows = []
-        for line in state.lines[:5]:
+        for line in state.lines:
             for i, hook in enumerate(line.hooks):
                 if hook.catch is None and not hook.baited:
                     continue
@@ -331,9 +331,9 @@ class LakeRenderer(SoftwareRenderer):
                     self.layers[name],
                     1.0 if fish else 0.7,
                 ))
-                if len(rows) >= 120:
+                if len(rows) >= 192:
                     break
-            if len(rows) >= 120:
+            if len(rows) >= 192:
                 break
         if rows:
             self.cork_buf.write(np.array(rows, np.float32).tobytes())
@@ -393,15 +393,15 @@ class LakeRenderer(SoftwareRenderer):
         self._scene(state,cam,light,1,self.draw_fb,buoys,corks)
         self._uniforms(self.water_p,state,cam,light,1,self.draw_fb.size)
         self.reflect_tex.use(1)
-        segments = np.zeros((5,4),np.float32)
-        heat = np.zeros(5,np.float32)
-        for i,line in enumerate(state.lines[:5]):
+        segments = np.zeros((8,4),np.float32)
+        heat = np.zeros(8,np.float32)
+        for i,line in enumerate(state.lines[:8]):
             segments[i] = (line.x0,line.z0,line.x1,line.z1)
             if line.fish_on():
                 heat[i] = 1.0
         self.water_p["line_segments"].write(segments.tobytes())
         self.water_p["line_heat"].write(heat.tobytes())
-        self.water_p["line_count"] = min(len(state.lines),5)
+        self.water_p["line_count"] = min(len(state.lines),8)
         ripples = np.zeros((4,4),np.float32)
         ripple_n = 0
         candidates = [(state.splash_x,state.splash_z,state.splash_anim),*self.splashes]
