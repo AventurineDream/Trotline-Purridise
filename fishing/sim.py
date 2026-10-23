@@ -254,7 +254,8 @@ class SetLine:
     def to_json(self) -> dict:
         result = deepcopy(self.extra_fields)
         result.update({
-            "tier": self.tier, "bait_sections": list(self.bait_sections),
+            "tier": self.tier, "bait": self.bait,
+            "bait_sections": list(self.bait_sections),
             "x0": round(self.x0, 2), "z0": round(self.z0, 2),
             "x1": round(self.x1, 2), "z1": round(self.z1, 2),
             "zone": self.zone,
@@ -635,9 +636,6 @@ class State:
     def battery_charge_available_this_visit(self) -> float:
         used = min(BATTERY_CHARGE_KWH, max(0.0, self.rowboat_charge_kwh_this_visit))
         return BATTERY_CHARGE_KWH - used
-
-    def owned_lines(self) -> int:
-        return len(self.held) + len(self.lines)
 
     # --- time -----------------------------------------------------------
 
