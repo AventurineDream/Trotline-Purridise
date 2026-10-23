@@ -626,7 +626,7 @@ class _ContentV2Validator:
         baits = self.table(docs, baits_file, "baits", {"id", "name", "price", "blurb", "matches"})
         boats = self.table(docs, boats_file, "boats", {
             "id", "name", "bow", "stern", "half_beam", "draft", "eye_height", "price",
-            "tank", "fuel_burn", "speed_factor", "turn_factor", "acceleration",
+            "lines", "tank", "fuel_burn", "speed_factor", "turn_factor", "acceleration",
             "well_bonus", "sail_speed", "traits"})
 
         self.require_saved_ids(species_file, "species", species)
@@ -732,6 +732,8 @@ class _ContentV2Validator:
 
         for bid, row, where in self.rows(boats_file, "boats"):
             self.text(boats_file, where + ".name", row.get("name"))
+            self.number(boats_file, where + ".lines", row.get("lines"),
+                        minimum=3, maximum=8, integer=True)
             for key in ("bow", "stern", "half_beam", "draft", "eye_height", "price", "tank",
                         "fuel_burn", "speed_factor", "turn_factor", "acceleration", "well_bonus", "sail_speed"):
                 self.number(boats_file, where + "." + key, row.get(key), minimum=None if key == "stern" else 0)

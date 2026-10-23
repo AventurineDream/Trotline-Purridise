@@ -36,6 +36,7 @@ class BoatModel:
     draft: float
     eye_height: float
     price: float
+    lines: int
     tank: float
     fuel_burn: float  # litres per game hour at full throttle, before upgrades
     speed_factor: float

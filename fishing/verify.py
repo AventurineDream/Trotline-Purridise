@@ -105,9 +105,9 @@ def _finite_scene_check(renderer, world):
 
 
 def _stress_lines():
-    # Maximum capacity: five 24-hook lines, fifteen buoys, mixed catch flags.
+    # Largest current boat: six 24-hook lines, eighteen buoys, mixed catch flags.
     lines = []
-    for i in range(5):
+    for i in range(6):
         hooks = [Hook(True,None) for _ in range(24)]
         if i%2==0:
             hooks[0].catch = Catch("bluegill",0.55,1,1,"flats","worm",10)
