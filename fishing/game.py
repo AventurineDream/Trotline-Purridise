@@ -633,7 +633,7 @@ class Session:
             self.ui.note = ""
         section_baits = list(self.ui.set_section_baits)
         old_sections = self.ui.set_sections
-        if keys.tap("q", dt) or keys.tap("g", dt):
+        if "q" in keys.pressed or "g" in keys.pressed:
             self.ui.set_sections = self.ui.set_sections % 3 + 1
             for i in range(old_sections, self.ui.set_sections):
                 section_baits[i] = self.ui.set_bait
