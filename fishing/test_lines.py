@@ -38,8 +38,9 @@ class LineCapacityAndBaitChecks(unittest.TestCase):
                     [bait for bait in ("worm", "shad", "minnow")
                      for _ in range(section_size)],
                 )
+                self.assertEqual(line.to_json()["bait"], "worm")
 
-    def test_legacy_scalar_bait_migrates_to_one_section(self):
+    def test_legacy_scalar_bait_migrates_and_save_mirrors_first_section(self):
         old = SetLine(
             "std", "shad", 1, 2, 3, 4, "open", [Hook(True)],
             line_id=str(uuid4()), extra_fields={"future_line_marker": 7},
@@ -51,7 +52,7 @@ class LineCapacityAndBaitChecks(unittest.TestCase):
         self.assertEqual(migrated.bait_sections, ["shad"])
         saved = migrated.to_json()
         self.assertEqual(saved["bait_sections"], ["shad"])
-        self.assertNotIn("bait", saved)
+        self.assertEqual(saved["bait"], "shad")
         self.assertEqual(saved["future_line_marker"], 7)
 
     def test_each_hook_catches_with_its_section_bait_and_emits_the_line_sections(self):
@@ -123,6 +124,15 @@ class LineCapacityAndBaitChecks(unittest.TestCase):
         self.assertEqual(session.ui.set_sections, 2)
         self.assertEqual(session.ui.set_section, 1)
         self.assertEqual(session.ui.set_section_baits, (0, 1, 0))
+
+    def test_holding_section_toggle_does_not_repeat(self):
+        state = State.new(self.world, seed=22)
+        session = Session(self.world, Path("/tmp/trotline-set-controls.json"), state, False)
+        session.ui.mode = "setbait"
+
+        session._keys(Keys(held={"q"}), 0.5)
+
+        self.assertEqual(session.ui.set_sections, 1)
 
     def test_smaller_boat_capacity_blocks_new_sets_and_keeps_existing_lines(self):
         state = State.new(self.world, seed=27)
