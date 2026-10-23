@@ -50,8 +50,7 @@ class SaveV2Checks(unittest.TestCase):
                     or any(not isinstance(bait, str) for bait in sections)):
                 legacy_bait = line.pop("bait", "worm")
                 sections = [legacy_bait if isinstance(legacy_bait, str) else "worm"]
-            else:
-                line.pop("bait", None)
+            line["bait"] = sections[0]
             line["bait_sections"] = sections
             lines.append(line)
         return lines
