@@ -1,6 +1,6 @@
 uniform sampler2D reflection;
-uniform vec4 line_segments[5];
-uniform float line_heat[5];
+uniform vec4 line_segments[8];
+uniform float line_heat[8];
 uniform int line_count;
 uniform vec4 ripples[4];
 uniform int ripple_count;

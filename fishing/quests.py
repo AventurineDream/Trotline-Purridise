@@ -73,6 +73,18 @@ class QuestManager:
                 and event_time >= accepted)
 
     @staticmethod
+    def _bait_sections_match(event: dict, required_bait: str) -> bool:
+        if "bait_sections" in event:
+            sections = event.get("bait_sections")
+            if not isinstance(sections, list) or not 1 <= len(sections) <= 3:
+                return False
+        else:
+            # Legacy line events carried only one bait_id.
+            sections = [event.get("bait_id")]
+        return all(isinstance(bait, str) and bait == required_bait
+                   for bait in sections)
+
+    @staticmethod
     def _prerequisites_met(state, definition: dict) -> bool:
         return all(state.narrative.quests[quest_id].status == "completed"
                    for quest_id in definition.get("prerequisites", []))
@@ -99,7 +111,7 @@ class QuestManager:
         if (event.get("zone_id") != objective.get("zone_id")
                 or event.get("tier_id") != objective.get("tier_id")
                 or event.get("hook_count") != objective.get("hook_count")
-                or event.get("bait_id") != objective.get("bait_id")):
+                or not self._bait_sections_match(event, objective.get("bait_id"))):
             return
         if "set_window" in objective and not _window_contains(objective["set_window"], event.get("game_minute")):
             return
@@ -112,7 +124,8 @@ class QuestManager:
                 "zone_id": event["zone_id"],
                 "tier_id": event["tier_id"],
                 "hook_count": event["hook_count"],
-                "bait_id": event["bait_id"],
+                "bait_id": objective["bait_id"],
+                "bait_sections": list(event.get("bait_sections", [event.get("bait_id")])),
                 "game_minute": event["game_minute"],
                 "active_game_minute": event["active_game_minute"],
             },
@@ -186,6 +199,7 @@ class QuestManager:
                 or event.get("species_id") != objective.get("species_id")
                 or event.get("source_zone_id") != objective.get("zone_id")
                 or event.get("bait_id") != objective.get("bait_id")
+                or not self._bait_sections_match(event, objective.get("bait_id"))
                 or not deployment_id(event.get("source_line_id"))):
             return
         entry = event.get("entry_game_minute")
@@ -197,6 +211,7 @@ class QuestManager:
             "lake_id": event["lake_id"],
             "source_zone_id": event["source_zone_id"],
             "bait_id": event["bait_id"],
+            "bait_sections": list(event.get("bait_sections", [event.get("bait_id")])),
             "catch_game_minute": event.get("catch_game_minute"),
             "entry_game_minute": entry,
         }

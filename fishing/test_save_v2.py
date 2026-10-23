@@ -38,6 +38,23 @@ class SaveV2Checks(unittest.TestCase):
     def read(path):
         return json.loads(path.read_text(encoding="utf-8"))
 
+    @staticmethod
+    def expected_migrated_value(key, value):
+        if key != "lines" or not isinstance(value, list):
+            return value
+        lines = []
+        for old_line in value:
+            line = dict(old_line)
+            sections = line.pop("bait_sections", None)
+            if (not isinstance(sections, list) or not 1 <= len(sections) <= 3
+                    or any(not isinstance(bait, str) for bait in sections)):
+                legacy_bait = line.pop("bait", "worm")
+                sections = [legacy_bait if isinstance(legacy_bait, str) else "worm"]
+            line["bait"] = sections[0]
+            line["bait_sections"] = sections
+            lines.append(line)
+        return lines
+
     def migrate_fixture(self, name):
         self.save_path = self.root / name / "platform" / "save.json"
         self.legacy_path = self.root / name / "install" / "saves" / "briar.json"
@@ -56,7 +73,8 @@ class SaveV2Checks(unittest.TestCase):
         for key, value in original.items():
             if key != "version":
                 self.assertIn(key, migrated, f"{name}: missing v1 key {key}")
-                self.assertEqual(migrated.get(key), value, f"{name}: {key}")
+                self.assertEqual(migrated.get(key), self.expected_migrated_value(key, value),
+                                 f"{name}: {key}")
         backups = savepaths.backup_candidates(self.save_path)
         self.assertEqual(len(backups), 1)
         self.assertRegex(backups[0].name, r"^briar\.v1\.\d{8}T\d{12}Z\.json$")
@@ -81,7 +99,8 @@ class SaveV2Checks(unittest.TestCase):
                 result = second.to_json()
                 for key, value in original.items():
                     if key != "version":
-                        self.assertEqual(result.get(key), value, f"{name}: {key}")
+                        self.assertEqual(result.get(key), self.expected_migrated_value(key, value),
+                                         f"{name}: {key}")
 
     def test_v2_defaults_and_migration_derived_book_stages(self):
         _, fresh, _ = self.migrate_fixture("fresh.json")

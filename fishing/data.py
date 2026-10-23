@@ -8,7 +8,6 @@ from pathlib import Path
 
 
 SPOIL_HOURS = 13.0
-MAX_LINES = 5
 DOZEN = 12
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 _CONTENT_FILES = ("species.json", "baits.json", "boats.json", "lakes.json")
