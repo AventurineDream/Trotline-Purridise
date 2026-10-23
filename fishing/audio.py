@@ -22,7 +22,9 @@ class Audio:
         self.time = 0.0
         self.motor_phase = 0.0
         self.oar_phase = 0.0
-        self.shots: list[tuple[np.ndarray, int]] = []
+        self.shots: list[tuple[np.ndarray, int, str]] = []
+        self._volumes = {"master": 1.0, "music": 1.0,
+                         "ambience": 1.0, "sfx": 1.0}
         self._water = self._make_water()
         self._water_at = 0
         self._wind = self._noise_bed(5, 0.11)
@@ -123,16 +125,30 @@ class Audio:
         buf *= 0.9 / (np.max(np.abs(buf)) + 1e-6)
         return buf.astype(np.float32)
 
-    def blip(self, kind: str):
+    def blip(self, kind: str, *, bus="sfx"):
         if not self.ok:
             return
-        self.shots.append((self._tone(kind), 0))
+        self.shots.append((self._tone(kind), 0, bus if bus in self._volumes else "sfx"))
 
     def _cue(self, kind: str):
         # Ambience waits its turn. A burst of frogs must not bury a bite.
         if len(self.shots) >= 4:
             return
-        self.shots.append((self._tone(kind), 0))
+        self.shots.append((self._tone(kind), 0, "ambience"))
+
+    def set_volumes(self, volumes=None, **levels):
+        """Set the four saved mixer buses, clamping malformed values safely."""
+        if isinstance(volumes, dict):
+            levels = {**volumes, **levels}
+        for name in self._volumes:
+            value = levels.get(name, self._volumes[name])
+            try:
+                value = float(value)
+            except (TypeError, ValueError, OverflowError):
+                value = self._volumes[name]
+            if not math.isfinite(value):
+                value = self._volumes[name]
+            self._volumes[name] = max(0.0, min(1.0, value))
 
     def _tone(self, kind: str) -> np.ndarray:
         if kind == "bite":
@@ -226,9 +242,11 @@ class Audio:
 
     def update(self, dt: float, throttle: float, speed: float, muted: bool,
                *, hour: float = 12.0, rain: float = 0.0, sailing: bool = False,
-               motorized: bool = True, rowing: bool = False):
+               motorized: bool = True, rowing: bool = False, volumes=None):
         # hour, rain, and sailing stay keyword-only. The window smoke test
         # still calls this with the four positional arguments.
+        if volumes is not None:
+            self.set_volumes(volumes)
         if not self.ok:
             return
         self.time += max(0.0, float(dt))
@@ -274,28 +292,38 @@ class Audio:
             motor = np.sin(2 * np.pi * cadence * 8.0) * (0.035 * drive) * stroke
         else:
             motor = np.zeros_like(water)
-        mix = water * 0.22 + motor
+        ambience = water * 0.22
+        sfx = motor.copy()
+        music = np.zeros_like(water)
         # One-shots stay centered. Wind and crickets sit a little wider.
         alive = []
-        for samples, cursor in self.shots:
+        for samples, cursor, bus in self.shots:
             take = min(frames, len(samples) - cursor)
             if take <= 0:
                 continue
-            mix[:take] += samples[cursor:cursor + take].astype(np.float32) / 32767.0
+            target = music if bus == "music" else ambience if bus == "ambience" else sfx
+            target[:take] += samples[cursor:cursor + take].astype(np.float32) / 32767.0
             cursor += take
             if cursor < len(samples):
-                alive.append((samples, cursor))
+                alive.append((samples, cursor, bus))
         self.shots = alive
         wind, self._wind_at = self._slice(self._wind, self._wind_at, frames)
         gust = 0.028 + 0.12 * self._rain + (0.075 if self._sailing else 0.0) + 0.05 * drive
         pan = 0.22 * math.sin(self.time * 0.31)
-        left = mix + wind * gust * (1.0 - pan)
-        right = mix + wind * gust * (1.0 + pan)
+        ambience_left = ambience + wind * gust * (1.0 - pan)
+        ambience_right = ambience + wind * gust * (1.0 + pan)
         if self._hour < 5.1 or self._hour > 20.6:
             bugs, self._cricket_at = self._slice(self._crickets, self._cricket_at, frames)
             level = 0.055 * (1.0 - min(1.0, self._rain) * 0.65)
-            left = left + bugs * level * 0.85
-            right = right + bugs * level * 1.15
+            ambience_left += bugs * level * 0.85
+            ambience_right += bugs * level * 1.15
+        master = self._volumes["master"]
+        left = master * (ambience_left * self._volumes["ambience"]
+                         + sfx * self._volumes["sfx"]
+                         + music * self._volumes["music"])
+        right = master * (ambience_right * self._volumes["ambience"]
+                          + (sfx * self._volumes["sfx"]
+                             + music * self._volumes["music"]))
         stereo = np.empty(frames * 2, np.int16)
         stereo[0::2] = (np.clip(left, -1.0, 1.0) * 32767).astype(np.int16)
         stereo[1::2] = (np.clip(right, -1.0, 1.0) * 32767).astype(np.int16)

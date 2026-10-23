@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 from pathlib import Path
 import time
 
@@ -16,7 +17,10 @@ from .audio import Audio
 from .data import BAITS, SPECIES, hour_of_day
 from .weather import weather_visuals
 from .platform import Platform, Text
-from .gamepad import session_input
+from .gamepad import (
+    ACTION_ALIASES, ACTION_SYMBOLS, KEY_NAMES, default_key_bindings,
+    session_input, set_key_binding,
+)
 from .render import Renderer
 from .imageops import resize_rgb
 from .guardian import maybe_start_sighting, pause_sighting_clock
@@ -32,7 +36,15 @@ DRIVING = {"play"}
 MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
 NAVIGATION_KEYS = set(MENU_DIRECTIONS) | set(MENU_DIRECTIONS.values())
 DRIVING_KEYS = {"w", "s", "a", "d", "up", "down", "left", "right"}
-PAUSE_N = 4
+PAUSE_N = 5
+SOUND_CAPTIONS = {
+    "bite": "Fish on the line.",
+    "bot": "Bot's chime sounds.",
+    "sell": "Sale complete.",
+    "error": "That action is unavailable.",
+    "click": "A soft click sounds.",
+    "splash": "A splash breaks the quiet.",
+}
 
 
 def _save_target(root: Path, override: str | Path | None) -> tuple[Path, bool]:
@@ -65,6 +77,13 @@ class MenuKeys:
         self.keys = keys
         self.pressed = keys.pressed
         self.held = keys.held
+        self.physical_keyboard_pressed = getattr(
+            keys, "physical_keyboard_pressed", getattr(keys, "keyboard_pressed", keys.pressed))
+        self.physical_keyboard_held = getattr(
+            keys, "physical_keyboard_held", getattr(keys, "keyboard_held", keys.held))
+        self.physical_keyboard_press_order = getattr(
+            keys, "physical_keyboard_press_order",
+            getattr(keys, "keyboard_press_order", ()))
 
     def tap(self, name: str, dt: float) -> bool:
         arrow = self.keys.tap(name, dt)
@@ -114,6 +133,21 @@ class Session:
         self._refresh_npcs()
         self._keys(keys, dt)
         self._simulate(keys, dt, driving_presses)
+        self._tick_caption(dt)
+
+    def _tick_caption(self, dt: float) -> None:
+        settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
+        if not settings.get("captions", True):
+            self.ui.caption = ""
+            self.ui.caption_timer = 0.0
+            return
+        if self.sound:
+            self.ui.caption = SOUND_CAPTIONS.get(self.sound, f"Sound cue: {self.sound}.")
+            self.ui.caption_timer = 2.4
+        elif self.ui.caption_timer > 0:
+            self.ui.caption_timer = max(0.0, self.ui.caption_timer - max(0.0, float(dt)))
+            if self.ui.caption_timer == 0:
+                self.ui.caption = ""
 
     def _refresh_npcs(self):
         key = (id(self.state),) + schedule_key(self.state, self.world)
@@ -262,6 +296,8 @@ class Session:
                 self._bot()
         elif mode == "pause":
             self._pause_keys(keys, dt)
+        elif mode == "settings":
+            self._settings_keys(keys, dt)
         elif mode == "help":
             self._help_keys(keys, dt)
 
@@ -271,7 +307,17 @@ class Session:
             if "esc" in keys.pressed:
                 self.ui.confirm_new = False
             elif "return" in keys.pressed or "space" in keys.pressed:
-                self.state = State.new(self.world)
+                previous_settings = deepcopy(
+                    self.state.v2.get("settings", {})
+                    if isinstance(self.state.v2, dict) else {}
+                )
+                new_state = State.new(self.world)
+                new_state.v2["settings"] = previous_settings
+                new_state.v2["mode"] = previous_settings.get(
+                    "mode", new_state.v2.get("mode", "cozy"))
+                new_state.v2["profile"]["collar"]["visible"] = previous_settings.get(
+                    "collar_visible", True)
+                self.state = new_state
                 self._attach_quest_manager()
                 self._title_catchup_pending = False
                 self.ui.confirm_new = False
@@ -689,8 +735,12 @@ class Session:
             if choice == 0:
                 self.ui.mode = "play"
             elif choice == 1:
-                self._open_help("pause")
+                self.ui.settings_page = "main"
+                self.ui.settings_i = 0
+                self.ui.mode = "settings"
             elif choice == 2:
+                self._open_help("pause")
+            elif choice == 3:
                 self.save()
                 self._continue_catchup_at = self.state.stamp
                 self._title_catchup_pending = True
@@ -700,6 +750,111 @@ class Session:
             else:
                 self.save()
                 self.quit = True
+
+    def _settings_keys(self, keys, dt: float) -> None:
+        if self.ui.settings_page == "keys":
+            self._keybindings_keys(keys, dt)
+            return
+        if "esc" in keys.pressed:
+            self.ui.mode = "pause"
+            return
+        rows = self.ui.settings_i
+        settings = self.state.v2.setdefault("settings", {})
+        if keys.tap("up", dt):
+            self.ui.settings_i = (self.ui.settings_i - 1) % 11
+        elif keys.tap("down", dt):
+            self.ui.settings_i = (self.ui.settings_i + 1) % 11
+        elif keys.tap("left", dt):
+            self._adjust_setting(rows, -1)
+        elif keys.tap("right", dt):
+            self._adjust_setting(rows, 1)
+        elif "return" in keys.pressed or "space" in keys.pressed:
+            if rows == 10:
+                self.ui.settings_page = "keys"
+                self.ui.key_binding_i = 0
+                self.ui.capturing_key = False
+            else:
+                self._adjust_setting(rows, 1)
+
+    def _adjust_setting(self, row: int, direction: int) -> None:
+        settings = self.state.v2.setdefault("settings", {})
+        if row == 0:
+            mode = settings.get("mode", self.state.v2.get("mode", "cozy"))
+            mode = "old_salt" if mode == "cozy" else "cozy"
+            settings["mode"] = mode
+            self.state.v2["mode"] = mode
+        elif row == 1:
+            current = settings.get("text_size", 1)
+            if type(current) is not int or current not in range(3):
+                current = 1
+            settings["text_size"] = (current + direction) % 3
+        elif row == 2:
+            settings["dyslexia_font"] = not bool(settings.get("dyslexia_font", False))
+        elif row == 3:
+            settings["reduced_motion"] = not bool(settings.get("reduced_motion", False))
+        elif row == 4:
+            settings["captions"] = not bool(settings.get("captions", True))
+        elif 5 <= row <= 8:
+            name = ("master", "music", "ambience", "sfx")[row - 5]
+            volumes = settings.get("volumes")
+            if not isinstance(volumes, dict):
+                volumes = {}
+                settings["volumes"] = volumes
+            current = volumes.get(name, 1.0)
+            try:
+                current = float(current)
+            except (TypeError, ValueError, OverflowError):
+                current = 1.0
+            if not math.isfinite(current):
+                current = 1.0
+            volumes[name] = round(max(0.0, min(1.0, current + direction * 0.1)), 2)
+        elif row == 9:
+            profile = self.state.v2.setdefault("profile", {})
+            collar = profile.setdefault("collar", {})
+            visible = not bool(settings.get("collar_visible", collar.get("visible", True)))
+            settings["collar_visible"] = visible
+            collar["visible"] = visible
+        self.save()
+
+    def _keybindings_keys(self, keys, dt: float) -> None:
+        settings = self.state.v2.setdefault("settings", {})
+        bindings = settings.setdefault("key_bindings", default_key_bindings())
+        actions = [action for action in ACTION_SYMBOLS
+                   if action not in {alias for group in ACTION_ALIASES for alias in group[1:]}]
+        rows = len(actions) + 1
+        self.ui.key_binding_i %= rows
+        if self.ui.capturing_key:
+            physical = getattr(keys, "physical_keyboard_pressed", None)
+            if physical is None:
+                physical = getattr(keys, "keyboard_pressed", keys.pressed)
+            if "esc" in physical or "backspace" in physical:
+                self.ui.capturing_key = False
+                return
+            order = getattr(keys, "physical_keyboard_press_order", ())
+            ordered = [key for key in order if key in physical and key in KEY_NAMES]
+            if not ordered:
+                ordered = sorted(key for key in physical if key in KEY_NAMES)
+            if ordered:
+                action = actions[self.ui.key_binding_i]
+                bindings = set_key_binding(bindings, action, ordered[0])
+                settings["key_bindings"] = bindings
+                self.ui.capturing_key = False
+                self.save()
+            return
+        if "esc" in keys.pressed:
+            self.ui.settings_page = "main"
+            self.ui.capturing_key = False
+            return
+        if keys.tap("up", dt):
+            self.ui.key_binding_i = (self.ui.key_binding_i - 1) % rows
+        elif keys.tap("down", dt):
+            self.ui.key_binding_i = (self.ui.key_binding_i + 1) % rows
+        elif "return" in keys.pressed or "space" in keys.pressed:
+            if self.ui.key_binding_i == len(actions):
+                settings["key_bindings"] = default_key_bindings()
+                self.save()
+            else:
+                self.ui.capturing_key = True
 
     def _help_keys(self, keys, dt):
         if "esc" in keys.pressed or "h" in keys.pressed:
@@ -791,7 +946,8 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
             big = resize_rgb(low, width, height)
             ui.draw(big, session.state, session.ui, cam)
             platform.present(big)
-            if session.world_running():
+            motion_reduced = bool(session.state.v2.get("settings", {}).get("reduced_motion", False))
+            if session.world_running() and not motion_reduced:
                 renderer.poke_splashes(session.state)
             minutes = session.state.game_minutes
             audio.update(dt, session.state.throttle, session.state.speed, session.state.muted,
@@ -804,7 +960,8 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
                          rowing=(session.state.boat_id=="rowboat"
                                  and (not session.state.rowboat_trolling_motor
                                       or session.state.rowboat_battery_kwh<=0)
-                                 and abs(session.state.throttle)>0.01))
+                                 and abs(session.state.throttle)>0.01),
+                         volumes=session.state.v2.get("settings", {}).get("volumes", {}))
             if session.ui.mode != "title" or session.ui.has_save:
                 save_acc += dt
                 if save_acc >= 45.0:
@@ -828,6 +985,8 @@ def _camera(renderer: Renderer, session: Session):
     state = session.state
     if session.ui.mode != "title":
         return renderer.camera_for(state)
-    yaw = state.yaw + math.sin(state.anim * 0.12) * 0.55
-    pitch = -0.05 + math.sin(state.anim * 0.07) * 0.025
+    settings = state.v2.get("settings", {}) if isinstance(state.v2, dict) else {}
+    reduced_motion = bool(settings.get("reduced_motion", False))
+    yaw = state.yaw if reduced_motion else state.yaw + math.sin(state.anim * 0.12) * 0.55
+    pitch = -0.05 if reduced_motion else -0.05 + math.sin(state.anim * 0.07) * 0.025
     return renderer.camera_for(state, yaw=yaw, pitch=pitch)
