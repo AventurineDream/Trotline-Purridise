@@ -13,7 +13,7 @@ Ticket 1 freezes a design against the current Little Briar game. It does not imp
 | Area | Current build | V3 proposal covered by this contract |
 | --- | --- | --- |
 | Game and world | Python game, Little Briar and Cedar Creek Lake; lake IDs briar and cedar | Optional narrative layer across both existing lakes |
-| Fishing | 36 fish, five bait IDs, four boats, trotline tiers of 12/18/24 hooks, maximum five deployed lines | Quest listeners observe existing line, catch, and boat events |
+| Fishing | 36 fish, five bait IDs, four boats, trotline tiers of 12/18/24 hooks, boat-specific deployed-line capacity | Quest listeners observe existing line, catch, and boat events |
 | Bot | B sends and recalls Bot; report contains zone, depth class or exact depth when a finder is owned, and bait advice | Quest objectives can request that existing report; no thermal or audio sensors |
 | Controls | F sets a line; E checks a line or opens the landing; B controls Bot; H opens Help; M mutes | C is the keyboard hail/chat action; H remains Help |
 | Time | One real second advances one game minute at 1x; day is 1,440 game minutes (24 real minutes at 1x). T selects 1x/3x/6x/12x while still | All quest durations and windows use the game clock |
@@ -172,15 +172,25 @@ These are quest-observation events over existing game state. They are not new fi
 
 | Event | Required fields | Used by |
 | --- | --- | --- |
-| line.set | line_id, lake_id, midpoint zone_id, tier_id, hook_count, bait_id, game_minute, active_game_minute | q01, q02, q05, q06 line source, q09, q11 |
+| line.set | line_id, lake_id, midpoint zone_id, tier_id, hook_count, bait_id, bait_sections, game_minute, active_game_minute | q01, q02, q05, q06 line source, q09, q11 |
 | line.check | line_id, lake_id, zone_id, game_minute, active_game_minute, eligible catch records | q02, q05, q09, q11 |
 | bot.scout_complete | lake_id, target line_id when applicable, scout-point zone_id, depth_class, exact_depth_m only when available, report-delivered flag | q01, q04, q11 |
-| fish.enter_livewell | species_id, source_line_id, lake_id, source zone_id, bait_id, catch_game_minute, entry_game_minute | q06 |
+| fish.enter_livewell | species_id, source_line_id, lake_id, source zone_id, bait_id, bait_sections, catch_game_minute, entry_game_minute | q06 |
 | zone.enter | lake_id, zone_id, game_minute, movement_cause, player_controlled | q10, q12 |
 | boat.move | lake_id, segment zone_id, in-zone distance_m, player_controlled, propulsion type | q08 |
 | anchor.sample | lake_id, zone_id, anchored, engine_idle, elapsed game minutes | q03, q07 |
 
 Use IDs from the live game state: bait IDs worm, liver, shad, minnow, craw; line tiers std (12 hooks), prem (18 hooks), heavy (24 hooks); species ID `golden_shiner`. The current `Catch` model exposes a species identifier and has no per-catch instance identifier, so do not add or require a separate `fish_id`. A new adapter may observe or persist existing state transitions, but it must not alter bite rates, fish values, line limits, movement, or gear.
+
+For bait-specific line objectives, every entry in `bait_sections` must equal the
+objective's required bait. A fish caught on a matching section does not qualify
+if another section on that deployed line uses different bait. Legacy events
+without `bait_sections` retain their single `bait_id` meaning.
+
+On `line.set`, `bait_id` mirrors the sole bait when all sections match and is
+`null` for a mixed-bait line. On `fish.enter_livewell`, `bait_id` is the bait
+used by the hook that caught that fish; `bait_sections` still describes the
+whole deployed line.
 
 ### 5.1 Persistent deployed-line identity
 

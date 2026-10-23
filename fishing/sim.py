@@ -24,7 +24,6 @@ from .data import (
     FINDER_PRICE,
     LIGHT_PRICE,
     LINE_TIERS,
-    MAX_LINES,
     MOTORS,
     PAINT,
     SPECIES,
@@ -193,7 +192,7 @@ class HeldLine:
 @dataclass
 class SetLine:
     tier: str
-    bait: str
+    bait_sections: list[str] | str
     x0: float
     z0: float
     x1: float
@@ -203,6 +202,37 @@ class SetLine:
     snag_minute: float = -999.0
     line_id: str = field(default_factory=lambda: str(uuid4()))
     extra_fields: dict = field(default_factory=dict, repr=False)
+
+    def __post_init__(self):
+        if isinstance(self.bait_sections, str):
+            sections = [self.bait_sections]
+        elif isinstance(self.bait_sections, (list, tuple)):
+            sections = list(self.bait_sections)
+        else:
+            raise ValueError("bait_sections must contain one to three bait IDs")
+        if not 1 <= len(sections) <= 3 or any(not isinstance(bait, str) for bait in sections):
+            raise ValueError("bait_sections must contain one to three bait IDs")
+        self.bait_sections = sections
+
+    @property
+    def bait(self) -> str:
+        """Compatibility alias for old callers; mixed lines use section one."""
+        return self.bait_sections[0]
+
+    def section_for_hook(self, index: int) -> int:
+        """Map hook i to one of the equally-sized bait sections."""
+        if not self.hooks:
+            return 0
+        index = max(0, min(len(self.hooks) - 1, int(index)))
+        return min(len(self.bait_sections) - 1,
+                   index * len(self.bait_sections) // len(self.hooks))
+
+    def bait_for_hook(self, index: int) -> str:
+        return self.bait_sections[self.section_for_hook(index)]
+
+    def section_hook_count(self, section: int) -> int:
+        return sum(1 for index in range(len(self.hooks))
+                   if self.section_for_hook(index) == section)
 
     def fish_on(self) -> int:
         return sum(1 for h in self.hooks if h.catch is not None)
@@ -224,7 +254,7 @@ class SetLine:
     def to_json(self) -> dict:
         result = deepcopy(self.extra_fields)
         result.update({
-            "tier": self.tier, "bait": self.bait,
+            "tier": self.tier, "bait_sections": list(self.bait_sections),
             "x0": round(self.x0, 2), "z0": round(self.z0, 2),
             "x1": round(self.x1, 2), "z1": round(self.z1, 2),
             "zone": self.zone,
@@ -236,10 +266,15 @@ class SetLine:
 
     @classmethod
     def from_json(cls, raw: dict) -> "SetLine":
-        known = {"tier", "bait", "x0", "z0", "x1", "z1", "zone", "hooks",
+        known = {"tier", "bait", "bait_sections", "x0", "z0", "x1", "z1", "zone", "hooks",
                  "snag_minute", "line_id"}
+        sections = raw.get("bait_sections")
+        if (not isinstance(sections, list) or not 1 <= len(sections) <= 3
+                or any(not isinstance(bait, str) for bait in sections)):
+            legacy_bait = raw.get("bait", "worm")
+            sections = [legacy_bait if isinstance(legacy_bait, str) else "worm"]
         return cls(
-            raw["tier"], raw["bait"], float(raw["x0"]), float(raw["z0"]),
+            raw["tier"], sections, float(raw["x0"]), float(raw["z0"]),
             float(raw["x1"]), float(raw["z1"]), raw["zone"],
             [Hook.from_json(h) for h in raw["hooks"]],
             float(raw.get("snag_minute", -999)),
@@ -742,7 +777,8 @@ class State:
                 x, z = line.point_at(i)
                 zone = world.zone_at(x, z)
                 depth = float(world.depth(x, z))
-                rates = species_rates(zone, line.bait, hour, weather, depth,self.lake_id)
+                bait = line.bait_for_hook(i)
+                rates = species_rates(zone, bait, hour, weather, depth,self.lake_id)
                 total = sum(rates.values())
                 if total <= 0:
                     continue
@@ -751,7 +787,7 @@ class State:
                 sp = self.rng.pick(rates)
                 weight = self._roll_weight(sp)
                 caught_hour = hour
-                catch = Catch(sp, weight, 1.0, 0.0, zone, line.bait, caught_hour,
+                catch = Catch(sp, weight, 1.0, 0.0, zone, bait, caught_hour,
                               self.lake_id, catch_game_minute=self.game_minutes)
                 hook.catch = catch
                 hook.baited = False
@@ -917,7 +953,8 @@ class State:
             "source_line_id": line.line_id,
             "lake_id": self.lake_id,
             "source_zone_id": f"{self.lake_id}:{line.zone}",
-            "bait_id": line.bait,
+            "bait_id": catch.bait,
+            "bait_sections": list(line.bait_sections),
             "catch_game_minute": catch.catch_game_minute,
             "entry_game_minute": self.game_minutes,
         })
@@ -1040,18 +1077,32 @@ class State:
 
     # --- lines ----------------------------------------------------------
 
-    def try_set(self, world: World, held_index: int, bait_id: str) -> str | None:
+    def try_set(self, world: World, held_index: int,
+                bait_sections: str | list[str] | tuple[str, ...]) -> str | None:
         if abs(self.speed) > 0.5:
             return "Idle the boat before you set."
         if not self.held:
             return "Every line you own is already in the water."
         if held_index < 0 or held_index >= len(self.held):
             return "No line selected."
+        if len(self.lines) >= self.boat.lines:
+            return f"{self.boat.name} carries up to {self.boat.lines} deployed lines."
         held = self.held[held_index]
         hooks = held.hooks
-        have = self.bait.get(bait_id, 0)
-        if have < hooks:
-            return f"Need {hooks} {BAIT_BY_ID[bait_id].name.lower()}. You have {have}."
+        sections = ([bait_sections] if isinstance(bait_sections, str)
+                    else list(bait_sections) if isinstance(bait_sections, (list, tuple)) else [])
+        if not 1 <= len(sections) <= 3:
+            return "Choose one to three bait sections."
+        if any(bait not in BAIT_BY_ID for bait in sections):
+            return "Choose bait from the list."
+        needed: dict[str, int] = {}
+        for index in range(hooks):
+            bait = sections[index * len(sections) // hooks]
+            needed[bait] = needed.get(bait, 0) + 1
+        for bait, amount in needed.items():
+            have = self.bait.get(bait, 0)
+            if have < amount:
+                return f"Need {amount} {BAIT_BY_ID[bait].name.lower()}. You have {have}."
         fx, fz = math.sin(self.yaw), math.cos(self.yaw)
         length = line_length(hooks)
         x0 = self.x + fx * 5.0
@@ -1078,7 +1129,7 @@ class State:
                 return "The landing is a no-line zone."
             if not world.navigable(px, pz):
                 return "That water won't hold a line."
-        draft = SetLine(held.tier, bait_id, x0, z0, x1, z1, "open", [])
+        draft = SetLine(held.tier, sections, x0, z0, x1, z1, "open", [])
         for other in self.lines:
             if _seg_gap(draft, other) < 16.0:
                 return "Too close to a line you already set."
@@ -1086,12 +1137,13 @@ class State:
         zone = world.zone_at(mx, mz)
         if zone in ("landing", "shore"):
             return "The landing is a no-line zone."
-        self.bait[bait_id] -= hooks
+        for bait, amount in needed.items():
+            self.bait[bait] -= amount
         self.held.pop(held_index)
         line_hooks = [Hook(True) for _ in range(hooks)]
-        self.lines.append(SetLine(held.tier, bait_id, x0, z0, x1, z1, zone, line_hooks))
+        self.lines.append(SetLine(held.tier, sections, x0, z0, x1, z1, zone, line_hooks))
         line = self.lines[-1]
-        self.preferred_bait = bait_id
+        self.preferred_bait = line.bait
         self.emit_quest_event({
             "type": "line.set",
             "lake_id": self.lake_id,
@@ -1099,12 +1151,14 @@ class State:
             "zone_id": f"{self.lake_id}:{line.zone}",
             "tier_id": line.tier,
             "hook_count": len(line.hooks),
-            "bait_id": line.bait,
+            "bait_id": line.bait if len(set(line.bait_sections)) == 1 else None,
+            "bait_sections": list(line.bait_sections),
             "game_minute": self.game_minutes,
             "active_game_minute": self.narrative.active_play_game_minutes,
         })
         from .world import zone_label
-        self.toast(f"Line set on the {zone_label(zone).lower()}. {hooks} hooks, {BAIT_BY_ID[bait_id].name.lower()}.")
+        bait_text = ", ".join(BAIT_BY_ID[bait].name.lower() for bait in line.bait_sections)
+        self.toast(f"Line set on the {zone_label(zone).lower()}. {hooks} hooks, {bait_text}.")
         return None
 
     def line_label(self, index: int) -> str:
@@ -1159,14 +1213,21 @@ class State:
         need = line.bare_hooks()
         if need == 0:
             return "Nothing bare on that line."
-        have = self.bait.get(line.bait, 0)
-        if have < need:
-            return f"Need {need} {BAIT_BY_ID[line.bait].name.lower()}. You have {have}."
-        self.bait[line.bait] -= need
+        needed: dict[str, int] = {}
+        for index, hook in enumerate(line.hooks):
+            if hook.catch is None and not hook.baited:
+                bait = line.bait_for_hook(index)
+                needed[bait] = needed.get(bait, 0) + 1
+        for bait, amount in needed.items():
+            have = self.bait.get(bait, 0)
+            if have < amount:
+                return f"Need {amount} {BAIT_BY_ID[bait].name.lower()}. You have {have}."
+        for bait, amount in needed.items():
+            self.bait[bait] -= amount
         for hook in line.hooks:
             if hook.catch is None and not hook.baited:
                 hook.baited = True
-        self.toast(f"Rebaited {need} hooks with {BAIT_BY_ID[line.bait].name.lower()}.")
+        self.toast(f"Rebaited {need} hooks with their section baits.")
         return None
 
     def pull_line(self, line_index: int) -> str | None:
@@ -1231,8 +1292,6 @@ class State:
         return None
 
     def buy_line(self, tier: str) -> str | None:
-        if self.owned_lines() >= MAX_LINES:
-            return f"Five lines is the limit on this lake."
         price = LINE_TIERS[tier]["price"]
         if not self._spend(price):
             return f"Need {dollars(price)}."

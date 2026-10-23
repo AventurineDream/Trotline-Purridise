@@ -629,6 +629,7 @@ class NarrativeChecks(unittest.TestCase):
             "lake_id": "briar",
             "source_zone_id": "briar:deep",
             "bait_id": "shad",
+            "bait_sections": ["shad"],
             "catch_game_minute": 1230,
         }])
 

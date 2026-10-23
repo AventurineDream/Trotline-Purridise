@@ -86,6 +86,8 @@ class MenuKeys:
             getattr(keys, "keyboard_press_order", ()))
 
     def tap(self, name: str, dt: float) -> bool:
+        if name not in MENU_DIRECTIONS:
+            return self.keys.tap(name, dt)
         arrow = self.keys.tap(name, dt)
         alias = self.keys.tap(MENU_DIRECTIONS[name], dt)
         return arrow or alias
@@ -495,6 +497,9 @@ class Session:
         self.ui.set_line = 0
         prefer = self.state.preferred_bait
         self.ui.set_bait = next((i for i, b in enumerate(BAITS) if b.id == prefer), 0)
+        self.ui.set_sections = 1
+        self.ui.set_section = 0
+        self.ui.set_section_baits = (self.ui.set_bait,) * 3
         self.ui.note = ""
 
     def _open_e(self):
@@ -522,13 +527,15 @@ class Session:
                 "line_id": line.line_id,
                 "game_minute": self.state.game_minutes,
                 "active_game_minute": self.state.narrative.active_play_game_minutes,
+                "bait_sections": list(line.bait_sections),
                 "eligible_catch_records": [
                     {
                         "species_id": hook.catch.species,
                         "source_line_id": line.line_id,
                         "lake_id": self.state.lake_id,
                         "source_zone_id": f"{self.state.lake_id}:{line.zone}",
-                        "bait_id": line.bait,
+                        "bait_id": hook.catch.bait,
+                        "bait_sections": list(line.bait_sections),
                         "catch_game_minute": hook.catch.catch_game_minute,
                     }
                     for hook in line.hooks if hook.catch is not None
@@ -624,19 +631,40 @@ class Session:
         if keys.tap("right", dt):
             self.ui.set_line = (self.ui.set_line + 1) % len(self.state.held)
             self.ui.note = ""
+        section_baits = list(self.ui.set_section_baits)
+        old_sections = self.ui.set_sections
+        if keys.tap("q", dt) or keys.tap("g", dt):
+            self.ui.set_sections = self.ui.set_sections % 3 + 1
+            for i in range(old_sections, self.ui.set_sections):
+                section_baits[i] = self.ui.set_bait
+            self.ui.set_section %= self.ui.set_sections
+            self.ui.set_bait = section_baits[self.ui.set_section]
+            self.ui.set_section_baits = tuple(section_baits)
+            self.ui.note = ""
+        if "tab" in keys.pressed:
+            self.ui.set_section = (self.ui.set_section + 1) % self.ui.set_sections
+            self.ui.set_bait = section_baits[self.ui.set_section]
+            self.ui.note = ""
         if keys.tap("up", dt):
             self.ui.set_bait = (self.ui.set_bait - 1) % len(BAITS)
+            section_baits[self.ui.set_section] = self.ui.set_bait
+            self.ui.set_section_baits = tuple(section_baits)
             self.ui.note = ""
         if keys.tap("down", dt):
             self.ui.set_bait = (self.ui.set_bait + 1) % len(BAITS)
+            section_baits[self.ui.set_section] = self.ui.set_bait
+            self.ui.set_section_baits = tuple(section_baits)
             self.ui.note = ""
         for i, name in enumerate("12345"):
             if name in keys.pressed:
                 self.ui.set_bait = i
+                section_baits[self.ui.set_section] = self.ui.set_bait
+                self.ui.set_section_baits = tuple(section_baits)
                 self.ui.note = ""
         if "return" in keys.pressed or "space" in keys.pressed:
-            bait = BAITS[self.ui.set_bait % len(BAITS)].id
-            err = self.state.try_set(self.world, self.ui.set_line, bait)
+            baits = [BAITS[index % len(BAITS)].id
+                     for index in self.ui.set_section_baits[:self.ui.set_sections]]
+            err = self.state.try_set(self.world, self.ui.set_line, baits)
             if err:
                 self.ui.note = err
                 self.sound = "error"

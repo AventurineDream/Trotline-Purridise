@@ -151,11 +151,14 @@ everything else (each one takes the better match of its two parent baits).
 
 - Tiers stay: std 12 / prem 18 / heavy 24 hooks.
 - **Line capacity per boat** (`03 §6`) replaces the global `MAX_LINES = 5`
-  (3–8 lines). It limits new deployments only. Lines already set over the
-  capacity stay where they are.
+  (3–8 lines). Each boat's `lines` value is the number of deployed lines it can
+  carry. It limits new deployments only; lines already set stay where they are
+  after switching to a boat with less capacity.
 - **Split baiting (new):** when setting a line, the player may divide its hooks
-  into up to 3 equal sections, each with its own bait. The check list shows which
-  section each catch came from.
+  into 1–3 equal sections, each with its own bait. Hook `i` uses section
+  `i * section_count // hook_count`; the check list identifies the section and
+  bait for each hook. Existing saves with one `bait` value migrate to one
+  section.
 
 ### 5.2 Bite model (existing, extended)
 

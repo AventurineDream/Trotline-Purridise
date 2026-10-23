@@ -600,7 +600,7 @@ class SoftwareRenderer:
                 items.append((zz, kind, bx, bz, 0.62, 1.0, sx, sy, False))
         cork_pts = []
         cork_meta = []
-        for line in state.lines[:5]:
+        for line in state.lines:
             for i, hook in enumerate(line.hooks):
                 if hook.catch is None and not hook.baited:
                     continue
@@ -611,7 +611,7 @@ class SoftwareRenderer:
                 cork_pts.append((x, bob, z))
                 fish = hook.catch is not None
                 cork_meta.append(("buoy_flag" if fish else "buoy", 0.42 if fish else 0.20))
-                if len(cork_pts) >= 120:
+                if len(cork_pts) >= 192:
                     break
         if cork_pts:
             cam_pts = cam.world_to_cam(np.array(cork_pts, np.float32))
