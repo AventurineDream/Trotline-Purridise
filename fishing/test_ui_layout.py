@@ -171,6 +171,44 @@ class GuideLayoutChecks(unittest.TestCase):
                         self.assertLessEqual(x + tw, width)
                         self.assertLessEqual(y + th, height)
 
+    def test_species_journal_details_reflow_inside_the_panel_at_minimum_size(self):
+        world = World()
+        ui = UI(self.text, world)
+        state = State.new(world, seed=73)
+        state.journal["bluegill"] = {
+            "count": 3, "best": 2.1, "lake_id": "briar", "zone": "flats",
+            "bait": "worm", "band": "trophy",
+        }
+        records, panels = [], []
+        text_draw, panel_draw = ui._text, ui._panel
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            image = ui._render(label, size, color, family)
+            records.append((label, x, y, image.shape[1], image.shape[0]))
+            return text_draw(frame, label, x, y, size, color, shadow, family)
+
+        def panel(frame, x, y, width, height, alpha):
+            panels.append((x, y, width, height))
+            panel_draw(frame, x, y, width, height, alpha)
+
+        ui._text, ui._panel = text, panel
+        ui._blit_rgb = lambda frame, image, x, y: None
+        frame = np.zeros((270, 480, 3), np.uint8)
+        ui.draw(frame, state, UIState(mode="journal"))
+
+        self.assertEqual(len(panels), 1)
+        px, py, pw, ph = panels[0]
+        details = [record for record in records if record[1] >= px + int(pw * 0.46) + 8]
+        self.assertTrue(any("Bluegill" in label for label, *_ in details))
+        self.assertTrue(any("caught" in label for label, *_ in details))
+        self.assertTrue(any("flats" in label for label, *_ in details))
+        for label, x, y, width, height in details:
+            with self.subTest(label=label):
+                self.assertGreaterEqual(x, px)
+                self.assertGreaterEqual(y, py)
+                self.assertLessEqual(x + width, px + pw)
+                self.assertLessEqual(y + height, py + ph)
+
     def _check_pages(self):
         # The guide needs no world or save. Keep the actual font rasterizer and
         # panel/text draws, while recording their geometry before any clipping.
