@@ -360,16 +360,19 @@ class UIState:
 def shop_rows(state, tab: int) -> list[Row]:
     rows: list[Row] = []
     if tab == 0:
-        total = round(sum(c.value() for c in state.well), 2)
+        saleable = [catch for catch in state.well if not catch.treasured]
+        total = round(sum(c.value() for c in saleable), 2)
         rows.append(Row(
-            "Sell everything", dollars(total), "The buyer is at the end of the dock.",
-            bool(state.well), "sell_all",
+            "Sell untreasured fish", dollars(total),
+            "Treasured fish stay in the livewell during bulk sale.",
+            bool(saleable), "sell_all",
         ))
         for i, catch in enumerate(state.well):
             name = SPECIES_BY_ID[catch.species].name
             q = quality_name(catch.quality)
+            mark = " · Treasured" if catch.treasured else ""
             rows.append(Row(
-                f"{catch.weight:.1f} lb {name}, {q}", dollars(catch.value()),
+                f"{catch.weight:.1f} lb {name}, {q}{mark}", dollars(catch.value()),
                 f"Caught on {BAIT_BY_ID[catch.bait].name.lower()}.",
                 True, "sell_one", str(i),
             ))
@@ -500,13 +503,17 @@ def check_rows(state, line_index: int) -> list[Row]:
             catch = hook.catch
             name = SPECIES_BY_ID[catch.species].name
             q = quality_name(catch.quality)
+            forced_release = state._forced_release_reason(catch) is not None
+            choice = "RELEASE" if forced_release or catch.disposition == "release" else "KEEP"
+            if catch.treasured:
+                choice += " · TREASURED"
             rows.append(Row(
-                f"{i + 1:2d}  {section_label}  {catch.weight:.1f} lb {name}, {q}", dollars(catch.value()),
-                "", True, "hook", str(i),
+                f"{i + 1:2d}  {section_label}  {catch.weight:.1f} lb {name}, {q}", choice,
+                "", not forced_release, "hook", str(i),
             ))
-    rows.append(Row("Take all", "", "Moves what the livewell can hold.", True, "take_all"))
+    rows.append(Row("Resolve catches", "", "Applies the Keep / Release choices.", True, "take_all"))
     rows.append(Row("Rebait bare hooks", "", "Uses each section's bait from the box.", True, "rebait"))
-    rows.append(Row("Pull the line", "", "Coils it aboard. The well must hold every fish.", True, "pull"))
+    rows.append(Row("Pull the line", "", "Resolves catches, then coils the line.", True, "pull"))
     return rows
 
 
@@ -1223,8 +1230,8 @@ class UI:
                 rw = len(row.right) * self.cell(body)[0]
                 self._text(frame, row.right, x + pw - m - rw, ry, body, color, shadow=False)
         foot = ui.note or self._controls(
-            ui, "W/S or arrows choose  Enter takes  Esc leaves it fishing",
-            "D-pad / stick choose  A takes  B leaves it fishing",
+            ui, "W/S choose  Enter toggles  Resolve applies  Esc back",
+            "D-pad choose  A toggles / applies  B back",
         )
         self._text(frame, self._trim(foot, small, pw - m * 2), x + m, y + ph - self.cell(small)[1] - 10, small, WARN if ui.note else DIM, shadow=False)
 
@@ -1445,14 +1452,15 @@ class UI:
                 catch = rows[i]
                 name = SPECIES_BY_ID[catch.species].name
                 q = quality_name(catch.quality)
-                label = f"{catch.weight:.1f} lb {name}, {q}"
+                mark = " · TREASURED" if catch.treasured else ""
+                label = f"{catch.weight:.1f} lb {name}, {q}{mark}"
                 color = GOLD if i == ui.well_i else INK
                 ry = top + n * (ch + 2)
                 self._text(frame, self._trim(label, body, int(pw * 0.68)), x + m, ry, body, color, shadow=False)
                 right = dollars(catch.value())
                 self._text(frame, right, x + pw - m - len(right) * self.cell(body)[0], ry, body, color, shadow=False)
-        foot = self._controls(ui, "W/S or arrows choose    I closes",
-                              "D-pad / stick choose    B closes")
+        foot = self._controls(ui, "W/S choose    T / Enter marks Treasured    I closes",
+                              "D-pad choose    A marks Treasured    B closes")
         self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
 
     def _pause(self, frame, ui: UIState):
@@ -1718,11 +1726,11 @@ _HELP = (
         "",
         "Anchor and let time run. Come back and check.",
         "Take fish into the livewell, rebait, or pull the line.",
-        "A fish left on the hook spoils after 13 hours.",
+        "A fish left on the hook gets away after 13 hours.",
         "Run a line over and you may knock one off.",
         "",
         "While the game is closed the lines keep soaking,",
-        "for up to six hours of real time, then the fish spoil.",
+        "for up to six hours of real time, then the fish get away.",
     )),
     ("THE LANDING", (
         "Nose into the slip and press E.",
