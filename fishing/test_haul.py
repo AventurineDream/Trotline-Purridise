@@ -8,6 +8,7 @@ from unittest.mock import patch
 import numpy as np
 
 from .game import Keys, Session
+from .haul import haul_cadence
 from .sim import Catch, Hook, SetLine, State
 from .ui import UI, UIState
 from .world import World
@@ -89,6 +90,24 @@ class HaulChecks(unittest.TestCase):
             boosted.tick(Keys(held={"e"}), 0.25)
         self.assertEqual(boosted.ui.mode, "check")
 
+    def test_drowsy_old_salt_cadence_matches_hook_progress(self):
+        session = self.make_session(2)
+        session.state.v2["settings"]["mode"] = "old_salt"
+        session.state.v2["needs"]["awake_h"] = 16.0
+        self.assertAlmostEqual(haul_cadence(session.state), 0.3125)
+        self.start_haul(session)
+        session.tick(Keys(), 0.25)
+        self.assertEqual(session.ui.haul_index, 0)
+
+        ui = UI(TextStub(), self.world)
+        ui_state = UIState(mode="haul", check_line=0, haul_index=0, haul_timer=0.25)
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+        with patch.object(ui, "_haul_segment", wraps=ui._haul_segment) as segments:
+            ui.draw(frame, session.state, ui_state)
+        water_y = int(720 * 0.61)
+        expected_hook_y = water_y - int((0.25 / 0.3125) * 720 * 0.18) - 8
+        self.assertEqual(segments.call_args_list[0].args[4], expected_hook_y)
+
     def test_fish_surfaces_before_card_and_a_key_skips_card_to_next_hook(self):
         fish = Catch("bluegill", 0.75, 1.0, 0.0, "flats", "worm", 8.0)
         session = self.make_session(12, catch=fish)
@@ -126,6 +145,7 @@ class HaulChecks(unittest.TestCase):
                            haul_phase="card", haul_counts_before={"bluegill": 0})
         ui.draw(frame.copy(), session.state, ui_state)
         self.assertIn("NEW!", text.calls)
+        self.assertIn("Any key except E continues   Hold E speeds the haul", text.calls)
 
         text.calls.clear()
         stage_session = self.make_session(12, catch=normal)

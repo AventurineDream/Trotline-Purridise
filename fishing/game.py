@@ -24,6 +24,7 @@ from .gamepad import (
 from .render import Renderer
 from .imageops import resize_rgb
 from .guardian import maybe_start_sighting, pause_sighting_clock
+from .haul import haul_cadence
 from .bot import reset as reset_bot
 from .bot import summon as summon_bot
 from .bot import tick as tick_bot
@@ -591,15 +592,7 @@ class Session:
             self.ui.mode = "check"
             self.ui.check_i = 0
             return
-        cadence = 0.25 if speed == "normal" else 0.10
-        needs = self.state.v2.get("needs", {}) if isinstance(self.state.v2, dict) else {}
-        try:
-            awake_hours = float(needs.get("awake_h", 0.0)) if isinstance(needs, dict) else 0.0
-        except (TypeError, ValueError, OverflowError):
-            awake_hours = 0.0
-        mode = settings.get("mode", self.state.v2.get("mode", "cozy"))
-        if mode == "old_salt" and awake_hours >= 16.0:
-            cadence *= 1.25
+        cadence = haul_cadence(self.state)
         multiplier = 3.0 if "e" in keys.held else 1.0
         step = max(0.0, float(dt)) * multiplier
         if self.ui.haul_index >= len(line.hooks):
