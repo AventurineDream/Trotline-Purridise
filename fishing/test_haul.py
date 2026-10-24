@@ -146,6 +146,7 @@ class HaulChecks(unittest.TestCase):
 
     def test_rechecking_an_unresolved_catch_does_not_replay_its_badge(self):
         fish = Catch("bluegill", 0.75, 1.0, 0.0, "flats", "worm", 8.0)
+        self.assertNotIn("haul_seen", fish.to_json())
         session = self.make_session(12, catch=fish)
         self.start_haul(session)
         session.tick(Keys(), 0.25)
