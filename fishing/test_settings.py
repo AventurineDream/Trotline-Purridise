@@ -34,10 +34,10 @@ class SettingsChecks(unittest.TestCase):
         session.ui.mode = "settings"
 
         # Values that cycle forward once reach a visibly different option.
-        for index in (0, 1, 2, 3, 4, 9):
+        for index in (0, 1, 2, 3, 4, 5, 10):
             session.ui.settings_i = index
             session.tick(Keys(pressed={"right"}), 0.05)
-        for index in (5, 6, 7, 8):
+        for index in (6, 7, 8, 9):
             session.ui.settings_i = index
             session.tick(Keys(pressed={"left"}), 0.05)
 
@@ -48,6 +48,7 @@ class SettingsChecks(unittest.TestCase):
         self.assertEqual(settings["text_size"], 2)
         self.assertTrue(settings["dyslexia_font"])
         self.assertTrue(settings["reduced_motion"])
+        self.assertEqual(settings["haul_speed"], "quick")
         self.assertFalse(settings["captions"])
         self.assertEqual(settings["volumes"], {
             "master": 0.9, "music": 0.9, "ambience": 0.9, "sfx": 0.9,
@@ -184,14 +185,13 @@ class SettingsChecks(unittest.TestCase):
         ui._keybindings(np.zeros((720, 1280, 3), np.uint8), state, ui_state)
         self.assertIn("X", ui.text.calls)
 
-    def test_haul_speed_is_hidden_until_haul_view_exists(self):
+    def test_haul_speed_is_available_in_settings(self):
         state = SimpleNamespace(v2={
             "settings": {"haul_speed": "instant"},
             "profile": {"collar": {"visible": True}},
         })
-        labels = [label for label, _value
-                  in UI.__new__(UI)._settings_rows(state)]
-        self.assertNotIn("Haul speed", labels)
+        rows = UI.__new__(UI)._settings_rows(state)
+        self.assertIn(("Haul speed", "Instant"), rows)
 
     def test_collar_visibility_controls_bot_rendering(self):
         state = State.new(self.world, seed=17)
@@ -334,6 +334,7 @@ class SettingsPresentationChecks(unittest.TestCase):
             ("Text size", "Large"),
             ("Dyslexia-friendly font", "Atkinson Hyperlegible"),
             ("Reduced motion", "On"),
+            ("Haul speed", "Quick"),
             ("Captions", "Off"),
             ("Master volume", "80%"),
             ("Music volume", "70%"),
