@@ -532,6 +532,7 @@ class UI:
         self._ch: dict[tuple[int, str], int] = {}
         self._text_scale = 1.0
         self._dyslexia_font = False
+        self.fish_card_renderer = None
 
     def cell(self, size: int) -> tuple[int, int]:
         actual = self._actual_size(size)
@@ -675,6 +676,15 @@ class UI:
         rgb = patch[:, :, :3].astype(np.float32)
         region = dst[y0:y1, x0:x1].astype(np.float32)
         dst[y0:y1, x0:x1] = np.clip(region * (1.0 - alpha) + rgb * alpha, 0, 255).astype(np.uint8)
+
+    @staticmethod
+    def _blit_rgb(dst, src, x, y):
+        h, w = src.shape[:2]
+        dh, dw = dst.shape[:2]
+        x0, y0 = max(0, int(x)), max(0, int(y))
+        x1, y1 = min(dw, int(x) + w), min(dh, int(y) + h)
+        if x0 < x1 and y0 < y1:
+            dst[y0:y1, x0:x1] = src[y0 - int(y):y1 - int(y), x0 - int(x):x1 - int(x)]
 
     def _fill(self, dst, x, y, w, h, rgb, alpha: float):
         dh, dw = dst.shape[:2]
@@ -1270,11 +1280,19 @@ class UI:
             if extra:
                 self._text(frame, extra, x + col_w - 24, top + row_i * (self.cell(small)[1] + 2), small, color, shadow=False)
         dx = x + col_w + 8
+        from .fishmesh import fish_thumbnail
+        if self.fish_card_renderer is None:
+            thumbnail = fish_thumbnail(sp.id)
+        else:
+            from .imageops import resize_rgb
+            thumbnail = resize_rgb(self.fish_card_renderer(sp.id), 128, 64)
+        self._blit_rgb(frame, thumbnail, dx, top)
+        detail_x = dx + 140
         if count <= 0:
-            self._text(frame,sp.name,dx,top,body,INK)
+            self._text(frame,sp.name,detail_x,top,body,INK)
             note = "Find this one on Little Briar." if self.world.id=="cedar" and not CEDAR_FISH[sp.id] else "Not on a hook yet."
-            self._text(frame,note,dx,top+ch+4,small,DIM)
-            self._wrap(frame,sp.blurb,dx,top+ch+self.cell(small)[1]+14,small,DIM,pw-(dx-x)-m)
+            self._text(frame,note,detail_x,top+ch+4,small,DIM)
+            self._wrap(frame,sp.blurb,dx,top+70,small,DIM,pw-(dx-x)-m)
         else:
             best = float(rec.get("best", 0))
             from .lakes import CEDAR_ZONES
@@ -1282,11 +1300,11 @@ class UI:
             zone = names.get(rec.get("zone", ""), rec.get("zone", ""))
             bait = BAIT_BY_ID[rec["bait"]].name if rec.get("bait") in BAIT_BY_ID else ""
             band = rec.get("band", "")
-            self._text(frame, sp.name, dx, top, body, INK)
-            self._text(frame, f"{count} caught    best {best:.1f} lb", dx, top + ch + 4, small, GOLD, shadow=False)
+            self._text(frame, sp.name, detail_x, top, body, INK)
+            self._text(frame, f"{count} caught    best {best:.1f} lb", detail_x, top + ch + 4, small, GOLD, shadow=False)
             where = "  ".join(p for p in (zone, bait, band) if p)
-            self._text(frame, where, dx, top + ch + self.cell(small)[1] + 12, small, INK, shadow=False)
-            self._wrap(frame, sp.blurb, dx, top + ch + self.cell(small)[1] * 2 + 24, small, DIM, pw - (dx - x) - m)
+            self._text(frame, where, detail_x, top + ch + self.cell(small)[1] + 12, small, INK, shadow=False)
+            self._wrap(frame, sp.blurb, dx, top + 70, small, DIM, pw - (dx - x) - m)
         foot = self._controls(ui, "W/S or arrows choose    A/D pages    J or Esc closes",
                               "D-pad / stick choose    D-pad pages    B closes")
         self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
