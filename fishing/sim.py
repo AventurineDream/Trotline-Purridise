@@ -150,8 +150,9 @@ class Catch:
             "noted_tired": self.noted_tired,
             "catch_game_minute": (None if self.catch_game_minute is None
                                   else round(self.catch_game_minute, 3)),
-            "haul_seen": bool(self.haul_seen),
         })
+        if self.haul_seen:
+            result["haul_seen"] = True
         if self.shiny:
             result["shiny"] = True
         if self.treasured:
