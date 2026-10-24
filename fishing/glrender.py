@@ -36,6 +36,7 @@ class LakeRenderer(SoftwareRenderer):
         self.last_ms = 0.0
         self._boat_key = None
         self._boat_local = None
+        self._fish_card_painter = None
         try:
             # EGL is available on Linux with both real GPUs and Mesa software GL.
             if self.ctx is None:
@@ -51,6 +52,8 @@ class LakeRenderer(SoftwareRenderer):
             self.h = max(90,int(height*scale))
             self.backend = device
             self._build()
+            from .fishmesh import FishCardPainter
+            self._fish_card_painter = FishCardPainter(self.ctx)
         except Exception as exc:
             self.close()
             raise RuntimeError(f"OpenGL setup: {exc}") from exc
@@ -451,11 +454,26 @@ class LakeRenderer(SoftwareRenderer):
         if self.ctx is not None:
             if self._owns_context:
                 with self.ctx:
+                    if self._fish_card_painter is not None:
+                        self._fish_card_painter.close()
+                        self._fish_card_painter = None
                     self._release_objects()
                 self.ctx.release()
             else:
+                if self._fish_card_painter is not None:
+                    self._fish_card_painter.close()
+                    self._fish_card_painter = None
                 self._release_objects()
             self.ctx = None
+
+    def fish_card(self, species_id: str, shiny: bool = False):
+        from .fishmesh import fish_card
+        if self._fish_card_painter is None:
+            return fish_card(species_id, shiny)
+        if self._owns_context:
+            with self.ctx:
+                return self._fish_card_painter.render(species_id, shiny)
+        return self._fish_card_painter.render(species_id, shiny)
 
     def _release_objects(self):
         for obj in reversed(self._objects):
