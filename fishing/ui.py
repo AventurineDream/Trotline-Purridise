@@ -342,6 +342,7 @@ class UIState:
     haul_timer: float = 0.0
     haul_phase: str = "rise"
     haul_phase_timer: float = 0.0
+    haul_badge_enabled: bool = True
     haul_counts_before: dict = field(default_factory=dict)
     journal_i: int = 0
     journal_page: int = 0
@@ -834,6 +835,8 @@ class UI:
         if catch.shiny:
             ribbon = "SHINY  *"
             ribbon_color = GOLD
+        elif not ui.haul_badge_enabled:
+            ribbon, ribbon_color = "CATCH", INK
         else:
             count_before = int(ui.haul_counts_before.get(catch.species, 0))
             line = state.lines[ui.check_line] if 0 <= ui.check_line < len(state.lines) else None
