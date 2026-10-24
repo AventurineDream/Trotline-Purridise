@@ -46,7 +46,21 @@
       "tags": [
         "surface"
       ],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.45,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "bluegill"
+      }
     },
     {
       "id": "bullhead",
@@ -69,7 +83,21 @@
       ],
       "food": "catfish",
       "tags": [],
-      "shiny": "albino"
+      "shiny": "albino",
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.1,
+        "body_depth": 0.92,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "rounded",
+        "barbels": 4,
+        "scale_pattern": "mottled",
+        "palette": "bullhead"
+      }
     },
     {
       "id": "crappie",
@@ -94,7 +122,21 @@
       "tags": [
         "shy"
       ],
-      "shiny": "starry"
+      "shiny": "starry",
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.8,
+        "body_depth": 0.88,
+        "head_shape": "pointed",
+        "snout": 0.04,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "crappie"
+      }
     },
     {
       "id": "carp",
@@ -117,7 +159,21 @@
       ],
       "food": "hearty",
       "tags": [],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
     },
     {
       "id": "drum",
@@ -140,7 +196,21 @@
       ],
       "food": "hearty",
       "tags": [],
-      "shiny": "glow"
+      "shiny": "glow",
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 3.1,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "plain",
+        "palette": "drum"
+      }
     },
     {
       "id": "channel",
@@ -163,7 +233,21 @@
       ],
       "food": "catfish",
       "tags": [],
-      "shiny": "albino"
+      "shiny": "albino",
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.3,
+        "body_depth": 0.98,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "plain",
+        "palette": "channel"
+      }
     },
     {
       "id": "blue",
@@ -186,7 +270,21 @@
       ],
       "food": "catfish",
       "tags": [],
-      "shiny": "glow"
+      "shiny": "glow",
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.5,
+        "body_depth": 1.05,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "plain",
+        "palette": "blue"
+      }
     },
     {
       "id": "flathead",
@@ -211,7 +309,21 @@
       "tags": [
         "shy"
       ],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.2,
+        "body_depth": 1.06,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "rounded",
+        "barbels": 4,
+        "scale_pattern": "mottled",
+        "palette": "flathead"
+      }
     },
     {
       "id": "largemouth",
@@ -236,7 +348,21 @@
       "tags": [
         "surface"
       ],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.05,
+        "body_depth": 1.02,
+        "head_shape": "rounded",
+        "snout": 0.12,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "largemouth"
+      }
     },
     {
       "id": "smallmouth",
@@ -258,7 +384,21 @@
       ],
       "food": "bass",
       "tags": [],
-      "shiny": "rose"
+      "shiny": "rose",
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.6,
+        "body_depth": 0.92,
+        "head_shape": "pointed",
+        "snout": 0.08,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "smallmouth"
+      }
     },
     {
       "id": "gar",
@@ -283,7 +423,21 @@
       "tags": [
         "surface"
       ],
-      "shiny": "starry"
+      "shiny": "starry",
+      "look": {
+        "family": "gar",
+        "length_depth_ratio": 5.8,
+        "body_depth": 0.78,
+        "head_shape": "pointed",
+        "snout": 0.52,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "gar"
+      }
     },
     {
       "id": "buffalo",
@@ -306,7 +460,21 @@
       ],
       "food": "hearty",
       "tags": [],
-      "shiny": "albino"
+      "shiny": "albino",
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 3.0,
+        "body_depth": 1.05,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "truncate",
+        "barbels": 0,
+        "scale_pattern": "plain",
+        "palette": "buffalo"
+      }
     },
     {
       "id": "white_crappie",
@@ -331,7 +499,21 @@
       "tags": [
         "shy"
       ],
-      "shiny": "starry"
+      "shiny": "starry",
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.7,
+        "body_depth": 0.88,
+        "head_shape": "pointed",
+        "snout": 0.04,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "crappie"
+      }
     },
     {
       "id": "redear",
@@ -354,7 +536,21 @@
       ],
       "food": "panfish",
       "tags": [],
-      "shiny": "rose"
+      "shiny": "rose",
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.45,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "redear"
+      }
     },
     {
       "id": "green_sunfish",
@@ -377,7 +573,21 @@
       ],
       "food": "panfish",
       "tags": [],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.25,
+        "body_depth": 1.1,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "green_sunfish"
+      }
     },
     {
       "id": "warmouth",
@@ -402,7 +612,21 @@
       "tags": [
         "shy"
       ],
-      "shiny": "ink"
+      "shiny": "ink",
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.5,
+        "body_depth": 1.04,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "warmouth"
+      }
     },
     {
       "id": "redbreast",
@@ -425,7 +649,21 @@
       ],
       "food": "panfish",
       "tags": [],
-      "shiny": "rose"
+      "shiny": "rose",
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.65,
+        "body_depth": 0.95,
+        "head_shape": "pointed",
+        "snout": 0.03,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "redbreast"
+      }
     },
     {
       "id": "longear",
@@ -450,7 +688,21 @@
       "tags": [
         "surface"
       ],
-      "shiny": "starry"
+      "shiny": "starry",
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.2,
+        "body_depth": 1.12,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "longear"
+      }
     },
     {
       "id": "spotted_bass",
@@ -473,7 +725,21 @@
       ],
       "food": "bass",
       "tags": [],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.2,
+        "body_depth": 0.96,
+        "head_shape": "rounded",
+        "snout": 0.1,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "largemouth"
+      }
     },
     {
       "id": "white_bass",
@@ -498,7 +764,21 @@
       "tags": [
         "surface"
       ],
-      "shiny": "starry"
+      "shiny": "starry",
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.75,
+        "body_depth": 0.82,
+        "head_shape": "pointed",
+        "snout": 0.08,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "largemouth"
+      }
     },
     {
       "id": "yellow_bass",
@@ -521,7 +801,21 @@
       ],
       "food": "bass",
       "tags": [],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.6,
+        "body_depth": 0.88,
+        "head_shape": "pointed",
+        "snout": 0.08,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "largemouth"
+      }
     },
     {
       "id": "hybrid_striper",
@@ -544,7 +838,21 @@
       ],
       "food": "bass",
       "tags": [],
-      "shiny": "starry"
+      "shiny": "starry",
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.7,
+        "body_depth": 0.88,
+        "head_shape": "pointed",
+        "snout": 0.1,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "hybrid_striper"
+      }
     },
     {
       "id": "striped_bass",
@@ -566,7 +874,21 @@
       ],
       "food": "bass",
       "tags": [],
-      "shiny": "glow"
+      "shiny": "glow",
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 4.0,
+        "body_depth": 0.86,
+        "head_shape": "pointed",
+        "snout": 0.12,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "striped_bass"
+      }
     },
     {
       "id": "bowfin",
@@ -589,7 +911,21 @@
       ],
       "food": "hearty",
       "tags": [],
-      "shiny": "ink"
+      "shiny": "ink",
+      "look": {
+        "family": "pike",
+        "length_depth_ratio": 4.25,
+        "body_depth": 0.95,
+        "head_shape": "rounded",
+        "snout": 0.08,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "bowfin"
+      }
     },
     {
       "id": "spotted_gar",
@@ -614,7 +950,21 @@
       "tags": [
         "surface"
       ],
-      "shiny": "starry"
+      "shiny": "starry",
+      "look": {
+        "family": "gar",
+        "length_depth_ratio": 5.9,
+        "body_depth": 0.76,
+        "head_shape": "pointed",
+        "snout": 0.58,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "spotted_gar"
+      }
     },
     {
       "id": "shortnose_gar",
@@ -637,7 +987,21 @@
       ],
       "food": "hearty",
       "tags": [],
-      "shiny": "rose"
+      "shiny": "rose",
+      "look": {
+        "family": "gar",
+        "length_depth_ratio": 5.15,
+        "body_depth": 0.82,
+        "head_shape": "pointed",
+        "snout": 0.34,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "shortnose_gar"
+      }
     },
     {
       "id": "alligator_gar",
@@ -660,7 +1024,21 @@
       ],
       "food": "hearty",
       "tags": [],
-      "shiny": "glow"
+      "shiny": "glow",
+      "look": {
+        "family": "gar",
+        "length_depth_ratio": 6.2,
+        "body_depth": 0.74,
+        "head_shape": "flat",
+        "snout": 0.7,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "alligator_gar"
+      }
     },
     {
       "id": "black_bullhead",
@@ -683,7 +1061,21 @@
       ],
       "food": "catfish",
       "tags": [],
-      "shiny": "ink"
+      "shiny": "ink",
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.05,
+        "body_depth": 0.92,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "rounded",
+        "barbels": 4,
+        "scale_pattern": "plain",
+        "palette": "black_bullhead"
+      }
     },
     {
       "id": "brown_bullhead",
@@ -707,7 +1099,21 @@
       "tags": [
         "shy"
       ],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.05,
+        "body_depth": 0.95,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "rounded",
+        "barbels": 4,
+        "scale_pattern": "mottled",
+        "palette": "brown_bullhead"
+      }
     },
     {
       "id": "blue_sucker",
@@ -731,7 +1137,21 @@
       "tags": [
         "shy"
       ],
-      "shiny": "glow"
+      "shiny": "glow",
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 4.0,
+        "body_depth": 0.82,
+        "head_shape": "pointed",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "plain",
+        "palette": "blue_sucker"
+      }
     },
     {
       "id": "bigmouth_buffalo",
@@ -754,7 +1174,21 @@
       ],
       "food": "hearty",
       "tags": [],
-      "shiny": "albino"
+      "shiny": "albino",
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.85,
+        "body_depth": 1.1,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "truncate",
+        "barbels": 0,
+        "scale_pattern": "plain",
+        "palette": "bigmouth_buffalo"
+      }
     },
     {
       "id": "black_buffalo",
@@ -776,7 +1210,21 @@
       ],
       "food": "hearty",
       "tags": [],
-      "shiny": "ink"
+      "shiny": "ink",
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 3.0,
+        "body_depth": 1.04,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "truncate",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "black_buffalo"
+      }
     },
     {
       "id": "golden_shiner",
@@ -801,7 +1249,21 @@
       "tags": [
         "surface"
       ],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
     },
     {
       "id": "gizzard_shad",
@@ -824,7 +1286,21 @@
       ],
       "food": "none",
       "tags": [],
-      "shiny": "starry"
+      "shiny": "starry",
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 4.45,
+        "body_depth": 0.82,
+        "head_shape": "pointed",
+        "snout": 0.03,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "gizzard_shad"
+      }
     },
     {
       "id": "threadfin_shad",
@@ -849,7 +1325,21 @@
       "tags": [
         "surface"
       ],
-      "shiny": "starry"
+      "shiny": "starry",
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.8,
+        "body_depth": 0.7,
+        "head_shape": "pointed",
+        "snout": 0.03,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "threadfin_shad"
+      }
     },
     {
       "id": "chain_pickerel",
@@ -873,7 +1363,21 @@
       "tags": [
         "shy"
       ],
-      "shiny": "golden"
+      "shiny": "golden",
+      "look": {
+        "family": "pike",
+        "length_depth_ratio": 5.0,
+        "body_depth": 0.8,
+        "head_shape": "pointed",
+        "snout": 0.25,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "chain_pickerel"
+      }
     }
   ]
 }
