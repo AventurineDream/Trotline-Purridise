@@ -405,6 +405,7 @@ def shots(dest: str) -> int:
     text = Text()
     ui = UI(text, world)
     renderer = Renderer(world,1280,720)
+    ui.fish_card_renderer = getattr(renderer, "fish_card", None)
 
     def grab(state, mode, name, **ui_kw):
         panel = UIState(mode=mode, has_save=True)
@@ -466,6 +467,8 @@ def shots(dest: str) -> int:
         check.lines[0].hooks[3].catch = Catch("bullhead", 1.1, 1.0, 2.0, "flats", "worm", 11.0)
         check.lines[0].hooks[3].baited = False
     grab(check, "check", "check.png", check_line=0, check_i=0)
+    from .fishmesh import fish_card_contact_sheet
+    write_png(out / "fishcards.png", fish_card_contact_sheet(ui.fish_card_renderer))
     rain = State.new(world,seed=2)
     _move(rain,-90.0,-40.0,math.atan2(-85.0,-75.0),(18.0-6.0)*60.0+3*24*60)
     grab(rain,"play","rain.png")
