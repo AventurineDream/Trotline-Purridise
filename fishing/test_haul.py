@@ -144,6 +144,31 @@ class HaulChecks(unittest.TestCase):
         ui.draw(frame.copy(), shiny_session.state, shiny_state)
         self.assertIn("SHINY  *", text.calls)
 
+    def test_rechecking_an_unresolved_catch_does_not_replay_its_badge(self):
+        fish = Catch("bluegill", 0.75, 1.0, 0.0, "flats", "worm", 8.0)
+        session = self.make_session(12, catch=fish)
+        self.start_haul(session)
+        session.tick(Keys(), 0.25)
+        session.tick(Keys(), 0.24)
+        self.assertTrue(fish.haul_seen)
+        self.assertTrue(Catch.from_json(fish.to_json()).haul_seen)
+
+        session.tick(Keys(pressed={"esc"}), 0.0)
+        self.assertEqual(session.ui.mode, "check")
+        session._open_e()
+        self.assertEqual(session.ui.mode, "haul")
+        session.tick(Keys(), 0.25)
+        session.tick(Keys(), 0.24)
+        self.assertFalse(session.ui.haul_badge_enabled)
+
+        text = TextStub()
+        ui = UI(text, self.world)
+        ui_state = session.ui
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+        ui.draw(frame, session.state, ui_state)
+        self.assertIn("CATCH", text.calls)
+        self.assertNotIn("NEW!", text.calls)
+
 
 if __name__ == "__main__":
     unittest.main()
