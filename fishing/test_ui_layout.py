@@ -144,6 +144,7 @@ class GuideLayoutChecks(unittest.TestCase):
             )),
             ("shop", UIState(mode="shop")),
             ("setbait", UIState(mode="setbait")),
+            ("haul", UIState(mode="haul")),
             ("check", UIState(mode="check")),
             ("journal", UIState(mode="journal")),
             ("narrative journal", UIState(mode="journal", journal_page=1)),
