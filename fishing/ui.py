@@ -33,6 +33,8 @@ from .data import (
 )
 from .content import load_content
 from .guardian import draw_sighting
+from .haul import haul_cadence
+from .savepaths import BOOK_STAGES
 from .narrative import QUEST_IDS
 from .platform import Text
 from .dialogue import nearby_npc
@@ -56,6 +58,9 @@ GOLD = (218, 187, 124)
 WARN = (220, 126, 96)
 GOOD = (150, 196, 140)
 GAME_TITLE = "Trotline Purridise"
+BOOK_STAGE_UP_COUNTS = frozenset(
+    threshold for threshold, _stage in BOOK_STAGES if threshold >= 3
+)
 
 SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes")
 _TABS = SHOP_TABS
@@ -727,7 +732,7 @@ class UI:
         settings = state.v2.get("settings", {}) if isinstance(state.v2, dict) else {}
         reduced = bool(settings.get("reduced_motion", False))
         speed = settings.get("haul_speed", "normal")
-        cadence = {"normal": 0.25, "quick": 0.10}.get(speed, 0.25)
+        cadence = haul_cadence(state)
         progress = (1.0 if ui.haul_phase == "surface" else
                     min(1.0, max(0.0, ui.haul_timer / cadence)))
         water_y = int(h * 0.61)
@@ -800,7 +805,7 @@ class UI:
         speed_label = {"normal": "Normal", "quick": "Quick", "instant": "Instant"}.get(speed, "Normal")
         self._text(frame, f"{speed_label} speed", int(w * 0.055), int(h * 0.13), small,
                    GOLD, shadow=False)
-        foot = self._controls(ui, "Hold E 3×   Any key skips a card   Esc summary",
+        foot = self._controls(ui, "Hold E 3×   Any key except E skips a card   Esc summary",
                               "Hold A 3×   A skips a card   B summary")
         self._center(frame, foot, w / 2, int(h * 0.95), small, INK)
         if ui.haul_phase == "card" and hook.catch is not None:
@@ -846,7 +851,7 @@ class UI:
             count = count_before + hauled
             if count == 1:
                 ribbon, ribbon_color = "NEW!", GOLD
-            elif count in (3, 5, 10):
+            elif count in BOOK_STAGE_UP_COUNTS:
                 ribbon, ribbon_color = "STAGE UP!", GOOD
             else:
                 ribbon, ribbon_color = "CATCH", INK
@@ -859,7 +864,7 @@ class UI:
         if catch.shiny:
             self._center(frame, "SHINY CATCH", w / 2, image_y + image_h + 12 + self.cell(body)[1],
                          small, GOLD)
-        foot = self._controls(ui, "Any key continues   Hold E speeds the haul",
+        foot = self._controls(ui, "Any key except E continues   Hold E speeds the haul",
                               "A continues   Hold A speeds the haul")
         self._center(frame, foot, w / 2, y + ph - self.cell(small)[1] - 10, small, DIM)
 
