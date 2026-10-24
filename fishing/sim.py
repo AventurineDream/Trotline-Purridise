@@ -118,6 +118,19 @@ class Catch:
     noted_tired: bool = False
     catch_game_minute: float | None = None
     extra_fields: dict = field(default_factory=dict, repr=False)
+    shiny: bool = False
+    treasured: bool | None = None
+    legendary: bool = False
+    disposition: str = "pending"
+
+    def __post_init__(self):
+        if self.treasured is None:
+            self.treasured = bool(self.shiny)
+        else:
+            self.treasured = bool(self.treasured)
+        if (not isinstance(self.disposition, str)
+                or self.disposition not in {"pending", "keep", "release", "kept", "released"}):
+            self.disposition = "pending"
 
     def value(self) -> float:
         return fish_value(self.species, self.weight, self.quality)
@@ -137,6 +150,16 @@ class Catch:
             "catch_game_minute": (None if self.catch_game_minute is None
                                   else round(self.catch_game_minute, 3)),
         })
+        if self.shiny:
+            result["shiny"] = True
+        if self.treasured:
+            result["treasured"] = True
+        elif self.shiny:
+            result["treasured"] = False
+        if self.legendary:
+            result["legendary"] = True
+        if self.disposition in {"keep", "release"}:
+            result["disposition"] = self.disposition
         return result
 
     @classmethod
@@ -150,13 +173,18 @@ class Catch:
         if not catch_minute_valid:
             catch_minute = None
         known = {"species", "weight", "quality", "age", "zone", "bait", "hour",
-                 "lake_id", "noted_tired", "catch_game_minute"}
+                 "lake_id", "noted_tired", "catch_game_minute", "shiny",
+                 "treasured", "legendary", "disposition"}
         return cls(
             raw["species"], float(raw["weight"]), float(raw["quality"]),
             float(raw["age"]), raw["zone"], raw["bait"], float(raw["hour"]),raw.get("lake_id","briar"),
             bool(raw.get("noted_tired", False)),
             float(catch_minute) if catch_minute is not None else None,
             {key: deepcopy(value) for key, value in raw.items() if key not in known},
+            shiny=bool(raw.get("shiny", False)),
+            treasured=(bool(raw["treasured"]) if "treasured" in raw else None),
+            legendary=bool(raw.get("legendary", False)),
+            disposition=raw.get("disposition", "pending"),
         )
 
 
@@ -668,6 +696,8 @@ class State:
             spoiled += s
             self.game_minutes += 1.0
         self.narrative.active_play_game_minutes += max(0.0, self.game_minutes - before)
+        if spoiled:
+            self.toast(self._spoilage_copy(spoiled))
         return hooked, spoiled
 
     def advance(self, dt: float, frozen: bool):
@@ -681,14 +711,16 @@ class State:
         if n <= 0:
             return
         before = self.game_minutes
+        spoiled = 0
         if n > 180:
             hours, n = divmod(n, 60)
-            self._advance_hours(hours, toast=False)
+            _hooked, spoiled = self._advance_hours(hours, toast=False)
         notes: dict[int, list] = {}
         self._tired = []
         self._records = []
         for _ in range(n):
-            got = self._advance_minute()
+            got, lost = self._advance_minute()
+            spoiled += lost
             for line_i, sp, weight, x, z in got:
                 notes.setdefault(line_i, []).append((sp, weight))
                 self.splash_x, self.splash_z = float(x), float(z)
@@ -711,8 +743,16 @@ class State:
         if self._records:
             weight, name = max(self._records)
             self.toast(f"Personal best. {weight:.1f} lb {name.lower()}.")
+        if spoiled:
+            self.toast(self._spoilage_copy(spoiled))
         self._tired = []
         self._records = []
+
+    @staticmethod
+    def _spoilage_copy(count: int) -> str:
+        if count == 1:
+            return "A fish waited a long while and wriggled free. Good for it."
+        return f"{count} fish waited a long while and wriggled free. Good for them."
 
     def catch_up(self, now: float | None = None) -> None:
         now = time.time() if now is None else now
@@ -724,25 +764,26 @@ class State:
             return
         hooked, spoiled = self._advance_hours(minutes // 60, toast=False)
         for _ in range(minutes % 60):
-            got = self._advance_minute(announce=False)
+            got, lost = self._advance_minute(announce=False)
             hooked += len(got)
+            spoiled += lost
         if hooked or spoiled:
-            self.toast(f"While you were away: {hooked} hooked, {spoiled} spoiled.")
+            self.toast(f"While you were away: {hooked} hooked, {spoiled} got away.")
 
     def _advance_hours(self, hours: int, toast: bool) -> tuple[int, int]:
         hooked = spoiled = 0
         for _ in range(hours):
-            h, s = self._one_span(1.0)
+            h, s = self._one_span(1.0, announce=toast)
             hooked += h
             spoiled += s
             self.game_minutes += 60.0
         return hooked, spoiled
 
-    def _advance_minute(self, announce: bool = True) -> list[tuple[int, str, float, float, float]]:
+    def _advance_minute(self, announce: bool = True) -> tuple[list[tuple[int, str, float, float, float]], int]:
         got = []
         h, s, events = self._one_span(1.0 / 60.0, collect=True, announce=announce)
         self.game_minutes += 1.0
-        return events
+        return events, s
 
     def _one_span(self, hours: float, collect: bool = False, announce: bool = False):
         """Age and bite across `hours` of game time. Clock is advanced by the caller."""
@@ -792,6 +833,9 @@ class State:
                 hooked += 1
                 self.hooked_total += 1
                 self._note_journal(catch, announce=announce)
+                reason = self._forced_release_reason(catch)
+                if reason:
+                    self._release_hook_catch(hook, catch, reason, announce=announce)
                 if collect:
                     events.append((li, sp, weight, x, z))
         if collect:
@@ -956,6 +1000,83 @@ class State:
             "catch_game_minute": catch.catch_game_minute,
             "entry_game_minute": self.game_minutes,
         })
+
+    @staticmethod
+    def _forced_release_reason(catch: Catch) -> str | None:
+        if catch.legendary:
+            return "legendary"
+        species = SPECIES_BY_ID.get(catch.species)
+        if species is not None and "protected" in species.tags:
+            return "protected"
+        return None
+
+    def _release_hook_catch(self, hook: Hook, catch: Catch,
+                            reason: str | None = None, *, announce: bool = True) -> None:
+        catch.disposition = "released"
+        hook.catch = None
+        hook.baited = False
+        if not announce:
+            return
+        name = SPECIES_BY_ID[catch.species].name
+        if reason == "protected":
+            self.toast(f"This is a {name}. They are protected here, so back it goes. The book still counts it.")
+        elif reason == "legendary":
+            self.toast("I will remember that for the rest of my battery.")
+        else:
+            self.toast(f"Released the {name.lower()}. The book still counts it.")
+
+    def prepare_catch_dispositions(self, line_index: int) -> bool:
+        """Default pending catches to Keep and preselect one small release if needed."""
+        line = self.lines[line_index]
+        newly_pending: list[Catch] = []
+        for hook in line.hooks:
+            catch = hook.catch
+            if catch is None:
+                continue
+            reason = self._forced_release_reason(catch)
+            if reason:
+                catch.disposition = "release"
+            elif catch.disposition not in {"keep", "release"}:
+                catch.disposition = "keep"
+                newly_pending.append(catch)
+
+        keep_weight = sum(
+            hook.catch.weight for hook in line.hooks
+            if hook.catch is not None
+            and hook.catch.disposition != "release"
+            and self._forced_release_reason(hook.catch) is None
+        )
+        space = max(0.0, self.well_cap() - self.well_load())
+        if keep_weight <= space + 1e-6:
+            return False
+        candidates = [catch for catch in newly_pending
+                      if not catch.treasured
+                      and self._forced_release_reason(catch) is None]
+        if not candidates:
+            return False
+        min(candidates, key=lambda catch: (catch.weight, catch.species)).disposition = "release"
+        self.toast("The livewell is full. I picked the smallest to swim home. You can change that.")
+        return True
+
+    def toggle_catch_disposition(self, line_index: int, hook_index: int) -> str | None:
+        hook = self.lines[line_index].hooks[hook_index]
+        catch = hook.catch
+        if catch is None:
+            return "Nothing on that hook."
+        if self._forced_release_reason(catch):
+            return "This fish has to be released. The book still counts it."
+        catch.disposition = "keep" if catch.disposition == "release" else "release"
+        return None
+
+    def toggle_treasured(self, catch_index: int) -> str | None:
+        if catch_index < 0 or catch_index >= len(self.well):
+            return "Nothing there."
+        catch = self.well[catch_index]
+        catch.treasured = not catch.treasured
+        name = SPECIES_BY_ID[catch.species].name.lower()
+        self.toast(f"{name.capitalize()} marked Treasured." if catch.treasured
+                   else f"Treasured mark removed from {name}.")
+        return None
 
     def _hull_ok(self, x, z, world: World, *, yaw=None) -> bool:
         return world.hull_clear(x,z,self.yaw if yaw is None else yaw,self.boat_id)
@@ -1168,14 +1289,22 @@ class State:
             return name
         return f"{name} {same.index(index) + 1}"
 
-    def take_hook(self, line_index: int, hook_index: int) -> str | None:
+    def take_hook(self, line_index: int, hook_index: int,
+                  disposition: str | None = None) -> str | None:
         line = self.lines[line_index]
         hook = line.hooks[hook_index]
         if hook.catch is None:
             return "Nothing on that hook."
-        if self.well_load() + hook.catch.weight > self.well_cap() + 1e-6:
-            return "The livewell won't take that one."
         catch = hook.catch
+        reason = self._forced_release_reason(catch)
+        if isinstance(disposition, str) and disposition in {"keep", "release"} and not reason:
+            catch.disposition = disposition
+        if reason or catch.disposition == "release":
+            self._release_hook_catch(hook, catch, reason)
+            return None
+        if self.well_load() + catch.weight > self.well_cap() + 1e-6:
+            return "The livewell won't take that one. Mark a fish Release or make room."
+        catch.disposition = "kept"
         self.well.append(catch)
         self._emit_livewell_entry(catch, line)
         hook.catch = None
@@ -1184,27 +1313,33 @@ class State:
 
     def take_all(self, line_index: int) -> str:
         line = self.lines[line_index]
-        moved = 0
-        left = 0
-        for hook in line.hooks:
-            if hook.catch is None:
-                continue
-            if self.well_load() + hook.catch.weight > self.well_cap() + 1e-6:
-                left += 1
-                continue
-            catch = hook.catch
-            self.well.append(catch)
-            self._emit_livewell_entry(catch, line)
-            hook.catch = None
-            hook.baited = False
-            moved += 1
-        if moved == 0 and left:
-            return "Livewell is full."
-        if left:
-            return f"Took {moved}. {left} stayed on the line."
-        if moved == 0:
+        catches = [hook.catch for hook in line.hooks if hook.catch is not None]
+        if not catches:
             return "Nothing to take."
-        return f"Took {moved} into the livewell."
+        self.prepare_catch_dispositions(line_index)
+        keep = [catch for catch in catches
+                if catch.disposition != "release"
+                and self._forced_release_reason(catch) is None]
+        if self.well_load() + sum(catch.weight for catch in keep) > self.well_cap() + 1e-6:
+            return "The livewell is full. Mark more fish Release before keeping them."
+
+        kept = released = 0
+        for hook in line.hooks:
+            catch = hook.catch
+            if catch is None:
+                continue
+            reason = self._forced_release_reason(catch)
+            if reason or catch.disposition == "release":
+                self._release_hook_catch(hook, catch, reason)
+                released += 1
+            else:
+                catch.disposition = "kept"
+                self.well.append(catch)
+                self._emit_livewell_entry(catch, line)
+                hook.catch = None
+                hook.baited = False
+                kept += 1
+        return f"Resolved catches: kept {kept}, released {released}."
 
     def rebait(self, line_index: int) -> str | None:
         line = self.lines[line_index]
@@ -1230,12 +1365,10 @@ class State:
 
     def pull_line(self, line_index: int) -> str | None:
         line = self.lines[line_index]
-        fish = [h.catch for h in line.hooks if h.catch is not None]
-        if self.well_load() + sum(c.weight for c in fish) > self.well_cap() + 1e-6:
-            return "The livewell can't hold every fish on that line."
-        for catch in fish:
-            self.well.append(catch)
-            self._emit_livewell_entry(catch, line)
+        if any(hook.catch is not None for hook in line.hooks):
+            result = self.take_all(line_index)
+            if result.startswith("The livewell"):
+                return result
         self.lines.pop(line_index)
         if self.bot_target_line_id == line.line_id:
             self.bot_target_line_id = None
@@ -1255,12 +1388,18 @@ class State:
     def sell_all(self) -> str:
         if not self.well:
             return "Livewell is empty."
-        total = round(sum(c.value() for c in self.well), 2)
-        n = len(self.well)
-        note = _buyer_line(self.well)
-        self.well.clear()
+        saleable = [catch for catch in self.well if not catch.treasured]
+        if not saleable:
+            return "Treasured fish stay in the livewell during bulk sale."
+        total = round(sum(c.value() for c in saleable), 2)
+        n = len(saleable)
+        treasured = [catch for catch in self.well if catch.treasured]
+        note = _buyer_line(saleable)
+        self.well = treasured
         self._earn(total)
         self.toast(f"Sold {n} fish for {dollars(total)}.")
+        if treasured:
+            self.toast(f"{len(treasured)} Treasured fish stayed in the livewell.")
         if note:
             self.toast(note)
         return f"Sold {n} for {dollars(total)}."
@@ -1524,6 +1663,8 @@ class State:
             if ids.count(line.line_id) > 1:
                 line.line_id = str(uuid4())
         st.well = [Catch.from_json(c) for c in raw["well"]]
+        for catch in st.well:
+            catch.disposition = "kept"
         st.x, st.z, st.yaw = float(raw["x"]), float(raw["z"]), float(raw["yaw"])
         st.anchored = bool(raw.get("anchored", False))
         st.motor = int(raw["motor"])
