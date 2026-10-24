@@ -17,7 +17,7 @@ from .imageops import resize_rgb
 from .pngsave import write_png
 from .render import Renderer
 from .savepaths import UnsupportedSaveVersionError, parse_save_option
-from .sim import HeldLine, State
+from .sim import Catch, HeldLine, Hook, SetLine, State
 from .ui import UI, UIState
 from .world import World, shore_sd
 
@@ -319,6 +319,7 @@ def _play(world: World):
         if session.state.time_scale != 3:
             raise AssertionError("anchored time scale")
         session.state._advance_hours(12, toast=False)
+        session.state.v2["settings"]["haul_speed"] = "instant"
         session.tick(Keys(pressed={"e"}), 0.05)
         if session.ui.mode != "check":
             raise AssertionError(session.ui.note or "E did not check the line")
@@ -406,6 +407,9 @@ def shots(dest: str) -> int:
     ui = UI(text, world)
     renderer = Renderer(world,1280,720)
     ui.fish_card_renderer = getattr(renderer, "fish_card", None)
+    software_renderer = Renderer(world, 1280, 720, software=True)
+    software_ui = UI(text, world)
+    software_ui.fish_card_renderer = getattr(software_renderer, "fish_card", None)
 
     def grab(state, mode, name, **ui_kw):
         panel = UIState(mode=mode, has_save=True)
@@ -447,7 +451,6 @@ def shots(dest: str) -> int:
     shop = State.new(world, seed=2)
     shop.money = 86.50
     shop.game_minutes = 8 * 60
-    from .sim import Catch
     shop.well.append(Catch("bluegill", 0.42, 1.0, 1.0, "flats", "worm", 10.0))
     shop.well.append(Catch("channel", 6.4, 0.72, 7.0, "cypress", "liver", 20.0))
     grab(shop, "shop", "shop.png", shop_tab=0, shop_i=0)
@@ -467,12 +470,59 @@ def shots(dest: str) -> int:
         check.lines[0].hooks[3].catch = Catch("bullhead", 1.1, 1.0, 2.0, "flats", "worm", 11.0)
         check.lines[0].hooks[3].baited = False
     grab(check, "check", "check.png", check_line=0, check_i=0)
+
+    def haul_fixture(*, fish=False, shiny=False):
+        state = State.new(world, seed=17 + int(fish) + int(shiny))
+        px, pz, yaw = _pose(world, "flats", "worm")
+        _move(state, px, pz, yaw, 8 * 60)
+        hooks = [Hook(True) for _ in range(12)]
+        if fish:
+            catch = Catch("bluegill", 0.75, 1.0, 0.0, "flats", "worm", 8.0,
+                          shiny=shiny)
+            hooks[0] = Hook(False, catch)
+            state._note_journal(catch)
+        if shiny:
+            shiny_catch = Catch("channel", 2.4, 1.0, 0.0, "flats", "worm", 8.0,
+                                shiny=True)
+            hooks[5] = Hook(False, shiny_catch)
+            state._note_journal(shiny_catch)
+        state.lines = [SetLine("std", "worm", px, pz, px + 42, pz + 8,
+                               "flats", hooks)]
+        return state
+
+    def grab_haul_gallery(target_renderer, target_ui, suffix):
+        target_ui.fish_card_renderer = getattr(target_renderer, "fish_card", None)
+        images = (
+            ("mid", haul_fixture(fish=True),
+             UIState(mode="haul", check_line=0, haul_index=6, haul_timer=0.13,
+                     haul_counts_before={"bluegill": 0})),
+            ("card", haul_fixture(fish=True),
+             UIState(mode="haul", check_line=0, haul_index=0, haul_phase="card",
+                     haul_counts_before={"bluegill": 0})),
+            ("shiny", haul_fixture(shiny=True),
+             UIState(mode="haul", check_line=0, haul_index=5, haul_phase="card",
+                     haul_counts_before={"channel": 0})),
+            ("summary", haul_fixture(fish=True, shiny=True),
+             UIState(mode="check", check_line=0, check_i=0)),
+        )
+        for name, state, panel in images:
+            low = target_renderer.render(state)
+            frame = resize_rgb(low, 1280, 720)
+            target_ui.draw(frame, state, panel)
+            path = out / f"haul-{suffix}-{name}.png"
+            write_png(path, frame)
+            print(f"{path.name:24s} {getattr(target_renderer, 'backend', 'CPU fallback')}")
+
+    gpu_label = "gl" if type(renderer).__name__ == "LakeRenderer" else "fallback"
+    grab_haul_gallery(renderer, ui, gpu_label)
+    grab_haul_gallery(software_renderer, software_ui, "software")
     from .fishmesh import fish_card_contact_sheet
     write_png(out / "fishcards.png", fish_card_contact_sheet(ui.fish_card_renderer))
     rain = State.new(world,seed=2)
     _move(rain,-90.0,-40.0,math.atan2(-85.0,-75.0),(18.0-6.0)*60.0+3*24*60)
     grab(rain,"play","rain.png")
     renderer.close()
+    software_renderer.close()
     text.close()
     print(out)
     return 0
