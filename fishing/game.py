@@ -281,8 +281,12 @@ class Session:
         elif mode == "journal":
             self._journal_keys(keys, dt)
         elif mode == "well":
-            n = max(1, len(self.state.well))
-            self._list_keys(keys, dt, "well_i", n, "i")
+            if "t" in keys.pressed or "return" in keys.pressed or "space" in keys.pressed:
+                if self.state.toggle_treasured(self.ui.well_i) is None:
+                    self.save()
+            else:
+                n = max(1, len(self.state.well))
+                self._list_keys(keys, dt, "well_i", n, "i")
         elif mode == "map":
             if "tab" in keys.pressed or "esc" in keys.pressed:
                 self.ui.mode = "play"
@@ -519,6 +523,8 @@ class Session:
             self.ui.check_line = nearest
             self.ui.check_i = 0
             self.ui.note = ""
+            if self.state.prepare_catch_dispositions(nearest):
+                self.ui.note = "The livewell is full. I picked the smallest to swim home. You can change that."
             line = self.state.lines[nearest]
             self.state.emit_quest_event({
                 "type": "line.check",
@@ -687,24 +693,30 @@ class Session:
         if keys.tap("down", dt):
             self.ui.check_i = (self.ui.check_i + 1) % len(rows)
             self.ui.note = ""
-        if "return" in keys.pressed or "space" in keys.pressed:
-            self._check_act(rows[self.ui.check_i % len(rows)])
+        selected = rows[self.ui.check_i % len(rows)]
+        if selected.kind == "hook" and keys.pressed & {"left", "right"}:
+            self._check_act(selected)
+        elif "return" in keys.pressed or "space" in keys.pressed:
+            self._check_act(selected)
 
     def _check_act(self, row):
         index = self.ui.check_line
         if row.kind == "hook":
-            if not row.enabled:
-                self.ui.note = "Nothing on that hook."
-                return "error"
-            err = self.state.take_hook(index, int(row.arg))
+            err = self.state.toggle_catch_disposition(index, int(row.arg))
             if err:
-                return self._fail(err)
-            self.ui.note = ""
+                self.ui.note = err
+                return "error"
+            catch = self.state.lines[index].hooks[int(row.arg)].catch
+            self.ui.note = ("Marked for Release." if catch and catch.disposition == "release"
+                            else "Marked to Keep.")
+            self.save()
             return "click"
         if row.kind == "take_all":
             msg = self.state.take_all(index)
-            self.ui.note = "" if msg.startswith("Took") else msg
-            return "click" if msg.startswith("Took") else "error"
+            self.ui.note = "" if msg.startswith("Resolved") else msg
+            if msg.startswith("Resolved"):
+                self.save()
+            return "click" if msg.startswith("Resolved") else "error"
         if row.kind == "rebait":
             err = self.state.rebait(index)
             if err:
@@ -716,6 +728,7 @@ class Session:
             if err:
                 return self._fail(err)
             self.ui.mode = "play"
+            self.save()
             return "click"
         return None
 
