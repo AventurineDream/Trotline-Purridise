@@ -957,6 +957,7 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
     audio = Audio()
     renderer = Renderer(world,width,height,software=software or platform.context is None,
                         context=platform.context)
+    ui.fish_card_renderer = getattr(renderer, "fish_card", None)
     last = platform.ticks()
     save_acc = 0.0
     blip = None
@@ -980,6 +981,7 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
                 ui = UI(text,session.world)
                 renderer = Renderer(session.world,width,height,
                                     software=software or platform.context is None,context=platform.context)
+                ui.fish_card_renderer = getattr(renderer, "fish_card", None)
                 last = platform.ticks()
             cam = _camera(renderer, session)
             platform.make_current()
