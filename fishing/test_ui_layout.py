@@ -9,7 +9,7 @@ import numpy as np
 from .platform import Text, find_font
 from .sim import State
 from .ui import (
-    UI, UIState, _GAMEPAD_HELP_CONTROLS, _HELP, _help_title,
+    DIM, SPECIES, UI, UIState, _GAMEPAD_HELP_CONTROLS, _HELP, _help_title,
     _prompt_for_device, _toast_for_device,
 )
 from .world import World
@@ -170,6 +170,87 @@ class GuideLayoutChecks(unittest.TestCase):
                         self.assertGreaterEqual(y, 0)
                         self.assertLessEqual(x + tw, width)
                         self.assertLessEqual(y + th, height)
+
+    def test_species_journal_details_reflow_inside_the_panel_at_minimum_size(self):
+        world = World()
+        ui = UI(self.text, world)
+        state = State.new(world, seed=73)
+        state.journal["bluegill"] = {
+            "count": 3, "best": 2.1, "lake_id": "briar", "zone": "flats",
+            "bait": "worm", "band": "trophy",
+        }
+        records, panels = [], []
+        text_draw, panel_draw = ui._text, ui._panel
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            image = ui._render(label, size, color, family)
+            records.append((label, x, y, image.shape[1], image.shape[0]))
+            return text_draw(frame, label, x, y, size, color, shadow, family)
+
+        def panel(frame, x, y, width, height, alpha):
+            panels.append((x, y, width, height))
+            panel_draw(frame, x, y, width, height, alpha)
+
+        ui._text, ui._panel = text, panel
+        ui._blit_rgb = lambda frame, image, x, y: None
+        frame = np.zeros((270, 480, 3), np.uint8)
+        ui.draw(frame, state, UIState(mode="journal"))
+
+        self.assertEqual(len(panels), 1)
+        px, py, pw, ph = panels[0]
+        details = [record for record in records if (
+            record[0] == "Bluegill"
+            or any(token in record[0].casefold() for token in (
+                "caught", "flats", "nightcrawlers", "trophy"))
+        )]
+        self.assertTrue(any(label == "Bluegill" for label, *_ in details))
+        self.assertTrue(any("caught" in label.casefold() for label, *_ in details))
+        self.assertTrue(any("flats" in label.casefold() for label, *_ in details), records)
+        for label, x, y, width, height in details:
+            with self.subTest(label=label):
+                self.assertGreaterEqual(x, px)
+                self.assertGreaterEqual(y, py)
+                self.assertLessEqual(x + width, px + pw)
+                self.assertLessEqual(y + height, py + ph)
+
+    def test_species_journal_blurb_waits_for_details_with_large_text(self):
+        world = World()
+        ui = UI(self.text, world)
+        state = State.new(world, seed=74)
+        state.v2["settings"]["text_size"] = 2
+        state.v2["settings"]["dyslexia_font"] = True
+        species = SPECIES[0]
+        state.journal[species.id] = {
+            "count": 3, "best": 2.1, "lake_id": "briar", "zone": "flats",
+            "bait": "worm", "band": "trophy",
+        }
+        records = []
+        text_draw = ui._text
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            image = ui._render(label, size, color, family)
+            records.append((label, x, y, image.shape[1], image.shape[0], color))
+            return text_draw(frame, label, x, y, size, color, shadow, family)
+
+        ui._text = text
+        ui._blit_rgb = lambda frame, image, x, y: None
+        frame = np.zeros((720, 1280, 3), np.uint8)
+        ui.draw(frame, state, UIState(mode="journal"))
+
+        details = [record for record in records if record[5] != DIM and (
+            record[0] == species.name
+            or any(token in record[0].casefold() for token in (
+                "caught", "flats", "nightcrawlers", "trophy"))
+        )]
+        self.assertTrue(any(label == species.name for label, *_ in details))
+        self.assertTrue(any("flats" in label.casefold() for label, *_ in details))
+        panel_x, panel_width = (1280 - int(1280 * 0.72)) // 2, int(1280 * 0.72)
+        dx = panel_x + int(panel_width * 0.46) + 8
+        blurb = [record for record in records if record[1] == dx and record[5] == DIM]
+        self.assertTrue(blurb, records)
+        detail_bottom = max(y + height for _, _, y, _, height, _ in details)
+        blurb_top = min(y for _, _, y, *_ in blurb)
+        self.assertGreaterEqual(blurb_top, detail_bottom + 3)
 
     def _check_pages(self):
         # The guide needs no world or save. Keep the actual font rasterizer and
