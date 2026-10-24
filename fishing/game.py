@@ -528,6 +528,7 @@ class Session:
             self.ui.haul_timer = 0.0
             self.ui.haul_phase = "rise"
             self.ui.haul_phase_timer = 0.0
+            self.ui.haul_badge_enabled = True
             self.ui.note = ""
             if self.state.prepare_catch_dispositions(nearest):
                 self.ui.note = "The livewell is full. I picked the smallest to swim home. You can change that."
@@ -635,6 +636,9 @@ class Session:
                 if self.ui.haul_phase_timer + 1e-9 >= 0.24:
                     self.ui.haul_phase = "card"
                     self.ui.haul_phase_timer = 0.0
+                    if hook.catch is not None:
+                        self.ui.haul_badge_enabled = not hook.catch.haul_seen
+                        hook.catch.haul_seen = True
                     continue
                 return
             needed = max(0.0, cadence - self.ui.haul_timer)
