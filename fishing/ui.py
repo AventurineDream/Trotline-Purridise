@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import lru_cache
 import math
 import textwrap
 
@@ -35,6 +36,8 @@ from .guardian import draw_sighting
 from .narrative import QUEST_IDS
 from .platform import Text
 from .dialogue import nearby_npc
+from .imageops import resize_rgb
+from .raster import raster_tri
 from .world import ZONE_NAME, World
 from .gamepad import (
     ACTION_ALIASES, ACTION_SYMBOLS, default_key_bindings,
@@ -335,6 +338,11 @@ class UIState:
     set_section_baits: tuple[int, int, int] = (0, 0, 0)
     check_line: int = 0
     check_i: int = 0
+    haul_index: int = 0
+    haul_timer: float = 0.0
+    haul_phase: str = "rise"
+    haul_phase_timer: float = 0.0
+    haul_counts_before: dict = field(default_factory=dict)
     journal_i: int = 0
     journal_page: int = 0
     journal_quest_i: int = 0
@@ -579,6 +587,8 @@ class UI:
             self._shop(frame, state, ui)
         elif mode == "setbait":
             self._setbait(frame, state, ui)
+        elif mode == "haul":
+            self._haul(frame, state, ui)
         elif mode == "check":
             self._check(frame, state, ui)
         elif mode == "journal":
@@ -636,6 +646,219 @@ class UI:
         top = y+margin+(ch+3)*2
         for i, (line, color) in enumerate(zip(rows+footer, colors+[DIM]*len(footer))):
             self._text(frame, line, x+margin, top+i*(ch+3), size, color, False)
+
+    @staticmethod
+    def _haul_sway(ui: UIState, reduced_motion: bool) -> float:
+        if reduced_motion:
+            return 0.0
+        return math.sin((ui.haul_index + ui.haul_timer * 3.0) * 1.7) * 0.012
+
+    def _haul_segment(self, frame, x0, y0, x1, y1, color, width=3, alpha=1.0):
+        h, w = frame.shape[:2]
+        pad = max(2, int(width) + 1)
+        left = max(0, int(min(x0, x1)) - pad)
+        right = min(w, int(max(x0, x1)) + pad + 1)
+        top = max(0, int(min(y0, y1)) - pad)
+        bottom = min(h, int(max(y0, y1)) + pad + 1)
+        if left >= right or top >= bottom:
+            return
+        yy, xx = np.mgrid[top:bottom, left:right]
+        dx, dy = float(x1 - x0), float(y1 - y0)
+        denominator = dx * dx + dy * dy
+        if denominator <= 1e-6:
+            distance = np.hypot(xx - x0, yy - y0)
+        else:
+            t = np.clip(((xx - x0) * dx + (yy - y0) * dy) / denominator, 0.0, 1.0)
+            distance = np.hypot(xx - (x0 + t * dx), yy - (y0 + t * dy))
+        mask = distance <= max(0.75, width * 0.5)
+        region = frame[top:bottom, left:right]
+        region[mask] = (region[mask].astype(np.float32) * (1.0 - alpha)
+                        + np.asarray(color, np.float32) * alpha).astype(np.uint8)
+
+    def _haul_oval(self, frame, cx, cy, rx, ry, color, alpha=1.0):
+        h, w = frame.shape[:2]
+        left, right = max(0, int(cx - rx)), min(w, int(cx + rx + 1))
+        top, bottom = max(0, int(cy - ry)), min(h, int(cy + ry + 1))
+        if left >= right or top >= bottom:
+            return
+        yy, xx = np.mgrid[top:bottom, left:right]
+        mask = ((xx - cx) / max(1.0, rx)) ** 2 + ((yy - cy) / max(1.0, ry)) ** 2 <= 1.0
+        region = frame[top:bottom, left:right]
+        region[mask] = (region[mask].astype(np.float32) * (1.0 - alpha)
+                        + np.asarray(color, np.float32) * alpha).astype(np.uint8)
+
+    def _haul_ring(self, frame, cx, cy, rx, ry, color, alpha=0.75, thickness=2.0):
+        h, w = frame.shape[:2]
+        left, right = max(0, int(cx - rx - thickness)), min(w, int(cx + rx + thickness + 1))
+        top, bottom = max(0, int(cy - ry - thickness)), min(h, int(cy + ry + thickness + 1))
+        if left >= right or top >= bottom:
+            return
+        yy, xx = np.mgrid[top:bottom, left:right]
+        distance = np.sqrt(((xx - cx) / max(1.0, rx)) ** 2
+                           + ((yy - cy) / max(1.0, ry)) ** 2)
+        mask = np.abs(distance - 1.0) <= thickness / max(1.0, min(rx, ry))
+        region = frame[top:bottom, left:right]
+        region[mask] = (region[mask].astype(np.float32) * (1.0 - alpha)
+                        + np.asarray(color, np.float32) * alpha).astype(np.uint8)
+
+    def _haul_splashes(self, frame, cx, cy, phase):
+        for index in range(5):
+            angle = (index * 2.399 + phase) % math.tau
+            length = 14 + (index % 3) * 7
+            x1 = cx + math.cos(angle) * length
+            y1 = cy + math.sin(angle) * length - 8
+            self._haul_segment(frame, cx + math.cos(angle) * 4,
+                               cy + math.sin(angle) * 4, x1, y1,
+                               (203, 226, 214), 2, 0.86)
+
+    def _haul(self, frame, state, ui: UIState):
+        h, w = frame.shape[:2]
+        if ui.check_line < 0 or ui.check_line >= len(state.lines):
+            self._fill(frame, 0, 0, w, h, (7, 14, 15), 0.58)
+            self._center(frame, "The line is gone.", w / 2, h * 0.46,
+                         self._size(frame, "head"), INK)
+            return
+        line = state.lines[ui.check_line]
+        if not line.hooks:
+            return
+        index = max(0, min(len(line.hooks) - 1, int(ui.haul_index)))
+        hook = line.hooks[index]
+        settings = state.v2.get("settings", {}) if isinstance(state.v2, dict) else {}
+        reduced = bool(settings.get("reduced_motion", False))
+        speed = settings.get("haul_speed", "normal")
+        cadence = {"normal": 0.25, "quick": 0.10}.get(speed, 0.25)
+        progress = (1.0 if ui.haul_phase == "surface" else
+                    min(1.0, max(0.0, ui.haul_timer / cadence)))
+        water_y = int(h * 0.61)
+        cx = w * 0.5
+        sway = self._haul_sway(ui, reduced) * w
+
+        self._fill(frame, 0, 0, w, h, (6, 14, 16), 0.30)
+        self._fill(frame, 0, water_y, w, h - water_y, (34, 84, 85), 0.26)
+        self._fill(frame, 0, water_y, w, max(1, int(h * 0.008)), (171, 190, 165), 0.24)
+        ripple_phase = 0.0 if reduced else (ui.haul_timer * 3.7) % math.tau
+        ripple_size = 28 if reduced else int(28 + 12 * (0.5 + 0.5 * math.sin(ripple_phase)))
+        self._haul_ring(frame, cx + sway, water_y + 8, ripple_size * 1.8,
+                        max(7, ripple_size * 0.34), (204, 220, 194), 0.52, 2.0)
+        self._haul_ring(frame, cx + sway, water_y + 9, ripple_size,
+                        max(5, ripple_size * 0.23), (221, 232, 201), 0.43, 1.5)
+
+        hook_y = water_y - int(progress * h * 0.18) - 8
+        hand_y = int(h * 0.85)
+        left_hand, right_hand = w * 0.20, w * 0.80
+        self._haul_segment(frame, left_hand, hand_y, cx - 5 + sway, hook_y,
+                           (62, 52, 42), 6, 0.9)
+        self._haul_segment(frame, right_hand, hand_y, cx + 5 + sway, hook_y,
+                           (62, 52, 42), 6, 0.9)
+        self._haul_segment(frame, left_hand, hand_y - 1, cx - 5 + sway, hook_y,
+                           (229, 211, 169), 2, 0.95)
+        self._haul_segment(frame, right_hand, hand_y - 1, cx + 5 + sway, hook_y,
+                           (229, 211, 169), 2, 0.95)
+
+        # Paws stay planted while the line and hook move above them.
+        paw_y = int(h * 0.87)
+        for hand_x in (left_hand, right_hand):
+            self._haul_oval(frame, hand_x, paw_y, w * 0.064, h * 0.047,
+                            (183, 145, 112), 0.98)
+            self._haul_oval(frame, hand_x - w * 0.022, paw_y - h * 0.046,
+                            w * 0.018, h * 0.026, (198, 162, 128), 0.98)
+            self._haul_oval(frame, hand_x, paw_y - h * 0.057,
+                            w * 0.018, h * 0.026, (198, 162, 128), 0.98)
+            self._haul_oval(frame, hand_x + w * 0.022, paw_y - h * 0.046,
+                            w * 0.018, h * 0.026, (198, 162, 128), 0.98)
+
+        self._haul_segment(frame, cx + sway, hook_y - 5, cx + sway,
+                           hook_y + h * 0.045, (70, 58, 44), 4, 0.98)
+        self._haul_segment(frame, cx + sway, hook_y + h * 0.045,
+                           cx + 10 + sway, hook_y + h * 0.06,
+                           (232, 217, 179), 3, 0.98)
+        self._haul_segment(frame, cx + 10 + sway, hook_y + h * 0.06,
+                           cx + 15 + sway, hook_y + h * 0.05,
+                           (232, 217, 179), 3, 0.98)
+
+        if hook.catch is not None and (ui.haul_phase == "surface" or progress >= 0.70):
+            sprite = _haul_mesh_sprite(hook.catch.species, state.lake_id, hook.catch.shiny)
+            lift = int(h * (0.015 + 0.075 * progress))
+            self._blit(frame, sprite, int(cx - sprite.shape[1] / 2),
+                       water_y - lift - sprite.shape[0] // 2)
+        if not reduced and (ui.haul_phase == "surface" or progress >= 0.82):
+            self._haul_splashes(frame, cx + sway, water_y + 2,
+                                (ui.haul_index * 0.77 + ui.haul_timer) % math.tau)
+
+        head, body, small = (self._size(frame, key) for key in ("head", "body", "small"))
+        title = f"HAULING  {index + 1:02d} / {len(line.hooks):02d}"
+        self._text(frame, title, int(w * 0.055), int(h * 0.06), head, INK)
+        if hook.catch is not None:
+            result = f"{SPECIES_BY_ID[hook.catch.species].name} on the line"
+            result_color = GOLD
+        elif hook.baited:
+            result, result_color = "Bait still on", GOOD
+        else:
+            result, result_color = "Empty hook · bait taken", DIM
+        self._center(frame, result, w / 2, int(h * 0.73), body, result_color)
+        speed_label = {"normal": "Normal", "quick": "Quick", "instant": "Instant"}.get(speed, "Normal")
+        self._text(frame, f"{speed_label} speed", int(w * 0.055), int(h * 0.13), small,
+                   GOLD, shadow=False)
+        foot = self._controls(ui, "Hold E 3×   Any key skips a card   Esc summary",
+                              "Hold A 3×   A skips a card   B summary")
+        self._center(frame, foot, w / 2, int(h * 0.95), small, INK)
+        if ui.haul_phase == "card" and hook.catch is not None:
+            self._haul_card(frame, state, ui, hook.catch, body, small)
+
+    def _haul_card(self, frame, state, ui: UIState, catch, body, small):
+        h, w = frame.shape[:2]
+        pw, ph = min(w - 24, 650), min(h - 24, 460)
+        x, y = (w - pw) // 2, (h - ph) // 2
+        self._fill(frame, 0, 0, w, h, (4, 10, 12), 0.58)
+        self._panel(frame, x, y, pw, ph, 0.98)
+        self._center(frame, "A FISH SURFACES", w / 2, y + 18,
+                     self._size(frame, "head"), GOLD)
+        try:
+            card = (self.fish_card_renderer(catch.species, catch.shiny)
+                    if self.fish_card_renderer else None)
+        except TypeError:
+            card = self.fish_card_renderer(catch.species)
+        if card is None:
+            from .fishmesh import fish_card
+            card = fish_card(catch.species, catch.shiny)
+        max_w = max(120, min(512, pw - 40))
+        max_h = max(64, min(256, ph - 170))
+        image_w = min(max_w, max_h * 2)
+        image_h = max(1, image_w // 2)
+        image = card if card.shape[1] == image_w and card.shape[0] == image_h else \
+            resize_rgb(card, image_w, image_h)
+        image_x, image_y = (w - image_w) // 2, y + max(58, (ph - image_h) // 2 - 18)
+        self._blit_rgb(frame, image, image_x, image_y)
+        self._round_fill(frame, image_x + image_w - 144, image_y + 8, 132, 30,
+                         (45, 49, 38), 0.94)
+        if catch.shiny:
+            ribbon = "SHINY  *"
+            ribbon_color = GOLD
+        else:
+            count_before = int(ui.haul_counts_before.get(catch.species, 0))
+            line = state.lines[ui.check_line] if 0 <= ui.check_line < len(state.lines) else None
+            hauled = (sum(1 for hook in line.hooks[:ui.haul_index + 1]
+                          if hook.catch is not None and hook.catch.species == catch.species)
+                      if line else 1)
+            count = count_before + hauled
+            if count == 1:
+                ribbon, ribbon_color = "NEW!", GOLD
+            elif count in (3, 5, 10):
+                ribbon, ribbon_color = "STAGE UP!", GOOD
+            else:
+                ribbon, ribbon_color = "CATCH", INK
+        self._center(frame, ribbon, image_x + image_w - 78, image_y + 13,
+                     small, ribbon_color)
+        species = SPECIES_BY_ID[catch.species]
+        quality = quality_name(catch.quality)
+        detail = f"{catch.weight:.1f} lb  ·  {species.name}  ·  {quality}"
+        self._center(frame, detail, w / 2, image_y + image_h + 12, body, INK)
+        if catch.shiny:
+            self._center(frame, "SHINY CATCH", w / 2, image_y + image_h + 12 + self.cell(body)[1],
+                         small, GOLD)
+        foot = self._controls(ui, "Any key continues   Hold E speeds the haul",
+                              "A continues   Hold A speeds the haul")
+        self._center(frame, foot, w / 2, y + ph - self.cell(small)[1] - 10, small, DIM)
 
     # --- primitives -----------------------------------------------------
 
@@ -1266,10 +1489,7 @@ class UI:
         top = y + 20 + self.cell(head)[1]
         col_w = int(pw * 0.46)
         compact = w < 560
-        visible = 4 if compact else max(
-            4, (ph - (top - y) - self.cell(small)[1] * 2)
-            // (self.cell(small)[1] + 2)
-        )
+        visible = 4 if compact else max(4,(ph-(top-y)-self.cell(small)[1]*2)//(self.cell(small)[1]+2))
         start = _window(ui.journal_i,len(SPECIES),visible)
         for row_i,item in enumerate(SPECIES[start:start+visible]):
             i = start+row_i
@@ -1539,6 +1759,9 @@ class UI:
         volumes = settings.get("volumes", {})
         if not isinstance(volumes, dict):
             volumes = {}
+        haul_speed = settings.get("haul_speed", "normal")
+        if haul_speed not in {"normal", "quick", "instant"}:
+            haul_speed = "normal"
         mode = settings.get("mode", v2.get("mode", "cozy"))
         if mode not in MODES:
             mode = "cozy"
@@ -1548,6 +1771,7 @@ class UI:
             ("Text size", ("Small", "Standard", "Large")[text_size]),
             ("Dyslexia-friendly font", "Atkinson Hyperlegible" if settings.get("dyslexia_font") else "Off"),
             ("Reduced motion", "On" if settings.get("reduced_motion") else "Off"),
+            ("Haul speed", {"normal": "Normal", "quick": "Quick", "instant": "Instant"}[haul_speed]),
             ("Captions", "On" if settings.get("captions", True) else "Off"),
         ]
         for name in VOLUME_NAMES:
@@ -1912,3 +2136,29 @@ def _fit(img: np.ndarray, tw: int, th: int) -> np.ndarray:
     ys = np.linspace(0, sh - 1, th).astype(np.int32)
     xs = np.linspace(0, sw - 1, tw).astype(np.int32)
     return img[ys][:, xs]
+
+
+@lru_cache(maxsize=48)
+def _haul_mesh_sprite(species_id: str, lake_id: str, shiny: bool) -> np.ndarray:
+    """Rasterize a cached side-on fish mesh for the haul's surface beat."""
+    from .fishmesh import haul_mesh
+
+    width, height = 384, 192
+    color = np.zeros((height, width, 3), dtype=np.float32)
+    depth = np.full((height, width), 1e6, dtype=np.float32)
+    mesh = haul_mesh(species_id, lake_id, shiny)
+    projected = mesh.vertices[:, :2].copy()
+    scale = 136.0
+    projected[:, 0] = width * 0.5 + projected[:, 0] * scale
+    projected[:, 1] = height * 0.5 - projected[:, 1] * scale
+    for index, triangle in enumerate(mesh.triangles):
+        vertices = mesh.vertices[triangle]
+        xy = projected[triangle]
+        zz = 3.0 - vertices[:, 2] * 0.12
+        raster_tri(color, depth, xy, zz, mesh.colors[index])
+    visible = depth < 1e6
+    sprite = np.zeros((height, width, 4), dtype=np.uint8)
+    sprite[:, :, :3] = np.clip(color * 255.0 + 0.5, 0, 255).astype(np.uint8)
+    sprite[:, :, 3] = visible.astype(np.uint8) * 255
+    sprite.setflags(write=False)
+    return sprite
