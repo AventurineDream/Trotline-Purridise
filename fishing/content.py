@@ -419,6 +419,12 @@ def validate_content(raw, *, source="<content>") -> NarrativeContent:
 _SPECIES_FOODS = {"none", "panfish", "catfish", "hearty", "bass", "trout", "fillet", "cosmic"}
 _SPECIES_TAGS = {"surface", "cold", "shy", "current", "protected"}
 _SHINY_PALETTES = {"albino", "golden", "starry", "glow", "ink", "rose"}
+_FISH_FAMILIES = {"catfish", "bass", "sunfish", "trout", "gar", "sucker",
+                  "minnow", "pike", "sculpin", "eel", "cosmic"}
+_FISH_HEAD_SHAPES = {"rounded", "pointed", "flat"}
+_FISH_MOUTHS = {"terminal", "inferior", "upturned"}
+_FISH_TAILS = {"forked", "rounded", "truncate"}
+_FISH_PATTERNS = {"plain", "spots", "bars", "stripes", "mottled", "vermiculate"}
 _BOAT_TRAITS = {
     "shallow", "silent", "hammock", "wind_steady", "trophy_rail", "glow",
     "galley", "ice_hull",
@@ -622,7 +628,8 @@ class _ContentV2Validator:
 
         species = self.table(docs, species_file, "species", {
             "id", "name", "price", "min_lb", "max_lb", "pref_time", "depth", "blurb",
-            "folk_name", "lakes", "food", "tags", "shiny"}, {"rate", "trophy", "tier"})
+            "folk_name", "lakes", "food", "tags", "shiny"},
+            {"rate", "trophy", "tier", "look"})
         baits = self.table(docs, baits_file, "baits", {"id", "name", "price", "blurb", "matches"})
         boats = self.table(docs, boats_file, "boats", {
             "id", "name", "bow", "stern", "half_beam", "draft", "eye_height", "price",
@@ -719,6 +726,42 @@ class _ContentV2Validator:
                 for index, tag in enumerate(tags):
                     self.enum(species_file, f"{where}.tags[{index}]", tag, _SPECIES_TAGS)
             self.enum(species_file, where + ".shiny", row.get("shiny"), _SHINY_PALETTES)
+            if "look" in row:
+                look = row["look"]
+                if not isinstance(look, dict):
+                    self.error(species_file, where + ".look", "expected an object")
+                    continue
+                required_look = {
+                    "family", "length_depth_ratio", "body_depth", "head_shape", "snout",
+                    "mouth", "dorsal_count", "adipose", "tail_shape", "barbels",
+                    "scale_pattern", "palette",
+                }
+                for key in sorted(required_look - look.keys()):
+                    self.error(species_file, where + ".look", f"missing required field {key!r}")
+                for key in sorted(look.keys() - required_look):
+                    self.error(species_file, where + ".look", f"unknown field {key!r}")
+                look_where = where + ".look."
+                self.enum(species_file, look_where + "family", look.get("family"), _FISH_FAMILIES)
+                self.number(species_file, look_where + "length_depth_ratio",
+                            look.get("length_depth_ratio"), minimum=1.5, maximum=8.0)
+                self.number(species_file, look_where + "body_depth",
+                            look.get("body_depth"), minimum=0.5, maximum=1.5)
+                self.enum(species_file, look_where + "head_shape",
+                          look.get("head_shape"), _FISH_HEAD_SHAPES)
+                self.number(species_file, look_where + "snout", look.get("snout"),
+                            minimum=0.0, maximum=0.75)
+                self.enum(species_file, look_where + "mouth", look.get("mouth"), _FISH_MOUTHS)
+                self.number(species_file, look_where + "dorsal_count", look.get("dorsal_count"),
+                            integer=True, minimum=0, maximum=2)
+                if type(look.get("adipose")) is not bool:
+                    self.error(species_file, look_where + "adipose", "expected a boolean")
+                self.enum(species_file, look_where + "tail_shape",
+                          look.get("tail_shape"), _FISH_TAILS)
+                self.number(species_file, look_where + "barbels", look.get("barbels"),
+                            integer=True, minimum=0, maximum=6)
+                self.enum(species_file, look_where + "scale_pattern",
+                          look.get("scale_pattern"), _FISH_PATTERNS)
+                self.enum(species_file, look_where + "palette", look.get("palette"), species)
 
         if baits_file not in self.unavailable_files:
             self.number(baits_file, "fallback_multiplier", baits_root.get("fallback_multiplier"), minimum=0, maximum=1)
