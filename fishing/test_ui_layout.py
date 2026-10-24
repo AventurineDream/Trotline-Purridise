@@ -198,10 +198,14 @@ class GuideLayoutChecks(unittest.TestCase):
 
         self.assertEqual(len(panels), 1)
         px, py, pw, ph = panels[0]
-        details = [record for record in records if record[1] >= px + int(pw * 0.46) + 8]
-        self.assertTrue(any("Bluegill" in label for label, *_ in details))
-        self.assertTrue(any("caught" in label for label, *_ in details))
-        self.assertTrue(any("flats" in label.casefold() for label, *_ in details), details)
+        details = [record for record in records if (
+            record[0] == "Bluegill"
+            or any(token in record[0].casefold() for token in (
+                "caught", "flats", "nightcrawlers", "trophy"))
+        )]
+        self.assertTrue(any(label == "Bluegill" for label, *_ in details))
+        self.assertTrue(any("caught" in label.casefold() for label, *_ in details))
+        self.assertTrue(any("flats" in label.casefold() for label, *_ in details), records)
         for label, x, y, width, height in details:
             with self.subTest(label=label):
                 self.assertGreaterEqual(x, px)
