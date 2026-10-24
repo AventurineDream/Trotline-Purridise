@@ -288,6 +288,7 @@ def default_v2(state=None) -> dict:
             "text_size": 1,
             "dyslexia_font": False,
             "reduced_motion": False,
+            "haul_speed": "normal",
             "captions": True,
             "volumes": {"master": 1.0, "music": 1.0,
                         "ambience": 1.0, "sfx": 1.0},
@@ -344,6 +345,8 @@ def _valid_leaf(value, default, path: str) -> bool:
         return value in ("cozy", "old_salt")
     if path == "v2.settings.text_size":
         return type(value) is int and value in (0, 1, 2)
+    if path == "v2.settings.haul_speed":
+        return value in ("normal", "quick", "instant")
     if path in ("v2.settings.dyslexia_font", "v2.settings.reduced_motion",
                 "v2.settings.captions", "v2.settings.collar_visible",
                 "v2.profile.collar.visible"):

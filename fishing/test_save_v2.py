@@ -16,7 +16,7 @@ from . import savepaths
 from .gamepad import default_key_bindings
 from .narrative import QUEST_IDS
 from .savepaths import (UnsupportedSaveVersionError, book_stage,
-                        load_game_save)
+                        load_game_save, merge_v2_defaults)
 from .sim import State
 from .ui import UI, UIState
 from .world import World
@@ -136,7 +136,7 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(defaults["calendar"], {"weather_windows": {}})
         self.assertEqual(defaults["settings"], {
             "mode": "cozy", "text_size": 1, "dyslexia_font": False,
-            "reduced_motion": False, "captions": True,
+            "reduced_motion": False, "haul_speed": "normal", "captions": True,
             "volumes": {"master": 1.0, "music": 1.0,
                         "ambience": 1.0, "sfx": 1.0},
             "collar_visible": True,
@@ -165,6 +165,11 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(guardian["v2"]["profile"]["bot_name"], "Copper-316")
         self.assertEqual([book_stage(n) for n in (0, 1, 3, 5, 10)],
                          ["rumor", "identified", "bait_known", "verified", "mastered"])
+
+    def test_invalid_saved_haul_speed_defaults_to_normal(self):
+        saved = {"settings": {"haul_speed": "warp"}}
+        migrated = merge_v2_defaults(None, saved)
+        self.assertEqual(migrated["settings"]["haul_speed"], "normal")
 
     def test_unknown_fields_survive_at_root_narrative_line_catch_and_v2_levels(self):
         self.migrate_fixture("mid_game.json")
