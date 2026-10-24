@@ -122,6 +122,7 @@ class Catch:
     treasured: bool | None = None
     legendary: bool = False
     disposition: str = "pending"
+    haul_seen: bool = False
 
     def __post_init__(self):
         if self.treasured is None:
@@ -150,6 +151,8 @@ class Catch:
             "catch_game_minute": (None if self.catch_game_minute is None
                                   else round(self.catch_game_minute, 3)),
         })
+        if self.haul_seen:
+            result["haul_seen"] = True
         if self.shiny:
             result["shiny"] = True
         if self.treasured:
@@ -174,7 +177,7 @@ class Catch:
             catch_minute = None
         known = {"species", "weight", "quality", "age", "zone", "bait", "hour",
                  "lake_id", "noted_tired", "catch_game_minute", "shiny",
-                 "treasured", "legendary", "disposition"}
+                 "treasured", "legendary", "disposition", "haul_seen"}
         return cls(
             raw["species"], float(raw["weight"]), float(raw["quality"]),
             float(raw["age"]), raw["zone"], raw["bait"], float(raw["hour"]),raw.get("lake_id","briar"),
@@ -185,6 +188,7 @@ class Catch:
             treasured=(bool(raw["treasured"]) if "treasured" in raw else None),
             legendary=bool(raw.get("legendary", False)),
             disposition=raw.get("disposition", "pending"),
+            haul_seen=bool(raw.get("haul_seen", False)),
         )
 
 

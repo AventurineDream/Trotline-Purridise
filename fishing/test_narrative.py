@@ -619,7 +619,7 @@ class NarrativeChecks(unittest.TestCase):
 
         self.state._quest_event_handler = capture
         session._open_e()
-        self.assertEqual(session.ui.mode, "check")
+        self.assertEqual(session.ui.mode, "haul")
         self.assertEqual(quest.status, "ready")
         event = next(event for event in events if event["type"] == "line.check")
         self.assertEqual(event["zone_id"], "briar:deep")

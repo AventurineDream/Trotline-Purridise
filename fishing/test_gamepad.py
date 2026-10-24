@@ -398,7 +398,8 @@ class GamepadChecks(unittest.TestCase):
             self.virtual_tap(joystick, set_button, update, BUTTON_Y, session)  # Tap Y sends Bot to scout.
             self.assertNotEqual(state.bot_phase, "home")
 
-            self.virtual_tap(joystick, set_button, update, BUTTON_A, session)  # E-equivalent opens the check list.
+            state.v2["settings"]["haul_speed"] = "instant"
+            self.virtual_tap(joystick, set_button, update, BUTTON_A, session)  # E-equivalent opens the instant summary.
             self.assertEqual(session.ui.mode, "check")
             for _ in range(len(check_rows(state, 0)) - 1):
                 self.virtual_tap(joystick, set_button, update, BUTTON_DPAD_DOWN, session)
