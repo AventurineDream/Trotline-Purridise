@@ -1265,7 +1265,11 @@ class UI:
         count = int(rec.get("count", 0))
         top = y + 20 + self.cell(head)[1]
         col_w = int(pw * 0.46)
-        visible = max(4,(ph-(top-y)-self.cell(small)[1]*2)//(self.cell(small)[1]+2))
+        compact = w < 560
+        visible = 4 if compact else max(
+            4, (ph - (top - y) - self.cell(small)[1] * 2)
+            // (self.cell(small)[1] + 2)
+        )
         start = _window(ui.journal_i,len(SPECIES),visible)
         for row_i,item in enumerate(SPECIES[start:start+visible]):
             i = start+row_i
@@ -1294,9 +1298,9 @@ class UI:
                                    20 * self.cell(small)[0])
         stacked = detail_width < minimum_detail_width
         if stacked:
-            detail_x = dx
+            detail_x = x + m if compact else dx
             detail_width = panel_right - detail_x
-        detail_y = top + 70 if stacked else top
+        detail_y = top + (64 if compact else 70) if stacked else top
         if count <= 0:
             detail_y = self._draw_journal_text(
                 frame, sp.name, detail_x, detail_y, detail_width, body, INK,
