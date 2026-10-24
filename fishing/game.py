@@ -278,6 +278,8 @@ class Session:
             self._set_keys(keys, dt)
         elif mode == "check":
             self._check_keys(keys, dt)
+        elif mode == "haul":
+            self._haul_keys(keys, dt)
         elif mode == "journal":
             self._journal_keys(keys, dt)
         elif mode == "well":
@@ -519,13 +521,26 @@ class Session:
             return
         nearest = self.state.nearest_line()
         if nearest is not None and abs(self.state.speed) < 1.4:
-            self.ui.mode = "check"
+            self.ui.mode = "haul"
             self.ui.check_line = nearest
             self.ui.check_i = 0
+            self.ui.haul_index = 0
+            self.ui.haul_timer = 0.0
+            self.ui.haul_phase = "rise"
+            self.ui.haul_phase_timer = 0.0
             self.ui.note = ""
             if self.state.prepare_catch_dispositions(nearest):
                 self.ui.note = "The livewell is full. I picked the smallest to swim home. You can change that."
             line = self.state.lines[nearest]
+            catches_on_line = {}
+            for hook in line.hooks:
+                if hook.catch is not None:
+                    catches_on_line[hook.catch.species] = catches_on_line.get(hook.catch.species, 0) + 1
+            self.ui.haul_counts_before = {
+                species: max(0, int(record.get("count", 0)) - catches_on_line.get(species, 0))
+                for species, record in self.state.journal.items()
+                if isinstance(record, dict)
+            }
             self.state.emit_quest_event({
                 "type": "line.check",
                 "lake_id": self.state.lake_id,
@@ -547,8 +562,104 @@ class Session:
                     for hook in line.hooks if hook.catch is not None
                 ],
             })
+            settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
+            if settings.get("haul_speed") == "instant":
+                self.ui.mode = "check"
             return
         self.state.toast("Nothing here to check.")
+
+    def _haul_keys(self, keys, dt: float) -> None:
+        index = self.ui.check_line
+        if index < 0 or index >= len(self.state.lines):
+            self.ui.mode = "play"
+            return
+        line = self.state.lines[index]
+        if not line.hooks:
+            self.ui.mode = "check"
+            return
+        if "esc" in keys.pressed:
+            self.ui.mode = "check"
+            self.ui.check_i = 0
+            return
+
+        settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
+        speed = settings.get("haul_speed", "normal")
+        if speed not in {"normal", "quick", "instant"}:
+            speed = "normal"
+        if speed == "instant":
+            self.ui.mode = "check"
+            self.ui.check_i = 0
+            return
+        cadence = 0.25 if speed == "normal" else 0.10
+        needs = self.state.v2.get("needs", {}) if isinstance(self.state.v2, dict) else {}
+        try:
+            awake_hours = float(needs.get("awake_h", 0.0)) if isinstance(needs, dict) else 0.0
+        except (TypeError, ValueError, OverflowError):
+            awake_hours = 0.0
+        mode = settings.get("mode", self.state.v2.get("mode", "cozy"))
+        if mode == "old_salt" and awake_hours >= 16.0:
+            cadence *= 1.25
+        multiplier = 3.0 if "e" in keys.held else 1.0
+        step = max(0.0, float(dt)) * multiplier
+        if self.ui.haul_index >= len(line.hooks):
+            self.ui.mode = "check"
+            self.ui.check_i = 0
+            return
+        if self.ui.haul_phase == "card" and keys.pressed - {"e"}:
+            self._next_haul_hook()
+            return
+
+        remaining = step
+        for _ in range(len(line.hooks) * 3 + 4):
+            if remaining <= 1e-9 or self.ui.mode != "haul":
+                return
+            if self.ui.haul_index >= len(line.hooks):
+                self.ui.mode = "check"
+                self.ui.check_i = 0
+                return
+            hook = line.hooks[self.ui.haul_index]
+            if self.ui.haul_phase == "card":
+                needed = max(0.0, 1.2 - self.ui.haul_phase_timer)
+                used = min(remaining, needed)
+                self.ui.haul_phase_timer += used
+                remaining -= used
+                if self.ui.haul_phase_timer + 1e-9 >= 1.2:
+                    self._next_haul_hook()
+                    continue
+                return
+            if self.ui.haul_phase == "surface":
+                needed = max(0.0, 0.24 - self.ui.haul_phase_timer)
+                used = min(remaining, needed)
+                self.ui.haul_phase_timer += used
+                remaining -= used
+                if self.ui.haul_phase_timer + 1e-9 >= 0.24:
+                    self.ui.haul_phase = "card"
+                    self.ui.haul_phase_timer = 0.0
+                    continue
+                return
+            needed = max(0.0, cadence - self.ui.haul_timer)
+            used = min(remaining, needed)
+            self.ui.haul_timer += used
+            remaining -= used
+            if self.ui.haul_timer + 1e-9 < cadence:
+                return
+            if hook.catch is not None:
+                self.ui.haul_phase = "surface"
+                self.ui.haul_timer = cadence
+                self.ui.haul_phase_timer = 0.0
+            else:
+                self._next_haul_hook()
+
+    def _next_haul_hook(self) -> None:
+        self.ui.haul_index += 1
+        self.ui.haul_timer = 0.0
+        self.ui.haul_phase = "rise"
+        self.ui.haul_phase_timer = 0.0
+        if self.ui.check_line >= len(self.state.lines) or (
+                self.ui.check_line < 0
+                or self.ui.haul_index >= len(self.state.lines[self.ui.check_line].hooks)):
+            self.ui.mode = "check"
+            self.ui.check_i = 0
 
     def _shop_keys(self, keys, dt):
         if "esc" in keys.pressed:
@@ -802,15 +913,15 @@ class Session:
         rows = self.ui.settings_i
         settings = self.state.v2.setdefault("settings", {})
         if keys.tap("up", dt):
-            self.ui.settings_i = (self.ui.settings_i - 1) % 11
+            self.ui.settings_i = (self.ui.settings_i - 1) % 12
         elif keys.tap("down", dt):
-            self.ui.settings_i = (self.ui.settings_i + 1) % 11
+            self.ui.settings_i = (self.ui.settings_i + 1) % 12
         elif keys.tap("left", dt):
             self._adjust_setting(rows, -1)
         elif keys.tap("right", dt):
             self._adjust_setting(rows, 1)
         elif "return" in keys.pressed or "space" in keys.pressed:
-            if rows == 10:
+            if rows == 11:
                 self.ui.settings_page = "keys"
                 self.ui.key_binding_i = 0
                 self.ui.capturing_key = False
@@ -834,9 +945,15 @@ class Session:
         elif row == 3:
             settings["reduced_motion"] = not bool(settings.get("reduced_motion", False))
         elif row == 4:
+            speeds = ("normal", "quick", "instant")
+            current = settings.get("haul_speed", "normal")
+            if current not in speeds:
+                current = "normal"
+            settings["haul_speed"] = speeds[(speeds.index(current) + (1 if direction >= 0 else -1)) % len(speeds)]
+        elif row == 5:
             settings["captions"] = not bool(settings.get("captions", True))
-        elif 5 <= row <= 8:
-            name = ("master", "music", "ambience", "sfx")[row - 5]
+        elif 6 <= row <= 9:
+            name = ("master", "music", "ambience", "sfx")[row - 6]
             volumes = settings.get("volumes")
             if not isinstance(volumes, dict):
                 volumes = {}
@@ -849,7 +966,7 @@ class Session:
             if not math.isfinite(current):
                 current = 1.0
             volumes[name] = round(max(0.0, min(1.0, current + direction * 0.1)), 2)
-        elif row == 9:
+        elif row == 10:
             profile = self.state.v2.setdefault("profile", {})
             collar = profile.setdefault("collar", {})
             visible = not bool(settings.get("collar_visible", collar.get("visible", True)))
