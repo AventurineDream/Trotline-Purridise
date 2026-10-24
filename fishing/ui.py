@@ -1327,7 +1327,7 @@ class UI:
             detail_y = self._draw_journal_text(
                 frame, where, detail_x, detail_y + 2, detail_width, small, INK,
                 max_lines=2, bottom=footer_top)
-        blurb_y = max(top + 70, detail_y + 3 if stacked else top + 70)
+        blurb_y = max(top + 70, detail_y + 3)
         self._draw_journal_text(
             frame, sp.blurb, dx, blurb_y, panel_right - dx, small, DIM,
             max_lines=4, bottom=footer_top)
