@@ -78,6 +78,7 @@ def _species_values(row: dict) -> dict:
     values = dict(_TIER_DEFAULTS.get(row.get("tier"), {}))
     values.update(row)
     values.pop("tier", None)
+    values.pop("look", None)
     return values
 
 
