@@ -201,7 +201,7 @@ class GuideLayoutChecks(unittest.TestCase):
         details = [record for record in records if record[1] >= px + int(pw * 0.46) + 8]
         self.assertTrue(any("Bluegill" in label for label, *_ in details))
         self.assertTrue(any("caught" in label for label, *_ in details))
-        self.assertTrue(any("flats" in label.casefold() for label, *_ in details))
+        self.assertTrue(any("flats" in label.casefold() for label, *_ in details), details)
         for label, x, y, width, height in details:
             with self.subTest(label=label):
                 self.assertGreaterEqual(x, px)
