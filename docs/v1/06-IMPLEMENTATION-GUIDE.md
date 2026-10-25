@@ -174,6 +174,15 @@ their new ids, rather than starting a second ledger.
 }
 ```
 
+Book pages snapshot their attributed rumor in `book.species[id].heard`
+(`text`, `teller`) on first access or catch. Authored rumors, folk names and
+legendary stories are loaded from validated `content_v2/book.json`. Later content
+edits cannot replace an existing snapshot. Each catch appends its zone, bait,
+time band, lake, weight and game minute to `found`; new catches also carry an
+optional `depth_m`, copied into that observation. Migrated observations retain
+only the conditions actually present in the old journal. Legendary pages keep
+an analogous `heard` story snapshot and append their first-hand `records`.
+
 `narrative_v1.reward_claims` remains the single authority for quest rewards.
 The v2 `reward_claims` lists hold keys for the new story, legendary-record and
 book-stage-up rewards. A scene state is `pending` or `done`; pending scenes
@@ -196,6 +205,11 @@ build and remains serialized until a recognized boat is selected.
   seed the first `found` condition. The Bot name is `Copper-` followed by the
   absolute schedule seed modulo 1000, padded to three digits. Unlocks: Cedar is
   open. Guardian sightings carry over.
+- Historical book thresholds are seeded into `book_stage_up` as
+  `<species id>:<stage>` claim keys during migration or normalization. Loading
+  never replays their toasts or grants their rewards. New catch transitions
+  claim the next threshold and emit a `book.stage_up` event together; the toast
+  lasts 3 seconds. Counts stay solely in the existing journal.
 - **Exactly once:** each reward (quest, story, legendary record, book stage-up) has
   a claim key in the ledger. Credit and reward are written in the same save
   transaction. Re-entering a scene never re-grants. For v2 rewards, add the key

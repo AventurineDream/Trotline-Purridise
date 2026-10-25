@@ -13,6 +13,7 @@ from pathlib import Path
 import tempfile
 from typing import Callable, Sequence, Type
 
+from .book import BOOK_STAGES, book_stage, seed_stage_claims
 from .gamepad import KEY_NAMES, default_key_bindings
 
 
@@ -21,8 +22,6 @@ LEGACY_SAVE = Path("saves") / "briar.json"
 SDL_ORGANIZATION = "TrotLineSim"
 SDL_APPLICATION = "TrotlinePurridise"
 V2_REWARD_KINDS = ("story", "legendary_record", "book_stage_up")
-BOOK_STAGES = ((10, "mastered"), (5, "verified"), (3, "bait_known"),
-               (1, "identified"), (0, "rumor"))
 _LOAD_ERRORS = (ValueError, KeyError, TypeError, OverflowError,
                 IndexError, AttributeError)
 
@@ -222,14 +221,6 @@ def _preserve_rejected_save(save_path: Path) -> Path:
             temporary.unlink(missing_ok=True)
 
 
-def book_stage(count: int) -> str:
-    try:
-        count = max(0, int(count))
-    except (TypeError, ValueError, OverflowError):
-        count = 0
-    return next(stage for threshold, stage in BOOK_STAGES if count >= threshold)
-
-
 def _book_defaults(state) -> dict:
     species = {}
     for species_id, entry in state.journal.items():
@@ -337,6 +328,8 @@ def merge_v2_defaults(state, saved_v2: object) -> dict:
         collar_visible = True
     normalized["settings"]["collar_visible"] = collar_visible
     normalized["profile"]["collar"]["visible"] = collar_visible
+    if state is not None:
+        seed_stage_claims(normalized, state.journal)
     return normalized
 
 
