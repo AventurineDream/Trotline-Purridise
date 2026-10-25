@@ -20,6 +20,7 @@ from .render import Renderer
 from .sim import Catch, Hook, SetLine, State
 from .ui import UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE
 from .narrative import QUEST_IDS
+from .bookview import BOOK_TABS
 from .boat import BOATS, ROWBOAT_BATTERY_KWH
 from .world import World
 
@@ -138,7 +139,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
         mode_frames = {mode:0 for mode in modes}
         lake_boat_ms = {f"{lake}/{boat}":[] for lake in ("briar","cedar") for boat in BOATS}
         coverage = {name:set() for name in ("modes", "lake_boat_pairs", "shop_tabs",
-                                           "help_pages", "fish_journal", "quest_journal",
+                                           "help_pages", "fish_journal", "quest_journal", "book_tabs",
                                            "dialogue_givers", "dialogue_statuses")}
         for i in range(frames):
             lake_id = ("briar","cedar")[(i//300)%2]
@@ -179,9 +180,13 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             mode_frames[panel.mode] += 1
             panel.shop_tab = visit%len(SHOP_TABS)
             panel.help_page = visit%HELP_N
-            journal_visit = visit%(len(SPECIES)+len(QUEST_IDS))
-            panel.journal_page = 3 if journal_visit >= len(SPECIES) else 0
+            legacy_pages = len(SPECIES) + len(QUEST_IDS)
+            journal_visit = visit % (legacy_pages + 3)
+            panel.journal_page = ((1, 2, 4)[journal_visit - legacy_pages]
+                                  if journal_visit >= legacy_pages else
+                                  (3 if journal_visit >= len(SPECIES) else 0))
             panel.journal_i = journal_visit%len(SPECIES)
+            panel.book_entry_i = journal_visit%len(SPECIES)
             panel.journal_quest_i = (journal_visit-len(SPECIES))%len(QUEST_IDS)
             if panel.mode=="dialogue":
                 quest_id = QUEST_IDS[visit%len(QUEST_IDS)]
@@ -211,8 +216,10 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             elif panel.mode=="help":
                 coverage["help_pages"].add(panel.help_page)
             elif panel.mode=="journal":
-                coverage["quest_journal" if panel.journal_page == 3 else "fish_journal"].add(
-                    panel.journal_quest_i if panel.journal_page == 3 else panel.journal_i)
+                coverage["book_tabs"].add(panel.journal_page)
+                if panel.journal_page in (0, 3):
+                    coverage["quest_journal" if panel.journal_page == 3 else "fish_journal"].add(
+                        panel.journal_quest_i if panel.journal_page == 3 else panel.journal_i)
             if low.dtype!=np.uint8 or not np.isfinite(low).all():
                 raise AssertionError("invalid frame")
             if text.cache_bytes>text.cache_limit:
@@ -235,6 +242,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
         expected_coverage = {"modes":len(modes), "lake_boat_pairs":len(lake_boat_ms),
                              "shop_tabs":len(SHOP_TABS), "help_pages":HELP_N,
                              "fish_journal":len(SPECIES), "quest_journal":len(QUEST_IDS),
+                             "book_tabs":len(BOOK_TABS),
                              "dialogue_givers":len(QUEST_IDS), "dialogue_statuses":4}
         coverage_complete = all(len(coverage[name])==count for name,count in expected_coverage.items())
         if frames>=1200 and not coverage_complete:

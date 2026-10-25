@@ -25,8 +25,8 @@ from .render import Renderer
 from .imageops import resize_rgb
 from .guardian import maybe_start_sighting, pause_sighting_clock
 from .haul import haul_cadence
-from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES
-from .bookview import (BOOK_TABS, book_controls, book_layout, contains,
+from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_rumor
+from .bookview import (BOOK_TABS, ENTRY_IDS, book_controls, book_layout, contains,
                        move_selection, turn_page)
 from .bot import reset as reset_bot
 from .bot import summon as summon_bot
@@ -144,8 +144,19 @@ class Session:
             self._menu_held.update(keys.held & NAVIGATION_KEYS)
         self._refresh_npcs()
         self._keys(keys, dt)
+        self._remember_book_page()
         self._simulate(keys, dt, driving_presses)
         self._tick_caption(dt)
+
+    def _remember_book_page(self):
+        """Opening a page records its rumor; drawing the book never saves it."""
+        if self.ui.mode != "journal" or self.ui.journal_page != 1 or self.ui.book_ceremony:
+            return
+        sid = ENTRY_IDS[self.ui.book_entry_i % len(ENTRY_IDS)]
+        if sid in BOOK_SPECIES_IDS:
+            remember_rumor(self.state.v2["book"], sid)
+        else:
+            legendary_page(sid, self.state.v2)
 
     def _book_presentation(self, dt):
         events = self.state.take_book_events()
