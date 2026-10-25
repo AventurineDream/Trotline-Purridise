@@ -378,6 +378,8 @@ large text. The full-frame verifier includes all five book tabs in its coverage.
 recorded and unrecorded legendary examples, and the title ceremony at 480×270
 for every text size. The compact quest selection falls back to the first quest
 if the long line/scout objective is no longer in the content.
+The `-accessible.png` variants also capture Large text with the accessibility
+font; shortcut hints fit their reserved footer row using that font's metrics.
 
 Stage events are consumed by the session into one three-second invitation;
 J (hold Y on gamepad) reads its exact species page. Title ceremonies wait for

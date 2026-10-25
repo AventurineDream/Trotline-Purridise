@@ -188,7 +188,6 @@ class BookView:
         size = self.small if size is None else size
         value = str(value)
         if y + self.u.cell(size)[1] > self.layout.y + self.layout.h - 6:
-            self.mark_cut()
             return y
         label = value
         while label and self.u._render(label, size, color).shape[1] > width:
@@ -312,7 +311,12 @@ class BookView:
         foot = ("D-pad choose · Left/right tabs · A opens / turns · B closes"
                 if self.ui.input_device == "gamepad" else
                 "W/S choose · A/D tabs · Enter opens / turns · J closes · Click to choose")
-        self.text(foot, self.x, l.y + l.h - 32, self.w)
+        # Shortcut hints have a fixed footer row. Keep tall accessibility glyphs
+        # inside that row instead of treating the hint as overflowing content.
+        hint_size = self.small
+        while hint_size > 1 and self.u.cell(hint_size)[1] > 26:
+            hint_size -= 1
+        self.text(foot, self.x, l.y + l.h - 32, self.w, hint_size)
 
     def grid(self):
         self.ui.journal_i %= len(BOOK_SPECIES_IDS)
@@ -571,8 +575,9 @@ def book_gallery(destination, *, text=None, world=None):
             ("unrecorded", UIState(mode="journal", journal_page=1, book_entry_i=len(BOOK_SPECIES_IDS) + 1)),
             ("ceremony", UIState(mode="journal", book_ceremony="book_of_five_waters")),
         )
-        for size in (0, 1, 2):
+        for size, accessibility in ((0, False), (1, False), (2, False), (2, True)):
             state.v2["settings"]["text_size"] = size
+            state.v2["settings"]["dyslexia_font"] = accessibility
             for name, panel in compact_cases:
                 panel.book_detail_page = 0
                 frame = np.full((270, 480, 3), LEATHER, dtype=np.uint8)
@@ -589,9 +594,11 @@ def book_gallery(destination, *, text=None, world=None):
                     np.concatenate(compact_frames[index:index+2], axis=1)
                     for index in range(0, len(compact_frames), 2)
                 ], axis=0)
-                write_png(out / f"book-{name}-compact-text{size}.png", sheet)
-                if name == "story" and size == 2:
+                suffix = "-accessible" if accessibility else ""
+                write_png(out / f"book-{name}-compact-text{size}{suffix}.png", sheet)
+                if name == "story" and size == 2 and not accessibility:
                     write_png(out / "book-story-compact.png", sheet)
+        state.v2["settings"]["dyslexia_font"] = False
         timings = []
         for index in range(150):
             panel = UIState(mode="journal", journal_page=index % 5, book_entry_i=3)

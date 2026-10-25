@@ -4,9 +4,9 @@
     1280,
     720
   ],
-  "p95_ms": 17.49,
-  "peak_rss_mib": 180.4,
-  "text_cache_mb": 8.38,
+  "p95_ms": 17.63,
+  "peak_rss_mib": 172.8,
+  "text_cache_mb": 8.36,
   "tabs": [
     "Fish",
     "Book",
