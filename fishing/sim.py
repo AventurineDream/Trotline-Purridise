@@ -57,6 +57,8 @@ from .boat import (
 from .weather import wind_at
 from .lakes import LAKES
 from .narrative import NarrativeState, deployment_id
+from .book import (promote_title, record_legendary_catch, record_observation,
+                   refresh_collection_title, stage_up_events)
 from .savepaths import (UnsupportedSaveVersionError, V2_REWARD_KINDS,
                         merge_v2_defaults)
 
@@ -123,6 +125,7 @@ class Catch:
     legendary: bool = False
     disposition: str = "pending"
     haul_seen: bool = False
+    depth_m: float | None = None
 
     def __post_init__(self):
         if self.treasured is None:
@@ -153,6 +156,8 @@ class Catch:
         })
         if self.haul_seen:
             result["haul_seen"] = True
+        if self.depth_m is not None:
+            result["depth_m"] = round(self.depth_m, 3)
         if self.shiny:
             result["shiny"] = True
         if self.treasured:
@@ -175,9 +180,15 @@ class Catch:
             catch_minute_valid = False
         if not catch_minute_valid:
             catch_minute = None
+        depth = raw.get("depth_m")
+        try:
+            if type(depth) not in (int, float) or not math.isfinite(depth) or depth < 0:
+                depth = None
+        except OverflowError:
+            depth = None
         known = {"species", "weight", "quality", "age", "zone", "bait", "hour",
                  "lake_id", "noted_tired", "catch_game_minute", "shiny",
-                 "treasured", "legendary", "disposition", "haul_seen"}
+                 "treasured", "legendary", "disposition", "haul_seen", "depth_m"}
         return cls(
             raw["species"], float(raw["weight"]), float(raw["quality"]),
             float(raw["age"]), raw["zone"], raw["bait"], float(raw["hour"]),raw.get("lake_id","briar"),
@@ -189,6 +200,7 @@ class Catch:
             legendary=bool(raw.get("legendary", False)),
             disposition=raw.get("disposition", "pending"),
             haul_seen=bool(raw.get("haul_seen", False)),
+            depth_m=depth,
         )
 
 
@@ -480,6 +492,7 @@ class State:
     time_scale: int = 1
     muted: bool = False
     toasts: list = field(default_factory=list)
+    book_events: list = field(default_factory=list, repr=False, compare=False)
     preferred_bait: str = "worm"
     hooked_total: int = 0
     stamp: float = 0.0
@@ -532,8 +545,8 @@ class State:
         self.anchored = True
         self.sail_raised = False
 
-    def toast(self, text: str):
-        self.toasts.append([text, 4.8])
+    def toast(self, text: str, seconds: float = 4.8):
+        self.toasts.append([text, seconds])
         if len(self.toasts) > 4:
             self.toasts = self.toasts[-4:]
 
@@ -831,7 +844,8 @@ class State:
                 weight = self._roll_weight(sp)
                 caught_hour = hour
                 catch = Catch(sp, weight, 1.0, 0.0, zone, bait, caught_hour,
-                              self.lake_id, catch_game_minute=self.game_minutes)
+                              self.lake_id, catch_game_minute=self.game_minutes,
+                              depth_m=depth)
                 hook.catch = catch
                 hook.baited = False
                 hooked += 1
@@ -854,16 +868,26 @@ class State:
         return sp.min_lb + (sp.max_lb - sp.min_lb) * u
 
     def _note_journal(self, catch: Catch, announce: bool = False):
-        rec = self.journal[catch.species]
-        first = int(rec["count"]) == 0
+        record_legendary_catch(self.v2, catch)
+        rec = self.journal.get(catch.species)
+        if not isinstance(rec, dict):
+            return
+        previous_count = max(0, int(rec.get("count", 0)))
+        first = previous_count == 0
         previous = float(rec["best"])
-        rec["count"] += 1
+        rec["count"] = previous_count + 1
         if catch.weight > previous:
             rec["best"] = round(catch.weight, 2)
         rec["zone"] = catch.zone
         rec["bait"] = catch.bait
         rec["band"] = band_of(catch.hour)
         rec["lake_id"] = catch.lake_id
+        record_observation(self.v2.setdefault("book", {}), catch)
+        for event in stage_up_events(self.v2, catch.species,
+                                     previous_count, rec["count"]):
+            self.book_events.append(event)
+            self.toast(event["toast"], event["toast_seconds"])
+        refresh_collection_title(self.v2.setdefault("book", {}), self.journal)
         if announce and not first and catch.weight > previous + 0.01:
             self._records.append((catch.weight, SPECIES_BY_ID[catch.species].name))
 
@@ -1728,6 +1752,15 @@ class State:
             return False
         claims.append(key)
         return True
+
+    def set_book_title(self, title: str) -> bool:
+        """Advance the book title from story progress or collection completion."""
+        return promote_title(self.v2.setdefault("book", {}), title, self.journal)
+
+    def take_book_events(self) -> list[dict]:
+        """Return pending presentation events and clear the transient queue."""
+        events, self.book_events = self.book_events, []
+        return events
 
     def set_scene_status(self, scene_id: str, status: str) -> bool:
         """Latch a scene as pending or done; pending scenes never grant rewards."""
