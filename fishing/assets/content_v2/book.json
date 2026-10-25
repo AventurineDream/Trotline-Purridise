@@ -1,0 +1,775 @@
+{
+  "schema_version": 1,
+  "species_rumors": {
+    "bluegill": {
+      "text": "Sunnies follow worms like kittens follow string. Try the flats by day.",
+      "teller": "Pip & Pebble",
+      "folk_name": "Sunny"
+    },
+    "bullhead": {
+      "text": "Mud Kittens come out at dusk in skinny water. Worms, always worms.",
+      "teller": "Silas",
+      "folk_name": "Mud Kitten"
+    },
+    "crappie": {
+      "text": "Papermouths hide in the lilies at dawn and gossip about minnows.",
+      "teller": "Willow",
+      "folk_name": "Papermouth"
+    },
+    "carp": {
+      "text": "A Golden Bucket will drag your jug clear across the warm flats.",
+      "teller": "Biscuit",
+      "folk_name": "Golden Bucket"
+    },
+    "drum": {
+      "text": "Put your ear to the hull over deep mud. That grunting is a Grunter.",
+      "teller": "Old Gus",
+      "folk_name": "Grunter"
+    },
+    "channel": {
+      "text": "The Wage pays the rent: liver, cypress shore, after dark.",
+      "teller": "Grandmother Whiskers",
+      "folk_name": "The Wage"
+    },
+    "blue": {
+      "text": "Old Blue sleeps in the deepest hole and wakes for cut shad at night.",
+      "teller": "Master Cinder",
+      "folk_name": "Old Blue"
+    },
+    "flathead": {
+      "text": "The Yellow Cat wants its supper alive. Minnows on the rocks at night.",
+      "teller": "Master Cinder",
+      "folk_name": "Yellow Cat"
+    },
+    "largemouth": {
+      "text": "Bucketmouth could swallow a sunrise. Minnows in the lilies at dawn.",
+      "teller": "Willow",
+      "folk_name": "Bucketmouth"
+    },
+    "smallmouth": {
+      "text": "Bronzeback lives on the south rocks and loves a crawfish.",
+      "teller": "Old Gus",
+      "folk_name": "Bronzeback"
+    },
+    "gar": {
+      "text": "Needle-Nose sunbathes in the cypress, then hunts cut bait after sunset.",
+      "teller": "Elder Moss",
+      "folk_name": "Needle-Nose"
+    },
+    "buffalo": {
+      "text": "The Drifter wanders the deep, bumping into worms by accident.",
+      "teller": "Old Gus",
+      "folk_name": "Drifter"
+    },
+    "white_crappie": {
+      "text": "Silver Paper is the creek channel's papermouth. Minnows by the brush.",
+      "teller": "Dr. Alder",
+      "folk_name": "Silver Paper"
+    },
+    "redear": {
+      "text": "Shellcrackers crunch snails on firm ground. Worms do nicely.",
+      "teller": "Biscuit",
+      "folk_name": "Shellcracker"
+    },
+    "green_sunfish": {
+      "text": "The Green Grump guards the rocks like it owns them.",
+      "teller": "Pip & Pebble",
+      "folk_name": "Green Grump"
+    },
+    "warmouth": {
+      "text": "Goggle-Eye peeks out of brushy coves at dusk.",
+      "teller": "Master Cinder",
+      "folk_name": "Goggle-Eye"
+    },
+    "redbreast": {
+      "text": "Copper Belly waits at creek mouths with its long ear flap out.",
+      "teller": "Silas",
+      "folk_name": "Copper Belly"
+    },
+    "longear": {
+      "text": "Painted Ear is the prettiest fish in the clear shallows. Worms.",
+      "teller": "Willow",
+      "folk_name": "Painted Ear"
+    },
+    "spotted_bass": {
+      "text": "Spot hunts where the creek channel drops off. Minnow or craw.",
+      "teller": "Sparky",
+      "folk_name": "Spot"
+    },
+    "white_bass": {
+      "text": "Sand Bass school where the channel meets open water at dawn.",
+      "teller": "Captain Maeve",
+      "folk_name": "Sand Bass"
+    },
+    "yellow_bass": {
+      "text": "Stripey hangs over underwater humps. Small minnows by day.",
+      "teller": "Dr. Alder",
+      "folk_name": "Stripey"
+    },
+    "hybrid_striper": {
+      "text": "The Wiper pulls like a motor. Shad over deep humps at dawn.",
+      "teller": "Doc Barnaby",
+      "folk_name": "The Wiper"
+    },
+    "striped_bass": {
+      "text": "A Rockfish was stocked here once, and it never left. Deep, open water, cut shad.",
+      "teller": "Grandmother Whiskers",
+      "folk_name": "Rockfish"
+    },
+    "bowfin": {
+      "text": "Grinnel is older than the lake, they say. Warm weedy backwater, cut bait, night.",
+      "teller": "Elder Moss",
+      "folk_name": "Grinnel"
+    },
+    "spotted_gar": {
+      "text": "Spotted Stick waits beside flooded timber at dusk.",
+      "teller": "Patch",
+      "folk_name": "Spotted Stick"
+    },
+    "shortnose_gar": {
+      "text": "Stubby Snout noses around muddy creek mouths at dusk.",
+      "teller": "Patch",
+      "folk_name": "Stubby Snout"
+    },
+    "alligator_gar": {
+      "text": "Gator is the heavyweight. Cut shad in the creek channels. Bring a big well.",
+      "teller": "Hank Mudpaw",
+      "folk_name": "Gator"
+    },
+    "black_bullhead": {
+      "text": "Inky is a little cat of quiet mud. Liver after dark.",
+      "teller": "Señora Luz",
+      "folk_name": "Inky"
+    },
+    "brown_bullhead": {
+      "text": "Horned Pout hides by the flooded brush on Briar. Liver at night.",
+      "teller": "Master Cinder",
+      "folk_name": "Horned Pout"
+    },
+    "blue_sucker": {
+      "text": "The Blue Racer visits the deep gravel on Briar, but only rarely.",
+      "teller": "Old Gus",
+      "folk_name": "Blue Racer"
+    },
+    "bigmouth_buffalo": {
+      "text": "Gourdhead drifts over deep mud and sometimes takes a worm.",
+      "teller": "Dr. Alder",
+      "folk_name": "Gourdhead"
+    },
+    "black_buffalo": {
+      "text": "The Shadow Drifter keeps to Briar's deep shelf. Worms or cut bait.",
+      "teller": "Silas",
+      "folk_name": "Shadow Drifter"
+    },
+    "golden_shiner": {
+      "text": "Gold Flash darts in the weeds and the Reed Passage. Tiny worm bites.",
+      "teller": "Pip & Pebble",
+      "folk_name": "Gold Flash"
+    },
+    "gizzard_shad": {
+      "text": "Hickory schools roll over open water. Rarely, one bites a worm.",
+      "teller": "Captain Maeve",
+      "folk_name": "Hickory"
+    },
+    "threadfin_shad": {
+      "text": "Thread is so small the hook laughs. Warm open water, if you must.",
+      "teller": "Quill",
+      "folk_name": "Thread"
+    },
+    "chain_pickerel": {
+      "text": "Jack is toothy and lives in Briar's lilies. Live minnows.",
+      "teller": "Willow",
+      "folk_name": "Jack"
+    },
+    "inland_silverside": {
+      "text": "Glass Sliver is see-through and shy of nothing. Open water, worms.",
+      "teller": "Kit",
+      "folk_name": "Glass Sliver"
+    },
+    "bluntnose_minnow": {
+      "text": "Button-Nose crowds the creek channels. Worms or dough.",
+      "teller": "Belle Pecan",
+      "folk_name": "Button-Nose"
+    },
+    "river_carpsucker": {
+      "text": "The Silver Vacuum cleans the creek bottom. Dough balls work.",
+      "teller": "Hank Mudpaw",
+      "folk_name": "Silver Vacuum"
+    },
+    "orangespotted_sunfish": {
+      "text": "Ember-Dot glows in the flooded shoreline. Worms by day.",
+      "teller": "Belle Pecan",
+      "folk_name": "Ember-Dot"
+    },
+    "bigscale_logperch": {
+      "text": "Log-Roller flips pebbles on the dam riprap. Worms.",
+      "teller": "Patch",
+      "folk_name": "Log-Roller"
+    },
+    "bullhead_minnow": {
+      "text": "Little Boss rules the channels at dusk. Worms.",
+      "teller": "Kit",
+      "folk_name": "Little Boss"
+    },
+    "lake_trout": {
+      "text": "The Deep Mackinaw follows the cold down and down. Minnows at dawn.",
+      "teller": "Torvald",
+      "folk_name": "Deep Mackinaw"
+    },
+    "bull_trout": {
+      "text": "Old Bull comes up the inlets at dawn. If you meet one, let it go home.",
+      "teller": "Elk-Ears Eli",
+      "folk_name": "Old Bull"
+    },
+    "westslope_cutthroat": {
+      "text": "Red-Throat loves the inlet riffles. Worms by day.",
+      "teller": "Dakota",
+      "folk_name": "Red-Throat"
+    },
+    "rainbow_trout": {
+      "text": "Sky-Side rises in the inlets and pondweed bay. Dough works too.",
+      "teller": "Freya",
+      "folk_name": "Sky-Side"
+    },
+    "brook_trout": {
+      "text": "Speckle is shy and lives in the snowmelt inlet. A quiet boat helps.",
+      "teller": "Bramble",
+      "folk_name": "Speckle"
+    },
+    "brown_trout": {
+      "text": "Butter-Belly lurks by the larch snags at dusk. Minnow or craw.",
+      "teller": "Ingrid",
+      "folk_name": "Butter-Belly"
+    },
+    "kokanee": {
+      "text": "Silver Bullets school out deep at dawn. Roe, always roe.",
+      "teller": "Torvald",
+      "folk_name": "Silver Bullet"
+    },
+    "lake_whitefish": {
+      "text": "Snow-Belly grazes the trench bottom. Worms or roe.",
+      "teller": "Mitzi",
+      "folk_name": "Snow-Belly"
+    },
+    "mountain_whitefish": {
+      "text": "Pebble-Nose sniffs the inlet stones by day.",
+      "teller": "Bjorn",
+      "folk_name": "Pebble-Nose"
+    },
+    "pygmy_whitefish": {
+      "text": "Thimble lives so deep it's practically a rumor. Night, worms.",
+      "teller": "Mitzi",
+      "folk_name": "Thimble"
+    },
+    "northern_pike": {
+      "text": "The Water Wolf waits in the pondweed with its teeth out.",
+      "teller": "Dakota",
+      "folk_name": "Water Wolf"
+    },
+    "yellow_perch": {
+      "text": "Tiger-Stripes crowd the pondweed bay and the outpost dock.",
+      "teller": "Willa Larch",
+      "folk_name": "Tiger-Stripe"
+    },
+    "burbot": {
+      "text": "The Eelpout comes up at night on the gravel reefs. It's all chin.",
+      "teller": "Captain Huckleberry",
+      "folk_name": "Eelpout"
+    },
+    "largescale_sucker": {
+      "text": "Rubber-Lip vacuums the inlet. Dough balls.",
+      "teller": "Bjorn",
+      "folk_name": "Rubber-Lip"
+    },
+    "longnose_sucker": {
+      "text": "Snoot keeps to the cold reefs.",
+      "teller": "Ingrid",
+      "folk_name": "Snoot"
+    },
+    "peamouth": {
+      "text": "Pea-Pods dimple the bay at dusk.",
+      "teller": "Freya",
+      "folk_name": "Pea-Pod"
+    },
+    "northern_pikeminnow": {
+      "text": "The Big-Mouth Minnow is no minnow at all. Gravel reefs, dusk.",
+      "teller": "Dakota",
+      "folk_name": "Big-Mouth Minnow"
+    },
+    "redside_shiner": {
+      "text": "Sunset Flicker flashes pink over the flats.",
+      "teller": "Willa Larch",
+      "folk_name": "Sunset Flicker"
+    },
+    "slimy_sculpin": {
+      "text": "Puddle-Puss hides under reef stones on cold nights.",
+      "teller": "Elk-Ears Eli",
+      "folk_name": "Puddle-Puss"
+    },
+    "mottled_sculpin": {
+      "text": "Patchwork sits so still you'd think it was a pebble.",
+      "teller": "Bramble",
+      "folk_name": "Patchwork"
+    },
+    "lake_chub": {
+      "text": "Button pops up anywhere shallow. Dough.",
+      "teller": "Bjorn",
+      "folk_name": "Button"
+    },
+    "pumpkinseed": {
+      "text": "Penny-Cheek suns itself by the outpost dock.",
+      "teller": "Willa Larch",
+      "folk_name": "Penny-Cheek"
+    },
+    "cisco": {
+      "text": "Lake Herring flash in the open water at dawn.",
+      "teller": "Torvald",
+      "folk_name": "Lake Herring"
+    },
+    "arctic_grayling": {
+      "text": "Sail-Fin only shows itself to quiet boats in the inlet.",
+      "teller": "Freya",
+      "folk_name": "Sail-Fin"
+    },
+    "golden_trout": {
+      "text": "Sunbeam lives in the snowmelt shallows. Shy as morning.",
+      "teller": "Freya",
+      "folk_name": "Sunbeam"
+    },
+    "tiger_trout": {
+      "text": "Marble-Back prowls the reefs at dusk. Minnows.",
+      "teller": "Ingrid",
+      "folk_name": "Marble-Back"
+    },
+    "splake": {
+      "text": "Twice-Char can't decide what it is, but it likes deep reefs at dawn.",
+      "teller": "Mitzi",
+      "folk_name": "Twice-Char"
+    },
+    "longnose_dace": {
+      "text": "Riffle-Nose noses the inlet stones. Worms.",
+      "teller": "Bramble",
+      "folk_name": "Riffle-Nose"
+    },
+    "mountain_sucker": {
+      "text": "Cobble-Kiss kisses every stone in the inlet.",
+      "teller": "Bjorn",
+      "folk_name": "Cobble-Kiss"
+    },
+    "white_sturgeon": {
+      "text": "The Old Plates is older than the outpost. Deep, at night. Let it go.",
+      "teller": "Captain Huckleberry",
+      "folk_name": "The Old Plates"
+    },
+    "walleye": {
+      "text": "Glass-Eye sees in the dark. Reefs at dusk, minnows.",
+      "teller": "Dakota",
+      "folk_name": "Glass-Eye"
+    },
+    "sauger": {
+      "text": "Sand-Eye follows the cold into the trench at night.",
+      "teller": "Mitzi",
+      "folk_name": "Sand-Eye"
+    },
+    "shorthead_redhorse": {
+      "text": "Rusty Tail flicks red in the inlet. Worms or craw.",
+      "teller": "Willa Larch",
+      "folk_name": "Rusty Tail"
+    },
+    "fathead_minnow": {
+      "text": "Pudge is everyone's snack. Dough by the dock.",
+      "teller": "Bramble",
+      "folk_name": "Pudge"
+    },
+    "redband_trout": {
+      "text": "Ember-Stripe warms itself by the springs. Worms or grubs.",
+      "teller": "Nyx",
+      "folk_name": "Ember-Stripe"
+    },
+    "coastal_cutthroat": {
+      "text": "Rain-Throat hides among the drowned pines at dawn. Quiet boats.",
+      "teller": "Mist",
+      "folk_name": "Rain-Throat"
+    },
+    "lahontan_cutthroat": {
+      "text": "The Desert King is rare and royal. Deep at dawn. Let it go.",
+      "teller": "Tamsin",
+      "folk_name": "Desert King"
+    },
+    "chinook": {
+      "text": "King's Supper roams the cobalt deep at dawn. Roe.",
+      "teller": "Juno",
+      "folk_name": "King's Supper"
+    },
+    "coho": {
+      "text": "Silver-Side flashes in the open caldera at dawn.",
+      "teller": "Ember",
+      "folk_name": "Silver-Side"
+    },
+    "tui_chub": {
+      "text": "Button-Belly loafs on the pumice shelf.",
+      "teller": "Ashby",
+      "folk_name": "Button-Belly"
+    },
+    "speckled_dace": {
+      "text": "Freckle dances in the warm spring shallows.",
+      "teller": "Nyx",
+      "folk_name": "Freckle"
+    },
+    "oregon_chub": {
+      "text": "Moss Pip hides in the moss gardens. Shy, worms.",
+      "teller": "Fumi",
+      "folk_name": "Moss Pip"
+    },
+    "klamath_smallscale_sucker": {
+      "text": "Soft-Mouth grazes the shelf and the deep. Dough.",
+      "teller": "Basalt Bea",
+      "folk_name": "Soft-Mouth"
+    },
+    "blue_chub": {
+      "text": "Bluebell rings near the surface in the moss gardens.",
+      "teller": "Fumi",
+      "folk_name": "Bluebell"
+    },
+    "prickly_sculpin": {
+      "text": "Pincushion bristles under the cliffs at night.",
+      "teller": "Ignis",
+      "folk_name": "Pincushion"
+    },
+    "umpqua_pikeminnow": {
+      "text": "River Wolf hunts the drowned pines at dusk.",
+      "teller": "Mist",
+      "folk_name": "River Wolf"
+    },
+    "chiselmouth": {
+      "text": "Scraper scrapes the cliff stones by day.",
+      "teller": "Basalt Bea",
+      "folk_name": "Scraper"
+    },
+    "alvord_chub": {
+      "text": "Dust Pip lives only in the warmest springs. Grubs.",
+      "teller": "Nyx",
+      "folk_name": "Dust Pip"
+    },
+    "cobalt_cisco": {
+      "text": "The Blue Ghost lives where the water is bluest. Deep, dawn.",
+      "teller": "Sora",
+      "folk_name": "Blue Ghost"
+    },
+    "obsidian_darter": {
+      "text": "Glass Bead darts along the obsidian. Grubs.",
+      "teller": "Ignis",
+      "folk_name": "Glass Bead"
+    },
+    "ember_char": {
+      "text": "Coal-Belly glows a little at dusk near the springs.",
+      "teller": "Nyx",
+      "folk_name": "Coal-Belly"
+    },
+    "ash_minnow": {
+      "text": "Smudge is grey as ash and everywhere on the shelf.",
+      "teller": "Ember",
+      "folk_name": "Smudge"
+    },
+    "cinder_sculpin": {
+      "text": "Hot-Rock sits on warm stones at night.",
+      "teller": "Ignis",
+      "folk_name": "Hot-Rock"
+    },
+    "pumice_skipper": {
+      "text": "Bobber-Fish floats like pumice. Dough at the surface.",
+      "teller": "Basalt Bea",
+      "folk_name": "Bobber-Fish"
+    },
+    "fumarole_perch": {
+      "text": "Steam-Stripe loves the springs by day.",
+      "teller": "Ashby",
+      "folk_name": "Steam-Stripe"
+    },
+    "sulfur_shiner": {
+      "text": "Yellow Spark flickers in the spring water.",
+      "teller": "Fumi",
+      "folk_name": "Yellow Spark"
+    },
+    "basalt_bass": {
+      "text": "Black Brick guards the cliffs at dawn. Crawfish.",
+      "teller": "Ignis",
+      "folk_name": "Black Brick"
+    },
+    "glasswing_trout": {
+      "text": "Window-Fin is see-through on clear days in the open.",
+      "teller": "Juno",
+      "folk_name": "Window-Fin"
+    },
+    "mistfin_dace": {
+      "text": "Fog-Flicker only comes out when the fog does.",
+      "teller": "Mist",
+      "folk_name": "Fog-Flicker"
+    },
+    "lava_belly_sunfish": {
+      "text": "Hot Penny glows orange in the spring shallows.",
+      "teller": "Ashby",
+      "folk_name": "Hot Penny"
+    },
+    "geyser_goby": {
+      "text": "Hiccup hops near the springs at night.",
+      "teller": "Ember",
+      "folk_name": "Hiccup"
+    },
+    "moonpool_whitefish": {
+      "text": "Night-Lamp rises in the deep after dark.",
+      "teller": "Juno",
+      "folk_name": "Night-Lamp"
+    },
+    "snagtooth_pike": {
+      "text": "Old Crook-Jaw waits in the drowned pines at dusk.",
+      "teller": "Mist",
+      "folk_name": "Old Crook-Jaw"
+    },
+    "fog_mudminnow": {
+      "text": "Hide-Away hides even better in fog.",
+      "teller": "Mist",
+      "folk_name": "Hide-Away"
+    },
+    "indigo_eelpout": {
+      "text": "Velvet Rope lives deeper than the light goes. Night, cut shad.",
+      "teller": "Sora",
+      "folk_name": "Velvet Rope"
+    },
+    "steam_carp": {
+      "text": "Kettle-Lips blows bubbles in the springs. Dough.",
+      "teller": "Ashby",
+      "folk_name": "Kettle-Lips"
+    },
+    "rimrock_bullhead": {
+      "text": "Pebble-Whisker pokes around the cliffs at night. Liver.",
+      "teller": "Tamsin",
+      "folk_name": "Pebble-Whisker"
+    },
+    "vent_catfish": {
+      "text": "Warm-Whiskers naps by the deep springs and wakes at night for liver.",
+      "teller": "Nyx",
+      "folk_name": "Warm-Whiskers"
+    },
+    "comet_minnow": {
+      "text": "Tail-Lights zip up the comet stream. Star-dust.",
+      "teller": "Comet",
+      "folk_name": "Tail-Light"
+    },
+    "meteor_bass": {
+      "text": "Rock-Drop crashes into the meteor reefs at rising.",
+      "teller": "Vega",
+      "folk_name": "Rock-Drop"
+    },
+    "quasar_koi": {
+      "text": "Lantern Koi glow in the lily drifts. Dough or star-dust.",
+      "teller": "Selene",
+      "folk_name": "Lantern Koi"
+    },
+    "pulsar_perch": {
+      "text": "Blinkers blink in the deep phase. Count the blinks.",
+      "teller": "Twinkle",
+      "folk_name": "Blinker"
+    },
+    "lunar_loach": {
+      "text": "Moon-Noodle wiggles through the light-reeds at night.",
+      "teller": "Andi",
+      "folk_name": "Moon-Noodle"
+    },
+    "solar_sunfish": {
+      "text": "Little Sun warms the lily drifts in the bright phase.",
+      "teller": "Selene",
+      "folk_name": "Little Sun"
+    },
+    "starling_shiner": {
+      "text": "Twinkle-Fry flock in the light-reeds at fading.",
+      "teller": "Lyra",
+      "folk_name": "Twinkle-Fry"
+    },
+    "galaxy_gar": {
+      "text": "Swirl-Snout spirals in the current at fading.",
+      "teller": "Rigel",
+      "folk_name": "Swirl-Snout"
+    },
+    "aurora_trout": {
+      "text": "Ribbon-Light shimmers in the comet stream at rising. Roe.",
+      "teller": "Nebula-Paws",
+      "folk_name": "Ribbon-Light"
+    },
+    "cosmic_carp": {
+      "text": "Big Bubble blows bubbles shaped like planets.",
+      "teller": "Comet",
+      "folk_name": "Big Bubble"
+    },
+    "void_eel": {
+      "text": "Long Shadow lives in the void well. Liver, deep phase.",
+      "teller": "Orion-Cat",
+      "folk_name": "Long Shadow"
+    },
+    "orbit_bluegill": {
+      "text": "Ring-Gills circle the station dock.",
+      "teller": "Andi",
+      "folk_name": "Ring-Gill"
+    },
+    "gravity_drum": {
+      "text": "Thumpers thump in the deep. You feel it in the hull.",
+      "teller": "Orion-Cat",
+      "folk_name": "Thumper"
+    },
+    "photon_tetra": {
+      "text": "Sparks light up the reeds at night.",
+      "teller": "Lyra",
+      "folk_name": "Spark"
+    },
+    "nova_pike": {
+      "text": "Flare-Jaw flares in the crystal kelp at fading.",
+      "teller": "Vega",
+      "folk_name": "Flare-Jaw"
+    },
+    "dwarf_star_darter": {
+      "text": "Speck is tiny, bright and lives on the meteor reefs.",
+      "teller": "Twinkle",
+      "folk_name": "Speck"
+    },
+    "saturnfin_puffer": {
+      "text": "Ring-Ball floats in the current with its fins like rings.",
+      "teller": "Rigel",
+      "folk_name": "Ring-Ball"
+    },
+    "celestial_catfish": {
+      "text": "Star-Whiskers prowls the void well at night. Liver.",
+      "teller": "Professor Astra-9",
+      "folk_name": "Star-Whiskers"
+    },
+    "moonbeam_crappie": {
+      "text": "Paper-Moon hides in the crystal kelp at rising.",
+      "teller": "Selene",
+      "folk_name": "Paper-Moon"
+    },
+    "twinkle_shad": {
+      "text": "Glitter-Fry schools in the current. Star-dust.",
+      "teller": "Comet",
+      "folk_name": "Glitter-Fry"
+    },
+    "eclipse_bowfin": {
+      "text": "Half-Moon lurks in the reeds at night.",
+      "teller": "Andi",
+      "folk_name": "Half-Moon"
+    },
+    "stardust_bullhead": {
+      "text": "Sprinkle-Cat noses the shoals at night. Liver or worms.",
+      "teller": "Twinkle",
+      "folk_name": "Sprinkle-Cat"
+    },
+    "asteroid_sucker": {
+      "text": "Pock-Lip grazes the meteor reefs.",
+      "teller": "Vega",
+      "folk_name": "Pock-Lip"
+    },
+    "halo_whitefish": {
+      "text": "Ring-Light rises in the open at rising. Roe.",
+      "teller": "Nebula-Paws",
+      "folk_name": "Ring-Light"
+    },
+    "constellation_char": {
+      "text": "Dot-to-Dot follows the current at fading. Connect its spots.",
+      "teller": "Rigel",
+      "folk_name": "Dot-to-Dot"
+    },
+    "milky_way_buffalo": {
+      "text": "Cream-Back drifts over the shoals.",
+      "teller": "Selene",
+      "folk_name": "Cream-Back"
+    },
+    "supernova_salmon": {
+      "text": "Burst only bites for the patient, in the current at rising.",
+      "teller": "Rigel",
+      "folk_name": "Burst"
+    },
+    "event_horizon_goby": {
+      "text": "The Edge-Sitter sits at the very bottom of the void well.",
+      "teller": "Twinkle",
+      "folk_name": "Edge-Sitter"
+    },
+    "zodiac_zander": {
+      "text": "Twelve-Stripe has a stripe for every month. Reefs at fading.",
+      "teller": "Vega",
+      "folk_name": "Twelve-Stripe"
+    },
+    "plasma_pickerel": {
+      "text": "Zap-Jaw zaps in the reeds at rising. Minnows.",
+      "teller": "Lyra",
+      "folk_name": "Zap-Jaw"
+    },
+    "ion_icefish": {
+      "text": "Clear-Cat is invisible except at night, deep in the current.",
+      "teller": "Orion-Cat",
+      "folk_name": "Clear-Cat"
+    },
+    "prism_ray": {
+      "text": "Rainbow Kite glides over the shoals on bright days.",
+      "teller": "Andi",
+      "folk_name": "Rainbow Kite"
+    },
+    "comet_tail_betta": {
+      "text": "Silk-Tail flutters at the surface of the lily drifts.",
+      "teller": "Lyra",
+      "folk_name": "Silk-Tail"
+    },
+    "purrsec_lanternfish": {
+      "text": "Purr-Lights purr. You can hear them if you're quiet.",
+      "teller": "Twinkle",
+      "folk_name": "Purr-Light"
+    }
+  },
+  "legendary_stories": {
+    "old_lantern": {
+      "story": "As gold as a lamp, and older than the landing. My grandmother said he guards the dock at night.",
+      "teller": "Grandmother Whiskers"
+    },
+    "lily_queen": {
+      "story": "Long as my canoe, and she rises only for misty dawns and a fancy breakfast.",
+      "teller": "Willow"
+    },
+    "spillway_monster": {
+      "story": "Near a hundred pounds of blue cat in the calm, marked pool. Heavy line, cut shad, after dark.",
+      "teller": "Doc Barnaby"
+    },
+    "channel_leviathan": {
+      "story": "Longer than my boat. After rain, deep night, pecan-smoked shad. I'm not making it up.",
+      "teller": "Hank Mudpaw"
+    },
+    "whiskered_guardian": {
+      "story": "Its whiskers write the twilight on the water. It comes when the lake has been treated kindly.",
+      "teller": "Quill"
+    },
+    "glacial_phantom": {
+      "story": "A trout so pale it looks like snow mist. Dawn in the inlet.",
+      "teller": "Freya"
+    },
+    "old_silverhead": {
+      "story": "Older than my boat and my boat's boat. Lives where the cold is.",
+      "teller": "Torvald"
+    },
+    "huckleberrys_whopper": {
+      "story": "It ate my boot and gave it back polished. Snowy night, gravel reefs, roe.",
+      "teller": "Captain Huckleberry"
+    },
+    "obsidian_gar": {
+      "story": "As black as the cinder shore and twice as shiny.",
+      "teller": "Ignis"
+    },
+    "caldera_fire_lizard": {
+      "story": "Not a fish at all. Something warm walks under the cold.",
+      "teller": "Nyx & Mist"
+    },
+    "nebula_weaver": {
+      "story": "It ribbons through the current on aurora nights and leaves light behind.",
+      "teller": "Nebula-Paws"
+    },
+    "star_whale": {
+      "story": "A whale made of light. It comes to whoever stops looking for it.",
+      "teller": "Professor Astra-9"
+    }
+  }
+}

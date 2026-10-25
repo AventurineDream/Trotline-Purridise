@@ -16,6 +16,7 @@ from .narrative import DAY_NPCS, QUEST_IDS, RIPPLE_BY_QUEST
 CONTENT_PATH = Path(__file__).with_name("assets") / "narrative_v1.json"
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json")
+BOOK_CONTENT_PATH = CONTENT_V2_PATH / "book.json"
 BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
 _GAMEPLAY_REFS_LOADED = False
 
@@ -100,6 +101,25 @@ class GameplayContent:
     boats: dict[str, dict]
     lakes: dict[str, dict]
     zones: dict[str, dict]
+
+
+@dataclass(frozen=True)
+class Rumor:
+    text: str
+    teller: str
+    folk_name: str = ""
+
+
+@dataclass(frozen=True)
+class LegendaryStory:
+    story: str
+    teller: str
+
+
+@dataclass
+class BookContent:
+    rumors: dict[str, Rumor]
+    legendaries: dict[str, LegendaryStory]
 
 
 class _Validator:
@@ -1031,10 +1051,51 @@ def load_content(path: str | Path = CONTENT_PATH) -> NarrativeContent:
     return validate_content(raw, source=path)
 
 
+def validate_book_content(raw, *, source=BOOK_CONTENT_PATH, species_ids=()) -> BookContent:
+    """Collect book authoring errors, including missing currently playable fish."""
+    validator = _Validator(source)
+    rumors, legendaries = {}, {}
+    if validator.shape(raw, "root", ("schema_version", "species_rumors", "legendary_stories")):
+        validator.literal(raw.get("schema_version"), 1, "schema_version")
+        for table, fields, count, target, row_type in (
+            ("species_rumors", ("text", "teller", "folk_name"), 144, rumors, Rumor),
+            ("legendary_stories", ("story", "teller"), 12, legendaries, LegendaryStory),
+        ):
+            rows = raw.get(table)
+            if not isinstance(rows, dict):
+                validator.error(table, "expected an object keyed by stable IDs")
+                continue
+            if len(rows) != count:
+                validator.error(table, f"expected {count} entries, found {len(rows)}")
+            for identifier, row in rows.items():
+                where = f"{table}({identifier})"
+                valid_id = validator.identifier(identifier, where + ".id")
+                if not validator.shape(row, where, fields):
+                    continue
+                valid_fields = [validator.text(row.get(key), where + "." + key)
+                                for key in fields]
+                if valid_id and all(valid_fields):
+                    target[identifier] = row_type(**{key: row[key] for key in fields})
+        for identifier in sorted(set(species_ids) - set(rumors)):
+            validator.error(f"species_rumors({identifier})", "missing rumor for playable species")
+    if validator.errors:
+        raise ContentError("\n".join(validator.errors))
+    return BookContent(rumors, legendaries)
+
+
+def load_book_content(path: str | Path = BOOK_CONTENT_PATH, *, species_ids=()) -> BookContent:
+    path = Path(path)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_keys)
+    except (OSError, ValueError) as exc:
+        raise ContentError(f"{path}: {exc}") from exc
+    return validate_book_content(raw, source=path, species_ids=species_ids)
+
+
 def _load_all_content():
-    """Validate v1 and v2 independently, then report both sets of errors."""
+    """Validate narrative, gameplay and book data independently, reporting all errors."""
     errors = []
-    narrative = gameplay = None
+    narrative = gameplay = book = None
     try:
         narrative = load_content()
     except ContentError as exc:
@@ -1043,14 +1104,19 @@ def _load_all_content():
         gameplay = load_content_v2()
     except ContentError as exc:
         errors.extend(str(exc).splitlines())
+    try:
+        book = load_book_content(species_ids=gameplay.species if gameplay else ())
+    except ContentError as exc:
+        errors.extend(str(exc).splitlines())
     if errors:
         raise ContentError("\n".join(errors))
-    return narrative, gameplay
+    return narrative, gameplay, book
 
 
 if __name__ == "__main__":
-    content, gameplay = _load_all_content()
+    content, gameplay, book = _load_all_content()
     print(f"Content valid: {len(content.npcs)} NPCs, {len(content.quests)} narrative quests, "
           f"{len(content.dialogue)} dialogue nodes, {len(gameplay.species)} species, "
           f"{len(gameplay.baits)} baits, {len(gameplay.boats)} boats, "
-          f"{len(gameplay.lakes)} lakes")
+          f"{len(gameplay.lakes)} lakes, {len(book.rumors)} book rumors, "
+          f"{len(book.legendaries)} legendary stories")

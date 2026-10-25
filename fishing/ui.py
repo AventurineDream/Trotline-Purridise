@@ -34,7 +34,7 @@ from .data import (
 from .content import load_content
 from .guardian import draw_sighting
 from .haul import haul_cadence
-from .savepaths import BOOK_STAGES
+from .book import BOOK_STAGES
 from .narrative import QUEST_IDS
 from .platform import Text
 from .dialogue import nearby_npc
