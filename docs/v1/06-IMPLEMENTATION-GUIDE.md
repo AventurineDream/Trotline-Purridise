@@ -355,9 +355,16 @@ and pointer hit testing. J opens the book; A/D or gamepad left/right changes
 tabs, W/S or gamepad up/down chooses entries, and Enter/A turns a page. Mouse
 clicks select tabs or fish, and the wheel browses entries. The Story tab retains
 the existing Lake Whispers & Ripples quest details and Guardian progress.
+Story details wrap to measured glyph widths and paginate at every window size;
+Enter/A or the Turn button reaches the full objective, status, prerequisites,
+Bot note and Guardian text. The page counter wraps when the last page is turned.
+Rumors are remembered when the session opens an entry; drawing previews uses
+read-only page data. Page-control labels are centered inside their hit regions.
 The collection tab cycles Ripples, Keepsakes and Trophies. `--shots` includes
 every tab at text sizes 0 and 2, extra shelf and ceremony views, a contact sheet,
 and `book-benchmark.json` for the warmed 1280×720 book presentation.
+`book-story-compact.png` shows every page of The Deep-Water Drift at 480×270 with
+large text. The full-frame verifier includes all five book tabs in its coverage.
 
 Stage events are consumed by the session into one three-second invitation;
 J (hold Y on gamepad) reads its exact species page. Title ceremonies wait for

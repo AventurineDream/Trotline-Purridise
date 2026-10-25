@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from functools import lru_cache
-import textwrap
 
 import numpy as np
 
@@ -72,9 +71,9 @@ def contains(rect, point):
 
 def book_controls(layout):
     return {
-        "previous": (layout.x + layout.w - 155, layout.y + layout.h - 70, 34, 24),
-        "turn": (layout.x + layout.w - 115, layout.y + layout.h - 70, 62, 24),
-        "next": (layout.x + layout.w - 47, layout.y + layout.h - 70, 30, 24),
+        "previous": (layout.x + layout.w - 185, layout.y + layout.h - 70, 36, 34),
+        "turn": (layout.x + layout.w - 143, layout.y + layout.h - 70, 88, 34),
+        "next": (layout.x + layout.w - 49, layout.y + layout.h - 70, 32, 34),
         "close": (layout.x + layout.w - 120, layout.y + 6, 110, 32),
     }
 
@@ -96,7 +95,7 @@ def turn_page(state, ui, viewport=(1280, 720)):
     elif ui.journal_page == 1:
         sid = ENTRY_IDS[ui.book_entry_i % len(ENTRY_IDS)]
         if sid in LEGENDARY_IDS:
-            pages = max(1, len(legendary_page(sid, state.v2)["records"]))
+            pages = max(1, len(legendary_page(sid, state.v2, remember=False)["records"]))
         else:
             found = state.v2["book"].get("species", {}).get(sid, {}).get("found", [])
             compact = book_layout(*viewport).content[2] < 620
@@ -108,7 +107,9 @@ def turn_page(state, ui, viewport=(1280, 720)):
         ui.book_shelf = (ui.book_shelf + 1) % 3
         ui.book_collection_i = 0
     elif ui.journal_page == 3:
-        ui.book_detail_page = (ui.book_detail_page + 1) % 2
+        # The renderer computes the page count from the actual font and window.
+        # Keep an absolute cursor so every wrapped page is reachable by input.
+        ui.book_detail_page += 1
     else:
         ui.book_entry_i = len(BOOK_SPECIES_IDS) + ui.book_watch_i % len(LEGENDARY_IDS)
         ui.journal_page = 1
@@ -190,8 +191,6 @@ class BookView:
     def text(self, value, x, y, width, size=None, color=INK):
         size = self.small if size is None else size
         value = str(value)
-        if y == self.bottom + 4:
-            width = min(width, self.w - 160)
         if y + self.u.cell(size)[1] > self.layout.y + self.layout.h - 6:
             return y
         label = value
@@ -202,16 +201,39 @@ class BookView:
         return y + self.u.cell(size)[1] + 4
 
     def lines(self, value, width):
-        columns = max(1, width // self.u.cell(self.small)[0])
-        return textwrap.wrap(str(value), width=columns, break_on_hyphens=False) or [""]
+        # Measure actual glyphs; the accessibility font is proportional.
+        result = []
+        for paragraph in str(value).splitlines() or [""]:
+            remaining = paragraph.strip()
+            while remaining:
+                low, high = 1, len(remaining)
+                while low < high:
+                    middle = (low + high + 1) // 2
+                    if self.u._render(remaining[:middle], self.small, INK).shape[1] <= width:
+                        low = middle
+                    else:
+                        high = middle - 1
+                end = low
+                if end < len(remaining) and not remaining[end].isspace():
+                    boundary = remaining.rfind(" ", 0, end + 1)
+                    if boundary > 0:
+                        end = boundary
+                result.append(remaining[:end].rstrip())
+                remaining = remaining[end:].lstrip()
+        return result or [""]
 
     def paragraph(self, value, x, y, width, bottom=None):
         bottom = self.bottom if bottom is None else bottom
-        for line in self.lines(value, width):
-            if y + self.line > bottom:
-                break
+        lines = self.lines(value, width)
+        available = max(0, (bottom - y) // self.line)
+        for index, line in enumerate(lines[:available]):
+            if index == available - 1 and len(lines) > available:
+                line += " …"
             y = self.text(line, x, y, width)
         return y
+
+    def footer(self, value, color=FADED):
+        self.text(value, self.x, self.bottom + 4, self.w - 190, color=color)
 
     def art(self, sid, count, rect):
         x, y, w, h = rect
@@ -251,8 +273,10 @@ class BookView:
         for name, rect in book_controls(l).items():
             if name != "close":
                 self.fill(rect, (218, 210, 185))
-                self.text({"previous": "‹", "turn": "Turn", "next": "›"}[name],
-                          rect[0] + 5, rect[1] + 1, rect[2] - 10)
+                label = {"previous": "‹", "turn": "Turn", "next": "›"}[name]
+                glyphs = self.u._render(label, self.small, INK)
+                self.text(label, rect[0] + (rect[2] - glyphs.shape[1]) // 2,
+                          rect[1] + (rect[3] - glyphs.shape[0]) // 2, rect[2] - 8)
         foot = ("D-pad choose · Left/right tabs · A opens / turns · B closes"
                 if self.ui.input_device == "gamepad" else
                 "W/S choose · A/D tabs · Enter opens / turns · J closes · Click to choose")
@@ -279,8 +303,8 @@ class BookView:
             self.text(f"{count} caught" if count else "What we heard", x + 8,
                       y + ah + 8 + self.line, w - 16, color=FADED)
         seen = sum(1 for sid in BOOK_SPECIES_IDS if self.state.journal.get(sid, {}).get("count", 0))
-        self.text(f"{seen}/144 identified · Fish {self.ui.journal_i + 1}/144 · Enter reads this page",
-                  self.x, self.bottom + 4, self.w, color=OCHRE)
+        count = len(BOOK_SPECIES_IDS)
+        self.footer(f"{seen}/{count} identified · Fish {self.ui.journal_i + 1}/{count} · Enter reads this page", OCHRE)
 
     def entry(self):
         self.ui.book_entry_i %= len(ENTRY_IDS)
@@ -288,7 +312,8 @@ class BookView:
         if sid in LEGENDARY_IDS:
             return self.legendary(sid)
         rec = self.state.journal.get(sid, {})
-        page = species_page(self.state.v2["book"], sid, rec.get("count", 0), rec)
+        page = species_page(self.state.v2["book"], sid, rec.get("count", 0), rec,
+                            remember=False)
         compact = self.w < 620
         phase = self.ui.book_detail_page % 3 if compact else 1
         title_bottom = self.text(page["name"] or page["folk_name"], self.x, self.y,
@@ -347,10 +372,10 @@ class BookView:
                         if self.u.world.id == "cedar" and sid in CEDAR_FISH and not CEDAR_FISH[sid]
                         else "No catch yet. A place to begin, and room for your own notes.")
                 self.paragraph(hint, rx, y, cw)
-        self.text(f"Entry {self.ui.book_entry_i + 1}/156 · Enter turns the notes", self.x, self.bottom + 4, self.w, color=FADED)
+        self.footer(f"Entry {self.ui.book_entry_i + 1}/{len(ENTRY_IDS)} · Enter turns the notes")
 
     def legendary(self, sid):
-        page = legendary_page(sid, self.state.v2)
+        page = legendary_page(sid, self.state.v2, remember=False)
         self.text(sid.replace("_", " ").title(), self.x, self.y, self.w, self.head)
         y = self.text("RECORDED" if page["verified"] else "A LAKE STORY", self.x,
                       self.y + self.line + 8, self.w, color=OCHRE)
@@ -379,37 +404,44 @@ class BookView:
         y = self.text(f"{kind} · {self.ui.book_collection_i+1}/{len(rows)}", self.x, y, self.w, color=OCHRE)
         self.paragraph(description, self.x, y + 12, self.w)
 
-    def story(self):
+    def story_pages(self):
+        """Lay out every quest field before choosing a visible page."""
         from .ui import quest_journal_details
-        self.ui.journal_quest_i %= len(QUEST_IDS)
-        detail = quest_journal_details(self.state, self.u.narrative_content, QUEST_IDS[self.ui.journal_quest_i])
-        if self.w < 620:
-            y = self.text("Lake Whispers & Ripples", self.x, self.y, self.w)
-            values = ([detail["title"], "Progress: " + detail["progress"], detail["guardian_status"]]
-                      if not self.ui.book_detail_page else [detail["giver"], detail["objective"],
-                                                           detail["latest_bot_note"] or "No Bot notes yet."])
-            for value in values:
-                if y + self.line <= self.bottom:
-                    y = self.text(value, self.x, y, self.w)
-            return
-        y = self.text("Lake Whispers & Ripples", self.x, self.y, self.w, self.head)
-        y = self.text(f"Chapter {self.state.v2['story']['chapter']} · {len(set(self.state.narrative.ripples))}/10 Ripples · Quest {self.ui.journal_quest_i+1}/12", self.x, y + 5, self.w, color=OCHRE)
-        width = self.w if self.w < 620 else (self.w - 40) // 2
-        y = self.text(detail["title"], self.x, y + 14, width, self.body)
-        y = self.paragraph(detail["giver"], self.x, y, width)
-        y = self.paragraph(detail["status"] + " · " + detail["objective"], self.x, y + 8, width, self.bottom - self.line * 3)
-        y = self.paragraph("Progress: " + detail["progress"], self.x, y + 8, width)
-        self.paragraph("Prerequisites: " + detail["prerequisites"], self.x, y + 8, width)
-        if self.w >= 620:
-            rx = self.x + width + 40
-            y = self.text("Notes at the water's edge", rx, self.y + self.line * 3, width, self.body)
-            y = self.paragraph(detail["latest_bot_note"] or "Bot's notes will gather here.", rx, y + 8, width)
-            self.paragraph(detail["guardian_status"], rx, y + 14, width)
-        self.text("Declined? Re-hail. Missed windows repeat; no expiry.", self.x, self.bottom + 4, self.w, color=FADED)
+        index = self.ui.journal_quest_i % len(QUEST_IDS)
+        detail = quest_journal_details(self.state, self.u.narrative_content, QUEST_IDS[index])
+        compact = self.w < 620
+        width = self.w if compact else (self.w - 40) // 2
+        top = self.y + self.u.cell(self.small if compact else self.head)[1] + 12
+        rows = max(1, (self.bottom - top) // self.line)
+        values = (
+            f"Chapter {self.state.v2['story']['chapter']} · {len(set(self.state.narrative.ripples))}/10 Ripples · Quest {index+1}/{len(QUEST_IDS)}",
+            detail["title"], "Status: " + detail["status"], "Giver: " + detail["giver"],
+            "Objective: " + detail["objective"], "Progress: " + detail["progress"],
+            "Prerequisites: " + detail["prerequisites"],
+            detail["latest_bot_note"] or "No Bot notes yet.",
+            detail["guardian_status"],
+            "Declined? Re-hail. Missed windows repeat; no expiry.",
+        )
+        groups = (values,) if compact else (values[:7], values[7:])
+        lines = [[line for value in group for line in self.lines(value, width)]
+                 for group in groups]
+        pages = tuple(tuple(tuple(column[start:start + rows]) for column in lines)
+                      for start in range(0, max(map(len, lines)), rows))
+        return pages, top, width
+
+    def story(self):
+        pages, top, width = self.story_pages()
+        page = self.ui.book_detail_page % len(pages)
+        self.text("Lake Whispers & Ripples", self.x, self.y, self.w,
+                  self.small if self.w < 620 else self.head)
+        for column, lines in enumerate(pages[page]):
+            for row, line in enumerate(lines):
+                self.text(line, self.x + column * (width + 40), top + row * self.line, width)
+        self.footer(f"Page {page + 1}/{len(pages)} · Enter turns")
 
     def watch(self):
         sid = LEGENDARY_IDS[self.ui.book_watch_i % len(LEGENDARY_IDS)]
-        page = legendary_page(sid, self.state.v2)
+        page = legendary_page(sid, self.state.v2, remember=False)
         y = self.text("Watch cards", self.x, self.y, self.w, self.head)
         y = self.text(sid.replace("_", " ").title(), self.x, y + 12, self.w, self.body)
         y = self.text("Recorded" if page["verified"] else "A lead from " + page["teller"], self.x, y, self.w, color=OCHRE)
@@ -418,7 +450,7 @@ class BookView:
         if clues:
             clue = clues[self.ui.book_detail_page % len(clues)]
             y = self.paragraph(_note_text(clue), self.x, y + 12, self.w)
-        self.text(f"Watch {self.ui.book_watch_i % len(LEGENDARY_IDS) + 1}/12 · W/S chooses · Enter reads its page", self.x, self.bottom + 4, self.w, color=FADED)
+        self.footer(f"Watch {self.ui.book_watch_i % len(LEGENDARY_IDS) + 1}/{len(LEGENDARY_IDS)} · W/S chooses · Enter reads its page")
 
     def ceremony(self):
         y = self.y + max(4, self.h // 5)
@@ -470,7 +502,7 @@ def book_gallery(destination, *, text=None, world=None):
                 frames.append(resize_rgb(frame, 640, 360))
         state.v2["settings"]["text_size"] = 2
         for name, panel in (
-            ("legendary", UIState(mode="journal", journal_page=1, book_entry_i=144)),
+            ("legendary", UIState(mode="journal", journal_page=1, book_entry_i=len(BOOK_SPECIES_IDS))),
             ("trophies", UIState(mode="journal", journal_page=2, book_shelf=2)),
             ("keepsake-shelf", UIState(mode="journal", journal_page=2, book_shelf=1)),
             ("ceremony", UIState(mode="journal", journal_page=1, book_ceremony="book_of_five_waters")),
@@ -480,6 +512,25 @@ def book_gallery(destination, *, text=None, world=None):
             write_png(out / f"book-{name}.png", frame)
         write_png(out / "book-contact-sheet.png", np.concatenate([
             np.concatenate(frames[index:index+2], axis=1) for index in range(0, 10, 2)
+        ], axis=0))
+        # Keep the complete long objective visible in a compact-window artifact.
+        panel = UIState(mode="journal", journal_page=3,
+                        journal_quest_i=next(index for index, qid in enumerate(QUEST_IDS)
+                            if renderer.narrative_content.quests[qid]["objective"]["type"] == "line_scout_check"))
+        frame = np.full((270, 480, 3), LEATHER, dtype=np.uint8)
+        renderer.draw(frame, state, panel)
+        pages = BookView(renderer, frame, state, panel).story_pages()[0]
+        compact_frames = []
+        for index in range(len(pages)):
+            panel.book_detail_page = index
+            frame = np.full((270, 480, 3), LEATHER, dtype=np.uint8)
+            renderer.draw(frame, state, panel)
+            compact_frames.append(frame)
+        if len(compact_frames) % 2:
+            compact_frames.append(np.full_like(frame, LEATHER))
+        write_png(out / "book-story-compact.png", np.concatenate([
+            np.concatenate(compact_frames[index:index+2], axis=1)
+            for index in range(0, len(compact_frames), 2)
         ], axis=0))
         timings = []
         for index in range(150):

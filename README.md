@@ -177,6 +177,8 @@ Keepsakes and Trophies. **Story** retains **Lake Whispers & Ripples**, including
 quest status, objectives, progress, locations and Bot's saved notes. Declined
 offers remain available, and missed time windows return later. Book renames
 receive a title-page ceremony when you return to Briar Landing.
+Story details wrap across numbered pages in small windows; **Enter/A** or
+**Turn** advances through the complete objective and prerequisites.
 
 Release W or S and the throttle stays where you set it. The HUD shows forward,
 reverse, or idle and the lever percentage. Dropping the anchor resets the lever
