@@ -195,10 +195,11 @@ class GuideLayoutChecks(unittest.TestCase):
         ui._text, ui._panel = text, panel
         ui._blit_rgb = lambda frame, image, x, y: None
         frame = np.zeros((270, 480, 3), np.uint8)
-        ui.draw(frame, state, UIState(mode="journal"))
+        ui.draw(frame, state, UIState(mode="journal", journal_page=1, book_detail_page=1))
 
-        self.assertEqual(len(panels), 1)
-        px, py, pw, ph = panels[0]
+        from .bookview import book_layout
+        layout = book_layout(480, 270)
+        px, py, pw, ph = layout.x, layout.y, layout.w, layout.h
         details = [record for record in records if (
             record[0] == "Bluegill"
             or any(token in record[0].casefold() for token in (
@@ -214,7 +215,7 @@ class GuideLayoutChecks(unittest.TestCase):
                 self.assertLessEqual(x + width, px + pw)
                 self.assertLessEqual(y + height, py + ph)
 
-    def test_species_journal_blurb_waits_for_details_with_large_text(self):
+    def test_book_rumor_and_observations_use_separate_columns_with_large_text(self):
         world = World()
         ui = UI(self.text, world)
         state = State.new(world, seed=74)
@@ -236,7 +237,7 @@ class GuideLayoutChecks(unittest.TestCase):
         ui._text = text
         ui._blit_rgb = lambda frame, image, x, y: None
         frame = np.zeros((720, 1280, 3), np.uint8)
-        ui.draw(frame, state, UIState(mode="journal"))
+        ui.draw(frame, state, UIState(mode="journal", journal_page=1))
 
         details = [record for record in records if record[5] != DIM and (
             record[0] == species.name
@@ -245,13 +246,12 @@ class GuideLayoutChecks(unittest.TestCase):
         )]
         self.assertTrue(any(label == species.name for label, *_ in details))
         self.assertTrue(any("flats" in label.casefold() for label, *_ in details))
-        panel_x, panel_width = (1280 - int(1280 * 0.72)) // 2, int(1280 * 0.72)
-        dx = panel_x + int(panel_width * 0.46) + 8
-        blurb = [record for record in records if record[1] == dx and record[5] == DIM]
-        self.assertTrue(blurb, records)
-        detail_bottom = max(y + height for _, _, y, _, height, _ in details)
-        blurb_top = min(y for _, _, y, *_ in blurb)
-        self.assertGreaterEqual(blurb_top, detail_bottom + 3)
+        heard = next(record for record in records if record[0] == "What we heard")
+        found = next(record for record in records if record[0] == "What we found")
+        observations = [record for record in records if "trophy" in record[0].casefold()]
+        self.assertGreater(found[1], heard[1] + heard[3])
+        self.assertTrue(observations)
+        self.assertTrue(all(record[1] >= found[1] for record in observations))
 
     def _check_pages(self):
         # The guide needs no world or save. Keep the actual font rasterizer and

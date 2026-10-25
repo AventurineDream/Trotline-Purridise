@@ -350,6 +350,21 @@ Cat NPC boats reuse the same generators.
 - Every screen works at 1280×720 and up, with three text sizes, and keyboard,
   gamepad and mouse navigation.
 
+`bookview.py` shares tab, grid and page-control geometry between presentation
+and pointer hit testing. J opens the book; A/D or gamepad left/right changes
+tabs, W/S or gamepad up/down chooses entries, and Enter/A turns a page. Mouse
+clicks select tabs or fish, and the wheel browses entries. The Story tab retains
+the existing Lake Whispers & Ripples quest details and Guardian progress.
+The collection tab cycles Ripples, Keepsakes and Trophies. `--shots` includes
+every tab at text sizes 0 and 2, extra shelf and ceremony views, a contact sheet,
+and `book-benchmark.json` for the warmed 1280×720 book presentation.
+
+Stage events are consumed by the session into one three-second invitation;
+J (hold Y on gamepad) reads its exact species page. Title ceremonies wait for
+Briar Landing and add the acknowledged milestone to `book.titles_seen`, so a
+reload cannot replay an acknowledged title page. Unknown save fields continue
+to preserve that acknowledgement for older builds.
+
 ## 7. Memory budget (3 GB hard cap)
 
 Peak RSS target **≤ 2.6 GB** on the GPU path. The benchmark hard-fails at

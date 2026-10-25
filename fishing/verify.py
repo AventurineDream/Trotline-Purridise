@@ -180,7 +180,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             panel.shop_tab = visit%len(SHOP_TABS)
             panel.help_page = visit%HELP_N
             journal_visit = visit%(len(SPECIES)+len(QUEST_IDS))
-            panel.journal_page = int(journal_visit>=len(SPECIES))
+            panel.journal_page = 3 if journal_visit >= len(SPECIES) else 0
             panel.journal_i = journal_visit%len(SPECIES)
             panel.journal_quest_i = (journal_visit-len(SPECIES))%len(QUEST_IDS)
             if panel.mode=="dialogue":
@@ -211,8 +211,8 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             elif panel.mode=="help":
                 coverage["help_pages"].add(panel.help_page)
             elif panel.mode=="journal":
-                coverage["quest_journal" if panel.journal_page else "fish_journal"].add(
-                    panel.journal_quest_i if panel.journal_page else panel.journal_i)
+                coverage["quest_journal" if panel.journal_page == 3 else "fish_journal"].add(
+                    panel.journal_quest_i if panel.journal_page == 3 else panel.journal_i)
             if low.dtype!=np.uint8 or not np.isfinite(low).all():
                 raise AssertionError("invalid frame")
             if text.cache_bytes>text.cache_limit:

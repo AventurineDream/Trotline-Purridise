@@ -521,6 +521,8 @@ def shots(dest: str) -> int:
     rain = State.new(world,seed=2)
     _move(rain,-90.0,-40.0,math.atan2(-85.0,-75.0),(18.0-6.0)*60.0+3*24*60)
     grab(rain,"play","rain.png")
+    from .bookview import book_gallery
+    book_gallery(out, text=text, world=world)
     renderer.close()
     software_renderer.close()
     text.close()
