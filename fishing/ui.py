@@ -355,6 +355,7 @@ class UIState:
     journal_quest_i: int = 0
     book_entry_i: int = 0
     book_detail_page: int = 0
+    book_detail_pages: int = 1
     book_shelf: int = 0
     book_collection_i: int = 0
     book_watch_i: int = 0

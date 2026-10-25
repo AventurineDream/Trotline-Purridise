@@ -441,6 +441,7 @@ class Session:
             self.ui.journal_page = 0
             self.ui.journal_quest_i = 0
             self.ui.book_detail_page = 0
+            self.ui.book_detail_pages = 1
             if self.ui.book_prompt_species in BOOK_SPECIES_IDS:
                 self.ui.book_entry_i = BOOK_SPECIES_IDS.index(self.ui.book_prompt_species)
                 self.ui.journal_i = self.ui.book_entry_i
@@ -946,6 +947,7 @@ class Session:
                 if contains(rect, click):
                     self.ui.journal_page = index
                     self.ui.book_detail_page = 0
+                    self.ui.book_detail_pages = 1
                     if index == 1:
                         self.ui.book_entry_i = self.ui.journal_i
                     return
@@ -961,6 +963,7 @@ class Session:
         if left or right:
             self.ui.journal_page = (self.ui.journal_page + (1 if right else -1)) % len(BOOK_TABS)
             self.ui.book_detail_page = 0
+            self.ui.book_detail_pages = 1
             if self.ui.journal_page == 1:
                 self.ui.book_entry_i = self.ui.journal_i
             return

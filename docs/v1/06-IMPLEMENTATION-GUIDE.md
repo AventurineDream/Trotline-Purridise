@@ -363,11 +363,21 @@ subsequent pages include those fields in full alongside all quest details.
 Rumors are remembered when the session opens an entry; drawing previews uses
 read-only page data. Idle menu ticks do not record rumors. Page-control labels
 are centered inside their hit regions.
+Species rumors and observations, Watch clues, legendary records and shelf
+descriptions use measured line pagination too. The renderer publishes the
+current page count in transient UI state. Enter/A finishes a Watch card before
+opening its entry, and finishes a shelf item's text before cycling shelves.
+Changing selection or tabs resets the page cursor and count. A zero-room
+paragraph marks the last visible line with an ellipsis.
 The collection tab cycles Ripples, Keepsakes and Trophies. `--shots` includes
 every tab at text sizes 0 and 2, extra shelf and ceremony views, a contact sheet,
 and `book-benchmark.json` for the warmed 1280×720 book presentation.
 `book-story-compact.png` shows every page of The Deep-Water Drift at 480×270 with
 large text. The full-frame verifier includes all five book tabs in its coverage.
+`book-*-compact-text{0,1,2}.png` captures every page of each tab, all shelf types,
+recorded and unrecorded legendary examples, and the title ceremony at 480×270
+for every text size. The compact quest selection falls back to the first quest
+if the long line/scout objective is no longer in the content.
 
 Stage events are consumed by the session into one three-second invitation;
 J (hold Y on gamepad) reads its exact species page. Title ceremonies wait for
