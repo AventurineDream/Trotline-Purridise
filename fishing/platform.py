@@ -27,6 +27,8 @@ SDL_WINDOWEVENT_FOCUS_GAINED = 12
 SDL_WINDOWEVENT_FOCUS_LOST = 13
 SDL_KEYDOWN = 0x300
 SDL_KEYUP = 0x301
+SDL_MOUSEBUTTONDOWN = 0x401
+SDL_MOUSEWHEEL = 0x403
 RGB24 = 0x17101803
 ARGB8888 = 0x16362004
 
@@ -110,10 +112,24 @@ class SDL_WindowEvent(ctypes.Structure):
     ]
 
 
+class SDL_MouseButtonEvent(ctypes.Structure):
+    # SDL2: https://wiki.libsdl.org/SDL2/SDL_MouseButtonEvent
+    _fields_ = [("type", c_uint32), ("timestamp", c_uint32), ("windowID", c_uint32),
+                ("which", c_uint32), ("button", c_uint8), ("state", c_uint8),
+                ("clicks", c_uint8), ("padding1", c_uint8), ("x", c_int), ("y", c_int)]
+
+
+class SDL_MouseWheelEvent(ctypes.Structure):
+    # Only the stable SDL2 prefix is read; later precision fields are optional.
+    _fields_ = [("type", c_uint32), ("timestamp", c_uint32), ("windowID", c_uint32),
+                ("which", c_uint32), ("x", c_int), ("y", c_int), ("direction", c_uint32)]
+
+
 class SDL_Event(ctypes.Union):
     _fields_ = [
         ("type", c_uint32), ("key", SDL_KeyboardEvent), ("window", SDL_WindowEvent),
         ("caxis", SDL_ControllerAxisEvent),
+        ("button", SDL_MouseButtonEvent), ("wheel", SDL_MouseWheelEvent),
         ("cbutton", SDL_ControllerButtonEvent),
         ("cdevice", SDL_ControllerDeviceEvent), ("pad", c_uint8 * 56),
     ]
@@ -250,6 +266,9 @@ class Input:
         self.device = "keyboard"
         self.quit = False
         self.focused = True
+        self.mouse_click = None
+        self.mouse_wheel = 0
+        self.viewport = (1280, 720)
         self._rep: dict[str, float] = {}
 
     def tap(self, name: str, dt: float) -> bool:
@@ -434,6 +453,9 @@ class Platform:
         # Reuse one Input so key-repeat timers survive across frames.
         inp = self._input
         inp.quit = False
+        inp.mouse_click = None
+        inp.mouse_wheel = 0
+        inp.viewport = (self.w, self.h)
         keyboard_pressed: set[str] = set()
         keyboard_press_order: list[str] = []
         event = SDL_Event()
@@ -447,8 +469,17 @@ class Platform:
                     keyboard_press_order.clear()
                     inp._rep.clear()
                     self.gamepad.clear_input()
+                    inp.mouse_click = None
+                    inp.mouse_wheel = 0
                 elif event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED:
                     self._focused = True
+            elif event.type == SDL_MOUSEBUTTONDOWN and self._focused:
+                if event.button.button == 1:
+                    inp.mouse_click = (event.button.x, event.button.y)
+                    self._last_device = "mouse"
+            elif event.type == SDL_MOUSEWHEEL and self._focused:
+                inp.mouse_wheel += event.wheel.y * (-1 if event.wheel.direction == 1 else 1)
+                self._last_device = "mouse"
             elif event.type == SDL_KEYDOWN and self._focused and not event.key.repeat:
                 name = _SCAN_NAMES.get(event.key.keysym.scancode)
                 if name is not None:

@@ -1,0 +1,21 @@
+{
+  "frames": 140,
+  "resolution": [
+    1280,
+    720
+  ],
+  "p95_ms": 17.92,
+  "peak_rss_mib": 176.5,
+  "text_cache_mb": 7.24,
+  "tabs": [
+    "Fish",
+    "Book",
+    "Ripples & Keepsakes",
+    "Story",
+    "Watch"
+  ],
+  "text_sizes": [
+    0,
+    2
+  ]
+}
