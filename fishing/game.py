@@ -143,8 +143,13 @@ class Session:
         else:
             self._menu_held.update(keys.held & NAVIGATION_KEYS)
         self._refresh_npcs()
+        previous_page = (self.ui.mode, self.ui.journal_page, self.ui.book_entry_i)
         self._keys(keys, dt)
-        self._remember_book_page()
+        current_page = (self.ui.mode, self.ui.journal_page, self.ui.book_entry_i)
+        if (current_page != previous_page or keys.pressed
+                or getattr(keys, "mouse_click", None) is not None
+                or getattr(keys, "mouse_wheel", 0)):
+            self._remember_book_page()
         self._simulate(keys, dt, driving_presses)
         self._tick_caption(dt)
 

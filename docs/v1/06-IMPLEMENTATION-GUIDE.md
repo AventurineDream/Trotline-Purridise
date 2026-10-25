@@ -358,8 +358,11 @@ the existing Lake Whispers & Ripples quest details and Guardian progress.
 Story details wrap to measured glyph widths and paginate at every window size;
 Enter/A or the Turn button reaches the full objective, status, prerequisites,
 Bot note and Guardian text. The page counter wraps when the last page is turned.
+The compact opening overview keeps progress and Guardian status together;
+subsequent pages include those fields in full alongside all quest details.
 Rumors are remembered when the session opens an entry; drawing previews uses
-read-only page data. Page-control labels are centered inside their hit regions.
+read-only page data. Idle menu ticks do not record rumors. Page-control labels
+are centered inside their hit regions.
 The collection tab cycles Ripples, Keepsakes and Trophies. `--shots` includes
 every tab at text sizes 0 and 2, extra shelf and ceremony views, a contact sheet,
 and `book-benchmark.json` for the warmed 1280×720 book presentation.

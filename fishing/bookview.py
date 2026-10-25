@@ -413,20 +413,29 @@ class BookView:
         width = self.w if compact else (self.w - 40) // 2
         top = self.y + self.u.cell(self.small if compact else self.head)[1] + 12
         rows = max(1, (self.bottom - top) // self.line)
-        values = (
-            f"Chapter {self.state.v2['story']['chapter']} · {len(set(self.state.narrative.ripples))}/10 Ripples · Quest {index+1}/{len(QUEST_IDS)}",
-            detail["title"], "Status: " + detail["status"], "Giver: " + detail["giver"],
-            "Objective: " + detail["objective"], "Progress: " + detail["progress"],
-            "Prerequisites: " + detail["prerequisites"],
-            detail["latest_bot_note"] or "No Bot notes yet.",
-            detail["guardian_status"],
-            "Declined? Re-hail. Missed windows repeat; no expiry.",
+        values = {
+            "chapter": f"Chapter {self.state.v2['story']['chapter']} · {len(set(self.state.narrative.ripples))}/10 Ripples · Quest {index+1}/{len(QUEST_IDS)}",
+            "title": detail["title"], "status": "Status: " + detail["status"],
+            "giver": "Giver: " + detail["giver"], "objective": "Objective: " + detail["objective"],
+            "progress": "Progress: " + detail["progress"],
+            "prerequisites": "Prerequisites: " + detail["prerequisites"],
+            "bot": detail["latest_bot_note"] or "No Bot notes yet.",
+            "guardian": detail["guardian_status"],
+            "reminder": "Declined? Re-hail. Missed windows repeat; no expiry.",
+        }
+        groups = (tuple(values),) if compact else (
+            ("chapter", "title", "status", "giver", "objective", "progress", "prerequisites"),
+            ("bot", "guardian", "reminder"),
         )
-        groups = (values,) if compact else (values[:7], values[7:])
-        lines = [[line for value in group for line in self.lines(value, width)]
+        lines = [[line for key in group for line in self.lines(values[key], width)]
                  for group in groups]
         pages = tuple(tuple(tuple(column[start:start + rows]) for column in lines)
                       for start in range(0, max(map(len, lines)), rows))
+        if compact:
+            # Keep the original three-line overview. Its abbreviated labels are
+            # also present in full in the following measured, wrapped pages.
+            overview = tuple(values[key] for key in ("title", "progress", "guardian"))
+            pages = ((overview[:rows],),) + pages
         return pages, top, width
 
     def story(self):
