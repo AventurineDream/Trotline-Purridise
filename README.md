@@ -179,6 +179,9 @@ offers remain available, and missed time windows return later. Book renames
 receive a title-page ceremony when you return to Briar Landing.
 Story details wrap across numbered pages in small windows; **Enter/A** or
 **Turn** advances through the complete objective and prerequisites.
+Rumors, Watch clues, legendary records and keepsake descriptions also wrap onto
+as many pages as needed. Finish the Watch card's pages to open its entry;
+finish a shelf item's pages to switch to the next shelf.
 
 Release W or S and the throttle stays where you set it. The HUD shows forward,
 reverse, or idle and the lever percentage. Dropping the anchor resets the lever
