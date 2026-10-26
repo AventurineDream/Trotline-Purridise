@@ -95,6 +95,30 @@ During play the window and lake share one OpenGL context. The window check reads
 
 The original source is preserved in `backups/original-2026-10-13.tar.gz`; the version before the two-lake expansion is in `backups/before-two-lakes-2026-10-13.tar.gz`. Older saves keep their money, fish, lines, gear, and records. They start with the owned jon boat and a full starter fuel tank; the new boats must be purchased. The active lake, owned boats, fuel tanks, rowboat battery, and its charge allowance for the current landing visit are saved. Engines resume at idle and sails resume lowered.
 
+## Modes and catnap
+
+New Game asks you to choose **Cozy** (default) or **Old Salt**. You can switch
+any time in Pause → Settings. Cozy applies no needs penalties. Entering either
+mode clears the routine counters; entering Old Salt starts them at zero.
+
+Press **Z** or hold gamepad **Y** to take a two-game-hour catnap at anchor or a
+landing. A boat with a **hammock** can nap while idling with the sail down.
+Pause also offers the shortcut **Z** / gamepad **X**. Lines soak normally. Any
+key or click finishes the fade; each nap advances the full two hours once.
+
+The first nap in a six-hour window grants **Rested** for six active game hours
+and, when a lead is available, a **Bot's dream** habitat note for a fish uncaught
+on this lake. One unread dream waits at a time. Opening the book goes to that
+lead; its heard note stays after reading it. Extra naps pass time and reset Old
+Salt Energy without extending an existing Rested window.
+
+In **Old Salt**, 16 awake game hours brings **Drowsy** (hauling 25% slower and
+soft screen edges). After 20 hours, the boat anchors safely for a catnap.
+More than 24 hours without a meal brings **Peckish** (boat speed reduced by 20%).
+Needs invitations appear at most once per ten real minutes of active play;
+**Later** snoozes that need for thirty active real minutes. Menus, lost focus,
+and time offline freeze the needs and Rested clocks.
+
 ## Two lakes
 
 **Little Briar** retains its familiar shoreline, landing, and fishing grounds. All 36 fish in the game collection can be found here.
@@ -126,7 +150,11 @@ All four models have their own complete hull collision footprint and draft. A wi
 
 The rowboat runs on oars without fuel. You can fit an optional **$350 9.9 hp electric trolling motor** with an **18 kWh battery**. Charging costs **$0.35 per kWh**, up to **5 kWh per landing visit**. Leave and return to charge again; the oars still work when the battery is empty.
 
-If stranded, lower the sail and idle, then press **R** for a tow to the current landing. A tow takes one game hour and costs up to $10, limited by available cash; a small emergency fuel reserve prevents an empty wallet from trapping the player. Deployed lines keep soaking in their original positions.
+If stranded, lower the sail and idle, then press **R** for a tow to the current
+landing. A tow takes one game hour. It is **free in Cozy**; in **Old Salt** it
+costs the smaller of your cash and **$25 + 2% of the active boat's price**.
+Any shortfall is waived, including at $0. A small emergency fuel reserve keeps
+an empty wallet from trapping the player. Deployed lines keep soaking in place.
 
 ## On the water
 
@@ -145,7 +173,7 @@ One real second is one minute on the lake. A day is 24 minutes. `T` cycles 1×, 
 | Q | — | Raise / lower the daysailer's sail |
 | R | — | Call a tow while idling, with the sail lowered |
 | B | Y tap | Send Bot ahead or out to a line. Press again to call him back |
-| Z | Y hold | Catnap (reserved until its gameplay ticket lands) |
+| Z | Y hold | Two-hour catnap at anchor or a landing; idle hammock boats can nap anywhere |
 | G | LB | Use the active Bot tool (reserved until its gameplay ticket lands) |
 | K | — | Galley (reserved until its gameplay ticket lands) |
 | Tab | Back | Chart |

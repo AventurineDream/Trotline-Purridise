@@ -523,6 +523,8 @@ def shots(dest: str) -> int:
     grab(rain,"play","rain.png")
     from .bookview import book_gallery
     book_gallery(out, text=text, world=world)
+    from .ui import comfort_gallery
+    comfort_gallery(out, text=text, world=world, background=renderer.render(dawn))
     renderer.close()
     software_renderer.close()
     text.close()

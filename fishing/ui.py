@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from functools import lru_cache
 import math
@@ -52,6 +53,7 @@ from .boat import (
 )
 from .lakes import LAKES
 from .weather import wind_at
+from . import comfort
 
 INK = (238, 233, 216)
 DIM = (169, 183, 175)
@@ -66,7 +68,7 @@ BOOK_STAGE_UP_COUNTS = frozenset(
 SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes")
 _TABS = SHOP_TABS
 TEXT_SIZE_SCALES = (0.9, 1.0, 1.15)
-MODES = ("cozy", "old_salt")
+MODES = comfort.MODES
 VOLUME_NAMES = ("master", "music", "ambience", "sfx")
 VOLUME_LABELS = {
     "master": "Master volume", "music": "Music volume",
@@ -374,11 +376,26 @@ class UIState:
     help_from: str = "play"
     title_i: int = 0
     confirm_new: bool = False
+    new_mode_i: int = 0
+    comfort_i: int = 0
+    needs_kind: str = ""
+    nap_timer: float = 0.0
+    nap_forced: bool = False
     note: str = ""
     has_save: bool = False
     conversation: object = None
     dialogue_content: object = None
     dialogue_from: str = "play"
+
+
+def comfort_controls(viewport):
+    width, height = viewport
+    margin = max(12, min(28, width // 35))
+    button_h = max(34, min(52, height // 7))
+    button_w = (width - margin * 2 - 48) // 2
+    y = height - margin - 16 - button_h
+    return ((margin + 16, y, button_w, button_h),
+            (width - margin - 16 - button_w, y, button_w, button_h))
 
 
 def shop_rows(state, tab: int) -> list[Row]:
@@ -589,9 +606,16 @@ class UI:
             self._toasts(frame, state, ui.input_device)
             return
         if mode == "play":
+            if comfort.drowsy(state.v2):
+                self._drowsy_edges(frame)
             self._hud(frame, state, ui)
+            self._comfort_status(frame, state)
             self._caption(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
+            return
+        if mode in {"new_mode", "needs", "catnap"}:
+            self._comfort(frame, state, ui)
+            self._caption(frame, state, ui)
             return
         if mode == "map":
             self._hud(frame, state, ui)
@@ -1104,9 +1128,9 @@ class UI:
             self._panel(frame,px,py,pw,int(30*unit)+8,0.72)
             self._text(frame,prompt,px+16,py+5,small+2,INK,False,"sans")
         if ui.input_device == "gamepad":
-            hint = "LS drive  LT/RT lever  Y Bot  X Set  A Check  RB Hail  Back Chart  Start Pause"
+            hint = "LS drive  LT/RT lever  Y Bot / hold Nap  X Set  A Check  RB Hail  Back Chart  Start Pause"
         else:
-            hint = "B Bot  Shift Idle  Q Sail  F Set  E Landing  C Hail  H Help" if state.boat_id=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  C Hail  H Help"
+            hint = "B Bot  Shift Idle Q Sail  F Set  E Landing  Z Nap  C Hail  H Help" if state.boat_id=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  Z Nap  C Hail  H Help"
         hint_w = self._measure(hint,small)
         hint_h = small + 16
         hint_x, hint_y = (w-hint_w-24)//2, h-m-hint_h
@@ -1315,8 +1339,8 @@ class UI:
         if ui.confirm_new:
             msg = "New morning? The save on disk stays until you overwrite it."
             self._text(frame,self._trim(msg,small,w-x*2),x,y2,small,WARN,False)
-            hint = self._controls(ui, "Enter starts over     Esc cancels",
-                                  "A starts over     B cancels")
+            hint = self._controls(ui, "Enter chooses a mode     Esc cancels",
+                                  "A chooses a mode     B cancels")
             self._text(frame,hint,x,y2+small_h+12*gap_scale,small,DIM,False,"sans")
             return
         for i, label in enumerate(options):
@@ -1333,6 +1357,139 @@ class UI:
         self._text(frame,controls,x,h-small_h-24*gap_scale,small,DIM,False,"sans")
         mark = "ONE LAKE. NO HURRY."
         self._text(frame,mark,w-x-self._measure(mark,small),h-small_h-24*gap_scale,small,DIM,False,"sans")
+
+    def _comfort_lines(self, value, size, width):
+        cache = getattr(self, "_comfort_line_cache", None)
+        if cache is None:
+            cache = self._comfort_line_cache = OrderedDict()
+        key = (value, self._actual_size(size), self._font_family("sans"), width)
+        if key in cache:
+            cache.move_to_end(key)
+            return cache[key]
+        lines = []
+        for paragraph in value.splitlines():
+            line = ""
+            for word in paragraph.split():
+                trial = word if not line else line + " " + word
+                if line and self._measure(trial, size) > width:
+                    lines.append(line)
+                    line = word
+                else:
+                    line = trial
+            lines.append(line)
+        line_height = max(self._render(line, size, DIM, "sans").shape[0] for line in lines) + 4
+        if len(cache) >= 64:
+            cache.popitem(last=False)
+        cache[key] = tuple(lines), line_height
+        return cache[key]
+
+    def _comfort(self, frame, state, ui):
+        if ui.mode == "needs" and comfort.mode(state.v2) != "old_salt":
+            return
+        h, w = frame.shape[:2]
+        margin = max(12, min(28, w // 35))
+        x, y, width, height = margin, margin, w - 2 * margin, h - 2 * margin
+        buttons = comfort_controls((w, h))
+        if ui.mode == "new_mode":
+            title, labels, selected = "Choose your pace", ("Cozy", "Old Salt"), ui.new_mode_i
+            body = ("Cozy: free tow and no needs penalties. Naps are always optional.\n"
+                    "Old Salt: Drowsy at 16 hours awake; a safe catnap after 20. Peckish after 24 hours slows boats. Tow: $25 + 2% of boat price, capped by cash.\n"
+                    "Change mode any time in Settings.")
+        elif ui.mode == "needs":
+            energy = ui.needs_kind == "energy"
+            title = "A little rest?" if energy else "A bite to eat?"
+            body = ("Bot: Your eyes are getting heavy. Hauling is 25% slower while Drowsy. Shall we anchor safely for a two-hour catnap?"
+                    if energy else "Bot: A meal would be nice. While Peckish, the boat runs 20% slower. You can still steer, haul and call the tow boat.")
+            labels = ("Anchor & nap" if energy else "Keep going", "Later (30 min)")
+            selected = ui.comfort_i
+        else:
+            progress = 1 - max(0., min(1., ui.nap_timer / 3))
+            reduced = state.v2["settings"].get("reduced_motion", False)
+            warm = 0. if reduced else abs(1 - 2 * progress)
+            tint = (int(15 + 50 * warm), int(26 + 20 * warm), int(35 - 10 * warm))
+            self._fill(frame, 0, 0, w, h, tint, .82 if reduced else .65 + .2 * np.sin(np.pi * progress))
+            title = "A safe anchor. A little sleep." if ui.nap_forced else "Catnap"
+            body = "Two quiet hours. Your lines keep soaking."
+            if comfort.rested(state.v2, state.narrative.active_play_game_minutes):
+                remaining = (state.v2["needs"]["rested_until"] - state.narrative.active_play_game_minutes) / 60
+                body += f"\nRested: {remaining:.1f} game hours left."
+            if state.v2["book"].get("dream_clue"):
+                body += "\nBot's dream left a habitat lead in your book."
+            labels = None
+            selected = 0
+        if labels:
+            self._round_fill(frame, x, y, width, height, (17, 31, 32), 1)
+        self._fill(frame, x + 10, y, width - 20, 1, GOLD, .34)
+        head, size = self._size(frame, "head"), self._size(frame, "body")
+        while head > 10 and self._measure(title, head) > width - 32:
+            head -= 1
+        self._text(frame, title, x + 16, y + 16, head, INK, False, "sans")
+        top = y + 30 + self._render(title, head, INK, "sans").shape[0]
+        hint = self._controls(ui, "Arrows choose · Enter selects · Esc back",
+                               "D-pad chooses · A selects · B back") if labels else "Any key or click finishes the fade."
+        if labels and ui.mode == "needs":
+            hint = self._controls(ui, "Arrows choose · Enter selects · F / Esc later",
+                                   "D-pad chooses · A selects · X / B later")
+        values = body + "\n" + hint
+        available = buttons[0][1] - 12 - top
+        while size > 10:
+            lines, line_height = self._comfort_lines(values, size, width - 32)
+            if len(lines) * line_height <= available:
+                break
+            size -= 1
+        lines, line_height = self._comfort_lines(values, size, width - 32)
+        for index, line in enumerate(lines):
+            self._text(frame, line, x + 16, top + index * line_height,
+                       size, DIM, False, "sans")
+        if labels:
+            for index, (label, rect) in enumerate(zip(labels, buttons)):
+                bx, by, bw, bh = rect
+                chosen = index == selected
+                self._round_fill(frame, bx, by, bw, bh, GOLD if chosen else (46, 66, 62), 1)
+                label = ("> " if chosen else "") + label
+                font = self._size(frame, "body")
+                while font > 10 and (self._measure(label, font) > bw - 16
+                                    or self._render(label, font, INK, "sans").shape[0] > bh - 10):
+                    font -= 1
+                glyph_height = self._render(label, font, INK, "sans").shape[0]
+                self._center(frame, label, bx + bw / 2, by + (bh - glyph_height) / 2,
+                             font, (22, 39, 39) if chosen else INK)
+
+    def _drowsy_edges(self, frame):
+        h, w = frame.shape[:2]
+        edge = max(5, min(24, h // 22))
+        for x, y, width, height, reverse, horizontal in (
+            (0, 0, edge, h, False, True), (w-edge, 0, edge, h, True, True),
+            (0, 0, w, edge, False, False), (0, h-edge, w, edge, True, False),
+        ):
+            region = frame[y:y+height, x:x+width].copy()
+            soft = resize_rgb(resize_rgb(region, max(1, width // 3), max(1, height // 3)), width, height)
+            ramp = np.linspace(.65, 0, edge, dtype=np.float32)
+            if reverse:
+                ramp = ramp[::-1]
+            alpha = ramp[None, :, None] if horizontal else ramp[:, None, None]
+            frame[y:y+height, x:x+width] = (region * (1-alpha) + soft * alpha).astype(np.uint8)
+
+    def _comfort_status(self, frame, state):
+        labels = []
+        if comfort.drowsy(state.v2):
+            labels.append("Drowsy")
+        if comfort.speed_factor(state.v2) < 1:
+            labels.append("Peckish")
+        if comfort.rested(state.v2, state.narrative.active_play_game_minutes):
+            labels.append("Rested")
+        if not labels:
+            return
+        h, w = frame.shape[:2]
+        scale = getattr(self, "_text_scale", 1.)
+        unit = h / 720 * scale
+        margin = max(12, int(26 * unit))
+        size = max(11, int(h / 60))
+        label = " · ".join(labels)
+        y = margin + int(92 * unit) + 18
+        width = self._measure(label, size) + 24
+        self._panel(frame, margin, y, width, self._render(label, size, GOLD, "sans").shape[0] + 16, .8)
+        self._text(frame, label, margin + 12, y + 6, size, GOLD, False, "sans")
 
     def _shop(self, frame, state, ui: UIState):
         rows = shop_rows(state, ui.shop_tab)
@@ -1580,7 +1737,7 @@ class UI:
         body = self._size(frame, "body")
         head = self._size(frame, "head")
         small = self._size(frame, "small")
-        pw = int(w * 0.34)
+        pw = min(w - 24, max(420, int(w * 0.34)))
         ph = 40 + self.cell(head)[1] + len(labels) * (self.cell(body)[1] + 8) + 30
         x, y = (w - pw) // 2, (h - ph) // 2
         self._panel(frame, x, y, pw, ph, 0.92)
@@ -1590,9 +1747,10 @@ class UI:
             color = GOLD if i == ui.pause_i else INK
             prefix = "> " if i == ui.pause_i else "  "
             self._text(frame, prefix + label, x + 18, y + 24 + self.cell(head)[1] + i * (self.cell(body)[1] + 8), body, color)
-        foot = self._controls(ui, "W/S or arrows   Enter selects",
-                              "D-pad / stick choose   A selects   B resumes")
-        self._text(frame, foot, x + 18, y + ph - self.cell(small)[1] - 12, small, DIM, shadow=False)
+        foot = ui.note or self._controls(ui, "Arrows · Enter selects · Z catnap",
+                                        "D-pad · A selects · B resumes · X catnap")
+        self._text(frame, foot, x + 18, y + ph - self.cell(small)[1] - 12, small,
+                   WARN if ui.note else DIM, shadow=False)
 
     def _settings_rows(self, state):
         v2 = getattr(state, "v2", {})
@@ -2008,3 +2166,96 @@ def _haul_mesh_sprite(species_id: str, lake_id: str, shiny: bool) -> np.ndarray:
     sprite[:, :, 3] = visible.astype(np.uint8) * 255
     sprite.setflags(write=False)
     return sprite
+
+
+def comfort_gallery(destination, *, text=None, world=None, background=None):
+    """--shots comfort fixtures and a warmed UI composition benchmark."""
+    from copy import deepcopy
+    import json
+    from pathlib import Path
+    import resource
+    import time
+    from .book import BOOK_SPECIES_IDS
+    from .pngsave import write_png
+    from .sim import State
+
+    own_text = text is None
+    text = Text() if own_text else text
+    world = World() if world is None else world
+    out = Path(destination)
+    out.mkdir(parents=True, exist_ok=True)
+    state = State.new(world, seed=42014)
+    comfort.change_mode(state.v2, "old_salt")
+    state.catnap(world)
+    state.toasts.clear()
+    state.tutorial = 4
+    clue = state.v2["book"]["dream_clue"]
+    entry = BOOK_SPECIES_IDS.index(clue["species"])
+    initial_needs = deepcopy(state.v2["needs"])
+    panels = (
+        ("mode-cozy", UIState(mode="new_mode")),
+        ("mode-old-salt", UIState(mode="new_mode", new_mode_i=1)),
+        ("drowsy-prompt", UIState(mode="needs", needs_kind="energy")),
+        ("peckish-prompt", UIState(mode="needs", needs_kind="hunger", comfort_i=1)),
+        ("catnap", UIState(mode="catnap", nap_timer=1.5)),
+        ("doze", UIState(mode="catnap", nap_timer=1.5, nap_forced=True)),
+        ("dream-entry", UIState(mode="journal", journal_page=1, book_entry_i=entry)),
+        ("routine-hud", UIState(mode="play")),
+    )
+    renderer = UI(text, world)
+    contact = []
+    def paint(panel, width, height):
+        state.v2["needs"] = deepcopy(initial_needs)
+        if panel.mode in {"needs", "play"}:
+            state.v2["needs"].update({"awake_h": 18., "since_meal_h": 25., "rested_until": None})
+        frame = (resize_rgb(background, width, height).copy() if background is not None
+                 else np.full((height, width, 3), (48, 79, 87), np.uint8))
+        renderer.draw(frame, state, panel)
+        return frame
+    try:
+        for width, height, size, accessibility, suffix in (
+            (1280, 720, 1, False, "standard"),
+            (1280, 720, 2, True, "accessible"),
+            (480, 270, 2, True, "compact-accessible"),
+        ):
+            state.v2["settings"].update({"text_size": size, "dyslexia_font": accessibility})
+            for name, panel in panels:
+                if width < 640 and panel.mode == "play":
+                    continue
+                frame = paint(panel, width, height)
+                if width < 640 and panel.mode == "journal":
+                    pages = []
+                    for page in range(panel.book_detail_pages):
+                        panel.book_detail_page = page
+                        pages.append(paint(panel, width, height))
+                    panel.book_detail_page = 0
+                    if len(pages) % 2:
+                        pages.append(np.full_like(frame, (48, 79, 87)))
+                    frame = np.concatenate([np.concatenate(pages[i:i+2], axis=1)
+                                            for i in range(0, len(pages), 2)], axis=0)
+                write_png(out / f"comfort-{name}-{suffix}.png", frame)
+                if suffix == "standard":
+                    contact.append(resize_rgb(frame, 640, 360))
+        write_png(out / "comfort-contact-sheet.png", np.concatenate([
+            np.concatenate(contact[i:i+2], axis=1) for i in range(0, len(contact), 2)
+        ], axis=0))
+        state.v2["settings"].update({"text_size": 2, "dyslexia_font": True})
+        timings = []
+        for i in range(150):
+            start = time.perf_counter()
+            paint(panels[i % len(panels)][1], 1280, 720)
+            if i >= 10:
+                timings.append((time.perf_counter() - start) * 1000)
+        report = {"frames": len(timings), "resolution": [1280, 720],
+                  "p50_ms": round(float(np.percentile(timings, 50)), 2),
+                  "p95_ms": round(float(np.percentile(timings, 95)), 2),
+                  "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+                  "text_cache_mb": round(text.cache_bytes / 1e6, 2),
+                  "text_size": 2, "accessibility_font": True,
+                  "scope": "Warmed comfort UI composition including Drowsy edges; excludes lake rendering"}
+        (out / "comfort-benchmark.json").write_text(json.dumps(report, indent=2) + "\n")
+        print("comfort shots / benchmark: " + json.dumps(report))
+        return report
+    finally:
+        if own_text:
+            text.close()

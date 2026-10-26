@@ -381,6 +381,8 @@ class BookView:
         stage = page["stage"].replace("_", " ").upper()
         stats = f"{page['count']} caught  ·  Best {page['best_weight']:.1f} lb"
         heard = ('“' + page["heard"]["text"] + '”', "— " + page["heard"]["teller"])
+        heard += tuple("Bot's dream · " + str(dream.get("text", ""))
+                       for dream in page["dreams"] if isinstance(dream, dict))
         details = []
         tracker = shiny_tracker(self.state.v2["book"], self.state.journal, sid)
         if tracker["unlocked"]:
