@@ -21,7 +21,10 @@ python -m unittest \
   fishing.test_content_v2.ContentV2Checks.test_seeded_thousand_step_fishing_outcomes_are_bit_identical -v
 ```
 
-All **43** focused checks passed locally. The 1,000-step deterministic replay
+All **46** focused checks passed locally, including escaped shiny reservations,
+overlapping hooks in both escape orders, confirmed shinies, target switching,
+and reloads. CI runs the expanded suite.
+The 1,000-step deterministic replay
 pins shiny flags and the saved RNG state, with catch timings accounting for the
 new creation-time draw. The migration check's Briar fixtures
 passed; its Cedar fixture could not run locally because this workspace lacks
@@ -37,8 +40,9 @@ The book portion of `python -m fishing --shots <directory>` now also produces:
 - `book-tracker-compact-accessible.png`: every page at 480×270 with the largest
   accessibility font.
 
-The sparkle marker is drawn into the bounded text cache, so it remains visible
-when a system or accessibility font lacks the ✦ glyph. Catch cards already use
+The sparkle marker always uses a procedural drawing in the bounded text cache.
+This gives both fonts the same marker, including fonts without the ✦ glyph.
+Catch cards already use
 the authored shiny palettes and a textual SHINY badge.
 
 `book-benchmark.json` reports **140 warmed book compositions** at 1280×720,

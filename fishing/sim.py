@@ -57,7 +57,8 @@ from .boat import (
 from .weather import wind_at
 from .lakes import LAKES
 from .narrative import NarrativeState, deployment_id
-from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, promote_title,
+from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, confirm_shiny, lose_shiny,
+                   promote_title,
                    record_legendary_catch, record_observation,
                    refresh_collection_title, roll_shiny, set_shiny_target,
                    shiny_tracker, stage_up_events)
@@ -128,6 +129,8 @@ class Catch:
     disposition: str = "pending"
     haul_seen: bool = False
     depth_m: float | None = None
+    shiny_since_before: int | None = None
+    shiny_observation: int | None = None
 
     def __post_init__(self):
         if self.legendary or self.species in LEGENDARY_IDS:
@@ -163,6 +166,10 @@ class Catch:
             result["haul_seen"] = True
         if self.depth_m is not None:
             result["depth_m"] = round(self.depth_m, 3)
+        if self.shiny_since_before is not None:
+            result["shiny_since_before"] = self.shiny_since_before
+        if self.shiny_observation is not None:
+            result["shiny_observation"] = self.shiny_observation
         if self.shiny:
             result["shiny"] = True
         if self.treasured:
@@ -191,8 +198,14 @@ class Catch:
                 depth = None
         except OverflowError:
             depth = None
+        before, observation = (raw.get("shiny_since_before"), raw.get("shiny_observation"))
+        if type(before) is not int or before < 0:
+            before = None
+        if type(observation) is not int or observation < 0:
+            observation = None
         known = {"species", "weight", "quality", "age", "zone", "bait", "hour",
                  "lake_id", "noted_tired", "catch_game_minute", "shiny",
+                 "shiny_since_before", "shiny_observation",
                  "treasured", "legendary", "disposition", "haul_seen", "depth_m"}
         return cls(
             raw["species"], float(raw["weight"]), float(raw["quality"]),
@@ -206,6 +219,8 @@ class Catch:
             disposition=raw.get("disposition", "pending"),
             haul_seen=bool(raw.get("haul_seen", False)),
             depth_m=depth,
+            shiny_since_before=before,
+            shiny_observation=observation,
         )
 
 
@@ -823,6 +838,9 @@ class State:
                     hook.catch.age += hours
                     hook.catch.quality = quality_of(hook.catch.age)
                     if hook.catch.age >= SPOIL_HOURS:
+                        lose_shiny(self.v2["book"], hook.catch,
+                                   (other.catch for deployed in self.lines for other in deployed.hooks
+                                    if other.catch is not None))
                         hook.catch = None
                         hook.baited = False
                         spoiled += 1
@@ -848,11 +866,13 @@ class State:
                 sp = self.rng.pick(rates)
                 weight = self._roll_weight(sp)
                 caught_hour = hour
+                book = self.v2.setdefault("book", {})
+                since_before = shiny_tracker(book, self.journal, sp)["since_shiny"]
+                shiny = roll_shiny(book, self.journal, sp, self.rng)
                 catch = Catch(sp, weight, 1.0, 0.0, zone, bait, caught_hour,
                               self.lake_id, catch_game_minute=self.game_minutes,
-                              depth_m=depth,
-                              shiny=roll_shiny(self.v2.setdefault("book", {}),
-                                               self.journal, sp, self.rng))
+                              depth_m=depth, shiny=shiny,
+                              shiny_since_before=since_before if shiny else None)
                 hook.catch = catch
                 hook.baited = False
                 hooked += 1
@@ -1047,6 +1067,7 @@ class State:
 
     def _release_hook_catch(self, hook: Hook, catch: Catch,
                             reason: str | None = None, *, announce: bool = True) -> None:
+        confirm_shiny(self.v2["book"], catch)
         catch.disposition = "released"
         hook.catch = None
         hook.baited = False
@@ -1378,6 +1399,7 @@ class State:
         if self.well_load() + catch.weight > self.well_cap() + 1e-6:
             return "The livewell won't take that one. Mark a fish Release or make room."
         catch.disposition = "kept"
+        confirm_shiny(self.v2["book"], catch)
         self.well.append(catch)
         self._emit_livewell_entry(catch, line)
         hook.catch = None
@@ -1407,6 +1429,7 @@ class State:
                 released += 1
             else:
                 catch.disposition = "kept"
+                confirm_shiny(self.v2["book"], catch)
                 self.well.append(catch)
                 self._emit_livewell_entry(catch, line)
                 hook.catch = None

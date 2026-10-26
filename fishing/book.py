@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from copy import deepcopy
 import math
 
@@ -111,6 +112,7 @@ def roll_shiny(book: dict, journal: dict, species_id: str, rng, *,
     All standard catches advance their species' counter; any shiny resets it.
     The guarantee applies only to the current Verified target. Even a forced
     shiny consumes its normal random roll so the RNG sequence is predictable.
+    Simulation catches save the reset as a reservation, refunded on escape.
     """
     if legendary or species_id not in SPECIES_RUMORS:
         return False
@@ -122,6 +124,53 @@ def roll_shiny(book: dict, journal: dict, species_id: str, rng, *,
         shiny = True
     entry["since_shiny"] = 0 if shiny else since
     return shiny
+
+
+def confirm_shiny(book: dict, catch: object) -> None:
+    """Credit a pending shiny once it is kept or deliberately released."""
+    if not getattr(catch, "shiny", False) or getattr(catch, "shiny_since_before", None) is None:
+        return
+    entry = _book_record(book, catch.species)
+    index = catch.shiny_observation
+    if type(index) is int and 0 <= index < len(entry["found"]):
+        observation = entry["found"][index]
+        if isinstance(observation, dict):
+            observation["shiny"] = True
+    entry["shiny"] = _catch_count(entry.get("shiny", 0)) + 1
+    catch.shiny_since_before = None
+    catch.shiny_observation = None
+
+
+def lose_shiny(book: dict, catch: object, pending: Iterable[object]) -> None:
+    """Refund an escaped shiny's reservation without undoing newer progress.
+
+    Transfer its saved counter to the next pending shiny, or add it to today's
+    counter if this was the last reservation. A newer confirmed shiny already
+    consumed that history. Observation indices keep this independent of hook
+    traversal, landing order, target changes, and save/reload.
+    """
+    before = getattr(catch, "shiny_since_before", None)
+    index = getattr(catch, "shiny_observation", None)
+    if (not getattr(catch, "shiny", False) or type(before) is not int or before < 0
+            or type(index) is not int or index < 0):
+        return
+    entry = _book_record(book, catch.species)
+    found = entry["found"]
+    newer_confirmed = any(isinstance(found[i], dict) and found[i].get("shiny")
+                          for i in range(len(found) - 1, index, -1))
+    if not newer_confirmed:
+        later = [other for other in pending
+                 if other.species == catch.species and other.shiny
+                 and other.shiny_since_before is not None
+                 and other.shiny_observation is not None
+                 and other.shiny_observation > index]
+        if later:
+            following = min(later, key=lambda other: other.shiny_observation)
+            following.shiny_since_before += before
+        else:
+            entry["since_shiny"] = _catch_count(entry.get("since_shiny", 0)) + before
+    catch.shiny_since_before = None
+    catch.shiny_observation = None
 
 
 def remember_rumor(book: dict, species_id: str) -> dict | None:
@@ -168,8 +217,11 @@ def record_observation(book: dict, catch: object) -> dict | None:
     except OverflowError:
         pass
     if getattr(catch, "shiny", False) and not getattr(catch, "legendary", False):
-        observation["shiny"] = True
-        entry["shiny"] = _catch_count(entry.get("shiny", 0)) + 1
+        if getattr(catch, "shiny_since_before", None) is not None:
+            catch.shiny_observation = len(entry["found"])
+        else:
+            observation["shiny"] = True
+            entry["shiny"] = _catch_count(entry.get("shiny", 0)) + 1
     entry["found"].append(observation)
     return deepcopy(observation)
 

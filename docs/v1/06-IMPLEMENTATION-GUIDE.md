@@ -248,11 +248,17 @@ build and remains serialized until a recognized boat is selected.
   pity catch. New counters start at zero, advance even while untracked, and
   reset on any shiny. Existing saved counters are retained. Legendary catches
   never roll. `Catch.shiny` persists through both hooks and the livewell; loading,
-  checking and resolving catches do not roll or count them again.
+  checking and resolving catches never roll again. A hooked shiny saves
+  `shiny_since_before` and its `shiny_observation` index on the catch, reserving
+  the reset until Keep/Release. `confirm_shiny` awards Trophy credit and marks
+  that observation once. If the fish gets away, `lose_shiny` restores its saved
+  counter to the next pending shiny or adds it to the current counter. A newer
+  confirmed observation supersedes that reservation. This preserves later
+  progress regardless of hook traversal, resolution order, or reloads.
   `book.set_shiny_target` enforces Verified status and saves one target in
   `v2.book.tracked`. `book.shiny_tracker` is a read-only presentation query.
-  `record_observation` records shiny totals at the existing journal-credit point,
-  independent of Keep/Release, for the book's Trophy shelf. `Catch.value()`
+  Ordinary journal counts and field notes retain their existing hook-time
+  credit. Pending shinies receive Trophy credit only at Keep/Release. `Catch.value()`
   supplies the 3× bonus to both individual and bulk sales; Treasured still
   protects against bulk sale until explicitly unmarked.
   `State.mount_shiny_trophy(species_id, boat_id=...)` is the fleet integration
