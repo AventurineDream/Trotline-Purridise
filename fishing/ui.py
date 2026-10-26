@@ -35,6 +35,7 @@ from .content import load_content
 from .guardian import draw_sighting
 from .haul import haul_cadence
 from .book import BOOK_STAGES
+from .bookview import BookView
 from .narrative import QUEST_IDS
 from .platform import Text
 from .dialogue import nearby_npc
@@ -352,6 +353,15 @@ class UIState:
     journal_i: int = 0
     journal_page: int = 0
     journal_quest_i: int = 0
+    book_entry_i: int = 0
+    book_detail_page: int = 0
+    book_detail_pages: int = 1
+    book_shelf: int = 0
+    book_collection_i: int = 0
+    book_watch_i: int = 0
+    book_ceremony: str = ""
+    book_prompt_species: str = ""
+    book_prompt_timer: float = 0.0
     well_i: int = 0
     pause_i: int = 0
     settings_page: str = "main"
@@ -598,10 +608,7 @@ class UI:
         elif mode == "check":
             self._check(frame, state, ui)
         elif mode == "journal":
-            if ui.journal_page == 1:
-                self._narrative_journal(frame, state, ui)
-            else:
-                self._journal(frame, state, ui)
+            self._journal(frame, state, ui)
         elif mode == "well":
             self._well(frame, state, ui)
         elif mode == "pause":
@@ -1270,6 +1277,9 @@ class UI:
         y = max(8, frame.shape[0] // 7)
         for raw_text, _ttl in state.toasts[-3:]:
             text = _toast_for_device(raw_text, input_device)
+            if raw_text == "Shall we add that?":
+                text += " Hold Y to read." if input_device == "gamepad" else " J reads the page."
+                text = self._trim(text, size, w - 32)
             tw = len(text) * _cw + 16
             x = (w - tw) // 2
             self._panel(frame, x, y, tw, ch + 8, 0.72)
@@ -1477,91 +1487,8 @@ class UI:
         self._text(frame, self._trim(foot, small, pw - m * 2), x + m, y + ph - self.cell(small)[1] - 10, small, WARN if ui.note else DIM, shadow=False)
 
     def _journal(self, frame, state, ui: UIState):
-        h, w = frame.shape[:2]
-        pw, ph = int(w * 0.72), int(h * 0.76)
-        x, y = (w - pw) // 2, (h - ph) // 2
-        self._panel(frame, x, y, pw, ph, 0.96)
-        head = self._size(frame, "head")
-        body = self._size(frame, "body")
-        small = self._size(frame, "small")
-        m = 16
-        ui.journal_i = _clamp(ui.journal_i, len(SPECIES))
-        seen = sum(1 for sp in SPECIES if state.journal.get(sp.id, {}).get("count", 0) > 0)
-        self._text(frame, "JOURNAL", x + m, y + 12, head, INK)
-        self._text(frame, f"{seen} of {len(SPECIES)} species", x + m + len("JOURNAL") * self.cell(head)[0] + 16, y + 18, small, GOLD, shadow=False)
-        page_hint = "1/2 · D-pad pages" if ui.input_device == "gamepad" else "1/2 · A/D pages"
-        self._text(frame, page_hint, x + pw - m - 18 * self.cell(small)[0], y + 18, small, DIM, shadow=False)
-        sp = SPECIES[ui.journal_i]
-        rec = state.journal.get(sp.id, {})
-        count = int(rec.get("count", 0))
-        top = y + 20 + self.cell(head)[1]
-        col_w = int(pw * 0.46)
-        compact = w < 560
-        visible = 4 if compact else max(4,(ph-(top-y)-self.cell(small)[1]*2)//(self.cell(small)[1]+2))
-        start = _window(ui.journal_i,len(SPECIES),visible)
-        for row_i,item in enumerate(SPECIES[start:start+visible]):
-            i = start+row_i
-            rec_i = state.journal.get(item.id, {})
-            n = int(rec_i.get("count", 0))
-            label = item.name
-            color = GOLD if i == ui.journal_i else (INK if n else DIM)
-            prefix = "> " if i == ui.journal_i else "  "
-            extra = f"{n}" if n else ""
-            self._text(frame, self._trim(prefix + label, small, col_w - 40), x + m, top + row_i * (self.cell(small)[1] + 2), small, color, shadow=False)
-            if extra:
-                self._text(frame, extra, x + col_w - 24, top + row_i * (self.cell(small)[1] + 2), small, color, shadow=False)
-        dx = x + col_w + 8
-        panel_right = x + pw - m
-        footer_top = y + ph - self.cell(small)[1] - 10
-        from .fishmesh import fish_thumbnail
-        if self.fish_card_renderer is None:
-            thumbnail = fish_thumbnail(sp.id)
-        else:
-            from .imageops import resize_rgb
-            thumbnail = resize_rgb(self.fish_card_renderer(sp.id), 128, 64)
-        self._blit_rgb(frame, thumbnail, dx, top)
-        detail_x = dx + 140
-        detail_width = panel_right - detail_x
-        minimum_detail_width = max(len(sp.name) * self.cell(body)[0],
-                                   20 * self.cell(small)[0])
-        stacked = detail_width < minimum_detail_width
-        if stacked:
-            detail_x = x + m if compact else dx
-            detail_width = panel_right - detail_x
-        detail_y = top + (64 if compact else 70) if stacked else top
-        if count <= 0:
-            detail_y = self._draw_journal_text(
-                frame, sp.name, detail_x, detail_y, detail_width, body, INK,
-                max_lines=1, bottom=footer_top)
-            note = "Find this one on Little Briar." if self.world.id=="cedar" and not CEDAR_FISH[sp.id] else "Not on a hook yet."
-            detail_y = self._draw_journal_text(
-                frame, note, detail_x, detail_y + 2, detail_width, small, DIM,
-                max_lines=2, bottom=footer_top)
-        else:
-            best = float(rec.get("best", 0))
-            from .lakes import CEDAR_ZONES
-            names = CEDAR_ZONES if rec.get("lake_id","briar")=="cedar" else ZONE_NAME
-            zone = names.get(rec.get("zone", ""), rec.get("zone", ""))
-            bait = BAIT_BY_ID[rec["bait"]].name if rec.get("bait") in BAIT_BY_ID else ""
-            band = rec.get("band", "")
-            detail_y = self._draw_journal_text(
-                frame, sp.name, detail_x, detail_y, detail_width, body, INK,
-                max_lines=1, bottom=footer_top)
-            detail_y = self._draw_journal_text(
-                frame, f"{count} caught · {best:.1f} lb", detail_x,
-                detail_y + 2, detail_width, small, GOLD, max_lines=2,
-                bottom=footer_top)
-            where = "  ".join(p for p in (zone, bait, band) if p)
-            detail_y = self._draw_journal_text(
-                frame, where, detail_x, detail_y + 2, detail_width, small, INK,
-                max_lines=2, bottom=footer_top)
-        blurb_y = max(top + 70, detail_y + 3)
-        self._draw_journal_text(
-            frame, sp.blurb, dx, blurb_y, panel_right - dx, small, DIM,
-            max_lines=4, bottom=footer_top)
-        foot = self._controls(ui, "W/S or arrows choose    A/D pages    J or Esc closes",
-                              "D-pad / stick choose    D-pad pages    B closes")
-        self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
+        ui.journal_page %= 5
+        BookView(self, frame, state, ui).draw()
 
     def _draw_journal_text(self, frame, value, x, y, width, size, color,
                            max_lines=4, bottom=None):
@@ -1582,102 +1509,7 @@ class UI:
         return y + len(lines) * line_height
 
     def _narrative_journal(self, frame, state, ui: UIState):
-        h, w = frame.shape[:2]
-        pw, ph = int(w * 0.94), int(h * 0.96)
-        x, y = (w - pw) // 2, (h - ph) // 2
-        self._panel(frame, x, y, pw, ph, 0.97)
-        head = self._size(frame, "head")
-        body = self._size(frame, "body")
-        small = self._size(frame, "small")
-        m = 16
-        quests = self.narrative_content.quests
-        ui.journal_quest_i = _clamp(ui.journal_quest_i, len(QUEST_IDS))
-        ripple_count = min(10, len(set(state.narrative.ripples)))
-        self._text(frame, "LAKE WHISPERS & RIPPLES", x + m, y + 9, head, INK)
-        counter = f"{ripple_count}/10 Ripples"
-        counter_w = len(counter) * self.cell(small)[0]
-        self._text(frame, counter, x + pw - m - counter_w, y + 16, small, GOLD, shadow=False)
-        page_line = self._controls(ui, "2/2 · W/S · A/D pages · J closes",
-                                   "2/2 · D-pad / stick · D-pad pages · B closes")
-        page_w = len(page_line) * self.cell(small)[0]
-        self._text(frame, page_line, x + pw - m - page_w, y + 16 + self.cell(small)[1], small, DIM, shadow=False)
-
-        small_ch = self.cell(small)[1]
-        row_height = small_ch + 2
-        content_top = y + 12 + self.cell(head)[1] + 5
-        footer_height = row_height * 4 + 10
-        footer_top = y + ph - footer_height
-        left_w = int(pw * 0.34)
-        detail_x = x + left_w + 12
-        detail_w = pw - (detail_x - x) - m
-        self._text(frame, "OPTIONAL QUESTS", x + m, content_top, small, GOLD, shadow=False)
-
-        rows_top = content_top + row_height + 3
-        visible = max(1, (footer_top - rows_top) // row_height)
-        start = _window(ui.journal_quest_i, len(QUEST_IDS), visible)
-        badge_w = max(map(len, _STATUS_BADGES.values())) * self.cell(small)[0]
-        for row_offset, quest_id in enumerate(QUEST_IDS[start:start + visible]):
-            index = start + row_offset
-            quest = quests[quest_id]
-            status = state.narrative.quests[quest_id].status
-            ry = rows_top + row_offset * row_height
-            if index == ui.journal_quest_i:
-                self._fill(frame, x + m - 4, ry - 1, left_w - m, row_height, (46, 42, 28), 0.86)
-            color = _STATUS_COLORS.get(status, DIM)
-            prefix = "> " if index == ui.journal_quest_i else "  "
-            label_width = left_w - 2 * m - badge_w - 8 - len(prefix) * self.cell(small)[0]
-            short_title = _SHORT_QUEST_TITLES.get(quest_id, quest["title"])
-            label = self._trim(short_title, small, label_width)
-            self._text(frame, prefix + label, x + m, ry, small, color, shadow=False)
-            badge = _STATUS_BADGES.get(status, "AVAIL")
-            badge_width = len(badge) * self.cell(small)[0]
-            self._text(frame, badge, x + left_w - m - badge_width, ry, small, color, shadow=False)
-
-        detail = quest_journal_details(state, self.narrative_content,
-                                       QUEST_IDS[ui.journal_quest_i])
-        detail_y = content_top
-        detail_bottom = footer_top - 3
-        progress_line_height = small_ch + 2
-        detail_body_bottom = max(content_top, detail_bottom - progress_line_height)
-        detail_y = self._draw_journal_text(
-            frame, detail["title"], detail_x, detail_y, detail_w, body, INK,
-            max_lines=1, bottom=detail_body_bottom)
-        detail_y = min(detail_y + 1, detail_body_bottom)
-        detail_y = self._draw_journal_text(
-            frame, f"{detail['status']} · Prerequisites: {detail['prerequisites']}",
-            detail_x, detail_y, detail_w, small, GOLD, max_lines=2, bottom=detail_body_bottom)
-        detail_y = self._draw_journal_text(
-            frame, f"Giver: {detail['giver']}", detail_x, detail_y, detail_w,
-            small, INK, max_lines=2, bottom=detail_body_bottom)
-        detail_y = self._draw_journal_text(
-            frame, f"Objective: {detail['objective']}", detail_x, detail_y, detail_w,
-            small, DIM, max_lines=4, bottom=detail_body_bottom)
-        self._draw_journal_text(
-            frame, f"Progress: {detail['progress']}", detail_x, detail_y, detail_w,
-            small, GOOD if detail["status"] == "Ready" else INK,
-            max_lines=2, bottom=detail_bottom)
-
-        note_y = footer_top
-        latest_bot_note = detail["latest_bot_note"]
-        note_bottom = y + ph - 5
-        if latest_bot_note:
-            note = latest_bot_note.strip()
-            if note.lower().startswith("bot:"):
-                note = note.split(":", 1)[1].strip()
-            note_y = self._draw_journal_text(
-                frame, "Bot: " + note, x + m, note_y, pw - m * 2,
-                small, GOLD, max_lines=1, bottom=note_bottom)
-        else:
-            note_y = self._draw_journal_text(
-                frame, "No narrative notes yet.", x + m, note_y, pw - m * 2,
-                small, DIM, max_lines=1, bottom=note_bottom)
-        note_y = self._draw_journal_text(
-            frame, detail["guardian_status"], x + m, note_y, pw - m * 2,
-            small, GOLD, max_lines=2, bottom=note_bottom)
-        revisit = "Declined? Re-hail. Missed windows repeat; no expiry."
-        self._draw_journal_text(
-            frame, revisit, x + m, note_y, pw - m * 2, small, DIM,
-            max_lines=1, bottom=note_bottom)
+        BookView(self, frame, state, ui).story()
 
     def _wrap(self, frame, text, x, y, size, color, width):
         cw, ch = self.cell(size)

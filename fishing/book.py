@@ -260,11 +260,14 @@ def record_legendary_catch(v2: dict, catch: object) -> bool:
     })
 
 
-def legendary_page(legendary_id: str, v2: dict) -> dict | None:
+def legendary_page(legendary_id: str, v2: dict, *, remember: bool = True) -> dict | None:
     """Return the authored story and saved sightings for one legendary page."""
     if legendary_id not in LEGENDARY_STORIES or not isinstance(v2, dict):
         return None
-    saved = _legendary_record(v2, legendary_id)
+    # Presentation can preview an unopened page without writing to the save.
+    source = v2 if remember else {"legendaries": {
+        legendary_id: deepcopy(v2.get("legendaries", {}).get(legendary_id, {}))}}
+    saved = _legendary_record(source, legendary_id)
     heard = saved["heard"]
     return {
         "id": legendary_id,
@@ -279,13 +282,15 @@ def legendary_page(legendary_id: str, v2: dict) -> dict | None:
 
 
 def species_page(book: dict, species_id: str, count: int,
-                 journal_record: dict | None = None) -> dict | None:
+                 journal_record: dict | None = None, *, remember: bool = True) -> dict | None:
     """Build the current data for a species page without introducing UI state."""
     if species_id not in SPECIES_RUMORS:
         return None
     count = _catch_count(count)
-    heard = remember_rumor(book, species_id)
-    entry = _book_record(book, species_id)
+    source = book if remember else {"species": {
+        species_id: deepcopy(book.get("species", {}).get(species_id, {}))}}
+    heard = remember_rumor(source, species_id)
+    entry = _book_record(source, species_id)
     species = SPECIES_BY_ID.get(species_id)
     found = deepcopy(entry["found"])
     best_bait = (max(BAIT_MATCH, key=lambda bait: bait_mult(bait, species_id))

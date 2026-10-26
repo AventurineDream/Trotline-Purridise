@@ -26,6 +26,7 @@ class TitleBrandingChecks(unittest.TestCase):
     def test_ui_strings_only_use_little_briar_as_a_lake_name(self):
         ui_paths = (
             ROOT / "fishing" / "ui.py",
+            ROOT / "fishing" / "bookview.py",
             ROOT / "fishing" / "game.py",
             ROOT / "fishing" / "verify.py",
         )
