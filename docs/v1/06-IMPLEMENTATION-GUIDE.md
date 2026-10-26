@@ -350,6 +350,43 @@ Cat NPC boats reuse the same generators.
 - Every screen works at 1280×720 and up, with three text sizes, and keyboard,
   gamepad and mouse navigation.
 
+`bookview.py` shares tab, grid and page-control geometry between presentation
+and pointer hit testing. J opens the book; A/D or gamepad left/right changes
+tabs, W/S or gamepad up/down chooses entries, and Enter/A turns a page. Mouse
+clicks select tabs or fish, and the wheel browses entries. The Story tab retains
+the existing Lake Whispers & Ripples quest details and Guardian progress.
+Story details wrap to measured glyph widths and paginate at every window size;
+Enter/A or the Turn button reaches the full objective, status, prerequisites,
+Bot note and Guardian text. The page counter wraps when the last page is turned.
+The compact opening overview keeps progress and Guardian status together;
+subsequent pages include those fields in full alongside all quest details.
+Rumors are remembered when the session opens an entry; drawing previews uses
+read-only page data. Idle menu ticks do not record rumors. Page-control labels
+are centered inside their hit regions.
+Species rumors and observations, Watch clues, legendary records and shelf
+descriptions use measured line pagination too. The renderer publishes the
+current page count in transient UI state. Enter/A finishes a Watch card before
+opening its entry, and finishes a shelf item's text before cycling shelves.
+Changing selection or tabs resets the page cursor and count. A zero-room
+paragraph marks the last visible line with an ellipsis.
+The collection tab cycles Ripples, Keepsakes and Trophies. `--shots` includes
+every tab at text sizes 0 and 2, extra shelf and ceremony views, a contact sheet,
+and `book-benchmark.json` for the warmed 1280×720 book presentation.
+`book-story-compact.png` shows every page of The Deep-Water Drift at 480×270 with
+large text. The full-frame verifier includes all five book tabs in its coverage.
+`book-*-compact-text{0,1,2}.png` captures every page of each tab, all shelf types,
+recorded and unrecorded legendary examples, and the title ceremony at 480×270
+for every text size. The compact quest selection falls back to the first quest
+if the long line/scout objective is no longer in the content.
+The `-accessible.png` variants also capture Large text with the accessibility
+font; shortcut hints fit their reserved footer row using that font's metrics.
+
+Stage events are consumed by the session into one three-second invitation;
+J (hold Y on gamepad) reads its exact species page. Title ceremonies wait for
+Briar Landing and add the acknowledged milestone to `book.titles_seen`, so a
+reload cannot replay an acknowledged title page. Unknown save fields continue
+to preserve that acknowledgement for older builds.
+
 ## 7. Memory budget (3 GB hard cap)
 
 Peak RSS target **≤ 2.6 GB** on the GPU path. The benchmark hard-fails at

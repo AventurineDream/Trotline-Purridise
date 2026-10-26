@@ -25,6 +25,9 @@ from .render import Renderer
 from .imageops import resize_rgb
 from .guardian import maybe_start_sighting, pause_sighting_clock
 from .haul import haul_cadence
+from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_rumor
+from .bookview import (BOOK_TABS, ENTRY_IDS, book_controls, book_layout, contains,
+                       move_selection, turn_page)
 from .bot import reset as reset_bot
 from .bot import summon as summon_bot
 from .bot import tick as tick_bot
@@ -61,11 +64,13 @@ def _save_target(root: Path, override: str | Path | None) -> tuple[Path, bool]:
 class Keys:
     """Enough of Input for a headless tick. `pressed` is the edge set."""
 
-    def __init__(self, pressed=(), held=(), quit=False, focused=True):
+    def __init__(self, pressed=(), held=(), quit=False, focused=True, *,
+                 mouse_click=None, mouse_wheel=0, viewport=(1280, 720)):
         self.pressed = set(pressed)
         self.held = set(held) | set(pressed)
         self.quit = quit
         self.focused = bool(focused)
+        self.mouse_click, self.mouse_wheel, self.viewport = mouse_click, mouse_wheel, viewport
 
     def tap(self, name: str, dt: float) -> bool:
         return name in self.pressed
@@ -92,6 +97,9 @@ class MenuKeys:
         arrow = self.keys.tap(name, dt)
         alias = self.keys.tap(MENU_DIRECTIONS[name], dt)
         return arrow or alias
+
+    def __getattr__(self, name):
+        return getattr(self.keys, name)
 
 
 class Session:
@@ -127,6 +135,7 @@ class Session:
                 self.save()
             self.quit = True
             return
+        self._book_presentation(dt)
         driving_presses = keys.pressed & DRIVING_KEYS if self.ui.mode in DRIVING else set()
         self._menu_held.intersection_update(keys.held)
         if self.ui.mode in DRIVING:
@@ -134,9 +143,52 @@ class Session:
         else:
             self._menu_held.update(keys.held & NAVIGATION_KEYS)
         self._refresh_npcs()
+        previous_page = (self.ui.mode, self.ui.journal_page, self.ui.book_entry_i)
         self._keys(keys, dt)
+        current_page = (self.ui.mode, self.ui.journal_page, self.ui.book_entry_i)
+        if (current_page != previous_page or keys.pressed
+                or getattr(keys, "mouse_click", None) is not None
+                or getattr(keys, "mouse_wheel", 0)):
+            self._remember_book_page()
         self._simulate(keys, dt, driving_presses)
         self._tick_caption(dt)
+
+    def _remember_book_page(self):
+        """Opening a page records its rumor; drawing the book never saves it."""
+        if self.ui.mode != "journal" or self.ui.journal_page != 1 or self.ui.book_ceremony:
+            return
+        sid = ENTRY_IDS[self.ui.book_entry_i % len(ENTRY_IDS)]
+        if sid in BOOK_SPECIES_IDS:
+            remember_rumor(self.state.v2["book"], sid)
+        else:
+            legendary_page(sid, self.state.v2)
+
+    def _book_presentation(self, dt):
+        events = self.state.take_book_events()
+        if events:
+            self.ui.book_prompt_species = events[-1]["species"]
+            self.ui.book_prompt_timer = 3.0
+        else:
+            self.ui.book_prompt_timer = max(0.0, self.ui.book_prompt_timer - dt)
+            if not self.ui.book_prompt_timer:
+                self.ui.book_prompt_species = ""
+        if self.ui.mode != "play" or not self.focused or self.world.id != "briar":
+            return
+        if self.state.slip_status(self.world) != "docked":
+            return
+        book = self.state.v2["book"]
+        title = book.get("title", "fishypedia")
+        if title not in BOOK_TITLE_STATES:
+            return
+        seen = book.get("titles_seen", ["fishypedia"])
+        if not isinstance(seen, list):
+            seen = ["fishypedia"]
+        for milestone in BOOK_TITLE_STATES[1:BOOK_TITLE_STATES.index(title) + 1]:
+            if milestone not in seen:
+                self.ui.book_ceremony = milestone
+                self.ui.journal_page = 1
+                self.ui.mode = "journal"
+                break
 
     def _tick_caption(self, dt: float) -> None:
         settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
@@ -388,6 +440,13 @@ class Session:
             self.ui.journal_i = 0
             self.ui.journal_page = 0
             self.ui.journal_quest_i = 0
+            self.ui.book_detail_page = 0
+            self.ui.book_detail_pages = 1
+            if self.ui.book_prompt_species in BOOK_SPECIES_IDS:
+                self.ui.book_entry_i = BOOK_SPECIES_IDS.index(self.ui.book_prompt_species)
+                self.ui.journal_i = self.ui.book_entry_i
+                self.ui.journal_page = 1
+                self.ui.book_prompt_species = ""
         if "i" in keys.pressed:
             self.ui.mode = "well"
             self.ui.well_i = 0
@@ -852,24 +911,71 @@ class Session:
             setattr(self.ui, field, (getattr(self.ui, field) + 1) % count)
 
     def _journal_keys(self, keys, dt):
+        click = getattr(keys, "mouse_click", None)
+        viewport = getattr(keys, "viewport", (1280, 720))
+        if self.ui.book_ceremony:
+            if keys.pressed & {"return", "space", "esc", "j"} or click is not None:
+                book = self.state.v2["book"]
+                seen = book.setdefault("titles_seen", ["fishypedia"])
+                if not isinstance(seen, list):
+                    seen = book["titles_seen"] = ["fishypedia"]
+                if self.ui.book_ceremony not in seen:
+                    seen.append(self.ui.book_ceremony)
+                self.ui.book_ceremony = ""
+                self.save()
+                if keys.pressed & {"esc", "j"}:
+                    self.ui.mode = "play"
+            return
         if "esc" in keys.pressed or "j" in keys.pressed:
             self.ui.mode = "play"
+            self.save()
             return
+        layout = book_layout(*viewport)
+        if click is not None:
+            for name, rect in book_controls(layout).items():
+                if contains(rect, click):
+                    if name == "close":
+                        self.ui.mode = "play"
+                        self.save()
+                    elif name == "turn":
+                        turn_page(self.state, self.ui, viewport)
+                    else:
+                        move_selection(self.state, self.ui, self._npc_content,
+                                       -1 if name == "previous" else 1)
+                    return
+            for index, rect in enumerate(layout.tabs):
+                if contains(rect, click):
+                    self.ui.journal_page = index
+                    self.ui.book_detail_page = 0
+                    self.ui.book_detail_pages = 1
+                    if index == 1:
+                        self.ui.book_entry_i = self.ui.journal_i
+                    return
+            if self.ui.journal_page == 0:
+                start = self.ui.journal_i // layout.capacity * layout.capacity
+                for offset, rect in enumerate(layout.cells()):
+                    if contains(rect, click) and start + offset < len(BOOK_SPECIES_IDS):
+                        self.ui.journal_i = start + offset
+                        turn_page(self.state, self.ui, viewport)
+                        return
         left = keys.tap("left", dt)
         right = keys.tap("right", dt)
         if left or right:
-            self.ui.journal_page = (self.ui.journal_page + (1 if right else -1)) % 2
-            return
-        if self.ui.journal_page == 1:
-            field, count = "journal_quest_i", len(self._npc_content.quests)
-        else:
-            field, count = "journal_i", len(SPECIES)
-        if count <= 0:
+            self.ui.journal_page = (self.ui.journal_page + (1 if right else -1)) % len(BOOK_TABS)
+            self.ui.book_detail_page = 0
+            self.ui.book_detail_pages = 1
+            if self.ui.journal_page == 1:
+                self.ui.book_entry_i = self.ui.journal_i
             return
         if keys.tap("up", dt):
-            setattr(self.ui, field, (getattr(self.ui, field) - 1) % count)
+            move_selection(self.state, self.ui, self._npc_content, -1)
         if keys.tap("down", dt):
-            setattr(self.ui, field, (getattr(self.ui, field) + 1) % count)
+            move_selection(self.state, self.ui, self._npc_content, 1)
+        wheel = getattr(keys, "mouse_wheel", 0)
+        if wheel:
+            move_selection(self.state, self.ui, self._npc_content, -wheel)
+        if keys.pressed & {"return", "space"}:
+            turn_page(self.state, self.ui, viewport)
 
     def _pause_keys(self, keys, dt):
         if "esc" in keys.pressed:

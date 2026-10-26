@@ -242,6 +242,9 @@ def session_input(keys, saved_bindings, repeat_state: dict[str, float]):
             self.quit = keys.quit
             self.focused = keys.focused
             self.device = keys.device
+            self.mouse_click = getattr(keys, "mouse_click", None)
+            self.mouse_wheel = getattr(keys, "mouse_wheel", 0)
+            self.viewport = getattr(keys, "viewport", (1280, 720))
             self.keyboard_pressed = keyboard_pressed
             self.keyboard_held = keyboard_held
             self.physical_keyboard_pressed = physical_keyboard_pressed

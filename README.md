@@ -166,10 +166,22 @@ Short taps are retained even when pressed and released between rendered frames.
 Losing window focus clears pending input and menu repeat, while held steering
 and throttle still follow the current keyboard state.
 
-The journal keeps the full 36-species collection and adds a separate **Lake
-Whispers & Ripples** page. Use **A/D** to switch pages and **W/S** to inspect
-quest status, objectives, progress, locations, and Bot's saved notes. Declined
-offers remain available, and missed time windows return later.
+**J** opens the inherited book, with **Fish**, **Book**, **Ripples & Keepsakes**,
+**Story** and **Watch** tabs. Use **A/D** (or gamepad left/right) for tabs,
+**W/S** (or gamepad up/down) to choose, and **Enter/A** to open a fish page or
+turn its notes. You can also click tabs, fish, the page controls and Close;
+the mouse wheel browses entries. Unknown fish keep their folk names and
+silhouettes until caught. The Book page keeps *What we heard* beside *What we
+found*, with stamps for each stage. The collection shelf cycles through Ripples,
+Keepsakes and Trophies. **Story** retains **Lake Whispers & Ripples**, including
+quest status, objectives, progress, locations and Bot's saved notes. Declined
+offers remain available, and missed time windows return later. Book renames
+receive a title-page ceremony when you return to Briar Landing.
+Story details wrap across numbered pages in small windows; **Enter/A** or
+**Turn** advances through the complete objective and prerequisites.
+Rumors, Watch clues, legendary records and keepsake descriptions also wrap onto
+as many pages as needed. Finish the Watch card's pages to open its entry;
+finish a shelf item's pages to switch to the next shelf.
 
 Release W or S and the throttle stays where you set it. The HUD shows forward,
 reverse, or idle and the lever percentage. Dropping the anchor resets the lever

@@ -15,6 +15,7 @@ from .platform import (
     Platform, SCAN, SDL_Event, SDL_KeyboardEvent, SDL_Keysym, SDL_WindowEvent,
     SDL_KEYDOWN, SDL_KEYUP, SDL_QUIT, SDL_WINDOWEVENT,
     SDL_WINDOWEVENT_FOCUS_GAINED, SDL_WINDOWEVENT_FOCUS_LOST,
+    SDL_MOUSEBUTTONDOWN, SDL_MOUSEWHEEL,
 )
 
 
@@ -73,6 +74,27 @@ class PlatformInputChecks(unittest.TestCase):
         self.assertEqual(SDL_KeyboardEvent.keysym.offset, 16)
         self.assertEqual(SDL_KeyboardEvent.repeat.offset, 13)
         self.assertEqual(SDL_WindowEvent.event.offset, 12)
+
+    def test_pointer_edges_wheel_direction_and_focus_are_preserved(self):
+        event = SDL_Event()
+        event.button.type = SDL_MOUSEBUTTONDOWN
+        event.button.button = 1
+        event.button.x, event.button.y = 12, 17
+        self.push(event)
+        event = SDL_Event()
+        event.wheel.type = SDL_MOUSEWHEEL
+        event.wheel.y, event.wheel.direction = 2, 1
+        self.push(event)
+        inp = self.platform.poll()
+        self.assertEqual(inp.mouse_click, (12, 17))
+        self.assertEqual(inp.mouse_wheel, -2)
+        self.assertEqual(inp.viewport, (32, 32))
+        self.assertEqual(inp.device, "mouse")
+        self.assertIsNone(self.platform.poll().mouse_click)
+        self.assertEqual(inp.mouse_wheel, 0)
+        self.focus(False)
+        self.push(event)
+        self.assertEqual(self.platform.poll().mouse_wheel, 0)
 
     def test_complete_taps_between_frames_survive_once(self):
         for name in SCAN:
