@@ -6,7 +6,7 @@ from functools import lru_cache
 import numpy as np
 
 from .book import (BOOK_SPECIES_IDS, LEGENDARY_IDS, SPECIES_RUMORS,
-                   legendary_page, species_page)
+                   legendary_page, shiny_tracker, species_page, tracker_unlocked)
 from .data import BAIT_BY_ID, CEDAR_FISH, LAKES, SPECIES_BY_ID
 from .imageops import resize_rgb
 from .narrative import QUEST_IDS, RIPPLE_BY_QUEST
@@ -69,13 +69,25 @@ def contains(rect, point):
     return x <= point[0] < x + w and y <= point[1] < y + h
 
 
-def book_controls(layout):
-    return {
+def tracker_species(state, ui):
+    """The current entry's actionable target, shared by drawing and input."""
+    if ui.journal_page != 1 or ui.book_ceremony:
+        return None
+    sid = ENTRY_IDS[ui.book_entry_i % len(ENTRY_IDS)]
+    return sid if tracker_unlocked(state.journal, sid) else None
+
+
+def book_controls(layout, state=None, ui=None):
+    controls = {
         "previous": (layout.x + layout.w - 185, layout.y + layout.h - 70, 36, 34),
         "turn": (layout.x + layout.w - 143, layout.y + layout.h - 70, 88, 34),
         "next": (layout.x + layout.w - 49, layout.y + layout.h - 70, 32, 34),
         "close": (layout.x + layout.w - 120, layout.y + 6, 110, 32),
     }
+    if state is not None and ui is not None and tracker_species(state, ui):
+        x, y, w, _h = layout.content
+        controls["tracker"] = (x + w - 152, y, 152, 34)
+    return controls
 
 
 def move_selection(state, ui, content, delta):
@@ -127,12 +139,16 @@ def collection_rows(state, content, shelf):
         records = page.get("records", []) if isinstance(page, dict) else []
         if records:
             rows.append((lid.replace("_", " ").title(), "Legendary replica", "A record in the book; a fish returned to the water."))
-    shinies = {sid for sid, page in state.v2.get("book", {}).get("species", {}).items()
-               if isinstance(page, dict) and page.get("shiny", 0)}
+    book = state.v2.get("book", {})
+    shinies = {sid for sid in BOOK_SPECIES_IDS
+               if shiny_tracker(book, state.journal, sid)["shiny"]}
     shinies.update(c.species for c in state.well if c.shiny)
     for sid in sorted(shinies):
         sp = SPECIES_BY_ID.get(sid)
-        rows.append((sp.name if sp else sid.replace("_", " ").title(), "Shiny", "A sparkling catch, remembered here."))
+        count = shiny_tracker(book, state.journal, sid)["shiny"]
+        note = f"{count} shiny catches recorded. " if count else ""
+        rows.append(("✦ " + (sp.name if sp else sid.replace("_", " ").title()), "Shiny",
+                     note + "A sparkling catch, remembered here. A replica can mount on a trophy rail."))
     return rows
 
 
@@ -301,13 +317,24 @@ class BookView:
             self.ceremony()
         else:
             (self.grid, self.entry, self.shelf, self.story, self.watch)[self.ui.journal_page]()
-        for name, rect in book_controls(l).items():
+        for name, rect in book_controls(l, self.state, self.ui).items():
             if name != "close":
                 self.fill(rect, (218, 210, 185))
-                label = {"previous": "‹", "turn": "Turn", "next": "›"}[name]
-                glyphs = self.u._render(label, self.small, INK)
+                if name == "tracker":
+                    sid = tracker_species(self.state, self.ui)
+                    active = self.state.v2["book"].get("tracked") == sid
+                    bindings = self.state.v2["settings"]["key_bindings"]
+                    key = "X" if self.ui.input_device == "gamepad" else bindings["set_line"].upper()
+                    label = key + (" · Stop tracking" if active else " · Track shiny")
+                else:
+                    label = {"previous": "‹", "turn": "Turn", "next": "›"}[name]
+                size = self.small
+                while size > 1 and (self.u.cell(size)[1] > rect[3] - 8
+                        or self.u._render(label, size, INK).shape[1] > rect[2] - 8):
+                    size -= 1
+                glyphs = self.u._render(label, size, INK)
                 self.text(label, rect[0] + (rect[2] - glyphs.shape[1]) // 2,
-                          rect[1] + (rect[3] - glyphs.shape[0]) // 2, rect[2] - 8)
+                          rect[1] + (rect[3] - glyphs.shape[0]) // 2, rect[2] - 8, size)
         foot = ("D-pad choose · Left/right tabs · A opens / turns · B closes"
                 if self.ui.input_device == "gamepad" else
                 "W/S choose · A/D tabs · Enter opens / turns · J closes · Click to choose")
@@ -355,6 +382,17 @@ class BookView:
         stats = f"{page['count']} caught  ·  Best {page['best_weight']:.1f} lb"
         heard = ('“' + page["heard"]["text"] + '”', "— " + page["heard"]["teller"])
         details = []
+        tracker = shiny_tracker(self.state.v2["book"], self.state.journal, sid)
+        if tracker["unlocked"]:
+            if tracker["tracked"]:
+                unit = "catch" if tracker["remaining"] == 1 else "catches"
+                details.append(f"Shiny Tracker · TRACKING · guaranteed within {tracker['remaining']} more {unit}.")
+            else:
+                details.append("Shiny Tracker · Ready. Track this species with the button above.")
+            details.append(f"{tracker['since_shiny']} catches since its last shiny. Switching targets keeps this count.")
+        else:
+            details.append("Shiny Tracker unlocks at Verified: five catches of this species.")
+        details.append(f"✦ Shinies recorded: {tracker['shiny']} · Base chance 1 in 64 · 3× sale value.")
         if page["best_bait"]:
             details.append("Best bait: " + BAIT_BY_ID[page["best_bait"]].name)
         sp = SPECIES_BY_ID.get(sid)
@@ -382,7 +420,10 @@ class BookView:
                          if self.u.world.id == "cedar" and sid in CEDAR_FISH and not CEDAR_FISH[sid]
                          else "No catch yet. A place to begin, and room for your own notes.")
         if self.compact:
-            top = self.text(name, self.x, self.y, self.w) + 4
+            title_width = self.w - 162 if tracker["unlocked"] else self.w
+            top = self.text(name, self.x, self.y, title_width) + 4
+            if tracker["unlocked"]:
+                top = max(top, self.y + 38)
             sections = (("What we heard", heard),
                         ("What we found", (stats, *notes)),
                         ("Field notes", (stage, *details)))
@@ -394,11 +435,14 @@ class BookView:
             self.draw_lines(lines, self.x, top, self.w)
             self.footer(f"{label} {index + 1}/{len(pages)}")
             return
-        title_bottom = self.text(name, self.x, self.y, self.w - 210, self.head)
-        stamp = (self.x + self.w - 200, self.y, 200, self.line + 6)
+        title_bottom = self.text(name, self.x, self.y,
+                                 self.w - (370 if tracker["unlocked"] else 210), self.head)
+        stamp = (self.x + self.w - (360 if tracker["unlocked"] else 200), self.y,
+                 200, max(34, self.line + 6))
         self.fill(stamp, OCHRE if page["mastered"] else LEATHER)
         self.text(stage, stamp[0] + 9, stamp[1] + 3, stamp[2] - 18, color=PAPER)
-        top = self.text(stats, self.x, title_bottom + 4, self.w, color=OCHRE) + 12
+        top = self.text(stats, self.x, max(title_bottom + 4, stamp[1] + stamp[3] + 4),
+                        self.w, color=OCHRE) + 12
         cw = (self.w - 48) // 2
         left_top = self.text("What we heard", self.x, top, cw, self.body)
         art_h = min(112, max(25, (self.bottom - left_top) // 3))
@@ -599,6 +643,35 @@ def book_gallery(destination, *, text=None, world=None):
                 if name == "story" and size == 2 and not accessibility:
                     write_png(out / "book-story-compact.png", sheet)
         state.v2["settings"]["dyslexia_font"] = False
+        # Tracker fixtures travel with --shots; compact pages include the full
+        # counter explanation with the largest accessibility font.
+        target = BOOK_SPECIES_IDS[2]
+        state.v2["book"]["species"][target].update({"since_shiny": 49, "shiny": 1})
+        for active, width, height, accessibility, name in (
+            (False, 1280, 720, False, "tracker-ready"),
+            (True, 1280, 720, False, "tracker-one-left"),
+            (True, 480, 270, True, "tracker-compact-accessible"),
+        ):
+            state.v2["settings"].update({"text_size": 2 if accessibility else 1,
+                                          "dyslexia_font": accessibility})
+            state.set_shiny_tracker(target if active else None)
+            state.toasts.clear()
+            panel = UIState(mode="journal", journal_page=1, book_entry_i=2)
+            frame = np.full((height, width, 3), LEATHER, dtype=np.uint8)
+            renderer.draw(frame, state, panel)
+            pages = []
+            for index in range(panel.book_detail_pages if accessibility else 1):
+                panel.book_detail_page = index
+                frame = np.full((height, width, 3), LEATHER, dtype=np.uint8)
+                renderer.draw(frame, state, panel)
+                pages.append(frame)
+            if accessibility:
+                if len(pages) % 2:
+                    pages.append(np.full_like(frame, LEATHER))
+                frame = np.concatenate([np.concatenate(pages[i:i+2], axis=1)
+                                        for i in range(0, len(pages), 2)], axis=0)
+            write_png(out / f"book-{name}.png", frame)
+        state.v2["settings"].update({"text_size": 2, "dyslexia_font": False})
         timings = []
         for index in range(150):
             panel = UIState(mode="journal", journal_page=index % 5, book_entry_i=3)
@@ -608,10 +681,13 @@ def book_gallery(destination, *, text=None, world=None):
             if index >= 10:
                 timings.append((time.perf_counter() - start) * 1000)
         report = {"frames": len(timings), "resolution": [1280, 720],
+                  "p50_ms": round(float(np.percentile(timings, 50)), 2),
                   "p95_ms": round(float(np.percentile(timings, 95)), 2),
                   "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
                   "text_cache_mb": round(text.cache_bytes / 1e6, 2),
-                  "tabs": list(BOOK_TABS), "text_sizes": [0, 2]}
+                  "tabs": list(BOOK_TABS), "text_sizes": [0, 1, 2],
+                  "benchmark_text_size": 2,
+                  "scope": "Warmed book compositions; excludes the lake renderer"}
         (out / "book-benchmark.json").write_text(json.dumps(report, indent=2) + "\n")
         print("book shots / benchmark: " + json.dumps(report))
         return report

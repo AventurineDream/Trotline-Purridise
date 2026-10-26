@@ -216,6 +216,10 @@ class Text:
         if hit is not None:
             self.cache.move_to_end(key)
             return hit
+        if "✦" in text:
+            rgba = self._sparkle_text(text, size, color, family)
+            self._cache_image(key, rgba)
+            return rgba
         col = SDL_Color(color[0], color[1], color[2], 255)
         surf = self.ttf.TTF_RenderUTF8_Blended(self.font(size, family), text.encode("utf-8"), col)
         if not surf:
@@ -238,13 +242,41 @@ class Text:
         rgba[:, :, 3] = pix[:, :, 3]
         rgba = rgba.copy()
         self.sdl.SDL_FreeSurface(conv)
+        self._cache_image(key, rgba)
+        return rgba
+
+    def _sparkle_text(self, text, size, color, family):
+        """Supply the shiny marker even in fonts without U+2726 coverage."""
+        parts = [self.render(part, size, color, family) if part else None
+                 for part in text.split("✦")]
+        height = max(self.render("M", size, color, family).shape[0],
+                     max((part.shape[0] for part in parts if part is not None), default=0))
+        width = max(5, round(size * .7))
+        # A tiny antialiased four-point sparkle, with the font's line height.
+        yy, xx = np.mgrid[:height * 4, :width * 4]
+        dx = np.abs((xx + .5) / 4 - width / 2) / (width * .46)
+        dy = np.abs((yy + .5) / 4 - height / 2) / (width * .46)
+        mask = (dx ** .65 + dy ** .65 <= 1).reshape(height, 4, width, 4)
+        sparkle = np.zeros((height, width, 4), np.uint8)
+        sparkle[:, :, :3] = color
+        sparkle[:, :, 3] = np.rint(mask.mean(axis=(1, 3)) * 255).astype(np.uint8)
+        pieces = []
+        for index, part in enumerate(parts):
+            if index:
+                pieces.append(sparkle)
+            if part is not None:
+                # SDL_ttf can extend a surface for descenders/overhangs. Keep
+                # the common font baseline and pad its transparent bottom.
+                pieces.append(np.pad(part, ((0, height - part.shape[0]), (0, 0), (0, 0))))
+        return np.concatenate(pieces, axis=1)
+
+    def _cache_image(self, key, rgba):
         if rgba.nbytes <= self.cache_limit:
             while self.cache and (self.cache_bytes + rgba.nbytes > self.cache_limit or len(self.cache)>=512):
                 _old_key, old = self.cache.popitem(last=False)
                 self.cache_bytes -= old.nbytes
             self.cache[key] = rgba
             self.cache_bytes += rgba.nbytes
-        return rgba
 
     def close(self):
         self.cache.clear()

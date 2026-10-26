@@ -1,0 +1,25 @@
+{
+  "frames": 140,
+  "resolution": [
+    1280,
+    720
+  ],
+  "p50_ms": 14.04,
+  "p95_ms": 18.99,
+  "peak_rss_mib": 172.9,
+  "text_cache_mb": 8.38,
+  "tabs": [
+    "Fish",
+    "Book",
+    "Ripples & Keepsakes",
+    "Story",
+    "Watch"
+  ],
+  "text_sizes": [
+    0,
+    1,
+    2
+  ],
+  "benchmark_text_size": 2,
+  "scope": "Warmed book compositions; excludes the lake renderer"
+}

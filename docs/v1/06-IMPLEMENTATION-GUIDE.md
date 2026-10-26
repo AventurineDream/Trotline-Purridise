@@ -244,6 +244,30 @@ build and remains serialized until a recognized boat is selected.
   60 m from its set point). The winch sets flow to 0 for the player's lines.
 - **Shiny:** at catch creation, `shiny = rng.chance(1/64)`. If tracking this
   species and `since_shiny + 1 ≥ 50`, then shiny = true. Update `since_shiny`.
+  `book.roll_shiny` uses `State.rng` once for each standard catch, including a
+  pity catch. New counters start at zero, advance even while untracked, and
+  reset on any shiny. Existing saved counters are retained. Legendary catches
+  never roll. `Catch.shiny` persists through both hooks and the livewell; loading,
+  checking and resolving catches never roll again. A hooked shiny saves
+  `shiny_since_before` and its `shiny_observation` index on the catch, reserving
+  the reset until Keep/Release. `confirm_shiny` awards Trophy credit and marks
+  that observation once. If the fish gets away, `lose_shiny` restores its saved
+  counter to the next pending shiny or adds it to the current counter. A newer
+  confirmed observation supersedes that reservation. This preserves later
+  progress regardless of hook traversal, resolution order, or reloads.
+  Both spoilage and running over a line use `State._drop_hook_catch`, which
+  refunds the reservation before clearing the hook.
+  `book.set_shiny_target` enforces Verified status and saves one target in
+  `v2.book.tracked`. `book.shiny_tracker` is a read-only presentation query.
+  Ordinary journal counts and field notes retain their existing hook-time
+  credit. Pending shinies receive Trophy credit only at Keep/Release. `Catch.value()`
+  supplies the 3× bonus to both individual and bulk sales; Treasured still
+  protects against bulk sale until explicitly unmarked.
+  `State.mount_shiny_trophy(species_id, boat_id=...)` is the fleet integration
+  hook: an owned boat must have `trophy_rail`; its cosmetic species list is saved
+  at `v2.boat_extras[boat_id].shiny_trophies`. Existing four boats have no rail;
+  the book displays recorded shinies now. Mounting is idempotent and consumes
+  neither a fish nor a book record.
 - **Legendary hook:** at haul resolution, if the line satisfies every requirement
   (`03 §3`) and was soaking at any moment inside the active window, the first hook
   that would have rolled any species instead becomes the legendary. Record, then

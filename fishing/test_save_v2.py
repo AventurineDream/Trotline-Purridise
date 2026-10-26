@@ -150,7 +150,7 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(book_stage(mid["journal"]["bluegill"]["count"]), "bait_known")
         self.assertEqual(mid["v2"]["book"]["species"]["bluegill"], {
             "found": [{"zone": "flats", "bait": "worm", "band": "dawn"}],
-            "shiny": 0, "since_shiny": 3,
+            "shiny": 0, "since_shiny": 0,
         })
         self.assertEqual(mid["v2"]["profile"]["bot_name"], "Copper-517")
         self.assertEqual(mid["v2"]["story"]["scene_states"], {"prologue": "done"})
