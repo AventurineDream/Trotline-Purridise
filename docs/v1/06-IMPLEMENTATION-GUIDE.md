@@ -244,6 +244,22 @@ build and remains serialized until a recognized boat is selected.
   60 m from its set point). The winch sets flow to 0 for the player's lines.
 - **Shiny:** at catch creation, `shiny = rng.chance(1/64)`. If tracking this
   species and `since_shiny + 1 ≥ 50`, then shiny = true. Update `since_shiny`.
+  `book.roll_shiny` uses `State.rng` once for each standard catch, including a
+  pity catch. New counters start at zero, advance even while untracked, and
+  reset on any shiny. Existing saved counters are retained. Legendary catches
+  never roll. `Catch.shiny` persists through both hooks and the livewell; loading,
+  checking and resolving catches do not roll or count them again.
+  `book.set_shiny_target` enforces Verified status and saves one target in
+  `v2.book.tracked`. `book.shiny_tracker` is a read-only presentation query.
+  `record_observation` records shiny totals at the existing journal-credit point,
+  independent of Keep/Release, for the book's Trophy shelf. `Catch.value()`
+  supplies the 3× bonus to both individual and bulk sales; Treasured still
+  protects against bulk sale until explicitly unmarked.
+  `State.mount_shiny_trophy(species_id, boat_id=...)` is the fleet integration
+  hook: an owned boat must have `trophy_rail`; its cosmetic species list is saved
+  at `v2.boat_extras[boat_id].shiny_trophies`. Existing four boats have no rail;
+  the book displays recorded shinies now. Mounting is idempotent and consumes
+  neither a fish nor a book record.
 - **Legendary hook:** at haul resolution, if the line satisfies every requirement
   (`03 §3`) and was soaking at any moment inside the active window, the first hook
   that would have rolled any species instead becomes the legendary. Record, then

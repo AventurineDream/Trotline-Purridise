@@ -1,0 +1,11 @@
+{
+  "tracked_seed": 41013,
+  "tracked_trials": 10000,
+  "tracked_shinies": 275,
+  "tracked_longest_gap": 50,
+  "untracked_seed": 41014,
+  "untracked_trials": 128000,
+  "untracked_shinies": 2045,
+  "untracked_rate": 0.0159765625,
+  "untracked_relative_error": 0.022499999999999964
+}

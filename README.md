@@ -183,6 +183,19 @@ Rumors, Watch clues, legendary records and keepsake descriptions also wrap onto
 as many pages as needed. Finish the Watch card's pages to open its entry;
 finish a shelf item's pages to switch to the next shelf.
 
+Standard catches now have a **1 in 64** shiny chance, rolled once and saved on
+the catch. After five catches of a species (**Verified**), its Book entry offers
+**Track shiny**: click it, press **F** (the rebindable Set line action), or use
+gamepad **X**. One species can be tracked at a time, with a shiny guaranteed by
+its 50th catch since the last shiny. Counters survive switching targets and
+reloads; untracked catches also advance their own species' counters. The entry
+shows how many catches remain while tracking.
+
+Shinies use their variant palette and **✦** labels, sell for **3×** normal value,
+and start **Treasured**, so bulk sale keeps them until you remove that mark.
+Released or sold shinies remain recorded on the book's Trophy shelf. A mounting
+hook is ready for boats with the future trophy rail trait.
+
 Release W or S and the throttle stays where you set it. The HUD shows forward,
 reverse, or idle and the lever percentage. Dropping the anchor resets the lever
 to idle, and existing saves resume at idle.
