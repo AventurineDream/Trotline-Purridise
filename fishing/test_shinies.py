@@ -129,6 +129,16 @@ class ShinyIntegrationChecks(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.path = Path(self.temporary.name) / "save.json"
 
+    def spawn_catch(self, state, *, natural_shiny=False):
+        """Create a real hooked catch while retaining older occupied hooks."""
+        line = SetLine("std", "worm", 0, 0, 12, 0, "flats", [Hook(True)])
+        state.lines.append(line)
+        with patch("fishing.sim.species_rates", return_value={"bluegill": 1}), \
+                patch.object(state, "_roll_weight", return_value=.75), \
+                patch.object(state.rng, "chance", side_effect=[True, natural_shiny]):
+            self.assertEqual(state._one_span(1), (1, 0))
+        return line.hooks[0].catch
+
     def test_roll_occurs_once_on_creation_and_never_on_check_or_reload(self):
         state = self.state
         state.journal["bluegill"]["count"] = 5
@@ -147,18 +157,108 @@ class ShinyIntegrationChecks(unittest.TestCase):
         self.assertTrue(catch.treasured)
         self.assertEqual(state.journal["bluegill"]["count"], 6)
         page = state.v2["book"]["species"]["bluegill"]
-        self.assertEqual((page["since_shiny"], page["shiny"]), (0, 1))
-        self.assertTrue(page["found"][0]["shiny"])
+        self.assertEqual((page["since_shiny"], page["shiny"]), (0, 0))
+        self.assertNotIn("shiny", page["found"][0])
         state.save(self.path, update_stamp=False)
         loaded = State.load(self.path, self.world)
         self.assertEqual(loaded.rng.s, state.rng.s)
         self.assertEqual(loaded.v2["book"], state.v2["book"])
         self.assertTrue(loaded.lines[0].hooks[0].catch.shiny)
+        self.assertEqual(loaded.lines[0].hooks[0].catch.shiny_since_before, 49)
+        self.assertEqual(loaded.lines[0].hooks[0].catch.shiny_observation, 0)
         self.assertIsNone(loaded.take_hook(0, 0, "release"))
         self.assertEqual(loaded.v2["book"]["species"]["bluegill"]["shiny"], 1)
+        self.assertTrue(loaded.v2["book"]["species"]["bluegill"]["found"][0]["shiny"])
         self.assertEqual(loaded.journal["bluegill"]["count"], 6)
         rows = collection_rows(loaded, None, 2)
         self.assertIn("✦ Bluegill", [row[0] for row in rows])
+
+    def test_forced_shiny_getaway_refunds_pity_across_reload_and_target_changes(self):
+        for reload in (False, True):
+            for resolution in ("keep", "release", "all"):
+                with self.subTest(reload=reload, resolution=resolution):
+                    state = State.new(self.world, seed=41017)
+                    state.journal["bluegill"]["count"] = 5
+                    state.journal["carp"]["count"] = 5
+                    state.v2["book"]["species"]["bluegill"] = {"since_shiny": 49}
+                    state.v2["book"]["species"]["carp"] = {
+                        "found": [], "shiny": 0, "since_shiny": 0}
+                    state.set_shiny_tracker("bluegill")
+                    self.assertTrue(self.spawn_catch(state).shiny)
+                    self.assertEqual(collection_rows(state, None, 2), [])
+                    with patch.dict(BOATS, {"jon": replace(BOATS["jon"], traits=("trophy_rail",))}):
+                        self.assertIsNotNone(state.mount_shiny_trophy("bluegill"))
+                    if reload:
+                        state.save(self.path, update_stamp=False)
+                        state = State.load(self.path, self.world)
+                    state.set_shiny_tracker("carp")
+                    rng_state = state.rng.s
+                    self.assertEqual(state._one_span(14), (0, 1))
+                    self.assertEqual(state.rng.s, rng_state)
+                    entry = state.v2["book"]["species"]["bluegill"]
+                    self.assertEqual((entry["shiny"], entry["since_shiny"]), (0, 49))
+                    self.assertNotIn("shiny", entry["found"][0])
+                    self.assertEqual(collection_rows(state, None, 2), [])
+                    self.assertEqual(state.well, [])
+                    self.assertEqual(state.journal["bluegill"]["count"], 6)
+                    state.set_shiny_tracker("bluegill")
+                    replacement = self.spawn_catch(state)
+                    self.assertTrue(replacement.shiny)
+                    if resolution == "all":
+                        self.assertIn("kept 1", state.take_all(1))
+                    else:
+                        self.assertIsNone(state.take_hook(1, 0, resolution))
+                    self.assertEqual((entry["shiny"], entry["since_shiny"]), (1, 0))
+                    self.assertTrue(entry["found"][1]["shiny"])
+                    self.assertIsNone(replacement.shiny_since_before)
+                    state.save(self.path, update_stamp=False)
+                    loaded = State.load(self.path, self.world)
+                    self.assertEqual(loaded.v2["book"], state.v2["book"])
+
+    def test_overlapping_pending_shinies_refund_in_either_escape_order(self):
+        for order in ((0, 3), (3, 0)):
+            with self.subTest(order=order):
+                state = State.new(self.world, seed=41018)
+                state.journal["bluegill"]["count"] = 5
+                state.v2["book"]["species"]["bluegill"] = {"since_shiny": 49}
+                state.set_shiny_tracker("bluegill")
+                self.spawn_catch(state)  # forced; 49 before it
+                for _ in range(2):
+                    self.assertFalse(self.spawn_catch(state).shiny)
+                self.assertTrue(self.spawn_catch(state, natural_shiny=True).shiny)
+                for _ in range(3):
+                    self.assertFalse(self.spawn_catch(state).shiny)
+                for index in order:
+                    state.lines[index].hooks[0].catch.age = 12.5
+                    self.assertEqual(state._one_span(1), (0, 1))
+                    state.save(self.path, update_stamp=False)
+                    state = State.load(self.path, self.world)
+                entry = state.v2["book"]["species"]["bluegill"]
+                self.assertEqual((entry["shiny"], entry["since_shiny"]), (0, 54))
+                self.assertFalse(any(row.get("shiny") for row in entry["found"]))
+                self.assertEqual(collection_rows(state, None, 2), [])
+                self.assertTrue(self.spawn_catch(state).shiny)
+
+    def test_confirmed_shiny_keeps_the_correct_counter_when_another_escapes(self):
+        for confirmed, escaped, expected in ((0, 3, 5), (3, 0, 3)):
+            with self.subTest(confirmed=confirmed):
+                state = State.new(self.world, seed=41019)
+                state.journal["bluegill"]["count"] = 5
+                state.v2["book"]["species"]["bluegill"] = {"since_shiny": 49}
+                state.set_shiny_tracker("bluegill")
+                self.spawn_catch(state)
+                for _ in range(2):
+                    self.spawn_catch(state)
+                self.spawn_catch(state, natural_shiny=True)
+                for _ in range(3):
+                    self.spawn_catch(state)
+                self.assertIsNone(state.take_hook(confirmed, 0, "keep"))
+                state.lines[escaped].hooks[0].catch.age = 12.5
+                self.assertEqual(state._one_span(1), (0, 1))
+                entry = state.v2["book"]["species"]["bluegill"]
+                self.assertEqual((entry["shiny"], entry["since_shiny"]), (1, expected))
+                self.assertTrue(entry["found"][confirmed]["shiny"])
+                self.assertNotIn("shiny", entry["found"][escaped])
 
     def test_counter_target_and_next_rng_sequence_round_trip(self):
         state = self.state

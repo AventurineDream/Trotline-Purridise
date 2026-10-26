@@ -306,6 +306,9 @@ Each gated legendary has a journal **watch card** showing:
   tracking is paused or another species is selected; any shiny resets that
   species to zero. If a counter already reached 49 while untracked, selecting it
   guarantees the next catch. Opening the book or reloading never rolls again.
+  A hooked shiny reserves that reset until it is kept or deliberately released.
+  If it gets away, its saved pity progress carries forward, preserving later
+  catches and confirmed shinies. Hook reservations survive saving and reloading.
   Use **F** (the rebindable Set line action), **X** on a controller, or the
   entry's **Track shiny / Stop tracking** button. Only Verified entries show it.
 - **Look:** a per-species variant palette (`albino`, `golden`, `starry`, `glow`,
@@ -315,6 +318,8 @@ Each gated legendary has a journal **watch card** showing:
 - **Value:** sells at 3× the normal price. Default disposition is *Treasured*
   (§5.5). Shiny trophies can be mounted on boats with the *trophy rail* trait or
   shown on the book's Trophy page.
+  Shiny Trophy credit and the observation's shiny flag are awarded on Keep or
+  Release, so an escaped fish cannot create a Trophy or a mountable replica.
   A remembered shiny stays on that page after release or sale. The mounting
   hook places a cosmetic replica without consuming the catch or its record.
 - Shiny completion never gates anything.

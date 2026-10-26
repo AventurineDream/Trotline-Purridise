@@ -193,6 +193,8 @@ shows how many catches remain while tracking.
 
 Shinies use their variant palette and **✦** labels, sell for **3×** normal value,
 and start **Treasured**, so bulk sale keeps them until you remove that mark.
+Shiny Trophy credit is awarded when you Keep or Release the fish. A hooked
+shiny that gets away leaves no Trophy and returns its reserved pity progress.
 Released or sold shinies remain recorded on the book's Trophy shelf. A mounting
 hook is ready for boats with the future trophy rail trait.
 
