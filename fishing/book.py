@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from copy import deepcopy
 import math
 
@@ -17,6 +18,9 @@ BOOK_STAGE_THRESHOLDS = tuple(sorted(threshold for threshold, _stage in BOOK_STA
 BOOK_TITLE_STATES = ("fishypedia", "book_of_five_waters", "pescapedia")
 BOOK_STAGE_TOAST = "Shall we add that?"
 BOOK_TOAST_SECONDS = 3.0
+SHINY_CHANCE = 1 / 64
+SHINY_PITY_CATCHES = 50
+SHINY_VALUE_MULTIPLIER = 3
 
 
 _CONTENT = load_book_content(species_ids=SPECIES_BY_ID)
@@ -59,14 +63,114 @@ def _book_record(book: dict, species_id: str) -> dict:
         pages = book["species"] = {}
     entry = pages.get(species_id)
     if not isinstance(entry, dict):
-        entry = {"found": [], "shiny": 0, "since_shiny": 3}
+        entry = {"found": [], "shiny": 0, "since_shiny": 0}
         pages[species_id] = entry
     entry.setdefault("found", [])
     entry.setdefault("shiny", 0)
-    entry.setdefault("since_shiny", 3)
+    entry.setdefault("since_shiny", 0)
     if not isinstance(entry["found"], list):
         entry["found"] = []
     return entry
+
+
+def tracker_unlocked(journal: dict, species_id: str) -> bool:
+    """Only a Verified standard species can be a Shiny Tracker target."""
+    if not isinstance(species_id, str) or species_id not in SPECIES_RUMORS:
+        return False
+    record = journal.get(species_id)
+    return isinstance(record, dict) and _catch_count(record.get("count", 0)) >= 5
+
+
+def set_shiny_target(book: dict, journal: dict, species_id: str | None) -> bool:
+    """Change the one saved target, leaving every species' counter intact."""
+    if species_id is not None and not tracker_unlocked(journal, species_id):
+        return False
+    book["tracked"] = species_id
+    return True
+
+
+def shiny_tracker(book: dict, journal: dict, species_id: str) -> dict:
+    """Read tracker progress without creating or changing a book page."""
+    pages = book.get("species", {})
+    entry = (pages.get(species_id, {})
+             if isinstance(pages, dict) and species_id in SPECIES_RUMORS else {})
+    if not isinstance(entry, dict):
+        entry = {}
+    since = _catch_count(entry.get("since_shiny", 0))
+    unlocked = tracker_unlocked(journal, species_id)
+    return {"unlocked": unlocked,
+            "tracked": unlocked and book.get("tracked") == species_id,
+            "since_shiny": since,
+            "remaining": max(1, SHINY_PITY_CATCHES - since),
+            "shiny": _catch_count(entry.get("shiny", 0))}
+
+
+def roll_shiny(book: dict, journal: dict, species_id: str, rng, *,
+               legendary: bool = False) -> bool:
+    """Roll once at catch creation, using the saved gameplay RNG.
+
+    All standard catches advance their species' counter; any shiny resets it.
+    The guarantee applies only to the current Verified target. Even a forced
+    shiny consumes its normal random roll so the RNG sequence is predictable.
+    Simulation catches save the reset as a reservation, refunded on escape.
+    """
+    if legendary or species_id not in SPECIES_RUMORS:
+        return False
+    entry = _book_record(book, species_id)
+    since = _catch_count(entry.get("since_shiny", 0)) + 1
+    shiny = rng.chance(SHINY_CHANCE)
+    if (book.get("tracked") == species_id and tracker_unlocked(journal, species_id)
+            and since >= SHINY_PITY_CATCHES):
+        shiny = True
+    entry["since_shiny"] = 0 if shiny else since
+    return shiny
+
+
+def confirm_shiny(book: dict, catch: object) -> None:
+    """Credit a pending shiny once it is kept or deliberately released."""
+    if not getattr(catch, "shiny", False) or getattr(catch, "shiny_since_before", None) is None:
+        return
+    entry = _book_record(book, catch.species)
+    index = catch.shiny_observation
+    if type(index) is int and 0 <= index < len(entry["found"]):
+        observation = entry["found"][index]
+        if isinstance(observation, dict):
+            observation["shiny"] = True
+    entry["shiny"] = _catch_count(entry.get("shiny", 0)) + 1
+    catch.shiny_since_before = None
+    catch.shiny_observation = None
+
+
+def lose_shiny(book: dict, catch: object, pending: Iterable[object]) -> None:
+    """Refund an escaped shiny's reservation without undoing newer progress.
+
+    Transfer its saved counter to the next pending shiny, or add it to today's
+    counter if this was the last reservation. A newer confirmed shiny already
+    consumed that history. Observation indices keep this independent of hook
+    traversal, landing order, target changes, and save/reload.
+    """
+    before = getattr(catch, "shiny_since_before", None)
+    index = getattr(catch, "shiny_observation", None)
+    if (not getattr(catch, "shiny", False) or type(before) is not int or before < 0
+            or type(index) is not int or index < 0):
+        return
+    entry = _book_record(book, catch.species)
+    found = entry["found"]
+    newer_confirmed = any(isinstance(found[i], dict) and found[i].get("shiny")
+                          for i in range(len(found) - 1, index, -1))
+    if not newer_confirmed:
+        later = [other for other in pending
+                 if other.species == catch.species and other.shiny
+                 and other.shiny_since_before is not None
+                 and other.shiny_observation is not None
+                 and other.shiny_observation > index]
+        if later:
+            following = min(later, key=lambda other: other.shiny_observation)
+            following.shiny_since_before += before
+        else:
+            entry["since_shiny"] = _catch_count(entry.get("since_shiny", 0)) + before
+    catch.shiny_since_before = None
+    catch.shiny_observation = None
 
 
 def remember_rumor(book: dict, species_id: str) -> dict | None:
@@ -112,6 +216,12 @@ def record_observation(book: dict, catch: object) -> dict | None:
             observation["game_minute"] = round(float(catch_minute), 3)
     except OverflowError:
         pass
+    if getattr(catch, "shiny", False) and not getattr(catch, "legendary", False):
+        if getattr(catch, "shiny_since_before", None) is not None:
+            catch.shiny_observation = len(entry["found"])
+        else:
+            observation["shiny"] = True
+            entry["shiny"] = _catch_count(entry.get("shiny", 0)) + 1
     entry["found"].append(observation)
     return deepcopy(observation)
 

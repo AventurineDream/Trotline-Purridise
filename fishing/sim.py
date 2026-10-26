@@ -57,8 +57,11 @@ from .boat import (
 from .weather import wind_at
 from .lakes import LAKES
 from .narrative import NarrativeState, deployment_id
-from .book import (promote_title, record_legendary_catch, record_observation,
-                   refresh_collection_title, stage_up_events)
+from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, confirm_shiny, lose_shiny,
+                   promote_title,
+                   record_legendary_catch, record_observation,
+                   refresh_collection_title, roll_shiny, set_shiny_target,
+                   shiny_tracker, stage_up_events)
 from .savepaths import (UnsupportedSaveVersionError, V2_REWARD_KINDS,
                         merge_v2_defaults)
 
@@ -126,8 +129,12 @@ class Catch:
     disposition: str = "pending"
     haul_seen: bool = False
     depth_m: float | None = None
+    shiny_since_before: int | None = None
+    shiny_observation: int | None = None
 
     def __post_init__(self):
+        if self.legendary or self.species in LEGENDARY_IDS:
+            self.shiny = False
         if self.treasured is None:
             self.treasured = bool(self.shiny)
         else:
@@ -137,7 +144,8 @@ class Catch:
             self.disposition = "pending"
 
     def value(self) -> float:
-        return fish_value(self.species, self.weight, self.quality)
+        normal = fish_value(self.species, self.weight, self.quality)
+        return round(normal * (SHINY_VALUE_MULTIPLIER if self.shiny else 1), 2)
 
     def to_json(self) -> dict:
         result = deepcopy(self.extra_fields)
@@ -158,6 +166,10 @@ class Catch:
             result["haul_seen"] = True
         if self.depth_m is not None:
             result["depth_m"] = round(self.depth_m, 3)
+        if self.shiny_since_before is not None:
+            result["shiny_since_before"] = self.shiny_since_before
+        if self.shiny_observation is not None:
+            result["shiny_observation"] = self.shiny_observation
         if self.shiny:
             result["shiny"] = True
         if self.treasured:
@@ -186,8 +198,14 @@ class Catch:
                 depth = None
         except OverflowError:
             depth = None
+        before, observation = (raw.get("shiny_since_before"), raw.get("shiny_observation"))
+        if type(before) is not int or before < 0:
+            before = None
+        if type(observation) is not int or observation < 0:
+            observation = None
         known = {"species", "weight", "quality", "age", "zone", "bait", "hour",
                  "lake_id", "noted_tired", "catch_game_minute", "shiny",
+                 "shiny_since_before", "shiny_observation",
                  "treasured", "legendary", "disposition", "haul_seen", "depth_m"}
         return cls(
             raw["species"], float(raw["weight"]), float(raw["quality"]),
@@ -201,6 +219,8 @@ class Catch:
             disposition=raw.get("disposition", "pending"),
             haul_seen=bool(raw.get("haul_seen", False)),
             depth_m=depth,
+            shiny_since_before=before,
+            shiny_observation=observation,
         )
 
 
@@ -818,8 +838,7 @@ class State:
                     hook.catch.age += hours
                     hook.catch.quality = quality_of(hook.catch.age)
                     if hook.catch.age >= SPOIL_HOURS:
-                        hook.catch = None
-                        hook.baited = False
+                        self._drop_hook_catch(hook)
                         spoiled += 1
                         continue
                     if announce and not hook.catch.noted_tired and hook.catch.age >= 9.0:
@@ -843,9 +862,13 @@ class State:
                 sp = self.rng.pick(rates)
                 weight = self._roll_weight(sp)
                 caught_hour = hour
+                book = self.v2.setdefault("book", {})
+                since_before = shiny_tracker(book, self.journal, sp)["since_shiny"]
+                shiny = roll_shiny(book, self.journal, sp, self.rng)
                 catch = Catch(sp, weight, 1.0, 0.0, zone, bait, caught_hour,
                               self.lake_id, catch_game_minute=self.game_minutes,
-                              depth_m=depth)
+                              depth_m=depth, shiny=shiny,
+                              shiny_since_before=since_before if shiny else None)
                 hook.catch = catch
                 hook.baited = False
                 hooked += 1
@@ -1038,8 +1061,18 @@ class State:
             return "protected"
         return None
 
+    def _drop_hook_catch(self, hook: Hook) -> None:
+        """Drop an escaped fish and refund its pending shiny reservation."""
+        if hook.catch is not None:
+            lose_shiny(self.v2["book"], hook.catch,
+                       (other.catch for line in self.lines for other in line.hooks
+                        if other.catch is not None))
+        hook.catch = None
+        hook.baited = False
+
     def _release_hook_catch(self, hook: Hook, catch: Catch,
                             reason: str | None = None, *, announce: bool = True) -> None:
+        confirm_shiny(self.v2["book"], catch)
         catch.disposition = "released"
         hook.catch = None
         hook.baited = False
@@ -1106,6 +1139,44 @@ class State:
                    else f"Treasured mark removed from {name}.")
         return None
 
+    def set_shiny_tracker(self, species_id: str | None) -> str | None:
+        """Select a Verified target (or stop tracking) without resetting pity."""
+        if not set_shiny_target(self.v2.setdefault("book", {}), self.journal, species_id):
+            return "The Shiny Tracker unlocks after five catches of a standard species."
+        if species_id is None:
+            self.toast("Shiny Tracker paused. Your counters are saved.")
+        else:
+            species = SPECIES_BY_ID.get(species_id)
+            name = species.name if species else species_id.replace("_", " ")
+            self.toast(f"Tracking shiny {name.lower()}.")
+        return None
+
+    def mount_shiny_trophy(self, species_id: str, *, boat_id: str | None = None) -> str | None:
+        """Hook for trophy-rail fittings: mount a remembered shiny replica.
+
+        This cosmetic does not consume the catch or its book record. The fleet
+        renderer can read boat_extras[boat_id]['shiny_trophies'] when rails ship.
+        """
+        boat_id = self.boat_id if boat_id is None else boat_id
+        if boat_id not in self.owned_boats or boat_id not in BOATS:
+            return "You do not own that boat."
+        if "trophy_rail" not in BOATS[boat_id].traits:
+            return "This boat needs a trophy rail. Your shinies remain on the book's Trophy page."
+        if not shiny_tracker(self.v2["book"], self.journal, species_id)["shiny"]:
+            return "Catch a shiny of that species first."
+        extras = self.v2.setdefault("boat_extras", {})
+        if not isinstance(extras, dict):
+            extras = self.v2["boat_extras"] = {}
+        fittings = extras.setdefault(boat_id, {})
+        if not isinstance(fittings, dict):
+            fittings = extras[boat_id] = {}
+        trophies = fittings.setdefault("shiny_trophies", [])
+        if not isinstance(trophies, list):
+            trophies = fittings["shiny_trophies"] = []
+        if species_id not in trophies:
+            trophies.append(species_id)
+        return None
+
     def _hull_ok(self, x, z, world: World, *, yaw=None) -> bool:
         return world.hull_clear(x,z,self.yaw if yaw is None else yaw,self.boat_id)
 
@@ -1162,8 +1233,7 @@ class State:
             dropped = False
             for hook in line.hooks:
                 if hook.catch is not None:
-                    hook.catch = None
-                    hook.baited = False
+                    self._drop_hook_catch(hook)
                     dropped = True
                     break
             self.speed *= 0.35
@@ -1333,6 +1403,7 @@ class State:
         if self.well_load() + catch.weight > self.well_cap() + 1e-6:
             return "The livewell won't take that one. Mark a fish Release or make room."
         catch.disposition = "kept"
+        confirm_shiny(self.v2["book"], catch)
         self.well.append(catch)
         self._emit_livewell_entry(catch, line)
         hook.catch = None
@@ -1362,6 +1433,7 @@ class State:
                 released += 1
             else:
                 catch.disposition = "kept"
+                confirm_shiny(self.v2["book"], catch)
                 self.well.append(catch)
                 self._emit_livewell_entry(catch, line)
                 hook.catch = None
