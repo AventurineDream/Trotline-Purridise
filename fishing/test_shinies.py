@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from dataclasses import replace
+from itertools import product
 from pathlib import Path
 import tempfile
 import unittest
@@ -175,8 +176,8 @@ class ShinyIntegrationChecks(unittest.TestCase):
 
     def test_forced_shiny_getaway_refunds_pity_across_reload_and_target_changes(self):
         for reload in (False, True):
-            for resolution in ("keep", "release", "all"):
-                with self.subTest(reload=reload, resolution=resolution):
+            for resolution, snag in product(("keep", "release", "all"), (False, True)):
+                with self.subTest(reload=reload, resolution=resolution, snag=snag):
                     state = State.new(self.world, seed=41017)
                     state.journal["bluegill"]["count"] = 5
                     state.journal["carp"]["count"] = 5
@@ -193,7 +194,13 @@ class ShinyIntegrationChecks(unittest.TestCase):
                         state = State.load(self.path, self.world)
                     state.set_shiny_tracker("carp")
                     rng_state = state.rng.s
-                    self.assertEqual(state._one_span(14), (0, 1))
+                    if snag:
+                        state.x, state.z, state.speed = 6., 0., 1.2
+                        state._maybe_snag(self.world)
+                        self.assertIsNone(state.lines[0].hooks[0].catch)
+                        self.assertFalse(state.lines[0].hooks[0].baited)
+                    else:
+                        self.assertEqual(state._one_span(14), (0, 1))
                     self.assertEqual(state.rng.s, rng_state)
                     entry = state.v2["book"]["species"]["bluegill"]
                     self.assertEqual((entry["shiny"], entry["since_shiny"]), (0, 49))

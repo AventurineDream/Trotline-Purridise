@@ -255,6 +255,8 @@ build and remains serialized until a recognized boat is selected.
   counter to the next pending shiny or adds it to the current counter. A newer
   confirmed observation supersedes that reservation. This preserves later
   progress regardless of hook traversal, resolution order, or reloads.
+  Both spoilage and running over a line use `State._drop_hook_catch`, which
+  refunds the reservation before clearing the hook.
   `book.set_shiny_target` enforces Verified status and saves one target in
   `v2.book.tracked`. `book.shiny_tracker` is a read-only presentation query.
   Ordinary journal counts and field notes retain their existing hook-time

@@ -21,9 +21,9 @@ python -m unittest \
   fishing.test_content_v2.ContentV2Checks.test_seeded_thousand_step_fishing_outcomes_are_bit_identical -v
 ```
 
-All **46** focused checks passed locally, including escaped shiny reservations,
-overlapping hooks in both escape orders, confirmed shinies, target switching,
-and reloads. CI runs the expanded suite.
+All **46** focused checks passed locally, including escaped shiny reservations
+from spoilage and snags, overlapping hooks in both escape orders, confirmed
+shinies, target switching, and reloads. CI runs the expanded suite.
 The 1,000-step deterministic replay
 pins shiny flags and the saved RNG state, with catch timings accounting for the
 new creation-time draw. The migration check's Briar fixtures

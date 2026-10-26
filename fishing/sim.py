@@ -838,11 +838,7 @@ class State:
                     hook.catch.age += hours
                     hook.catch.quality = quality_of(hook.catch.age)
                     if hook.catch.age >= SPOIL_HOURS:
-                        lose_shiny(self.v2["book"], hook.catch,
-                                   (other.catch for deployed in self.lines for other in deployed.hooks
-                                    if other.catch is not None))
-                        hook.catch = None
-                        hook.baited = False
+                        self._drop_hook_catch(hook)
                         spoiled += 1
                         continue
                     if announce and not hook.catch.noted_tired and hook.catch.age >= 9.0:
@@ -1065,6 +1061,15 @@ class State:
             return "protected"
         return None
 
+    def _drop_hook_catch(self, hook: Hook) -> None:
+        """Drop an escaped fish and refund its pending shiny reservation."""
+        if hook.catch is not None:
+            lose_shiny(self.v2["book"], hook.catch,
+                       (other.catch for line in self.lines for other in line.hooks
+                        if other.catch is not None))
+        hook.catch = None
+        hook.baited = False
+
     def _release_hook_catch(self, hook: Hook, catch: Catch,
                             reason: str | None = None, *, announce: bool = True) -> None:
         confirm_shiny(self.v2["book"], catch)
@@ -1228,8 +1233,7 @@ class State:
             dropped = False
             for hook in line.hooks:
                 if hook.catch is not None:
-                    hook.catch = None
-                    hook.baited = False
+                    self._drop_hook_catch(hook)
                     dropped = True
                     break
             self.speed *= 0.35
