@@ -462,7 +462,8 @@ class Session:
             self.state = state
             self._attach_quest_manager()
             self._title_catchup_pending = False
-            self.ui = UIState(mode="play", input_device=self.ui.input_device)
+            self.ui = UIState(mode="play", input_device=self.ui.input_device,
+                              dialogue_content=self._npc_content)
             self.save()
         else:
             kind, later = self.ui.needs_kind, self.ui.comfort_i == 1

@@ -25,10 +25,12 @@ retains Rested, dream history and the shared prompt throttle.
   reaches the landing, and boats and livewell contents remain intact. The
   existing idle/sail-down prerequisite is unchanged.
 - New-game cancellation preserves the save. Keyboard, mouse and controller
-  paths select a mode and start a nap. Native text bounds checks cover both
+  paths select a mode and start a nap. Hailing and rendering NPC dialogue works
+  immediately after choosing either mode, without restarting. Native text bounds
+  checks cover both
   fonts, all three text sizes, and 1280×720 / 480×270 dialogs without overlaps.
 
-The focused local command passed **119 tests**:
+The focused local command passed **120 tests**:
 
 ```sh
 python -m unittest fishing.test_comfort fishing.test_world_pause fishing.test_settings fishing.test_haul fishing.test_book fishing.test_bookview fishing.test_shinies fishing.test_content_v2 fishing.test_catches fishing.test_ui_layout -q
