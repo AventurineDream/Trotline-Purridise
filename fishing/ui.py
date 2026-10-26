@@ -393,6 +393,8 @@ def shop_rows(state, tab: int) -> list[Row]:
         ))
         for i, catch in enumerate(state.well):
             name = SPECIES_BY_ID[catch.species].name
+            if catch.shiny:
+                name = "✦ " + name
             q = quality_name(catch.quality)
             mark = " · Treasured" if catch.treasured else ""
             rows.append(Row(
@@ -526,6 +528,8 @@ def check_rows(state, line_index: int) -> list[Row]:
         else:
             catch = hook.catch
             name = SPECIES_BY_ID[catch.species].name
+            if catch.shiny:
+                name = "✦ " + name
             q = quality_name(catch.quality)
             forced_release = state._forced_release_reason(catch) is not None
             choice = "RELEASE" if forced_release or catch.disposition == "release" else "KEEP"
@@ -1555,6 +1559,8 @@ class UI:
                     break
                 catch = rows[i]
                 name = SPECIES_BY_ID[catch.species].name
+                if catch.shiny:
+                    name = "✦ " + name
                 q = quality_name(catch.quality)
                 mark = " · TREASURED" if catch.treasured else ""
                 label = f"{catch.weight:.1f} lb {name}, {q}{mark}"

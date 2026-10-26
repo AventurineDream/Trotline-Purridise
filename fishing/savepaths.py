@@ -236,7 +236,7 @@ def _book_defaults(state) -> dict:
         conditions = {key: entry.get(key) for key in ("zone", "bait", "band")}
         if all(isinstance(value, str) and value for value in conditions.values()):
             found.append(conditions)
-        species[species_id] = {"found": found, "shiny": 0, "since_shiny": 3}
+        species[species_id] = {"found": found, "shiny": 0, "since_shiny": 0}
     return species
 
 

@@ -302,6 +302,12 @@ Each gated legendary has a journal **watch card** showing:
   species at a time from the book. While tracking, a shiny is **guaranteed by the
   50th eligible catch** of that species since the last shiny of it. The counter is
   saved per species and survives switching targets.
+  Every standard catch advances its species' counter, including catches while
+  tracking is paused or another species is selected; any shiny resets that
+  species to zero. If a counter already reached 49 while untracked, selecting it
+  guarantees the next catch. Opening the book or reloading never rolls again.
+  Use **F** (the rebindable Set line action), **X** on a controller, or the
+  entry's **Track shiny / Stop tracking** button. Only Verified entries show it.
 - **Look:** a per-species variant palette (`albino`, `golden`, `starry`, `glow`,
   `ink`, `rose`; see the `03` *Shiny* column) plus a sparkle. It is never
   conveyed by color alone (a
@@ -309,6 +315,8 @@ Each gated legendary has a journal **watch card** showing:
 - **Value:** sells at 3× the normal price. Default disposition is *Treasured*
   (§5.5). Shiny trophies can be mounted on boats with the *trophy rail* trait or
   shown on the book's Trophy page.
+  A remembered shiny stays on that page after release or sale. The mounting
+  hook places a cosmetic replica without consuming the catch or its record.
 - Shiny completion never gates anything.
 
 ---

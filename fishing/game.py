@@ -27,7 +27,7 @@ from .guardian import maybe_start_sighting, pause_sighting_clock
 from .haul import haul_cadence
 from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_rumor
 from .bookview import (BOOK_TABS, ENTRY_IDS, book_controls, book_layout, contains,
-                       move_selection, turn_page)
+                       move_selection, tracker_species, turn_page)
 from .bot import reset as reset_bot
 from .bot import summon as summon_bot
 from .bot import tick as tick_bot
@@ -930,15 +930,20 @@ class Session:
             self.ui.mode = "play"
             self.save()
             return
+        if "f" in keys.pressed:
+            self._toggle_book_tracker()
+            return
         layout = book_layout(*viewport)
         if click is not None:
-            for name, rect in book_controls(layout).items():
+            for name, rect in book_controls(layout, self.state, self.ui).items():
                 if contains(rect, click):
                     if name == "close":
                         self.ui.mode = "play"
                         self.save()
                     elif name == "turn":
                         turn_page(self.state, self.ui, viewport)
+                    elif name == "tracker":
+                        self._toggle_book_tracker()
                     else:
                         move_selection(self.state, self.ui, self._npc_content,
                                        -1 if name == "previous" else 1)
@@ -976,6 +981,14 @@ class Session:
             move_selection(self.state, self.ui, self._npc_content, -wheel)
         if keys.pressed & {"return", "space"}:
             turn_page(self.state, self.ui, viewport)
+
+    def _toggle_book_tracker(self):
+        sid = tracker_species(self.state, self.ui)
+        if sid is None:
+            return
+        target = None if self.state.v2["book"].get("tracked") == sid else sid
+        if self.state.set_shiny_tracker(target) is None:
+            self.save()
 
     def _pause_keys(self, keys, dt):
         if "esc" in keys.pressed:
