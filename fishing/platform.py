@@ -247,7 +247,10 @@ class Text:
 
     def _sparkle_text(self, text, size, color, family):
         """Supply the shiny marker even in fonts without U+2726 coverage."""
-        height = self.render("M", size, color, family).shape[0]
+        parts = [self.render(part, size, color, family) if part else None
+                 for part in text.split("✦")]
+        height = max(self.render("M", size, color, family).shape[0],
+                     max((part.shape[0] for part in parts if part is not None), default=0))
         width = max(5, round(size * .7))
         # A tiny antialiased four-point sparkle, with the font's line height.
         yy, xx = np.mgrid[:height * 4, :width * 4]
@@ -258,11 +261,13 @@ class Text:
         sparkle[:, :, :3] = color
         sparkle[:, :, 3] = np.rint(mask.mean(axis=(1, 3)) * 255).astype(np.uint8)
         pieces = []
-        for index, part in enumerate(text.split("✦")):
+        for index, part in enumerate(parts):
             if index:
                 pieces.append(sparkle)
-            if part:
-                pieces.append(self.render(part, size, color, family))
+            if part is not None:
+                # SDL_ttf can extend a surface for descenders/overhangs. Keep
+                # the common font baseline and pad its transparent bottom.
+                pieces.append(np.pad(part, ((0, height - part.shape[0]), (0, 0), (0, 0))))
         return np.concatenate(pieces, axis=1)
 
     def _cache_image(self, key, rgba):

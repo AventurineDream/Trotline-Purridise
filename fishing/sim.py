@@ -1120,7 +1120,9 @@ class State:
         if species_id is None:
             self.toast("Shiny Tracker paused. Your counters are saved.")
         else:
-            self.toast(f"Tracking shiny {SPECIES_BY_ID[species_id].name.lower()}.")
+            species = SPECIES_BY_ID.get(species_id)
+            name = species.name if species else species_id.replace("_", " ")
+            self.toast(f"Tracking shiny {name.lower()}.")
         return None
 
     def mount_shiny_trophy(self, species_id: str, *, boat_id: str | None = None) -> str | None:

@@ -16,10 +16,14 @@
 Run the focused regressions with the repository's Python environment:
 
 ```sh
-python -m unittest fishing.test_shinies fishing.test_book fishing.test_bookview fishing.test_catches -v
+python -m unittest \
+  fishing.test_shinies fishing.test_book fishing.test_bookview fishing.test_catches \
+  fishing.test_content_v2.ContentV2Checks.test_seeded_thousand_step_fishing_outcomes_are_bit_identical -v
 ```
 
-All **42** focused checks passed locally. The migration check's Briar fixtures
+All **43** focused checks passed locally. The 1,000-step deterministic replay
+pins shiny flags and the saved RNG state, with catch timings accounting for the
+new creation-time draw. The migration check's Briar fixtures
 passed; its Cedar fixture could not run locally because this workspace lacks
 the tracked `fishing/assets/cedar.npz`. Full migration coverage and the software
 selftest run in the existing `gameplay-tests` CI job.
@@ -38,7 +42,7 @@ when a system or accessibility font lacks the ✦ glyph. Catch cards already use
 the authored shiny palettes and a textual SHINY badge.
 
 `book-benchmark.json` reports **140 warmed book compositions** at 1280×720,
-largest text size: p50 **13.94 ms**, p95 **18.83 ms**, peak RSS **172.9 MiB**,
+largest text size: p50 **14.04 ms**, p95 **18.99 ms**, peak RSS **172.9 MiB**,
 text cache **8.38 MB** (within 8 MiB). This measures the book composition only;
 it excludes the lake renderer and is not a whole-game frame benchmark.
 
