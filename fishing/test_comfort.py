@@ -211,6 +211,25 @@ class ComfortChecks(unittest.TestCase):
         self.assertEqual(comfort.mode(self.session.state.v2), "old_salt")
         self.assertEqual(comfort.mode(State.load(self.path, self.world).v2), "old_salt")
 
+    def test_both_new_game_modes_can_hail_and_render_npc_dialogue(self):
+        text = Text()
+        self.addCleanup(text.close)
+        renderer = UI(text, self.world)
+        for index, mode in enumerate(comfort.MODES):
+            with self.subTest(mode=mode):
+                self.session.ui.mode = "new_mode"
+                self.session.ui.new_mode_i = index
+                self.session.tick(Keys(pressed={"return"}), 0)
+                state = self.session.state
+                npc = state.npcs[0]
+                state.x, state.z = npc.anchor.position
+                self.session.tick(Keys(pressed={"c"}), 0)
+                self.assertEqual(self.session.ui.mode, "dialogue")
+                frame = np.zeros((720, 1280, 3), np.uint8)
+                renderer.draw(frame, state, self.session.ui)
+                self.assertIs(self.session.ui.dialogue_content, self.session._npc_content)
+                self.assertTrue(frame.any())
+
     def test_mouse_mode_choice_and_controller_pause_catnap(self):
         self.session.ui.mode = "new_mode"
         x, y, _w, _h = comfort_controls((480, 270))[1]
