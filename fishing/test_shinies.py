@@ -10,9 +10,10 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from .boat import BOATS
-from .book import (LEGENDARY_IDS, SHINY_CHANCE, SHINY_PITY_CATCHES,
+from .book import (BOOK_SPECIES_IDS, LEGENDARY_IDS, SHINY_CHANCE, SHINY_PITY_CATCHES,
                    roll_shiny, set_shiny_target, shiny_tracker)
 from .bookview import ENTRY_IDS, book_controls, book_layout, collection_rows
+from .data import SPECIES_BY_ID
 from .game import Keys, Session
 from .gamepad import BUTTON_ACTIONS, BUTTON_X
 from .platform import Input, Text
@@ -255,6 +256,11 @@ class ShinyIntegrationChecks(unittest.TestCase):
         self.assertEqual((state.rng.s, state.game_minutes), (rng_state, minute))
         ui.book_entry_i = ENTRY_IDS.index(LEGENDARY_IDS[0])
         self.assertNotIn("tracker", book_controls(layout, state, ui))
+        # A future save can contain Verified pages beyond this build's roster.
+        future = next(sid for sid in BOOK_SPECIES_IDS if sid not in SPECIES_BY_ID)
+        state.journal[future] = {"count": 5}
+        self.assertIsNone(state.set_shiny_tracker(future))
+        self.assertEqual(state.v2["book"]["tracked"], future)
 
     def test_sparkle_marker_renders_in_both_fonts_and_uses_the_bounded_cache(self):
         text = Text()
@@ -269,6 +275,16 @@ class ShinyIntegrationChecks(unittest.TestCase):
                 label = text.render("A ✦ Bluegill", size, (60, 80, 70), family)
                 self.assertIs(label, text.render("A ✦ Bluegill", size, (60, 80, 70), family))
                 self.assertLessEqual(text.cache_bytes, text.cache_limit)
+        # Some CI fonts extend a surface for descenders; reproduce that
+        # independently of which native fonts happen to be installed here.
+        def fragments(value, *_args):
+            height = 15 if value == " Bluegill" else 14
+            return np.full((height, 8, 4), 255, np.uint8)
+        with patch.object(text, "render", side_effect=fragments):
+            composed = text._sparkle_text("A ✦ Bluegill", 12, (60, 80, 70), "mono")
+        self.assertEqual(composed.shape, (15, 24, 4))
+        self.assertEqual(composed[-1, 0, 3], 0)
+        self.assertEqual(composed[-1, -1, 3], 255)
 
 
 if __name__ == "__main__":

@@ -330,6 +330,7 @@ class ContentV2Checks(unittest.TestCase):
                 catch.bait,
                 catch.hour.hex(),
                 catch.lake_id,
+                catch.shiny,
             ))
             return record(catch, announce=announce)
 
@@ -341,14 +342,16 @@ class ContentV2Checks(unittest.TestCase):
         for _ in range(1000):
             state.advance(1.0, frozen=False)
 
+        # Catch creation now consumes one shiny roll from the saved RNG.
+        # Pin that sequence, including the flag, rather than the pre-shiny one.
         self.assertEqual(outcomes, [
             ("bluegill", "0x1.9a1521e7aa5aap-3", "0x1.8c00000000000p+8",
-             "open", "worm", "0x1.9333333333333p+3", "briar"),
-            ("carp", "0x1.3c26136d49b5ap+1", "0x1.8b80000000000p+9",
-             "open", "worm", "0x1.32eeeeeeeeeefp+4", "briar"),
+             "open", "worm", "0x1.9333333333333p+3", "briar", False),
+            ("carp", "0x1.3c26136d49b5ap+1", "0x1.8b00000000000p+9",
+             "open", "worm", "0x1.32aaaaaaaaaabp+4", "briar", False),
         ])
         self.assertEqual((state.game_minutes, state.hooked_total, state.rng.s),
-                         (1000.0, 2, 16426900400529033108))
+                         (1000.0, 2, 9380871146142679977))
 
 
 if __name__ == "__main__":
