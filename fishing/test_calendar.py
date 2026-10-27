@@ -166,6 +166,22 @@ class CalendarPlayChecks(unittest.TestCase):
         self.assertEqual(rates.call_args.args[3], calendar.weather_at(state))
         self.assertEqual(rates.call_args.kwargs['game_minutes'], 1440)
 
+    def test_bot_fireflies_follow_forecast_when_legacy_weather_disagrees(self):
+        from .data import weather_at as legacy_weather
+        from .life import extra_faces
+        state = self.state
+        # Both are night: planned rain under a legacy clear sky, then planned
+        # fair weather under legacy rain. The water ring remains in either case.
+        for minute, planned, legacy, count in ((4080, 'drizzle', 'clear', 6),
+                                               (5160, 'fair', 'drizzle', 11)):
+            with self.subTest(minute=minute):
+                state.game_minutes = minute
+                self.assertEqual(calendar.weather_at(state), planned)
+                self.assertEqual(legacy_weather(minute), legacy)
+                before = state.to_json()
+                self.assertEqual(len(extra_faces(state)), count)
+                self.assertEqual(state.to_json(), before)
+
     def test_all_current_lake_friends_gather_and_restore_normal_schedule(self):
         for minute, count in ((9299, 2), (9300, 6), (9479, 6), (9480, 2)):
             self.state.game_minutes = minute
