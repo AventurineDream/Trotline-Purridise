@@ -205,7 +205,11 @@ class Session:
             self.ui.caption_timer = 0.0
             return
         if self.sound:
-            self.ui.caption = SOUND_CAPTIONS.get(self.sound, f"Sound cue: {self.sound}.")
+            if self.sound == "bot":
+                from .bot import chime_caption
+                self.ui.caption = chime_caption(self.state)
+            else:
+                self.ui.caption = SOUND_CAPTIONS.get(self.sound, f"Sound cue: {self.sound}.")
             self.ui.caption_timer = 2.4
         elif self.ui.caption_timer > 0:
             self.ui.caption_timer = max(0.0, self.ui.caption_timer - max(0.0, float(dt)))
@@ -990,7 +994,7 @@ class Session:
                 return self._fail(err)
             self.ui.note = ""
             self.save()
-            return "click"
+            return "bot" if row.kind == "bot_shell" else "click"
         if row.kind in {"ingredient", "dish_card", "dish", "recipe", "snack", "weather", "teach", "cookout", "cookout_chat"}:
             return self._kitchen_action(row)
         if not row.enabled and row.kind != "paint":
@@ -1467,7 +1471,8 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
             keys = platform.poll(dt)
             session.tick(keys, dt)
             if session.sound:
-                audio.blip(session.sound)
+                from .bot import sound_kind
+                audio.blip(sound_kind(session.state, session.sound))
             if session.quit:
                 break
             if renderer.world is not session.world:
