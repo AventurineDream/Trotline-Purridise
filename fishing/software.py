@@ -18,6 +18,7 @@ from .sprites import bake
 from .world import Face, World, hash21, noise2
 from .boat import HULL_BOW, HULL_STERN, HULL_HALF_BEAM, HULL_INNER_BEAM
 from .weather import lighting_at
+from . import comfort
 
 VIEW_W = 360
 VIEW_H = 270
@@ -434,6 +435,7 @@ class SoftwareRenderer:
         colr = self._rises(colr, hx, hz, state)
         fog_density = (1.0 - light["rain"]) / 820.0 + light["rain"] / 240.0
         fog = np.clip(1.0 - np.exp(-dist * fog_density), 0.0, 0.72)
+        fog *= comfort.fog_factor(state, dist)
         colr = colr * (1.0 - fog)[:, None] + light["horizon"] * fog[:, None]
         # Night keeps the water dark, but not a flat black.
         dim = 0.42 + 0.58 * (1.0 - light["night"]) + light["moon_i"] * 0.20
@@ -571,6 +573,7 @@ class SoftwareRenderer:
             colr = colr + (cone * fall * light["night"])[:, None] * np.array([0.45, 0.38, 0.24], np.float32)
         fog_density = (1.0 - light["rain"]) / 480.0 + light["rain"] / 220.0
         fog = np.clip(1.0 - np.exp(-dist * fog_density), 0.0, 1.0)
+        fog *= comfort.fog_factor(state, dist)
         colr = colr * (1.0 - fog)[:, None] + light["horizon"] * fog[:, None]
         self.col.reshape(-1, 3)[idx] = np.clip(colr, 0.0, 1.0)
         self.z.reshape(-1)[idx] = dist
@@ -636,6 +639,10 @@ class SoftwareRenderer:
                 tint_v = max(ambient, 0.45)
             tint = np.array([tint_v, tint_v, tint_v], np.float32)
             fog = float(np.clip(1.0 - math.exp(-zz / 380.0), 0.0, 0.82))
+            fog *= float(comfort.fog_factor(state, zz))
+            if kind in ("buoy", "buoy_flag") and comfort.has_buff(state, "glow_buoys"):
+                tint = np.maximum(tint, np.array([1.3, 1.15, .85], np.float32))
+                fog *= .35
             blit_sprite(self.col, self.z, self.sprites[kind], sx, sy, zz, int(dest_h), tint, fog, fog_c)
 
     def _faces(self, cam, faces: list[Face], light, boat: bool, two_sided: bool = False):

@@ -89,7 +89,7 @@ That makes a `.venv` if you don't have one, installs the dependencies, and start
 ./play.sh --smoke             # real window, sailing, purchases, weather, and lake changes
 ```
 
-The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. Its full 1,200-frame run checks observed coverage of both lakes, all four boats, six shop tabs, four help pages, 36 fish and 12 quest journal entries, and dialogue for all twelve givers in four quest states. It also exercises weather fades, fuel and battery gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry and finite floating-point scene colors are checked as well. Results depend on the graphics driver and the other applications running on the computer.
+The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. Its full 1,200-frame run checks observed coverage of both lakes, all four boats, seven shop tabs, four help pages, 36 fish and 12 quest journal entries, and dialogue for all twelve givers in four quest states. It also exercises weather fades, fuel and battery gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry and finite floating-point scene colors are checked as well. Results depend on the graphics driver and the other applications running on the computer.
 
 During play the window and lake share one OpenGL context. The window check reads the pixels submitted to the actual window and verifies that presenting a frame does not corrupt subsequent lake frames. Headless screenshots use a separate standalone context.
 
@@ -108,7 +108,7 @@ key or click finishes the fade; each nap advances the full two hours once.
 
 The first nap in a six-hour window grants **Rested** for six active game hours
 and, when a lead is available, a **Bot's dream** habitat note for a fish uncaught
-on this lake. One unread dream waits at a time. Opening the book goes to that
+on this lake. One ordinary unread dream waits at a time; Huckleberry Fish Pie can queue an extra. Opening the book goes to that
 lead; its heard note stays after reading it. Extra naps pass time and reset Old
 Salt Energy without extending an existing Rested window.
 
@@ -118,6 +118,41 @@ More than 24 hours without a meal brings **Peckish** (boat speed reduced by 20%)
 Needs invitations appear at most once per ten real minutes of active play;
 **Later** snoozes that need for thirty active real minutes. Menus, lost focus,
 and time offline freeze the needs and Rested clocks.
+
+## Pantry and kitchen
+
+Open the landing shop with **E** and choose **Kitchen**, or press **K** to open
+your pantry. Gamepad users can open the pantry with **Y** from Pause. A galley
+boat can cook while anchored; every boat can carry and eat Kibble Tins.
+
+Each host sells a specialty ingredient and **$3 Kibble Tins**. The pantry holds
+**20 of each item**. A snack resets Old Salt hunger without replacing a picnic
+buff. Hosts teach two dishes during their chapter; missed dish cards cost
+**$40 after that chapter**. Legendary clue tellers provide recipe-bait cards.
+
+A dish uses one food-group fish and one pantry ingredient. The confirmation
+screen selects the smallest eligible fish; **Up / Down** chooses another.
+Shiny, Treasured, protected and legendary fish are never used. A cooked dish
+replaces the previous picnic buff. Six-hour buffs pause in menus and offline;
+haul buffs keep their remaining checks across saves and travel. A charge is
+spent when a hook rises or the check is shown instantly. Skipping the two-second
+steam-and-bowl scene never cooks twice.
+
+The ten dishes improve scouting, haul speed, fuel use, favorable-water
+invitations, dream leads, fog visibility, bait retention, shiny progress or buoy
+visibility. Huckleberry Fish Pie queues an extra dream without discarding an
+unread one. Moon-Milk Pudding gives an extra guarantee credit per tracked fish
+on the next three checks; the next newly hooked fish uses an earned guarantee.
+Starlight Soup lights your buoys for six game hours and makes its Old Salt meal
+last 48 game hours. Later snacks or dishes retain any longer remaining meal
+window while granting at least 24 hours from when they are eaten.
+
+Recipe bait uses **one piece of each parent bait plus one pantry item** and
+makes **twelve pieces**, subject to bait-box capacity. It takes the better
+species match of its two parents and is selected normally when setting a line.
+The bait picker scrolls through all seventeen baits. A weather invitation marks
+currently favorable nearby water on the chart for two game hours; Bot stays
+quiet when no such water is nearby.
 
 ## Two lakes
 
@@ -175,7 +210,7 @@ One real second is one minute on the lake. A day is 24 minutes. `T` cycles 1×, 
 | B | Y tap | Send Bot ahead or out to a line. Press again to call him back |
 | Z | Y hold | Two-hour catnap at anchor or a landing; idle hammock boats can nap anywhere |
 | G | LB | Use the active Bot tool (reserved until its gameplay ticket lands) |
-| K | — | Galley (reserved until its gameplay ticket lands) |
+| K | Pause → Y | Pantry; cook at a landing or while anchored aboard a galley boat |
 | Tab | Back | Chart |
 | J / I | — | Journal / livewell |
 | T | — | Time scale, while you are still |

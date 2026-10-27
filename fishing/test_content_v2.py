@@ -24,7 +24,9 @@ class ContentV2Checks(unittest.TestCase):
     def test_data_loaders_keep_the_existing_gameplay_apis(self):
         content = load_content_v2()
         self.assertEqual(len(content.species), 36)
-        self.assertEqual(len(content.baits), 5)
+        self.assertEqual(len(content.baits), 17)
+        self.assertEqual(len(content.pantry), 6)
+        self.assertEqual(len(content.dishes), 10)
         self.assertEqual(set(content.boats), {"jon", "rowboat", "sail", "pontoon"})
         self.assertEqual(set(content.lakes), {"briar", "cedar"})
         self.assertEqual(len(SPECIES), 36)

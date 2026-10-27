@@ -14,7 +14,7 @@ from .quests import QuestManager
 from .dialogue import Conversation, nearby_npc
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
-from .data import BAITS, SPECIES, hour_of_day
+from .data import BAITS, BAIT_BY_ID, SPECIES, hour_of_day
 from .weather import weather_visuals
 from .platform import Platform, Text
 from .gamepad import (
@@ -28,6 +28,7 @@ from .haul import haul_cadence
 from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_rumor
 from .book import take_dream_clue
 from . import comfort
+from . import kitchen
 from .bookview import (BOOK_TABS, ENTRY_IDS, book_controls, book_layout, contains,
                        move_selection, tracker_species, turn_page)
 from .bot import reset as reset_bot
@@ -349,6 +350,8 @@ class Session:
                 self.ui.nap_timer = max(0.0, self.ui.nap_timer - dt)
                 if keys.pressed or getattr(keys, "mouse_click", None) or not self.ui.nap_timer:
                     self.ui.mode = "play"
+        elif mode in {"kitchen", "cook_confirm", "cooking"}:
+            self._kitchen_keys(keys, dt)
         elif mode == "play":
             self._play_keys(keys)
         elif mode == "dialogue":
@@ -473,6 +476,8 @@ class Session:
             elif kind == "energy":
                 self.state.anchored = True
                 self._start_catnap()
+            elif self.state.v2["pantry"].get("kibble", 0):
+                kitchen.snack(self.state)
             self.save()
 
     def _start_catnap(self, *, forced=False):
@@ -501,6 +506,9 @@ class Session:
             return
         if "z" in keys.pressed:
             self._start_catnap()
+            return
+        if "k" in keys.pressed:
+            self._open_kitchen()
             return
         if "c" in keys.pressed:
             self._hail()
@@ -546,6 +554,8 @@ class Session:
         npc = nearby_npc(self.state)
         if npc is None:
             return
+        if kitchen.teach(self.state, npc.id):
+            self.save()
         self.conversation = Conversation.start(npc, self.state, self._npc_content)
         self.ui.conversation = self.conversation
         self.ui.dialogue_from = self.ui.mode
@@ -680,6 +690,8 @@ class Session:
             if self.state.prepare_catch_dispositions(nearest):
                 self.ui.note = "The livewell is full. I picked the smallest to swim home. You can change that."
             line = self.state.lines[nearest]
+            self.ui.haul_picnic_factor = comfort.haul_factor(self.state)
+            self.ui.haul_picnic_started = False
             catches_on_line = {}
             for hook in line.hooks:
                 if hook.catch is not None:
@@ -712,11 +724,23 @@ class Session:
             })
             settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
             if settings.get("haul_speed") == "instant":
+                self._start_haul_perk(line)
                 self.ui.mode = "check"
             return
         self.state.toast("Nothing here to check.")
 
+    def _start_haul_perk(self, line):
+        if self.ui.haul_picnic_started or not line.hooks:
+            return
+        before = comfort.active_buff(self.state)
+        self.ui.haul_picnic_factor = comfort.begin_haul(self.state, line)
+        self.ui.haul_picnic_started = True
+        if before and before.effect in {"quick_haul", "keep_bait", "shiny_credit"}:
+            self.save()
+
     def _haul_keys(self, keys, dt: float) -> None:
+        if not self.focused:
+            return
         index = self.ui.check_line
         if index < 0 or index >= len(self.state.lines):
             self.ui.mode = "play"
@@ -726,6 +750,7 @@ class Session:
             self.ui.mode = "check"
             return
         if "esc" in keys.pressed:
+            self._start_haul_perk(line)
             self.ui.mode = "check"
             self.ui.check_i = 0
             return
@@ -735,10 +760,11 @@ class Session:
         if speed not in {"normal", "quick", "instant"}:
             speed = "normal"
         if speed == "instant":
+            self._start_haul_perk(line)
             self.ui.mode = "check"
             self.ui.check_i = 0
             return
-        cadence = haul_cadence(self.state)
+        cadence = haul_cadence(self.state) * self.ui.haul_picnic_factor
         multiplier = 3.0 if "e" in keys.held else 1.0
         step = max(0.0, float(dt)) * multiplier
         if self.ui.haul_index >= len(line.hooks):
@@ -786,6 +812,7 @@ class Session:
             remaining -= used
             if self.ui.haul_timer + 1e-9 < cadence:
                 return
+            self._start_haul_perk(line)
             if hook.catch is not None:
                 self.ui.haul_phase = "surface"
                 self.ui.haul_timer = cadence
@@ -804,6 +831,108 @@ class Session:
             self.ui.mode = "check"
             self.ui.check_i = 0
 
+    def _open_kitchen(self):
+        self.ui.kitchen_from = self.ui.mode
+        self.ui.mode = "kitchen"
+        self.ui.shop_i = 0
+        self.ui.note = ""
+
+    def _kitchen_menu_keys(self, keys, rows, dt):
+        if keys.tap("up", dt):
+            self.ui.shop_i = (self.ui.shop_i - 1) % len(rows)
+            self.ui.note = ""
+        if keys.tap("down", dt):
+            self.ui.shop_i = (self.ui.shop_i + 1) % len(rows)
+            self.ui.note = ""
+        select = bool(keys.pressed & {"return", "space"})
+        click = getattr(keys, "mouse_click", None)
+        if click is not None:
+            for index, rect in self.ui.kitchen_hitboxes:
+                if contains(rect, click) and index < len(rows):
+                    self.ui.shop_i, select = index, True
+        if select:
+            self.sound = self._kitchen_action(rows[self.ui.shop_i % len(rows)])
+
+    def _kitchen_action(self, row):
+        if not row.enabled:
+            return self._fail(row.blurb)
+        if row.kind in {"dish", "recipe"}:
+            self.ui.cook_from = self.ui.mode
+            self.ui.cook_kind, self.ui.cook_arg = row.kind, row.arg
+            self.ui.cook_label = (kitchen.DISHES[row.arg].name if row.kind == "dish"
+                                  else BAIT_BY_ID[row.arg].name)
+            self.ui.cook_fish = self.ui.comfort_i = 0
+            self.ui.note = ""
+            self.ui.mode = "cook_confirm"
+            return "click"
+        error = None
+        if row.kind == "ingredient":
+            error = kitchen.buy_ingredient(self.state, self.world, row.arg)
+        elif row.kind == "dish_card":
+            error = kitchen.buy_card(self.state, self.world, row.arg)
+        elif row.kind == "snack":
+            error = kitchen.snack(self.state)
+        elif row.kind == "weather":
+            error = comfort.weather_invitation(self.state)
+        elif row.kind == "teach":
+            kitchen.teach(self.state, row.arg)
+        if error:
+            return self._fail(error)
+        self.ui.note = ""
+        self.save()
+        return "click"
+
+    def _kitchen_keys(self, keys, dt):
+        if not self.focused:
+            return
+        if self.ui.mode == "cooking":
+            self.ui.cook_timer = max(0., self.ui.cook_timer - dt)
+            if keys.pressed or getattr(keys, "mouse_click", None) or not self.ui.cook_timer:
+                self.ui.mode = self.ui.cook_from
+            return
+        if "esc" in keys.pressed:
+            self.ui.mode = (self.ui.kitchen_from if self.ui.mode == "kitchen"
+                            else self.ui.cook_from)
+            self.ui.note = ""
+            self.save()
+            return
+        if self.ui.mode == "kitchen":
+            self._kitchen_menu_keys(keys, kitchen.rows(self.state, self.world), dt)
+            return
+        if keys.tap("up", dt):
+            self.ui.cook_fish -= 1
+        if keys.tap("down", dt):
+            self.ui.cook_fish += 1
+        if keys.tap("left", dt) or keys.tap("right", dt):
+            self.ui.comfort_i = 1 - self.ui.comfort_i
+        select = bool(keys.pressed & {"return", "space"})
+        click = getattr(keys, "mouse_click", None)
+        if click is not None:
+            for index, rect in enumerate(comfort_controls(getattr(keys, "viewport", (1280, 720)))):
+                if contains(rect, click):
+                    self.ui.comfort_i, select = index, True
+        if not select:
+            return
+        if self.ui.comfort_i:
+            self.ui.mode = self.ui.cook_from
+            return
+        if self.ui.cook_kind == "dish":
+            dish = kitchen.DISHES[self.ui.cook_arg]
+            fish = kitchen.eligible_fish(self.state, dish.food)
+            chosen = fish[self.ui.cook_fish % len(fish)] if fish else None
+            error = kitchen.cook_dish(self.state, self.world, dish.id, chosen)
+            text = dish.blurb
+        else:
+            error = kitchen.cook_bait(self.state, self.world, self.ui.cook_arg)
+            text = "A cooked dozen, ready for your lines."
+        if error:
+            self._fail(error)
+            return
+        self.ui.note = ""
+        self.ui.cook_text, self.ui.cook_timer = text, 2.0
+        self.ui.mode = "cooking"
+        self.save()
+
     def _shop_keys(self, keys, dt):
         if "esc" in keys.pressed:
             self.ui.mode = "play"
@@ -818,6 +947,9 @@ class Session:
             self.ui.shop_i = 0
             self.ui.note = ""
         rows = shop_rows(self.state, self.ui.shop_tab)
+        if self.ui.shop_tab == 6:
+            self._kitchen_menu_keys(keys, rows, dt)
+            return
         if rows and keys.tap("up", dt):
             self.ui.shop_i = (self.ui.shop_i - 1) % len(rows)
             self.ui.note = ""
@@ -830,6 +962,8 @@ class Session:
     def _buy(self, row):
         state = self.state
         err = None
+        if row.kind in {"ingredient", "dish_card", "dish", "recipe", "snack", "weather", "teach"}:
+            return self._kitchen_action(row)
         if not row.enabled and row.kind != "paint":
             self.ui.note = row.blurb or "Not for sale."
             return "error"
@@ -1078,6 +1212,9 @@ class Session:
             self.save()
 
     def _pause_keys(self, keys, dt):
+        if keys.pressed & {"k", "b"}:
+            self._open_kitchen()
+            return
         if keys.pressed & {"z", "f"}:
             self.ui.mode = "play"
             if not self._start_catnap():

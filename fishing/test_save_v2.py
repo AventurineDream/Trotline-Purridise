@@ -115,7 +115,8 @@ class SaveV2Checks(unittest.TestCase):
                          {"stage": "none", "knot": None, "visible": True})
         self.assertEqual(defaults["needs"], DEFAULT_NEEDS)
         self.assertIsNone(defaults["buff"])
-        self.assertEqual(defaults["pantry"], {"herbs": 0})
+        from .data import PANTRY
+        self.assertEqual(defaults["pantry"], dict.fromkeys(PANTRY, 0))
         self.assertEqual(defaults["recipes"], [])
         self.assertEqual(defaults["dishes_known"], [])
         self.assertEqual(defaults["boat_extras"], {})

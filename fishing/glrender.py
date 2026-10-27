@@ -20,6 +20,7 @@ from .forest import H as ATLAS_H, W as ATLAS_W, atlas
 from .imageops import resize_rgb
 from .software import FOV, BASE_PITCH, SoftwareRenderer
 from .weather import lighting_at
+from . import comfort
 from .world import Face
 from .boat import HULL_INNER_BEAM, HULL_HALF_BEAM, HULL_BOW
 
@@ -286,7 +287,7 @@ class LakeRenderer(SoftwareRenderer):
             lake_grid=(self.world.nx,self.world.nz),lake_shore=3,lake_depth=4,
             lily_centre=next((tuple(row[1:3]) for row in self.world.zones if row[0]=="lilies"),(-175,-115)),
             boat_pos=(state.x,state.z),boat_forward=(math.sin(state.yaw),math.cos(state.yaw)),
-            speed=float(state.speed),spotlight=float(state.light),
+            speed=float(state.speed),spotlight=float(state.light),comfort_fog_radius=comfort.fog_radius(state),
             slip_origin=(sl.ox,sl.oz),slip_inland=(sl.ix,sl.iz),slip_side=(sl.sx,sl.sz),
             slip_size=(sl.half_w,sl.land_ext,sl.water_ext))
         for key,value in values.items():
@@ -312,7 +313,8 @@ class LakeRenderer(SoftwareRenderer):
             name = "buoy_flag" if line.fish_on() else "buoy"
             for x,z in line.buoys():
                 bob = math.sin(state.anim*1.7+x)*0.025
-                rows.append((x,bob,z,0.39,0.68,self.layers[name],1.0))
+                rows.append((x,bob,z,0.39,0.68,self.layers[name],
+                             -1.0 if comfort.has_buff(state, "glow_buoys") else 1.0))
         if rows:
             self.buoy_buf.write(np.array(rows,np.float32).tobytes())
         return len(rows)

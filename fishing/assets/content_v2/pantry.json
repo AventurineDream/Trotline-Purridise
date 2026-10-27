@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "capacity": 20,
+  "card_price": 40,
+  "items": [
+    {
+      "id": "herbs",
+      "name": "Briar herbs",
+      "host": "grandmother_whiskers",
+      "lake": "briar",
+      "price": 4
+    },
+    {
+      "id": "pecan",
+      "name": "Pecan smoke chips",
+      "host": "doc_barnaby",
+      "lake": "cedar",
+      "price": 6
+    },
+    {
+      "id": "huckleberries",
+      "name": "Huckleberries",
+      "host": "captain_huckleberry",
+      "lake": "flathead",
+      "price": 8
+    },
+    {
+      "id": "salt",
+      "name": "Mineral salt",
+      "host": "sora",
+      "lake": "crater",
+      "price": 10
+    },
+    {
+      "id": "moonmilk",
+      "name": "Moon-milk",
+      "host": "astra_9",
+      "lake": "nebula",
+      "price": 12
+    },
+    {
+      "id": "kibble",
+      "name": "Kibble Tin",
+      "host": "all",
+      "lake": "all",
+      "price": 3
+    }
+  ]
+}
