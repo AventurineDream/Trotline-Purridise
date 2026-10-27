@@ -257,14 +257,14 @@ class KitchenChecks(unittest.TestCase):
         _zone, state.x, state.z, _radius = next(row for row in self.world.zones if row[0] == 'flats')
         state.game_minutes = 360
         before = state.rng.s
-        with patch('fishing.data.weather_at', return_value='clear'):
+        with patch('fishing.calendar.weather_at', return_value='clear'):
             spot = comfort.weather_spot(state)
             self.assertIsNotNone(spot)
             self.assertEqual(spot['band'], 'day')
             self.assertLessEqual(np.hypot(spot['x'] - state.x, spot['z'] - state.z), 300)
             self.assertIsNone(comfort.weather_invitation(state))
             self.assertEqual(state.v2['calendar']['invitation_mark'], spot)
-        with patch('fishing.data.weather_at', return_value='mist'):
+        with patch('fishing.calendar.weather_at', return_value='mist'):
             self.assertIsNone(comfort.weather_spot(state))
         self.assertEqual(state.rng.s, before)
 

@@ -181,8 +181,8 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             panel.shop_tab = visit%len(SHOP_TABS)
             panel.help_page = visit%HELP_N
             legacy_pages = len(SPECIES) + len(QUEST_IDS)
-            journal_visit = visit % (legacy_pages + 3)
-            panel.journal_page = ((1, 2, 4)[journal_visit - legacy_pages]
+            journal_visit = visit % (legacy_pages + 4)
+            panel.journal_page = ((1, 2, 4, 5)[journal_visit - legacy_pages]
                                   if journal_visit >= legacy_pages else
                                   (3 if journal_visit >= len(SPECIES) else 0))
             panel.journal_i = journal_visit%len(SPECIES)

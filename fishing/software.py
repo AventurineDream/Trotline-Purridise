@@ -129,7 +129,7 @@ class SoftwareRenderer:
         if cam is None:
             cam = self.camera_for(state)
         world = self.world
-        light = lighting_at(state.game_minutes + state.minute_acc)
+        light = lighting_at(state.game_minutes + state.minute_acc, state)
         col = self.col
         zbuf = self.z
         zbuf[:] = 1e6
@@ -433,7 +433,7 @@ class SoftwareRenderer:
 
         colr = self._wake_rope_light(colr, hx, hz, dist, state, cam, light)
         colr = self._rises(colr, hx, hz, state)
-        fog_density = (1.0 - light["rain"]) / 820.0 + light["rain"] / 240.0
+        fog_density = (1.0 - light["rain"]) / 820.0 + light["rain"] / 240.0 + light.get("mist", 0.0) / 250.0
         fog = np.clip(1.0 - np.exp(-dist * fog_density), 0.0, 0.72)
         fog *= comfort.fog_factor(state, dist)
         colr = colr * (1.0 - fog)[:, None] + light["horizon"] * fog[:, None]
@@ -571,7 +571,7 @@ class SoftwareRenderer:
             cone = np.clip((along - 0.78) / 0.20, 0.0, 1.0)
             fall = np.clip(1.0 - dd / 48.0, 0.0, 1.0) ** 2
             colr = colr + (cone * fall * light["night"])[:, None] * np.array([0.45, 0.38, 0.24], np.float32)
-        fog_density = (1.0 - light["rain"]) / 480.0 + light["rain"] / 220.0
+        fog_density = (1.0 - light["rain"]) / 480.0 + light["rain"] / 220.0 + light.get("mist", 0.0) / 250.0
         fog = np.clip(1.0 - np.exp(-dist * fog_density), 0.0, 1.0)
         fog *= comfort.fog_factor(state, dist)
         colr = colr * (1.0 - fog)[:, None] + light["horizon"] * fog[:, None]
@@ -638,7 +638,7 @@ class SoftwareRenderer:
             else:
                 tint_v = max(ambient, 0.45)
             tint = np.array([tint_v, tint_v, tint_v], np.float32)
-            fog = float(np.clip(1.0 - math.exp(-zz / 380.0), 0.0, 0.82))
+            fog = float(np.clip(1.0 - math.exp(-zz * (1 / 380.0 + light.get("mist", 0.0) / 250.0)), 0.0, 0.82))
             fog *= float(comfort.fog_factor(state, zz))
             if kind in ("buoy", "buoy_flag") and comfort.has_buff(state, "glow_buoys"):
                 tint = np.maximum(tint, np.array([1.3, 1.15, .85], np.float32))

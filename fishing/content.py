@@ -16,7 +16,7 @@ from .narrative import DAY_NPCS, QUEST_IDS, RIPPLE_BY_QUEST
 CONTENT_PATH = Path(__file__).with_name("assets") / "narrative_v1.json"
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
-                    "pantry.json", "dishes.json")
+                    "pantry.json", "dishes.json", "calendar.json")
 BOOK_CONTENT_PATH = CONTENT_V2_PATH / "book.json"
 BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
 _GAMEPLAY_REFS_LOADED = False
@@ -967,9 +967,90 @@ class _ContentV2Validator:
             if row.get("price") != 0 or row.get("sold_at"):
                 self.error(baits_file, where + ".recipe", "recipe bait is cooked, never sold")
 
+        self.calendar(docs, species)
         if self.errors:
             raise ContentError("\n".join(self.errors))
         return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes)
+
+    def calendar(self, docs, species):
+        filename = "calendar.json"
+        raw = self.root(docs, filename, {"schema_version", "lake_days", "legendary_windows",
+                                       "reservations", "cookout", "cookout_lines"})
+        if filename in self.unavailable_files:
+            return
+        lakes = {"briar", "cedar", "flathead", "crater", "nebula"}
+        weather = {"clear", "fair", "overcast", "drizzle", "mist", "snow_mist", "fog", "aurora"}
+        days = self.table(docs, filename, "lake_days", {"id", "lake", "weekday", "name", "band",
+                          "multiplier", "foods", "species", "zones", "weather_bias", "fireflies"})
+        windows = self.table(docs, filename, "legendary_windows", {"id", "lake", "start_hour", "end_hour",
+                             "weathers", "recent_rain", "minimum_minutes"})
+        if len(days) != 4:
+            self.error(filename, "lake_days", "expected two Lake Days per playable lake")
+        if len(windows) != 12:
+            self.error(filename, "legendary_windows", "expected all twelve legendary windows")
+        seen = set()
+        for _id, row, where in self.rows(filename, "lake_days"):
+            self.enum(filename, where + ".lake", row.get("lake"), lakes)
+            self.number(filename, where + ".weekday", row.get("weekday"), integer=True, minimum=0, maximum=5)
+            self.text(filename, where + ".name", row.get("name"))
+            self.enum(filename, where + ".band", row.get("band"), {"dawn", "day", "dusk", "night", "any"})
+            self.number(filename, where + ".multiplier", row.get("multiplier"), minimum=1, maximum=2)
+            self.id_list(filename, where + ".foods", row.get("foods"), _SPECIES_FOODS)
+            # Future lake species and zones need not be playable yet.
+            for key in ("species", "zones"):
+                values = row.get(key)
+                if not isinstance(values, list) or any(not isinstance(v, str) or not v for v in values):
+                    self.error(filename, where + "." + key, "expected a list of stable IDs")
+            self.enum(filename, where + ".weather_bias", row.get("weather_bias"), weather | {""})
+            if type(row.get("fireflies")) is not bool:
+                self.error(filename, where + ".fireflies", "expected a boolean")
+            if row.get("lake") in ("briar", "cedar") and "species.json" not in self.unavailable_files:
+                for sid in row.get("species", []) if isinstance(row.get("species"), list) else []:
+                    self.enum(filename, where + ".species", sid, species)
+                for zone in row.get("zones", []) if isinstance(row.get("zones"), list) else []:
+                    self.enum(filename, where + ".zones", zone, {"open", "rocks", "flats", "deep", "lilies", "cypress", "inlet"})
+            pair = (str(row.get("lake")), str(row.get("weekday")))
+            if pair in seen:
+                self.error(filename, where, "duplicate lake/weekday")
+            seen.add(pair)
+        for lake in ("briar", "cedar"):
+            if sum(row.get("lake") == lake for row in days.values()) != 2:
+                self.error(filename, "lake_days", f"expected two specials for {lake}")
+        for lake in lakes:
+            if sum(row.get("lake") == lake for row in windows.values()) < 2:
+                self.error(filename, "legendary_windows", f"expected at least two windows for {lake}")
+        reservations = raw.get("reservations")
+        if not isinstance(reservations, list):
+            self.error(filename, "reservations", "expected a list")
+            reservations = []
+        rows = [(row, where) for _id, row, where in self.rows(filename, "legendary_windows")]
+        for index, row in enumerate(reservations):
+            where = f"reservations[{index}]"
+            if not isinstance(row, dict) or set(row) != {"lake", "start_hour", "end_hour", "weathers"}:
+                self.error(filename, where, "expected lake, start_hour, end_hour and weathers")
+                continue
+            rows.append((row, where))
+        for row, where in rows:
+            self.enum(filename, where + ".lake", row.get("lake"), lakes)
+            self.number(filename, where + ".start_hour", row.get("start_hour"), integer=True, minimum=0, maximum=23)
+            self.number(filename, where + ".end_hour", row.get("end_hour"), integer=True, minimum=0, maximum=24)
+            conditions = self.id_list(filename, where + ".weathers", row.get("weathers"), weather)
+            if where.startswith("reservations") and not conditions:
+                self.error(filename, where + ".weathers", "reservation must choose at least one weather")
+            if "recent_rain" in row and type(row["recent_rain"]) is not bool:
+                self.error(filename, where + ".recent_rain", "expected a boolean")
+            if "minimum_minutes" in row:
+                self.number(filename, where + ".minimum_minutes", row["minimum_minutes"], integer=True, minimum=120, maximum=240)
+            if row.get("start_hour") == row.get("end_hour"):
+                self.error(filename, where, "weather window must have positive duration")
+        cookout = raw.get("cookout")
+        if cookout != {"weekday": 6, "start_hour": 17, "end_hour": 20, "gift_count": 1}:
+            self.error(filename, "cookout", "expected Sunday 17–20 and one pantry gift")
+        lines = raw.get("cookout_lines")
+        if not isinstance(lines, dict) or set(lines) != NPC_IDS:
+            self.error(filename, "cookout_lines", "expected one line per current lake cat")
+        elif any(not isinstance(line, str) or not line.strip() for line in lines.values()):
+            self.error(filename, "cookout_lines", "expected non-empty chat lines")
 
 
 def validate_content_v2(raw_files, *, unavailable_files=()) -> GameplayContent:

@@ -257,15 +257,25 @@ non-Treasured fish and says so. It never discards silently.
 
 - Existing weather blending stays. New lakes add **snow mist** (Flathead),
   **caldera fog** (Crater) and **aurora** (Nebula) as weather states.
-- The game uses a 7-day week (day 0 = Monday). The journal shows the week.
+- The game uses a 7-day week (day 0 = Monday), rolling over at 06:00 with
+  the existing NPC game-day schedule. The journal’s Week tab shows all seven
+  days, Lake Days and a paginated hourly forecast. Watch cards show the next
+  weather opportunity without claiming that story/equipment gates are met.
 - **Lake Days:** each lake has two weekday specials in `03 §8` (e.g. Cedar's
   Thursday *Shad Run*: blue and channel catfish ×1.3 at night).
 - **Sunday Cookout (17:00–20:00, every lake):** all of that lake's cats gather at
   the landing. Bring any one fish to share for a pantry gift and a chat line from
-  each friend. Missing a cookout costs nothing; there is another next week.
+  each friend. The Kitchen menu offers an explicit fish choice and confirmation:
+  one ordinary fish (including non-food species), for one host-specialty or
+  Kibble pantry item, once per lake that Sunday. Shiny, Treasured, protected and
+  legendary fish cannot be shared. A full gift slot spends nothing. Chat lines
+  can be heard without sharing. No social event or gift replays offline.
+  Missing a cookout costs nothing; there is another next week.
 - **Weather invitation:** at most once per game day, Bot points out a nearby zone
   with an active favorable condition and offers to mark it. If nothing is
-  favorable, he says nothing.
+  favorable, he says nothing. Automatic invitations run only after active world
+  time advances. The manual kitchen request shares the daily allowance;
+  Freshwater Tacos retain their one extra invitation that day.
 
 ---
 
@@ -639,7 +649,7 @@ Existing keys are unchanged. New keys:
 | Z | Y (hold) | Catnap |
 | G | LB | Use the active Bot tool |
 | K | — (via menu) | Galley (on galley boats, anchored) |
-| J then A/D | D-pad | Journal pages: Fish → **Book** → Ripples & Keepsakes → Story → Watch cards |
+| J then A/D | D-pad | Journal pages: Fish → **Book** → Ripples & Keepsakes → Story → Watch cards → Week |
 
 Gamepad support is new (SDL GameController). Left stick: steer and throttle
 lever. RT/LT: throttle up and down. A = E, B = back/Esc, X = F, Y (tap) = B (Bot),

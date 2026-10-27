@@ -11,7 +11,7 @@ SPOIL_HOURS = 13.0
 DOZEN = 12
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 _CONTENT_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
-                  "pantry.json", "dishes.json")
+                  "pantry.json", "dishes.json", "calendar.json")
 
 
 def _unique_json_keys(pairs):
@@ -48,6 +48,49 @@ def _validate_content_v2_files(raw_files: dict) -> None:
 
 
 _validate_content_v2_files(CONTENT_V2_RAW)
+
+
+@dataclass(frozen=True)
+class LakeDay:
+    id: str
+    lake: str
+    weekday: int
+    name: str
+    band: str
+    multiplier: float
+    foods: tuple[str, ...]
+    species: tuple[str, ...]
+    zones: tuple[str, ...]
+    weather_bias: str
+    fireflies: bool
+
+
+@dataclass(frozen=True)
+class WeatherWindow:
+    id: str
+    lake: str
+    start_hour: int
+    end_hour: int
+    weathers: tuple[str, ...]
+    recent_rain: bool
+    minimum_minutes: int
+
+
+@dataclass(frozen=True)
+class WeatherReservation:
+    lake: str
+    start_hour: int
+    end_hour: int
+    weathers: tuple[str, ...]
+
+
+CALENDAR_DATA = CONTENT_V2_RAW["calendar.json"]
+LAKE_DAYS = tuple(LakeDay(**{**row, **{key: tuple(row[key]) for key in
+                         ("foods", "species", "zones")}}) for row in CALENDAR_DATA["lake_days"])
+LEGENDARY_WINDOWS = {row["id"]: WeatherWindow(**{**row, "weathers": tuple(row["weathers"])})
+                     for row in CALENDAR_DATA["legendary_windows"]}
+WEATHER_RESERVATIONS = tuple(WeatherReservation(**{**row, "weathers": tuple(row["weathers"])})
+                             for row in CALENDAR_DATA["reservations"])
 
 _TIER_DEFAULTS = {
     row["tier"]: {key: row[key] for key in ("rate", "trophy")}

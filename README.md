@@ -230,7 +230,7 @@ Losing window focus clears pending input and menu repeat, while held steering
 and throttle still follow the current keyboard state.
 
 **J** opens the inherited book, with **Fish**, **Book**, **Ripples & Keepsakes**,
-**Story** and **Watch** tabs. Use **A/D** (or gamepad left/right) for tabs,
+**Story**, **Watch** and **Week** tabs. Use **A/D** (or gamepad left/right) for tabs,
 **W/S** (or gamepad up/down) to choose, and **Enter/A** to open a fish page or
 turn its notes. You can also click tabs, fish, the page controls and Close;
 the mouse wheel browses entries. Unknown fish keep their folk names and
@@ -273,3 +273,18 @@ and rails continue back past the camera and fill the bottom of the view.
 Five baits: nightcrawlers, chicken liver, cut shad, live minnows, crawfish. The 36 fish each have their own size range, value, bait preferences, habitat, activity period, and journal record. The journal scrolls through the full collection and shows fishing notes before the first catch. Sell fish at the landing and spend it on bait, lines, boats, fuel, motors, livewells, a bait box, a depth finder, a spotlight, and paint. A color you own can be worn again for free.
 
 The collection includes bluegill; yellow, black, and brown bullhead; black and white crappie; common carp; freshwater drum; channel, blue, and flathead catfish; largemouth, smallmouth, and spotted bass; white and yellow bass; hybrid striped and striped bass; longnose, spotted, shortnose, and alligator gar; smallmouth, bigmouth, and black buffalo; redear, green, redbreast, and longear sunfish; warmouth; bowfin; blue sucker; golden shiner; gizzard and threadfin shad; and chain pickerel.
+
+
+The **Week** tab shows the active lake's seven-day weather plan, Lake Days and
+Sunday cookout. Days begin at 6 AM, with Monday as day zero. Tuesday dawn
+panfish and Friday night catfish have Briar bonuses; Cedar has Thursday night
+blue/channel catfish and Saturday daytime bass in open water or rocks. Forecasts
+survive reloading and lake travel, and Watch cards show the next rare-weather
+opportunity (story and gear requirements still apply).
+
+On Sunday from 5–8 PM, meet all six current lake friends at the landing. Open
+**Kitchen**, choose **Share a fish at the Sunday cookout**, then confirm a fish
+for one pantry gift per lake that Sunday. Chat with each friend from the same
+menu. Shiny, Treasured, protected and legendary fish stay safe. Bot automatically
+marks nearby favorable water at most once per day; the kitchen's manual weather
+request shares that allowance, with the existing tacos exception.
