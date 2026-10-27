@@ -111,8 +111,9 @@ class LakeFrameworkChecks(unittest.TestCase):
                 self.assertTrue(all(world.hull_clear(x, z, state.yaw, boat) for boat in BOATS))
             self.assertEqual(world.zone_at(400, 0), "shore")
             self.assertFalse(world.navigable(400, 0))
-            self.assertEqual(LAKE_SPECIES_IDS[lake], ())
-            self.assertTrue(all(rate == 0 for rate in species_rates("open", "worm", 12, "clear", 4, lake).values()))
+            self.assertEqual(len(LAKE_SPECIES_IDS[lake]), 34)
+            rates = species_rates("open", "worm", 12, "clear", 4, lake)
+            self.assertTrue(all(rate == 0 for sid, rate in rates.items() if sid not in LAKE_SPECIES_IDS[lake]))
 
     def test_reed_passage_keeps_original_anchors_terrain_and_zone_indices(self):
         world = self.briar

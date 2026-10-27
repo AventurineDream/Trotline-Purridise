@@ -41,7 +41,6 @@ class TitleBrandingChecks(unittest.TestCase):
             )
         self.assertEqual(little_briar_strings, {
             "Little Briar Lake",
-            "Find this one on Little Briar.",
         })
         verify_source = (ROOT / "fishing" / "verify.py").read_text()
         self.assertIn('Platform(1280,720,f"{GAME_TITLE} — visual check"',

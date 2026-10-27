@@ -14,8 +14,9 @@ The landing's **Lakes** tab lists all five waters. Briar and Cedar remain open
 from the start. Completing chapter 2 opens Flathead, chapter 3 opens Crater,
 and chapter 4 opens Nebula; pull every line and return to the landing before
 travelling. The three new waters currently use driveable flat maps while their
-landscapes, fish and neighbors are developed. Briar's chart now includes the
-Reed Passage. [Implementation and captures](docs/issue-51/README.md).
+landscapes and neighbors are developed. All 144 standard fish are now authored
+and catchable: 36 each on Briar and Cedar, and 34 on each new water. Briar's chart now includes the
+Reed Passage. [Lake framework](docs/issue-51/README.md) · [Fish data and captures](docs/issue-52/README.md).
 
 | | |
 | --- | --- |
@@ -96,7 +97,7 @@ That makes a `.venv` if you don't have one, installs the dependencies, and start
 ./play.sh --smoke             # real window, sailing, purchases, weather, and lake changes
 ```
 
-The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. Its full 1,200-frame run checks observed coverage of both lakes, all four boats, seven shop tabs, four help pages, 36 fish and 12 quest journal entries, and dialogue for all twelve givers in four quest states. It also exercises weather fades, fuel and battery gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry and finite floating-point scene colors are checked as well. Results depend on the graphics driver and the other applications running on the computer.
+The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. Its full 1,200-frame run checks observed coverage of both lakes, all four boats, seven shop tabs, four help pages, 144 fish and 12 quest journal entries, and dialogue for all twelve givers in four quest states. It also exercises weather fades, fuel and battery gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry and finite floating-point scene colors are checked as well. Results depend on the graphics driver and the other applications running on the computer.
 
 During play the window and lake share one OpenGL context. The window check reads the pixels submitted to the actual window and verifies that presenting a frame does not corrupt subsequent lake frames. Headless screenshots use a separate standalone context.
 
@@ -161,9 +162,9 @@ The bait picker scrolls through all seventeen baits. A weather invitation marks
 currently favorable nearby water on the chart for two game hours; Bot stays
 quiet when no such water is nearby.
 
-## Two lakes
+## Five waters
 
-**Little Briar** retains its familiar shoreline, landing, and fishing grounds. All 36 fish in the game collection can be found here.
+**Little Briar** retains its familiar shoreline, landing, and fishing grounds. Its 36-species collection can be found here.
 
 **Cedar Creek Lake** recreates the Texas reservoir's branching shoreline, islands, and depth contours from the [Texas Water Development Board's 2017 survey](https://www.twdb.texas.gov/surfacewater/surveys/completed/index.asp). Horizontal distances are compressed tenfold for play; depth stays in metres and is capped at about 53 feet. The landing is placed near the County Public Ramp on Caney Creek. The shoreline and depth grids are shared by graphics, the chart, fishing, and collisions.
 
@@ -277,7 +278,7 @@ the dock crossbeam, and solid rocks and stumps. Turns and movement are checked
 in short steps, so the bow and corners stay out of obstacles. The hull sides
 and rails continue back past the camera and fill the bottom of the view.
 
-Five baits: nightcrawlers, chicken liver, cut shad, live minnows, crawfish. The 36 fish each have their own size range, value, bait preferences, habitat, activity period, and journal record. The journal scrolls through the full collection and shows fishing notes before the first catch. Sell fish at the landing and spend it on bait, lines, boats, fuel, motors, livewells, a bait box, a depth finder, a spotlight, and paint. A color you own can be worn again for free.
+Nine ordinary baits: nightcrawlers, chicken liver, cut shad, live minnows, crawfish, dough balls, trout roe, ember grubs and star-dust. The 144 fish each have their own size range, value, bait preferences, habitat, activity period, and journal record. The journal scrolls through the full collection and shows fishing notes before the first catch. Sell fish at the landing and spend it on bait, lines, boats, fuel, motors, livewells, a bait box, a depth finder, a spotlight, and paint. A color you own can be worn again for free.
 
 The collection includes bluegill; yellow, black, and brown bullhead; black and white crappie; common carp; freshwater drum; channel, blue, and flathead catfish; largemouth, smallmouth, and spotted bass; white and yellow bass; hybrid striped and striped bass; longnose, spotted, shortnose, and alligator gar; smallmouth, bigmouth, and black buffalo; redear, green, redbreast, and longear sunfish; warmouth; bowfin; blue sucker; golden shiner; gizzard and threadfin shad; and chain pickerel.
 

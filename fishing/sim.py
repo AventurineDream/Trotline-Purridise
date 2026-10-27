@@ -57,6 +57,7 @@ from .weather import wind_at
 from . import calendar
 from .calendar import weather_at
 from .lakes import LAKES
+from .data import weight_string
 from .narrative import NarrativeState, deployment_id
 from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, confirm_shiny, lose_shiny,
                    promote_title,
@@ -803,7 +804,7 @@ class State:
             if len(items) == 1:
                 sp, weight = items[0]
                 name = SPECIES_BY_ID[sp].name.lower()
-                self.toast(f"A {name}, {weight:.1f} lb, took the {label.lower()} line.")
+                self.toast(f"A {name}, {weight_string(weight)}, took the {label.lower()} line.")
             else:
                 self.toast(f"{len(items)} fish took the {label.lower()} line.")
         if len(self._tired) == 1:
@@ -812,7 +813,7 @@ class State:
             self.toast(f"{len(self._tired)} fish are getting tired. About four hours left.")
         if self._records:
             weight, name = max(self._records)
-            self.toast(f"Personal best. {weight:.1f} lb {name.lower()}.")
+            self.toast(f"Personal best. {weight_string(weight)} {name.lower()}.")
         if spoiled:
             self.toast(self._spoilage_copy(spoiled))
         self._tired = []

@@ -16,6 +16,7 @@ from . import savepaths
 from .gamepad import default_key_bindings
 from .comfort import DEFAULT_NEEDS
 from .narrative import QUEST_IDS
+from .data import SPECIES_BY_ID
 from .savepaths import (UnsupportedSaveVersionError, book_stage,
                         load_game_save, merge_v2_defaults)
 from .sim import State
@@ -41,6 +42,11 @@ class SaveV2Checks(unittest.TestCase):
 
     @staticmethod
     def expected_migrated_value(key, value):
+        if key == "journal" and isinstance(value, dict):
+            journal = dict(value)
+            for sid in SPECIES_BY_ID:
+                journal.setdefault(sid, {"count": 0, "best": 0.0, "zone": "", "bait": "", "band": ""})
+            return journal
         if key != "lines" or not isinstance(value, list):
             return value
         lines = []

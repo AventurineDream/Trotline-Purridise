@@ -254,11 +254,15 @@ The nine ordinary baits and eight recipe definitions are loaded from
 its dozen must fit after those inputs are removed. Recipe baits are cooked,
 never sold. The original five bait-match maps are unchanged. For the current
 36-species collection, dough is a universal 0.25 secondary match, roe uses the
-minnow matches, grubs use the worm matches, and stardust uses the existing
-fallback. Later species tables may add their own matches. Every recipe uses
+minnow matches with explicit 0.6 secondary matches for gizzard and threadfin
+shad, grubs use the worm matches, and stardust uses the existing fallback. The
+two roe matches let those legacy shad reach the catchability threshold without
+changing their species rows or any of the original five bait profiles. Roe can
+be bought at Flathead or Crater and carried back. Later species tables may add their own matches. Every recipe uses
 `max(parent_a_match, parent_b_match)` for every species, including fallback.
 
-Briar and Cedar are the currently available lakes. Recipes needing roe, ember
+All five waters now have their ordinary fish rosters; the three new landscapes
+remain flat systems maps. Recipes needing roe, ember
 grubs or stardust depend on stock at the later lakes; later specialty pantry
 items likewise arrive with their hosts. Their recipes are defined here so the
 matching lake/content tickets can enable them without changing cooking rules.

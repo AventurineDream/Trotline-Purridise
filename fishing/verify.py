@@ -132,6 +132,9 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
     try:
         graphics_checks(renderer,world)
         modes = ("play","map","shop","setbait","check","journal","well","pause","help","title","dialogue")
+        # Two journal blocks per cycle keep all 144 fish and twelve quests
+        # reachable in the existing 1,200-frame coverage run.
+        mode_cycle = (*modes[:6], "journal", *modes[6:])
         locations = ((-90,-40,-2.3),(300,30,math.pi/2),(40,10,-math.pi/2),(0,0,0))
         minutes = (0,180,360,756,900,3*1440+600,3*1440+1050,3*1440+1110)
         frame_ms,render_ms,samples = [],[],[]
@@ -173,7 +176,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             state.game_minutes = minutes[(i//90)%len(minutes)] + (i%90)*12/30
             state.speed = 1.8
             state.anchored = False
-            panel.mode = modes[(i//20)%len(modes)]
+            panel.mode = mode_cycle[(i//20)%len(mode_cycle)]
             # Advance within each mode independently. Coupling selectors to
             # the outer frame block silently skipped half of the old menus.
             visit = mode_frames[panel.mode]
@@ -265,7 +268,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             "coverage_complete":coverage_complete,
             "checks":["fixed anchored depth","matching camera projections","eleven UI modes, including dialogue",
                       "both lakes with repeated renderer release and rebuild","all four boats and raised sail",
-                      "seven shop tabs, four help pages, 36 fish and 12 quest journal entries",
+                      f"seven shop tabs, four help pages, {len(SPECIES)} fish and 12 quest journal entries",
                       "twelve dialogue givers and four saved quest statuses","changing fuel and battery gauges",
                       "clear, fair, night, drizzle and 12x midnight fades","five heavy lines and fifteen buoys",
                       "all paint colors","changing look and steering","bounded text cache"],

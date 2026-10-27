@@ -29,7 +29,7 @@ class FishMeshChecks(unittest.TestCase):
 
     def test_every_existing_species_has_an_anatomical_look(self):
         species = load_content_v2().species
-        self.assertEqual(len(species), 36)
+        self.assertEqual(len(species), 144)
         self.assertTrue(all(isinstance(row.get("look"), dict) for row in species.values()))
         self.assertGreaterEqual(fish_look("channel")["barbels"], 4)
         self.assertGreater(fish_look("alligator_gar")["snout"], 0.5)
@@ -122,10 +122,10 @@ class FishMeshChecks(unittest.TestCase):
         self.assertLess(card_cache_limit_bytes(), 25_000_000)
         self.assertLessEqual(cache_bytes(), 25_000_000)
 
-    def test_contact_sheet_contains_normal_and_shiny_cards_for_all_36_species(self):
+    def test_contact_sheet_contains_normal_and_shiny_cards_for_all_144_species(self):
         sheet = fish_card_contact_sheet()
 
-        self.assertEqual(sheet.shape, (8 * 80, 9 * THUMBNAIL_SIZE[0], 3))
+        self.assertEqual(sheet.shape, (32 * 80, 9 * THUMBNAIL_SIZE[0], 3))
         self.assertGreater(int(sheet.std()), 10)
 
 
