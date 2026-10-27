@@ -64,6 +64,22 @@ the Cedar NPZ missing from this source export; GitHub's complete repository
 retains blob `c9df54cbbece17a4b9574ad9bf0ad86a0902d624`. No replacement asset
 or test suppression is added. Full push `gameplay-tests` remains required.
 
+## Save recovery after the island arrives
+
+Loading an older Crater save checks deployed rope segments for newly dry land.
+A displaced rope moves into the clear launch approach, preserving its length,
+deployment ID, mixed baits, hooks, fish, quest history and unknown metadata.
+Only coordinates and the rope's current habitat change; the catch's original
+observations stay intact. Affected Bot target coordinates follow the same ID.
+Wet deployments stay where the player placed them, and saving/reloading is
+idempotent. Inventory, livewell capacity and fishing RNG are not used for rescue.
+
+Four persistence regressions cover a buried mixed line with a shiny treasured
+fish and future fields, a crossing with both endpoints still wet, an untouched
+valid deployment, and six recovered lines on every current boat. Each boat can
+reach and pull every rope and then travel away from Crater. This addresses the
+P1 save trap raised on the initial PR95 review.
+
 ## Captures and budgets
 
 ```sh

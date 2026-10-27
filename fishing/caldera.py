@@ -85,3 +85,70 @@ def thermal_faces(state, world):
                  for theta,r in ((a,radius),(b,radius),(b,radius+.04),(a,radius+.04))]
             out.append(_face(pts,(0,1,0),(.42,.52,.73)))
     return out
+
+
+def recover_displaced_lines(state, world):
+    """Move ropes buried by the new island into the clear launch approach.
+
+    Keep the deployed object, ID, hooks, catches and unknown metadata intact.
+    The geometry check makes this safe to repeat after saving; wet lines stay
+    exactly where the player placed them. No fishing RNG or inventory is used.
+    """
+    from .sim import _point_seg
+    sl=world.slip
+    fx,fz=-sl.ix,-sl.iz
+    yaw=math.atan2(fx,fz)
+    moved=0
+    offsets=(0, *[sign*n for n in range(12,85,12) for sign in (1,-1)])
+    for line in state.lines:
+        coordinates=(line.x0,line.z0,line.x1,line.z1)
+        if not all(math.isfinite(value) for value in coordinates):
+            continue
+        length=math.hypot(line.x1-line.x0,line.z1-line.z0)
+        fractions=np.linspace(0,1,min(1024,max(8,math.ceil(length)+1)))
+        x=line.x0+(line.x1-line.x0)*fractions
+        z=line.z0+(line.z1-line.z0)*fractions
+        dry=(world.shore_sd(x,z)>=0) & ~sl.contains(x,z)
+        if not bool(np.any(dry)):
+            continue
+        replacement=None
+        for a in (-85,-135,-185,-235):
+            for side in offsets:
+                x0,z0=sl.world(a,side)
+                x1,z1=x0+fx*length,z0+fz*length
+                samples=[(x0+(x1-x0)*t,z0+(z1-z0)*t) for t in fractions]
+                if not all(world.hull_clear(px,pz,yaw,state.boat_id) for px,pz in samples):
+                    continue
+                if any(_point_seg(px,pz,other.x0,other.z0,other.x1,other.z1)<8
+                       for other in state.lines if other is not line for px,pz in samples):
+                    continue
+                # Approach along the already clear central launch, then move
+                # sideways beyond the marina before running the relocated rope.
+                route=(sl.world(-55,0),sl.world(a,0),(x0,z0))
+                safe=True
+                for start,end in zip(route,route[1:]):
+                    heading=math.atan2(end[0]-start[0],end[1]-start[1])
+                    steps=max(2,math.ceil(math.dist(start,end)/2)+1)
+                    for t in np.linspace(0,1,steps):
+                        px,pz=start[0]+(end[0]-start[0])*t,start[1]+(end[1]-start[1])*t
+                        if not world.hull_clear(px,pz,heading,state.boat_id):
+                            safe=False
+                            break
+                    if not safe:
+                        break
+                if safe:
+                    replacement=(x0,z0,x1,z1)
+                    break
+            if replacement is not None:
+                break
+        if replacement is None:
+            continue
+        line.x0,line.z0,line.x1,line.z1=replacement
+        line.zone=world.zone_at((line.x0+line.x1)/2,(line.z0+line.z1)/2)
+        if state.bot_target_line_id==line.line_id:
+            state.bot_tx,state.bot_tz=line.point_at(0)
+        moved+=1
+    if moved:
+        noun='line' if moved==1 else 'lines'
+        state.toast(f'The changed shoreline moved {moved} {noun} to clear water by the dock.')
+    return moved
