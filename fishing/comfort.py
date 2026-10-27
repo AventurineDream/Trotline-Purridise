@@ -4,7 +4,8 @@ from copy import deepcopy
 import math
 
 from .book import remember_dream_clue
-from .data import LAKE_RATE_MULTIPLIERS, SPECIES, ZONE_MATCH, zone_mult
+from .data import (DISHES, LAKE_RATE_MULTIPLIERS, PANTRY, PANTRY_CAPACITY,
+                   SPECIES, ZONE_MATCH, zone_mult)
 
 MODES = ("cozy", "old_salt")
 NAP_MINUTES = 120
@@ -13,6 +14,7 @@ PROMPT_INTERVAL = 600.0
 SNOOZE_SECONDS = 1800.0
 DEFAULT_NEEDS = {
     "awake_h": 0.0, "since_meal_h": 0.0, "rested_until": None,
+    "meal_hours": 24.0,
     "last_prompt_real_s": 0.0, "active_real_s": 0.0, "prompt_shown": False,
     "prompted": {"energy": False, "hunger": False},
     "snooze_until": {"energy": 0.0, "hunger": 0.0},
@@ -46,6 +48,7 @@ def normalize_needs(v2):
         needs[key] = number(needs[key])
     if needs["rested_until"] is not None:
         needs["rested_until"] = number(needs["rested_until"], None)
+    needs["meal_hours"] = 48.0 if needs.get("meal_hours") == 48 else 24.0
     needs["prompt_shown"] = needs["prompt_shown"] is True
     for key in ("prompted", "snooze_until"):
         if not isinstance(needs[key], dict):
@@ -94,7 +97,8 @@ def doze_due(v2):
 
 
 def speed_factor(v2):
-    peckish = mode(v2) == "old_salt" and number(_view(v2).get("since_meal_h")) > 24.0
+    limit = 48.0 if _view(v2).get("meal_hours") == 48 else 24.0
+    peckish = mode(v2) == "old_salt" and number(_view(v2).get("since_meal_h")) > limit
     return .8 if peckish else 1.0
 
 
@@ -103,10 +107,11 @@ def rested(v2, active_game_minutes):
     return until > active_game_minutes
 
 
-def meal(v2):
+def meal(v2, *, hours=24):
     """Kitchen/snack hook; a meal clears hunger without changing any buff."""
     needs = normalize_needs(v2)
     needs["since_meal_h"] = 0.0
+    needs["meal_hours"] = 48.0 if hours == 48 else 24.0
     needs["prompted"]["hunger"] = False
     needs["snooze_until"]["hunger"] = 0.0
 
@@ -145,10 +150,11 @@ def snooze(v2, kind):
         needs["snooze_until"][kind] = needs["active_real_s"] + SNOOZE_SECONDS
 
 
-def dream_clue(state, world):
+def dream_clue(state, world, *, extra=False):
     """One reproducible, previously unoffered habitat lead on this lake."""
     book = state.v2["book"]
-    if book.get("dream_clue") is not None:
+    unread = book.get("dream_clue")
+    if unread is not None and not extra:
         return None
     pages = book.get("species", {})
     candidates = []
@@ -172,7 +178,18 @@ def dream_clue(state, world):
     clue = {"species": sid, "lake_id": world.id, "zone": zone,
             "teller": "Bot's dream",
             "text": f"I dreamed of {species.folk_name or species.name} near {world.zone_name(zone).lower()}."}
-    return clue if remember_dream_clue(book, clue) else None
+    if unread is not None:
+        book["dream_clue"] = None
+    if not remember_dream_clue(book, clue):
+        book["dream_clue"] = unread
+        return None
+    if unread is not None:
+        queue = book.setdefault("dream_queue", [])
+        if not isinstance(queue, list):
+            queue = book["dream_queue"] = []
+        queue.append(clue)
+        book["dream_clue"] = unread
+    return clue
 
 
 def finish_nap(state, world, eligible):
@@ -181,7 +198,163 @@ def finish_nap(state, world, eligible):
         needs["awake_h"] = 0.0
         needs["prompted"]["energy"] = False
         needs["snooze_until"]["energy"] = 0.0
+    bonus = has_buff(state, "extra_dream")
+    if bonus:
+        consume_buff(state)
     if eligible:
         needs["rested_until"] = state.narrative.active_play_game_minutes + RESTED_MINUTES
-        return dream_clue(state, world)
+    if eligible or bonus:
+        return dream_clue(state, world, extra=bonus)
+    return None
+
+
+def normalize_food(v2):
+    pantry = v2.get("pantry")
+    if not isinstance(pantry, dict):
+        pantry = v2["pantry"] = {}
+    for item_id in PANTRY:
+        value = pantry.get(item_id, 0)
+        pantry[item_id] = min(PANTRY_CAPACITY, max(0, value)) if type(value) is int else 0
+
+
+def active_buff(state):
+    """Read-only effect query; unknown future buffs remain intact in saves."""
+    buff = state.v2.get("buff")
+    if not isinstance(buff, dict):
+        return None
+    dish_id = buff.get("dish")
+    dish = DISHES.get(dish_id) if isinstance(dish_id, str) else None
+    if dish is None:
+        return None
+    if dish.minutes:
+        if number(buff.get("until_active_minutes")) <= state.narrative.active_play_game_minutes:
+            return None
+    elif number(buff.get("charges")) <= 0:
+        return None
+    if dish.effect == "weather_invitation" and buff.get("day") != int(state.game_minutes // 1440):
+        return None
+    return dish
+
+
+def has_buff(state, effect):
+    dish = active_buff(state)
+    return dish is not None and dish.effect == effect
+
+
+def serve_dish(state, dish):
+    meal(state.v2, hours=dish.value if dish.effect == "glow_buoys" else 24)
+    state.v2["buff"] = {"dish": dish.id, "charges": dish.charges,
+                        "until_active_minutes": state.narrative.active_play_game_minutes + dish.minutes,
+                        "day": int(state.game_minutes // 1440)}
+    state.toast(dish.name + ". " + dish.blurb)
+
+
+def consume_buff(state):
+    buff = state.v2.get("buff")
+    if isinstance(buff, dict):
+        buff["charges"] = max(0, int(number(buff.get("charges"))) - 1)
+        if not buff["charges"]:
+            state.v2["buff"] = None
+
+
+def fuel_factor(state):
+    dish = active_buff(state)
+    return dish.value if dish and dish.effect == "fuel_saver" else 1.0
+
+
+def scout_range_factor(state, weather):
+    dish = active_buff(state)
+    return dish.value if dish and dish.effect == "steady_scout" and weather != "snow_mist" else 1.0
+
+
+def gust_factor(state, weather):
+    return 0.0 if weather == "snow_mist" and has_buff(state, "steady_scout") else 1.0
+
+
+def fog_radius(state):
+    dish = active_buff(state)
+    return dish.value if dish and dish.effect == "clear_fog" else 0.0
+
+
+def fog_factor(state, distance):
+    import numpy as np
+    radius = fog_radius(state)
+    return np.where(np.asarray(distance) <= radius, .25, 1.) if radius else 1.
+
+
+def haul_factor(state):
+    dish = active_buff(state)
+    return dish.value if dish and dish.effect == "quick_haul" else 1.0
+
+
+def begin_haul(state, line):
+    """Snapshot one nonempty check's perk before spending a saved charge."""
+    dish = active_buff(state)
+    if dish is None or not line.hooks or dish.effect not in {"quick_haul", "keep_bait", "shiny_credit"}:
+        return 1.0
+    if dish.effect == "keep_bait":
+        for hook in line.hooks:
+            if hook.catch is None:
+                hook.baited = True
+    if dish.effect == "shiny_credit":
+        from .book import tracker_unlocked
+        book = state.v2["book"]
+        tracked = book.get("tracked")
+        if tracker_unlocked(state.journal, tracked):
+            for hook in line.hooks:
+                catch = hook.catch
+                if (catch is not None and catch.species == tracked and not catch.shiny
+                        and not catch.legendary and not catch.extra_fields.get("picnic_pity_credited")):
+                    page = book.setdefault("species", {}).setdefault(tracked, {})
+                    page["since_shiny"] = int(number(page.get("since_shiny"))) + int(dish.value) - 1
+                    catch.extra_fields["picnic_pity_credited"] = True
+    consume_buff(state)
+    return dish.value if dish.effect == "quick_haul" else 1.0
+
+
+def weather_spot(state):
+    """Find nearby water favored by the current weather and time, or stay silent."""
+    from .data import band_of, hour_of_day, weather_at, weather_mult, time_mult
+    from .sim import species_rates
+    world = state._world
+    if world is None:
+        return None
+    hour, weather = hour_of_day(state.game_minutes), weather_at(state.game_minutes)
+    candidates = []
+    for zone, x, z, _radius in world.zones:
+        if math.hypot(x - state.x, z - state.z) > 300 or zone in ('shore', 'landing'):
+            continue
+        depth = float(world.depth(x, z))
+        if depth <= 0:
+            continue
+        rates = species_rates(zone, state.preferred_bait, hour, weather, depth, world.id)
+        favorable = [sp for sp in SPECIES if weather_mult(sp.id, weather) > 1
+                     and time_mult(sp.pref_time, hour) == 1 and rates.get(sp.id, 0) > .004]
+        if favorable:
+            candidates.append((sum(rates[sp.id] for sp in favorable), zone, x, z))
+    if not candidates:
+        return None
+    _rate, zone, x, z = max(candidates)
+    return {'lake_id': world.id, 'zone': zone, 'x': float(x), 'z': float(z),
+            'band': band_of(hour), 'until_game_minutes': state.game_minutes + 120}
+
+
+def weather_invitation(state):
+    """Offer a favorable-water mark once a day, plus the tacos' one extra."""
+    calendar = state.v2["calendar"]
+    day = int(state.game_minutes // 1440)
+    used = int(number(calendar.get("invitations_used"))) if calendar.get("invitation_day") == day else 0
+    bonus = has_buff(state, "weather_invitation")
+    if used >= 1 + int(bonus):
+        return "Today's weather invitations have been used."
+    spot = weather_spot(state)
+    if spot is None:
+        return None
+    note = f"Bot: The {state._world.zone_name(spot['zone']).lower()} is having a good {spot['band']}. I've marked it on your chart."
+    calendar['invitation_mark'] = spot
+    calendar['invitation_day'], calendar['invitations_used'] = day, used + 1
+    if used and bonus:
+        consume_buff(state)
+    state.narrative.record_bot_note(note)
+    state.toast(note)
     return None

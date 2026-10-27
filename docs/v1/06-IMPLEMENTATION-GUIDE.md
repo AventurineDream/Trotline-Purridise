@@ -141,12 +141,14 @@ their new ids, rather than starting a second ledger.
     "profile": {"bot_name": "Copper-316", "shell": "tin", "shells": ["tin"],
                 "tools": [], "collar": {"stage": "none", "knot": null, "visible": true}},
     "needs": {"awake_h": 0.0, "since_meal_h": 0.0, "rested_until": null,
+              "meal_hours": 24.0,
               "last_prompt_real_s": 0, "active_real_s": 0,
               "prompt_shown": false,
               "prompted": {"energy": false, "hunger": false},
               "snooze_until": {"energy": 0, "hunger": 0}},
     "buff": null,
-    "pantry": {"herbs": 0},
+    "pantry": {"herbs": 0, "pecan": 0, "huckleberries": 0,
+               "salt": 0, "moonmilk": 0, "kibble": 0},
     "recipes": [], "dishes_known": [],
     "boat_extras": {"<boat id>": {"paint": {}}},
     "book": {"species": {"bluegill": {"found": [], "shiny": 0, "since_shiny": 3}},
@@ -251,10 +253,47 @@ build and remains serialized until a recognized boat is selected.
   `prompted` and `snooze_until` keep per-need offer/snooze state. Menus, focus
   loss, the fade and time offline do not consume snooze time.
 - `comfort.meal(v2)` is the kitchen/snack integration hook: clears hunger and
-  its offer state without replacing a buff. Pantry and meal content are V1-15.
+  its offer state without replacing a buff. `kitchen.snack` uses it; cooked
+  dishes call `comfort.serve_dish`, replacing the single `v2.buff` slot.
 - `remember_dream_clue` retains a dream in `book.species[id].dreams` while
   `book.dream_clue` holds the one unread lead. Reading its entry clears that
   slot; drawing pages is read-only and never rolls a lead.
+
+### Pantry and picnic integration (V1-15)
+
+- `pantry.json` holds the six items, host/lake stock, capacity and card price;
+  `dishes.json` holds all ten effects. `baits.json` holds regional stock and
+  eight parent-pair recipes. `data.py` exposes typed `PANTRY`, `DISHES`, and
+  `BAIT_RECIPES`. `content.py` validates references, prices, durations/charges,
+  food groups and recipe parents before building runtime objects.
+- `kitchen.py` owns atomic purchases, teaching, cards, safe fish selection,
+  dish cooking, bait cooking and snacks. Fish are selected from the livewell
+  by food group and weight, excluding every protected class even when selected
+  explicitly. Only accepted input consumes ingredients. Rendering is read-only.
+- `kitchenview.py` provides scrolling landing/pantry rows, fish confirmation,
+  and the two-second scene. `--shots` includes its gallery and warmed UI
+  benchmark. Mouse hitboxes, keyboard and controller paths share the row model.
+- A buff saves `dish`, `charges`, `until_active_minutes` and `day`; the validated
+  dish supplies effect parameters. Timed buffs use
+  `narrative.active_play_game_minutes`. Unknown future buff fields survive.
+  Haul perks snapshot at the first raised hook (or direct/instant check), save
+  remaining charges, and keep the third check's speed until it finishes.
+- Pudding adds bonus credit on an affected check only once per tracked ordinary
+  fish, using a saved `picnic_pity_credited` catch field. It does not reroll a
+  hooked fish or change base shiny odds. The next catch honors an earned pity
+  guarantee through the existing `roll_shiny` path.
+- Soup's meal allowance saves `needs.meal_hours=48` until another meal. Extra
+  pie dreams use `book.dream_queue`; the existing unread slot stays first.
+- Bot scouting, fuel burn, software fog/buoys, GL fog/buoys and chart markers
+  query the current effect. No fishing-rate modifier is added. The five legacy
+  bait maps and 360 sampled base-rate tables have regression fingerprints.
+- `weather_spot` finds current favorable nearby water; `weather_invitation`
+  enforces the saved daily quota and optional tacos charge, stays silent when
+  none is favorable, and saves a two-hour chart mark. The calendar ticket can
+  call the same hook for automatic invitations.
+- Host teaching reads the saved story cursor; card sales follow chapter
+  completion. Future chapter/lake content supplies its hosts and food species
+  through the same interfaces; no story progress is fabricated by the kitchen.
 
 ## 5. Simulation formulas
 

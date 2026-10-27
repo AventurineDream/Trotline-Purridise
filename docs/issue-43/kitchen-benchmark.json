@@ -1,0 +1,14 @@
+{
+  "frames": 140,
+  "resolution": [
+    1280,
+    720
+  ],
+  "p50_ms": 9.3,
+  "p95_ms": 10.48,
+  "text_size": 2,
+  "accessibility_font": true,
+  "peak_rss_mib": 173.3,
+  "text_cache_mb": 8.38,
+  "scope": "Warmed kitchen UI composition, including scrolling lists, fish confirmation and steam; excludes lake rendering"
+}

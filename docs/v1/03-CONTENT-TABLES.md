@@ -249,6 +249,15 @@ legendary's clue teller):
 
 ---
 
+The nine ordinary baits and eight recipe definitions are loaded from
+`baits.json`. A recipe consumes one piece of each parent and one ingredient;
+its dozen must fit after those inputs are removed. Recipe baits are cooked,
+never sold. The original five bait-match maps are unchanged. For the current
+36-species collection, dough is a universal 0.25 secondary match, roe uses the
+minnow matches, grubs use the worm matches, and stardust uses the existing
+fallback. Later species tables may add their own matches. Every recipe uses
+`max(parent_a_match, parent_b_match)` for every species, including fallback.
+
 ## 3. Legendaries (12)
 
 All windows are game clock, at least 120 minutes long. "Line" means a qualifying

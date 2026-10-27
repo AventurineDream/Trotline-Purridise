@@ -108,7 +108,8 @@ time offline do not count toward these real-play timers.
 - **Rested:** the first nap in any 6 game hours grants *Rested* for 6 game hours.
   Rested gives a **Bot dream-clue**: one unknown habitat lead for a species
   uncaught on this lake, written in the book under *What we heard* as "Bot's dream".
-  Only one unread dream-clue can wait at a time. In Old Salt, a nap also resets
+  Only one ordinary unread dream-clue can wait at a time; Huckleberry Fish Pie
+  can queue an additional lead. In Old Salt, a nap also resets
   Energy.
 - Extra naps just pass time. Nothing is lost by napping or by never napping.
 - Rested and its cooldown use the saved active-game clock, so both pause in
@@ -148,9 +149,34 @@ Each host sells one specialty ingredient. A pantry holds up to 20 of each item.
 Dishes, buffs and recipes are in `03 §5`. Each host teaches two dishes. A dish is
 learned in the host's chapter, or by buying its card for $40 after that chapter.
 
+A Kibble Tin can be eaten from the pantry aboard any boat or directly from an
+Old Salt hunger invitation. It leaves the active picnic buff intact. K opens
+the pantry; cooking still requires a landing or an anchored galley.
+Confirmation previews the fish and ingredients before consuming them. Up/Down
+chooses another eligible fish; cancelling spends nothing. Cooking commits and
+saves once before the skippable two-second scene.
+
+Timed buffs use the active-game clock, so they freeze in menus, on focus loss
+and offline. A haul charge is spent only when at least one hook rises, or when
+its check list is shown directly (instant speed / skipping the animation).
+The third affected haul retains its bonus after spending the final charge.
+Empty-hook bait retention restores bait on empty bare hooks; ordinary unbuffed
+bait behavior stays unchanged. Moon-Milk Pudding adds one extra pity credit for
+each ordinary tracked fish on an affected check, at most once per fish. It
+never rerolls an existing catch; the next newly hooked fish uses an earned
+guarantee. Huckleberry Fish Pie preserves an unread dream and queues its extra
+lead. Reading advances the queue in order. Starlight Soup's 48-hour meal
+allowance lasts until the next meal, independently of its six-hour buoy light.
+
+Hosts teach their dishes while `story.chapter` equals the host's chapter.
+Missing cards become available once the chapter is complete (the chapter cursor
+has advanced or the chapter appears in `story.completed_chapters`). Known cards
+cannot be bought twice. Recipe cards are learned on hailing their clue teller.
+
 ### 4.4 Bait recipes — new
 
-Cook two baits plus one pantry item into a **recipe bait** (makes a dozen). Recipe
+Cook one individual piece of each of two parent baits plus one pantry item into
+a **recipe bait** (makes a dozen). The resulting dozen must fit the bait box. Recipe
 baits are the "key" for gated legendaries (`03 §3`) and work as ordinary bait for
 everything else (each one takes the better match of its two parent baits).
 
