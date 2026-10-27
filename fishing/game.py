@@ -854,7 +854,8 @@ class Session:
                 if contains(rect, click) and index < len(rows):
                     self.ui.shop_i, select = index, True
         if select:
-            self.sound = self._kitchen_action(rows[self.ui.shop_i % len(rows)])
+            row = rows[self.ui.shop_i % len(rows)]
+            self.sound = self._buy(row) if row.kind.startswith("bot_") else self._kitchen_action(row)
 
     def _kitchen_action(self, row):
         if not row.enabled:
@@ -958,7 +959,7 @@ class Session:
             self.ui.shop_i = 0
             self.ui.note = ""
         rows = shop_rows(self.state, self.ui.shop_tab)
-        if self.ui.shop_tab == 6:
+        if self.ui.shop_tab in (6, 7):
             self._kitchen_menu_keys(keys, rows, dt)
             return
         if rows and keys.tap("up", dt):
@@ -973,6 +974,23 @@ class Session:
     def _buy(self, row):
         state = self.state
         err = None
+        if row.kind in {"bot_shell", "bot_tool", "bot_knot"}:
+            from . import botidentity
+            if not row.enabled:
+                return self._fail(row.blurb)
+            if row.kind == "bot_shell":
+                err = botidentity.swap_shell(state, self.world, row.arg)
+            elif row.kind == "bot_tool":
+                err = botidentity.buy_tool(state, self.world, row.arg)
+            elif not botidentity.at_landing(state, self.world):
+                err = "Tie the collar at a landing while stopped."
+            else:
+                err = botidentity.choose_knot(state, row.arg)
+            if err:
+                return self._fail(err)
+            self.ui.note = ""
+            self.save()
+            return "click"
         if row.kind in {"ingredient", "dish_card", "dish", "recipe", "snack", "weather", "teach", "cookout", "cookout_chat"}:
             return self._kitchen_action(row)
         if not row.enabled and row.kind != "paint":
