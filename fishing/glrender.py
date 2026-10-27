@@ -192,6 +192,8 @@ class LakeRenderer(SoftwareRenderer):
             material = 1.0 if c[0]>c[2]*1.35 else 2.0
             if c[0]>0.8 and c[1]>0.5 and c[2]<0.3:
                 material = 3.0
+            if face.emissive is not None:
+                material = 8.0 + face.emissive if face.emissive > 0 else 2.0
             if face.space=="cam":
                 material += 4.0
             for i in (0,1,2,0,2,3):

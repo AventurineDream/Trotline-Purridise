@@ -631,3 +631,36 @@ supply tool effects. This ticket provides their state and purchase contracts.
 `--shots` includes the identity gallery and a warmed menu benchmark, using one
 shared active world for all snapshot states. Compact books keep the name in
 the title row so the inherited three-line quest overview remains intact.
+
+
+### V1-18 Bot shell art, collar rig and chimes
+
+`botmesh.py` builds Classic Tin, green Frog, yellow Duck, copper Sub and violet/
+teal Astral shells from boxes, ellipsoids, swept rods and rings. The shared wool
+collar has raised stitches, a loose loop and the three saved knots. Home poses
+stay fixed on each existing boat's bow. Scouting drives shell-specific propeller,
+webbed-foot, wing or crystal joints; reduced motion freezes decorative motion
+without changing scout travel. Unknown future shell IDs fall back visually to
+Tin without rewriting the saved identity.
+
+Twelve immutable local meshes bound the cache; transformed faces are temporary.
+The largest variant is 802 quads, below the existing 500 KB dynamic-buffer budget
+alongside the player boat. No texture atlas, extra framebuffer, actor history or
+per-lake resource is added. `Face.emissive=None` preserves legacy material
+inference; new actor faces use explicit zero or a 0–1 night-emission strength.
+This keeps yellow Duck enamel from being classified as a lamp, and makes Astral
+chrome/freckles glow in both OpenGL and software. The existing vertex stride and
+buffer sizes stay intact.
+
+Shell palette, chime ID and caption are validated `bot.json` fields. The legacy
+scouting API still emits `bot`; playback resolves that cue to the current shell,
+and captions use its matching authored sound description. `botchimes.py` caches
+five quiet, deterministic mono PCM voices: triangle, wooden ribbit-click, rubber
+squeak, bubbly tick and glass bell. They use the existing SFX volume/mute path.
+
+`--shots` adds four-view turntables for every shell × collar on/off × day/night,
+a knot comparison, scout-motion strip, the native GL comparison when available,
+five WAV samples and an incremental memory/rig report. The memory probe excludes
+renderer/context and exported image buffers, warms all shell/collar variants and
+all voices, and records RSS growth plus traced Python/NumPy peak. The same active
+world/context serves native snapshots; software studio frames need no lake.

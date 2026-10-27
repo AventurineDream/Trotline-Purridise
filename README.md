@@ -296,4 +296,7 @@ progress. Tools require the earned shell (Sonar Grid also requires the Depth
 Finder) and remain owned with any shell. Story rewards advance the wool collar;
 the chapter-four marker enables his saved knot choice. Settings can hide the
 collar without changing the story. Bot's name also appears on Continue and in
-the book. Shell models/chimes and tool effects follow in their dedicated tickets.
+the book. All five shells now have procedural models, with the wool collar and saved
+knot, moving scout parts and distinct captioned chimes. Astral glows at night.
+Reduced motion freezes decorative joints. Individual tool effects follow in
+their dedicated tickets.
