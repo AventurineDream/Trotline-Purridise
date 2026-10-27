@@ -6,7 +6,8 @@ import math
 
 import numpy as np
 
-from .data import hour_of_day, weather_at
+from .data import hour_of_day
+from .calendar import weather_at
 from .world import Face
 
 # Blue stays under 0.3 so the mesh shader classifies these as lamps.
@@ -29,7 +30,7 @@ def extra_faces(state) -> list:
         return []
     faces = _ring(x, z)
     hour = hour_of_day(minutes)
-    if (hour < 5.5 or hour > 19.5) and weather_at(minutes) != "drizzle":
+    if (hour < 5.5 or hour > 19.5) and weather_at(state, minutes) != "drizzle":
         faces.extend(_fireflies(tx, tz, anim))
     return faces
 
