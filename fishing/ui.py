@@ -1296,14 +1296,20 @@ class UI:
             tx = max(x, min(x + u + 6, x + mw - width))
             ty = max(y, min(y + v + 6, y + mh - self.cell(size)[1]))
             if self.world.generated:
-                width = self._measure(label, size)
+                width = self._measure(label, size, "mono")
                 height = self.cell(size)[1]
-                candidates = ((x+u+6,y+v+6),(x+u-width-6,y+v+6),
-                              (x+u-width/2,y+v-height-6),(x+u-width/2,y+v+height+8))
-                for px,py in candidates:
-                    tx=max(x,min(x+mw-width,px))
-                    ty=max(y,min(y+mh-height,py))
-                    box=(tx,ty,tx+width,ty+height)
+                # Search near the habitat first. A bounded chart-row fallback
+                # keeps long canonical names inside the map and off each other.
+                offsets = (6, -height-6, height+8, -2*height-10, 2*height+12,
+                           -3*height-14, 3*height+16)
+                candidates = [(x+u+dx, y+v+dy) for dy in offsets
+                              for dx in (6, -width-6, -width/2)]
+                candidates.extend((px, py) for py in range(int(y), int(y+mh-height)+1, height+4)
+                                  for px in (x, x+mw-width, x+(mw-width)/2))
+                for px, py in candidates:
+                    tx = max(x, min(x+mw-width, px))
+                    ty = max(y, min(y+mh-height, py))
+                    box = (tx, ty, tx+width, ty+height)
                     if all(box[2]+4 < old[0] or old[2]+4 < box[0]
                            or box[3]+3 < old[1] or old[3]+3 < box[1] for old in occupied):
                         break

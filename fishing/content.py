@@ -645,9 +645,9 @@ class _ContentV2Validator:
             return
         for key in sorted(keys - value.keys()):
             self.error(filename, where, f"missing required field {key!r}")
-        for key in sorted(value.keys() - keys):
+        for key in sorted(value.keys() - keys - {"rim", "islands", "thermal"}):
             self.error(filename, where, f"unknown field {key!r}")
-        self.enum(filename, where + ".kind", value.get("kind"), {"alpine"})
+        self.enum(filename, where + ".kind", value.get("kind"), {"alpine", "caldera"})
         if lake.get("placeholder") is not False:
             self.error(filename, where, "a generated environment cannot be a placeholder")
         self.number(filename, where + ".seed", value.get("seed"), integer=True, minimum=0, maximum=2**32-1)
@@ -721,9 +721,38 @@ class _ContentV2Validator:
                         or not all(-2400 <= n <= 2400 for n in row[:2])
                         or not 20 <= row[2] <= 400 or not 50 <= row[3] <= 500):
                     self.error(filename, f"{where}.peaks[{i}]", "expected x, z, height 20..400, width 50..500")
-        ambience = self.id_list(filename, where + ".ambience", value.get("ambience"), {"loon", "larch_wind"})
-        if set(ambience) != {"loon", "larch_wind"}:
-            self.error(filename, where + ".ambience", "alpine ambience requires loon and larch_wind hooks")
+        hooks = {"caldera_wind"} if value.get("kind") == "caldera" else {"loon", "larch_wind"}
+        ambience = self.id_list(filename, where + ".ambience", value.get("ambience"), hooks)
+        if set(ambience) != hooks:
+            self.error(filename, where + ".ambience", "environment requires its declared ambience hooks")
+        if value.get("kind") == "caldera":
+            for key in ("rim", "islands", "thermal"):
+                if key not in value:
+                    self.error(filename, where + "." + key, "required for a caldera environment")
+        if "rim" in value:
+            vector("rim", 2, 20, 200)
+        if "islands" in value:
+            islands = value["islands"]
+            if not isinstance(islands, list) or not 1 <= len(islands) <= 4:
+                self.error(filename, where + ".islands", "expected 1 to 4 bounded cinder islands")
+            else:
+                for i, row in enumerate(islands):
+                    if (not isinstance(row, list) or len(row) != 5
+                            or not all(type(n) in (int, float) and _is_finite(n) for n in row)
+                            or not all(-1200 <= n <= 1200 for n in row[:2])
+                            or not all(20 <= n <= 200 for n in row[2:])):
+                        self.error(filename, f"{where}.islands[{i}]", "expected x, z, radii and height 20..200")
+                    elif valid_outline and math.hypot(*row[:2])+max(row[2:4])+20 >= min(p[1] for p in outline):
+                        self.error(filename, f"{where}.islands[{i}]", "island must leave a navigable outer channel")
+        if "thermal" in value:
+            thermal = value["thermal"]
+            if not isinstance(thermal, list) or not 1 <= len(thermal) <= 4:
+                self.error(filename, where + ".thermal", "expected 1 to 4 thermal vents")
+            else:
+                for i, row in enumerate(thermal):
+                    if (not isinstance(row, list) or len(row) != 2
+                            or not all(type(n) in (int, float) and _is_finite(n) and -1200 <= n <= 1200 for n in row)):
+                        self.error(filename, f"{where}.thermal[{i}]", "expected finite x, z coordinates")
 
     def validate(self, docs):
         species_file, baits_file = "species.json", "baits.json"

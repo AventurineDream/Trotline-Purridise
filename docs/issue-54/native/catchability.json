@@ -1,0 +1,585 @@
+[
+  {
+    "species": "alvord_chub",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 268.0,
+    "z": -332.0,
+    "depth_m": 1.4909539222717285,
+    "bait": "grub",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.005,
+    "default_rate": 0.005,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "crater"
+    ]
+  },
+  {
+    "species": "ash_minnow",
+    "lake": "crater",
+    "zone": "flats",
+    "x": -24.0,
+    "z": -444.0,
+    "depth_m": 0.9820894002914429,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "basalt_bass",
+    "lake": "crater",
+    "zone": "rocks",
+    "x": 124.0,
+    "z": -208.0,
+    "depth_m": 10.522992134094238,
+    "bait": "craw",
+    "hour": 6,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "blue_chub",
+    "lake": "crater",
+    "zone": "lilies",
+    "x": -400.0,
+    "z": -228.0,
+    "depth_m": 3.333073616027832,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "chinook",
+    "lake": "crater",
+    "zone": "deep",
+    "x": -124.0,
+    "z": -132.0,
+    "depth_m": 20.310565948486328,
+    "bait": "roe",
+    "hour": 6,
+    "weather": "clear",
+    "rate": 0.005,
+    "default_rate": 0.005,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "flathead",
+      "crater"
+    ]
+  },
+  {
+    "species": "chiselmouth",
+    "lake": "crater",
+    "zone": "rocks",
+    "x": 128.0,
+    "z": -208.0,
+    "depth_m": 1.2753148078918457,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "cinder_sculpin",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 280.0,
+    "z": -332.0,
+    "depth_m": 2.0186119079589844,
+    "bait": "grub",
+    "hour": 23,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "crater"
+    ]
+  },
+  {
+    "species": "coastal_cutthroat",
+    "lake": "crater",
+    "zone": "cypress",
+    "x": 300.0,
+    "z": 36.0,
+    "depth_m": 1.0775526762008667,
+    "bait": "worm",
+    "hour": 6,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "cobalt_cisco",
+    "lake": "crater",
+    "zone": "deep",
+    "x": -124.0,
+    "z": -132.0,
+    "depth_m": 20.310565948486328,
+    "bait": "roe",
+    "hour": 6,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "flathead",
+      "crater"
+    ]
+  },
+  {
+    "species": "coho",
+    "lake": "crater",
+    "zone": "open",
+    "x": -32.0,
+    "z": -468.0,
+    "depth_m": 7.318885803222656,
+    "bait": "roe",
+    "hour": 6,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "flathead",
+      "crater"
+    ]
+  },
+  {
+    "species": "ember_char",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 264.0,
+    "z": -332.0,
+    "depth_m": 23.544151306152344,
+    "bait": "grub",
+    "hour": 18,
+    "weather": "clear",
+    "rate": 0.005,
+    "default_rate": 0.005,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "crater"
+    ]
+  },
+  {
+    "species": "fog_mudminnow",
+    "lake": "crater",
+    "zone": "cypress",
+    "x": 300.0,
+    "z": 36.0,
+    "depth_m": 1.0775526762008667,
+    "bait": "worm",
+    "hour": 6,
+    "weather": "fog",
+    "rate": 0.0168,
+    "default_rate": 0.012,
+    "ratio": 1.4,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "fumarole_perch",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 268.0,
+    "z": -332.0,
+    "depth_m": 1.4909539222717285,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "geyser_goby",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 268.0,
+    "z": -332.0,
+    "depth_m": 1.4909539222717285,
+    "bait": "grub",
+    "hour": 23,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "crater"
+    ]
+  },
+  {
+    "species": "glasswing_trout",
+    "lake": "crater",
+    "zone": "open",
+    "x": -32.0,
+    "z": -468.0,
+    "depth_m": 7.318885803222656,
+    "bait": "roe",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.006999999999999999,
+    "default_rate": 0.005,
+    "ratio": 1.4,
+    "bait_sold_at": [
+      "flathead",
+      "crater"
+    ]
+  },
+  {
+    "species": "indigo_eelpout",
+    "lake": "crater",
+    "zone": "deep",
+    "x": -124.0,
+    "z": -132.0,
+    "depth_m": 20.310565948486328,
+    "bait": "shad",
+    "hour": 23,
+    "weather": "clear",
+    "rate": 0.005,
+    "default_rate": 0.005,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "klamath_smallscale_sucker",
+    "lake": "crater",
+    "zone": "flats",
+    "x": -28.0,
+    "z": -444.0,
+    "depth_m": 8.427876472473145,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "lahontan_cutthroat",
+    "lake": "crater",
+    "zone": "deep",
+    "x": -120.0,
+    "z": -132.0,
+    "depth_m": 2.358401298522949,
+    "bait": "minnow",
+    "hour": 6,
+    "weather": "clear",
+    "rate": 0.005,
+    "default_rate": 0.005,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "lava_belly_sunfish",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 268.0,
+    "z": -332.0,
+    "depth_m": 1.4909539222717285,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "mistfin_dace",
+    "lake": "crater",
+    "zone": "lilies",
+    "x": -400.0,
+    "z": -228.0,
+    "depth_m": 3.333073616027832,
+    "bait": "worm",
+    "hour": 6,
+    "weather": "fog",
+    "rate": 0.0168,
+    "default_rate": 0.012,
+    "ratio": 1.4,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "moonpool_whitefish",
+    "lake": "crater",
+    "zone": "deep",
+    "x": -124.0,
+    "z": -132.0,
+    "depth_m": 20.310565948486328,
+    "bait": "roe",
+    "hour": 23,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "flathead",
+      "crater"
+    ]
+  },
+  {
+    "species": "obsidian_darter",
+    "lake": "crater",
+    "zone": "rocks",
+    "x": 128.0,
+    "z": -208.0,
+    "depth_m": 1.2753148078918457,
+    "bait": "grub",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "crater"
+    ]
+  },
+  {
+    "species": "oregon_chub",
+    "lake": "crater",
+    "zone": "lilies",
+    "x": -396.0,
+    "z": -228.0,
+    "depth_m": 0.9662728309631348,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "prickly_sculpin",
+    "lake": "crater",
+    "zone": "rocks",
+    "x": 116.0,
+    "z": -208.0,
+    "depth_m": 15.107802391052246,
+    "bait": "worm",
+    "hour": 23,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "pumice_skipper",
+    "lake": "crater",
+    "zone": "flats",
+    "x": -24.0,
+    "z": -444.0,
+    "depth_m": 0.9820894002914429,
+    "bait": "dough",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "redband_trout",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 268.0,
+    "z": -332.0,
+    "depth_m": 1.4909539222717285,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "rimrock_bullhead",
+    "lake": "crater",
+    "zone": "rocks",
+    "x": 128.0,
+    "z": -208.0,
+    "depth_m": 1.2753148078918457,
+    "bait": "liver",
+    "hour": 23,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "snagtooth_pike",
+    "lake": "crater",
+    "zone": "cypress",
+    "x": 300.0,
+    "z": 36.0,
+    "depth_m": 1.0775526762008667,
+    "bait": "minnow",
+    "hour": 18,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "speckled_dace",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 268.0,
+    "z": -332.0,
+    "depth_m": 1.4909539222717285,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "steam_carp",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 268.0,
+    "z": -332.0,
+    "depth_m": 1.4909539222717285,
+    "bait": "dough",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "sulfur_shiner",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 268.0,
+    "z": -332.0,
+    "depth_m": 1.4909539222717285,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "tui_chub",
+    "lake": "crater",
+    "zone": "flats",
+    "x": -28.0,
+    "z": -444.0,
+    "depth_m": 8.427876472473145,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "clear",
+    "rate": 0.03,
+    "default_rate": 0.03,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "umpqua_pikeminnow",
+    "lake": "crater",
+    "zone": "cypress",
+    "x": 328.0,
+    "z": 32.0,
+    "depth_m": 11.533012390136719,
+    "bait": "minnow",
+    "hour": 18,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "vent_catfish",
+    "lake": "crater",
+    "zone": "springs",
+    "x": 264.0,
+    "z": -332.0,
+    "depth_m": 23.544151306152344,
+    "bait": "liver",
+    "hour": 23,
+    "weather": "clear",
+    "rate": 0.012,
+    "default_rate": 0.012,
+    "ratio": 1.0,
+    "bait_sold_at": [
+      "all"
+    ]
+  }
+]

@@ -90,7 +90,7 @@ class LakeFrameworkChecks(unittest.TestCase):
             self.assertEqual(self.state.to_json(), before)
 
     def test_flat_maps_have_only_their_authored_habitats_and_safe_hulls(self):
-        for lake in ("crater", "nebula"):
+        for lake in ("nebula",):
             world = World(lake)
             self.assertTrue(world.placeholder)
             self.assertEqual(world.height.shape, (129, 169))
@@ -210,7 +210,7 @@ class LakeFrameworkChecks(unittest.TestCase):
             self.skipTest("Standalone EGL unavailable: " + str(error))
         from .glrender import LakeRenderer
         try:
-            for lake in ("crater", "nebula"):
+            for lake in ("nebula",):
                 world = World(lake)
                 with ctx:
                     renderer = LakeRenderer(world, 160, 90, context=ctx)

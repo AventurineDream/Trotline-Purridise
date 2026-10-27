@@ -20,6 +20,12 @@ void main() {
             float snowcap = smoothstep(snow_line-12.0,snow_line+18.0,pos.y+patch*18.0);
             c = mix(c,vec3(.84,.89,.91),snowcap);
         }
+        if (lake_kind>3.5) {
+            c = mix(vec3(.18,.20,.25),vec3(.48,.48,.51),patch);
+            float island = length((pos.xz-cinder_island.xy)/cinder_island.zw);
+            if (island<1.12) c = mix(vec3(.045,.055,.08),vec3(.13,.15,.20),patch);
+            if (distance(pos.xz,lily_centre)<110.0 && sd<30.0) c = vec3(.14,.26,.18)*(0.8+patch*.3);
+        }
         // Dappled shadows along the forest edge, fixed in world space.
         float canopy = smoothstep(3.0,12.0,sd)*(1.0-smoothstep(55.0,95.0,sd));
         c *= 1.0-canopy*(0.12+0.18*noise(pos.xz*0.10));

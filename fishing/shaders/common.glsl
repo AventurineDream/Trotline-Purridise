@@ -6,11 +6,11 @@ uniform vec3 slip_size;
 uniform float cloud_cover, rain, mist, speed, spotlight;
 uniform float comfort_fog_radius;
 uniform float mirror;
-uniform float lake_kind, snow, snow_anim, snow_line;
+uniform float lake_kind, snow, snow_anim, snow_line, still_reflection;
 uniform vec3 alpine_shallow, alpine_deep;
 uniform vec3 lake_water;
 uniform sampler2D lake_shore, lake_depth;
-uniform vec4 lake_bounds;
+uniform vec4 lake_bounds, cinder_island;
 uniform vec2 lake_grid, lily_centre;
 
 // Signed distances must not use pow(x, 2): GLSL leaves negative bases undefined.
@@ -112,6 +112,10 @@ vec3 haze(vec3 c, vec3 p) {
     float fog = 1.0-exp(-dist*(mix(0.00085,0.0037,rain)+mist*0.004));
     // Low mist, strongest at first light and in rain.
     fog += exp(-max(p.y,0.0)*0.25)*smoothstep(45.0,500.0,dist)*(gold*0.13+rain*0.1);
+    if (lake_kind>3.5) {
+        float layer = 1.0-smoothstep(3.0+mist*45.0,20.0+mist*75.0,p.y);
+        fog += layer*mist*.38*smoothstep(20.0,450.0,dist);
+    }
     if (comfort_fog_radius > 0.0 && distance(p.xz,boat_pos) <= comfort_fog_radius) fog *= 0.25;
     return mix(c,horizon,clamp(fog,0.0,0.92));
 }
