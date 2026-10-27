@@ -208,8 +208,10 @@ build and remains serialized until a recognized boat is selected.
   Mode is `cozy`. Story chapter is 0, but the **prologue is marked seen** for any
   save with catches, so a veteran isn't asked to set a first line. Existing
   counts derive the book stage at 0/1/3/5/10 catches; a saved zone, bait and band
-  seed the first `found` condition. The Bot name is `Copper-` followed by the
-  absolute schedule seed modulo 1000, padded to three digits. Unlocks: Cedar is
+  seed the first `found` condition. The Bot name uses a private `sim.RNG` fork of the
+  schedule seed: one of the twelve `bot.json` prefixes plus suffix 011–999.
+  Existing valid assigned names survive; old out-of-range placeholders such as
+  `Copper-000` are repaired once. Unlocks: Cedar is
   open. Guardian sightings carry over.
 - Historical book thresholds are seeded into `book_stage_up` as
   `<species id>:<stage>` claim keys during migration or normalization. Loading
@@ -593,3 +595,39 @@ rate isolation, event boundaries, atomic gifts, protected choices, pause/focus,
 read-only drawing and keyboard/pointer forecast pagination. `--shots` adds the
 calendar gallery and a warmed UI benchmark (week, Sunday, cookout and fish
 confirmation), including large text, accessibility font and 480×270 layouts.
+
+
+### V1-17 Bot identity and progression
+
+`bot.json` is validated with the other v2 content files and supplies twelve name
+prefixes, five shells, tool prices/Depth Finder prerequisites, collar stages and
+three knots. `data.py` exposes typed `BotShell` / `BotTool` views. The name fork
+is domain-separated with SHA-256 from the schedule seed and never advances the
+fishing RNG. The save slot and book header show the saved name, and dialogue
+expands only literal `{BotName}` and `{Skipper}` tokens; other braces stay literal.
+
+`botidentity.py` owns profile normalization and explicit story reward hooks:
+`grant_shell`, `grant_tool` (including the chapter-one free Reed Anchor),
+`advance_collar`, `choose_knot`, and `sync_story_rewards`. Shell awards never
+auto-equip. Completed chapters reconcile earned shells and the received/loose
+collar on load without replaying toasts, purchases or choices. The chapter-four
+marker scene enables knot choice with `story.scene_states.story_c4_knot` set to
+`ready`/`active`; finishing or skipping `end_02` adds the joint book credit, and
+`end_03` preserves the favorite knot. The future story system calls the same
+hooks when its authored scenes run.
+
+Landing → Bot swaps earned shells free, records tool purchases and offers the
+saved cosmetic knot choice when the marker scene is ready. Purchases validate
+landing/speed, earned shell, Depth Finder (Sonar Grid), money and duplicate
+ownership before spending. Owning the shell is sufficient; wearing it is not
+required. Free story tools can be granted before the corresponding shell award.
+A swap changes only `profile.shell`: name, notes, quest rewards, collar, tools,
+scouting phase/target and RNG remain untouched. Future profile fields and IDs
+survive normalization. The collar renders only after receipt; hiding it in
+Settings changes visibility without changing story state.
+
+V1-18 supplies the shell geometry, chosen-knot models and chimes; V1-19/V1-20
+supply tool effects. This ticket provides their state and purchase contracts.
+`--shots` includes the identity gallery and a warmed menu benchmark, using one
+shared active world for all snapshot states. Compact books keep the name in
+the title row so the inherited three-line quest overview remains intact.

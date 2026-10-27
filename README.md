@@ -288,3 +288,12 @@ for one pantry gift per lake that Sunday. Chat with each friend from the same
 menu. Shiny, Treasured, protected and legendary fish stay safe. Bot automatically
 marks nearby favorable water at most once per day; the kitchen's manual weather
 request shares that allowance, with the existing tacos exception.
+
+
+Open **Bot** at a landing to see his stamped name, earned shells, tool ownership
+and collar memory. Shell changes are free and preserve his notes and scouting
+progress. Tools require the earned shell (Sonar Grid also requires the Depth
+Finder) and remain owned with any shell. Story rewards advance the wool collar;
+the chapter-four marker enables his saved knot choice. Settings can hide the
+collar without changing the story. Bot's name also appears on Continue and in
+the book. Shell models/chimes and tool effects follow in their dedicated tickets.

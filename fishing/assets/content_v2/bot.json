@@ -1,0 +1,119 @@
+{
+  "schema_version": 2,
+  "name_prefixes": [
+    "Copper",
+    "Quark",
+    "Zed",
+    "Brass",
+    "Sprocket",
+    "Clinker",
+    "Whirly",
+    "Widget",
+    "Cobalt",
+    "Anchor",
+    "Rivet",
+    "Echo"
+  ],
+  "suffix_min": 11,
+  "suffix_max": 999,
+  "shells": [
+    {
+      "id": "tin",
+      "name": "Classic Tin Deckhand",
+      "chapter": 0,
+      "tool_id": "sonar_grid"
+    },
+    {
+      "id": "frog",
+      "name": "Frog Bot",
+      "chapter": 1,
+      "tool_id": "reed_anchor"
+    },
+    {
+      "id": "duck",
+      "name": "Rubber Duck Bot",
+      "chapter": 2,
+      "tool_id": "wave_chime"
+    },
+    {
+      "id": "sub",
+      "name": "Clockwork Copper Sub",
+      "chapter": 3,
+      "tool_id": "thermo_scanner"
+    },
+    {
+      "id": "astral",
+      "name": "Astral Starlight Bot",
+      "chapter": 5,
+      "tool_id": "zero_g_winch"
+    }
+  ],
+  "tools": [
+    {
+      "id": "sonar_grid",
+      "name": "Sonar Grid",
+      "price": 150,
+      "requires_finder": true
+    },
+    {
+      "id": "reed_anchor",
+      "name": "Reed Anchor",
+      "price": 120,
+      "requires_finder": false
+    },
+    {
+      "id": "wave_chime",
+      "name": "Wave Chime",
+      "price": 180,
+      "requires_finder": false
+    },
+    {
+      "id": "thermo_scanner",
+      "name": "Thermocline Scanner",
+      "price": 260,
+      "requires_finder": false
+    },
+    {
+      "id": "zero_g_winch",
+      "name": "Zero-G Winch",
+      "price": 400,
+      "requires_finder": false
+    }
+  ],
+  "collar_stages": [
+    {
+      "id": "none",
+      "name": "Not received"
+    },
+    {
+      "id": "received",
+      "name": "Wool collar"
+    },
+    {
+      "id": "loose",
+      "name": "Loose loop"
+    },
+    {
+      "id": "retied",
+      "name": "Adjustable knot"
+    },
+    {
+      "id": "favorite",
+      "name": "Still my favorite"
+    }
+  ],
+  "knots": [
+    {
+      "id": "square",
+      "name": "Square knot"
+    },
+    {
+      "id": "bow",
+      "name": "Bow"
+    },
+    {
+      "id": "sailors_hitch",
+      "name": "Sailor's hitch"
+    }
+  ]
+}
