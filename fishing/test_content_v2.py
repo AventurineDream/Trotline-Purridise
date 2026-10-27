@@ -341,8 +341,12 @@ class ContentV2Checks(unittest.TestCase):
             "std", "worm", 100.0, 100.0, 100.0, 100.0, "open",
             [Hook(True) for _ in range(12)],
         ))
-        for _ in range(1000):
-            state.advance(1.0, frozen=False)
+        # Keep the original data/RNG contract independent of calendar weather.
+        # Calendar reproducibility and live rates are covered in test_calendar.
+        from .data import weather_at as reference_weather
+        with patch("fishing.sim.weather_at", side_effect=lambda st: reference_weather(st.game_minutes)):
+            for _ in range(1000):
+                state.advance(1.0, frozen=False)
 
         # Catch creation now consumes one shiny roll from the saved RNG.
         # Pin that sequence, including the flag, rather than the pre-shiny one.

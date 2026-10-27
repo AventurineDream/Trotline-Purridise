@@ -16,6 +16,7 @@ from .npcs import active_npcs, schedule_key
 from .audio import Audio
 from .data import BAITS, BAIT_BY_ID, SPECIES, hour_of_day
 from .weather import weather_visuals
+from . import calendar
 from .platform import Platform, Text
 from .gamepad import (
     ACTION_ALIASES, ACTION_SYMBOLS, KEY_NAMES, default_key_bindings,
@@ -255,6 +256,7 @@ class Session:
             "engine_idle": (not state.sail_raised and abs(state.throttle) <= 0.01
                             and abs(state.throttle_setting) <= 0.01),
         })
+        calendar.active_tick(state, before)
         self._refresh_npcs()
 
     def _simulate(self, keys, dt: float, driving_presses=()):
@@ -554,7 +556,8 @@ class Session:
         npc = nearby_npc(self.state)
         if npc is None:
             return
-        if kitchen.teach(self.state, npc.id):
+        cookout_chat = calendar.chat(self.state, self.world, npc.id, self._npc_content)
+        if kitchen.teach(self.state, npc.id) or cookout_chat:
             self.save()
         self.conversation = Conversation.start(npc, self.state, self._npc_content)
         self.ui.conversation = self.conversation
@@ -856,11 +859,11 @@ class Session:
     def _kitchen_action(self, row):
         if not row.enabled:
             return self._fail(row.blurb)
-        if row.kind in {"dish", "recipe"}:
+        if row.kind in {"dish", "recipe", "cookout"}:
             self.ui.cook_from = self.ui.mode
             self.ui.cook_kind, self.ui.cook_arg = row.kind, row.arg
             self.ui.cook_label = (kitchen.DISHES[row.arg].name if row.kind == "dish"
-                                  else BAIT_BY_ID[row.arg].name)
+                                  else "Sunday landing cookout" if row.kind == "cookout" else BAIT_BY_ID[row.arg].name)
             self.ui.cook_fish = self.ui.comfort_i = 0
             self.ui.note = ""
             self.ui.mode = "cook_confirm"
@@ -874,6 +877,8 @@ class Session:
             error = kitchen.snack(self.state)
         elif row.kind == "weather":
             error = comfort.weather_invitation(self.state)
+        elif row.kind == "cookout_chat":
+            calendar.chat(self.state, self.world, row.arg, self._npc_content)
         elif row.kind == "teach":
             kitchen.teach(self.state, row.arg)
         if error:
@@ -916,7 +921,13 @@ class Session:
         if self.ui.comfort_i:
             self.ui.mode = self.ui.cook_from
             return
-        if self.ui.cook_kind == "dish":
+        if self.ui.cook_kind == "cookout":
+            fish = kitchen.eligible_fish(self.state, "any", food_only=False)
+            chosen = fish[self.ui.cook_fish % len(fish)] if fish else None
+            gift = kitchen.PANTRY[calendar.cookout_gift(self.state)].name
+            error = calendar.share_fish(self.state, self.world, chosen)
+            text = "Your fish joins the table. " + gift + " joins your pantry. Stay for the company."
+        elif self.ui.cook_kind == "dish":
             dish = kitchen.DISHES[self.ui.cook_arg]
             fish = kitchen.eligible_fish(self.state, dish.food)
             chosen = fish[self.ui.cook_fish % len(fish)] if fish else None
@@ -962,7 +973,7 @@ class Session:
     def _buy(self, row):
         state = self.state
         err = None
-        if row.kind in {"ingredient", "dish_card", "dish", "recipe", "snack", "weather", "teach"}:
+        if row.kind in {"ingredient", "dish_card", "dish", "recipe", "snack", "weather", "teach", "cookout", "cookout_chat"}:
             return self._kitchen_action(row)
         if not row.enabled and row.kind != "paint":
             self.ui.note = row.blurb or "Not for sale."
@@ -1183,6 +1194,13 @@ class Session:
                     if contains(rect, click) and start + offset < len(BOOK_SPECIES_IDS):
                         self.ui.journal_i = start + offset
                         turn_page(self.state, self.ui, viewport)
+                        return
+            if self.ui.journal_page == 5:
+                from .bookview import week_rects
+                for index, rect in enumerate(week_rects(layout)):
+                    if contains(rect, click):
+                        self.ui.book_week_i = index
+                        self.ui.book_detail_page = 0
                         return
         left = keys.tap("left", dt)
         right = keys.tap("right", dt)
@@ -1457,7 +1475,7 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
             minutes = session.state.game_minutes
             audio.update(dt, session.state.throttle, session.state.speed, session.state.muted,
                          hour=hour_of_day(minutes),
-                         rain=float(weather_visuals(minutes)["rain"]),
+                         rain=float(weather_visuals(minutes, session.state)["rain"]),
                          sailing=session.state.sail_raised,
                          motorized=(session.state.boat_id!="rowboat"
                                     or (session.state.rowboat_trolling_motor

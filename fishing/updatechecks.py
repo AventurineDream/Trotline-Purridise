@@ -10,6 +10,7 @@ import numpy as np
 
 from .data import BAITS, SPECIES
 from .book import BOOK_SPECIES_IDS
+from .bookview import BOOK_TABS
 from .game import Keys, Session
 from .platform import Input
 from .sim import Catch, HeldLine, State
@@ -84,8 +85,8 @@ def interface_checks(world):
         if session.ui.journal_page != 0:
             raise AssertionError("left arrow did not return to the species journal")
         session.tick(Keys(pressed={"a"}), 0.05)
-        if session.ui.journal_page != 4:
-            raise AssertionError("A did not wrap to the Watch tab")
+        if session.ui.journal_page != len(BOOK_TABS) - 1:
+            raise AssertionError("A did not wrap to the last journal tab")
         session.tick(Keys(pressed={"j"}), 0.05)
         if session.ui.mode != "play":
             raise AssertionError("J did not close the journal from the narrative page")

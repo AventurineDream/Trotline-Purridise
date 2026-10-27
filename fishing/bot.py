@@ -12,7 +12,7 @@ import numpy as np
 
 from .world import Face
 from . import comfort
-from .data import weather_at
+from . import calendar
 
 _PHASES = ("home", "go", "out", "back")
 # Feet position in the level boat frame: starboard, up, forward of the eye.
@@ -97,7 +97,7 @@ def tick(state, world, dt: float) -> str | None:
         return sound
     dist = _step(state, world, min(_SPEED * dt, 2.5))
     leash = math.hypot(state.bot_x - state.x, state.bot_z - state.z)
-    if state.bot_phase == "go" and leash > 170.0 * comfort.scout_range_factor(state, weather_at(state.game_minutes)):
+    if state.bot_phase == "go" and leash > 170.0 * comfort.scout_range_factor(state, calendar.weather_at(state)):
         state.bot_phase = "back"
         state.bot_target_line_id = None
         state.toast("Bot is turning around. That's far enough.")
@@ -240,7 +240,7 @@ def _afloat(world, x: float, z: float) -> bool:
 
 
 def _target(state, world):
-    reach = comfort.scout_range_factor(state, weather_at(state.game_minutes))
+    reach = comfort.scout_range_factor(state, calendar.weather_at(state))
     best = None
     best_d = 1.0e9
     for line in state.lines:
@@ -290,7 +290,7 @@ def _try(state, world, dx: float, dz: float) -> bool:
 
 
 def _report(state, world) -> str:
-    from .data import BAIT_BY_ID, SPECIES_BY_ID, hour_of_day, weather_at
+    from .data import BAIT_BY_ID, SPECIES_BY_ID, hour_of_day
     from .sim import species_rates
     from .world import zone_label
 
@@ -308,11 +308,11 @@ def _report(state, world) -> str:
     else:
         where = "middling water"
     hour = hour_of_day(state.game_minutes)
-    weather = weather_at(state.game_minutes)
+    weather = calendar.weather_at(state)
     best_bait, best_sp, best = "worm", "bluegill", -1.0
     likelihood = {}
     for bait in BAIT_BY_ID:
-        rates = species_rates(zone, bait, hour, weather, depth, state.lake_id)
+        rates = species_rates(zone, bait, hour, weather, depth, state.lake_id, game_minutes=state.game_minutes)
         for sid, rate in rates.items():
             likelihood[sid] = max(likelihood.get(sid, 0), rate)
         sp = max(rates, key=rates.get)

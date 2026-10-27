@@ -527,6 +527,8 @@ def shots(dest: str) -> int:
     comfort_gallery(out, text=text, world=world, background=renderer.render(dawn))
     from .kitchenview import kitchen_gallery
     kitchen_gallery(out, text=text, world=world, background=renderer.render(dawn))
+    from .calendarview import calendar_gallery
+    calendar_gallery(out, text=text, world=world, background=renderer.render(dawn))
     renderer.close()
     software_renderer.close()
     text.close()

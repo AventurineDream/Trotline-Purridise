@@ -68,7 +68,7 @@ class AmbientChecks(unittest.TestCase):
                 before = state.to_json()
                 first = ambient.faces(state, world)
                 second = ambient.faces(state, world)
-                explicit = ambient.faces(state, world, lighting_at(state.game_minutes + state.minute_acc))
+                explicit = ambient.faces(state, world, lighting_at(state.game_minutes + state.minute_acc, state))
                 np.testing.assert_array_equal(geometry(first), geometry(second))
                 np.testing.assert_array_equal(geometry(first), geometry(explicit))
                 self.assertEqual(state.to_json(), before)
