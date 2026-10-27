@@ -15,7 +15,8 @@ from .narrative import DAY_NPCS, QUEST_IDS, RIPPLE_BY_QUEST
 
 CONTENT_PATH = Path(__file__).with_name("assets") / "narrative_v1.json"
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
-CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json")
+CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
+                    "pantry.json", "dishes.json")
 BOOK_CONTENT_PATH = CONTENT_V2_PATH / "book.json"
 BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
 _GAMEPLAY_REFS_LOADED = False
@@ -101,6 +102,8 @@ class GameplayContent:
     boats: dict[str, dict]
     lakes: dict[str, dict]
     zones: dict[str, dict]
+    pantry: dict[str, dict]
+    dishes: dict[str, dict]
 
 
 @dataclass(frozen=True)
@@ -650,7 +653,8 @@ class _ContentV2Validator:
             "id", "name", "price", "min_lb", "max_lb", "pref_time", "depth", "blurb",
             "folk_name", "lakes", "food", "tags", "shiny"},
             {"rate", "trophy", "tier", "look"})
-        baits = self.table(docs, baits_file, "baits", {"id", "name", "price", "blurb", "matches"})
+        baits = self.table(docs, baits_file, "baits", {"id", "name", "price", "blurb", "matches"},
+                           {"sold_at", "recipe"})
         boats = self.table(docs, boats_file, "boats", {
             "id", "name", "bow", "stern", "half_beam", "draft", "eye_height", "price",
             "lines", "tank", "fuel_burn", "speed_factor", "turn_factor", "acceleration",
@@ -789,9 +793,13 @@ class _ContentV2Validator:
             self.text(baits_file, where + ".name", row.get("name"))
             self.text(baits_file, where + ".blurb", row.get("blurb"))
             self.number(baits_file, where + ".price", row.get("price"), minimum=0)
-            if type(row.get("price")) in (int, float) and row.get("price", 0) <= 0:
+            if ("recipe" not in row and type(row.get("price")) in (int, float)
+                    and row.get("price", 0) <= 0):
                 self.error(baits_file, where + ".price", "must be greater than zero")
             self.multiplier_map(baits_file, where + ".matches", row.get("matches"), species_refs, maximum=1)
+            if "sold_at" in row:
+                self.id_list(baits_file, where + ".sold_at", row["sold_at"],
+                             {"all", "briar", "cedar", "flathead", "crater", "nebula"})
 
         for bid, row, where in self.rows(boats_file, "boats"):
             self.text(boats_file, where + ".name", row.get("name"))
@@ -903,13 +911,69 @@ class _ContentV2Validator:
             if "zone_labels" not in cedar:
                 self.error(lakes_file, "lakes(cedar).zone_labels", "required for the existing Cedar zone labels")
 
+        pantry_file, dishes_file = "pantry.json", "dishes.json"
+        pantry_root = self.root(docs, pantry_file, {"schema_version", "capacity", "card_price", "items"})
+        self.root(docs, dishes_file, {"schema_version", "dishes"})
+        pantry = self.table(docs, pantry_file, "items", {"id", "name", "host", "lake", "price"})
+        dishes = self.table(docs, dishes_file, "dishes", {
+            "id", "name", "host", "chapter", "food", "ingredient", "effect",
+            "minutes", "charges", "value", "blurb"})
+        if pantry_file not in self.unavailable_files:
+            self.number(pantry_file, "capacity", pantry_root.get("capacity"), integer=True, minimum=1, maximum=20)
+            self.number(pantry_file, "card_price", pantry_root.get("card_price"), minimum=0)
+        for item_id, row, where in self.rows(pantry_file, "items"):
+            for key in ("name", "host"):
+                self.text(pantry_file, where + "." + key, row.get(key))
+            self.enum(pantry_file, where + ".lake", row.get("lake"),
+                      {"all", "briar", "cedar", "flathead", "crater", "nebula"})
+            self.number(pantry_file, where + ".price", row.get("price"), minimum=.01)
+        for dish_id, row, where in self.rows(dishes_file, "dishes"):
+            for key in ("name", "host", "blurb"):
+                self.text(dishes_file, where + "." + key, row.get(key))
+            if row.get("host") not in [item.get("host") for item in pantry.values()]:
+                self.error(dishes_file, where + ".host", "must reference a pantry host")
+            self.number(dishes_file, where + ".chapter", row.get("chapter"), integer=True, minimum=1, maximum=5)
+            self.enum(dishes_file, where + ".food", row.get("food"), (_SPECIES_FOODS - {"none"}) | {"any"})
+            self.enum(dishes_file, where + ".ingredient", row.get("ingredient"), pantry)
+            self.enum(dishes_file, where + ".effect", row.get("effect"), {
+                "scout_species", "quick_haul", "fuel_saver", "weather_invitation", "steady_scout",
+                "extra_dream", "clear_fog", "keep_bait", "shiny_credit", "glow_buoys"})
+            self.number(dishes_file, where + ".minutes", row.get("minutes"), integer=True, minimum=0)
+            self.number(dishes_file, where + ".charges", row.get("charges"), integer=True, minimum=0)
+            self.number(dishes_file, where + ".value", row.get("value"), minimum=.01)
+            if not row.get("minutes") and not row.get("charges"):
+                self.error(dishes_file, where, "a buff needs a duration or charges")
+            timed = row.get("effect") in {"scout_species", "fuel_saver", "steady_scout", "clear_fog", "glow_buoys"}
+            if timed and (not row.get("minutes") or row.get("charges") != 0):
+                self.error(dishes_file, where, "timed effects need a duration and no charges")
+            if not timed and (row.get("minutes") != 0 or not row.get("charges")):
+                self.error(dishes_file, where, "charged effects need charges and no duration")
+            if row.get("effect") in {"quick_haul", "fuel_saver"}:
+                self.number(dishes_file, where + ".value", row.get("value"), minimum=.01, maximum=1)
+        for bait_id, row, where in self.rows(baits_file, "baits"):
+            if "recipe" not in row:
+                continue
+            recipe = row["recipe"]
+            if not isinstance(recipe, dict):
+                self.error(baits_file, where + ".recipe", "expected an object")
+                continue
+            if set(recipe) != {"parents", "ingredient", "teller"}:
+                self.error(baits_file, where + ".recipe", "expected parents, ingredient and teller")
+            parents = self.id_list(baits_file, where + ".recipe.parents", recipe.get("parents"), baits)
+            if len(parents) != 2 or any("recipe" in baits[p] for p in parents):
+                self.error(baits_file, where + ".recipe.parents", "expected two distinct ordinary baits")
+            self.enum(baits_file, where + ".recipe.ingredient", recipe.get("ingredient"), pantry)
+            self.text(baits_file, where + ".recipe.teller", recipe.get("teller"))
+            if row.get("price") != 0 or row.get("sold_at"):
+                self.error(baits_file, where + ".recipe", "recipe bait is cooked, never sold")
+
         if self.errors:
             raise ContentError("\n".join(self.errors))
-        return GameplayContent(species, baits, boats, lakes, zones)
+        return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes)
 
 
 def validate_content_v2(raw_files, *, unavailable_files=()) -> GameplayContent:
-    """Validate all four v2 source files and every cross-file reference."""
+    """Validate the v2 source files and every cross-file reference."""
     if not isinstance(raw_files, dict):
         raise ContentError("content_v2:root: expected a mapping of filenames to documents")
     validator = _ContentV2Validator(unavailable_files)

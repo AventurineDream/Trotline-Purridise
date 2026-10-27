@@ -315,7 +315,8 @@ def take_dream_clue(book: dict) -> object | None:
     clue = book.get("dream_clue")
     if clue is None:
         return None
-    book["dream_clue"] = None
+    queue = book.get("dream_queue", [])
+    book["dream_clue"] = queue.pop(0) if isinstance(queue, list) and queue else None
     return deepcopy(clue)
 
 

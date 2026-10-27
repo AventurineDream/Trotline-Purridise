@@ -10,7 +10,8 @@ from pathlib import Path
 SPOIL_HOURS = 13.0
 DOZEN = 12
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
-_CONTENT_FILES = ("species.json", "baits.json", "boats.json", "lakes.json")
+_CONTENT_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
+                  "pantry.json", "dishes.json")
 
 
 def _unique_json_keys(pairs):
@@ -97,10 +98,12 @@ class Bait:
     name: str
     price: float  # per dozen
     blurb: str
+    sold_at: tuple[str, ...] = ("all",)
 
 
 BAITS: tuple[Bait, ...] = tuple(
-    Bait(**{key: row[key] for key in ("id", "name", "price", "blurb")})
+    Bait(**{key: row[key] for key in ("id", "name", "price", "blurb")},
+         sold_at=tuple(row.get("sold_at", ["all"])))
     for row in CONTENT_V2_RAW["baits.json"]["baits"]
 )
 
@@ -111,6 +114,52 @@ BAIT_MATCH: dict[str, dict[str, float]] = {
     for row in CONTENT_V2_RAW["baits.json"]["baits"]
 }
 BAIT_FALLBACK_MULTIPLIER = CONTENT_V2_RAW["baits.json"]["fallback_multiplier"]
+
+
+@dataclass(frozen=True)
+class BaitRecipe:
+    parents: tuple[str, str]
+    ingredient: str
+    teller: str
+
+
+BAIT_RECIPES = {row["id"]: BaitRecipe(tuple(row["recipe"]["parents"]),
+                                      row["recipe"]["ingredient"], row["recipe"]["teller"])
+                for row in CONTENT_V2_RAW["baits.json"]["baits"] if "recipe" in row}
+for _bait_id, _recipe in BAIT_RECIPES.items():
+    BAIT_MATCH[_bait_id] = {
+        sid: max(BAIT_MATCH[parent].get(sid, BAIT_FALLBACK_MULTIPLIER)
+                 for parent in _recipe.parents) for sid in SPECIES_BY_ID}
+
+
+@dataclass(frozen=True)
+class PantryItem:
+    id: str
+    name: str
+    host: str
+    lake: str
+    price: float
+
+
+@dataclass(frozen=True)
+class Dish:
+    id: str
+    name: str
+    host: str
+    chapter: int
+    food: str
+    ingredient: str
+    effect: str
+    minutes: int
+    charges: int
+    value: float
+    blurb: str
+
+
+PANTRY = {row["id"]: PantryItem(**row) for row in CONTENT_V2_RAW["pantry.json"]["items"]}
+PANTRY_CAPACITY = CONTENT_V2_RAW["pantry.json"]["capacity"]
+DISH_CARD_PRICE = CONTENT_V2_RAW["pantry.json"]["card_price"]
+DISHES = {row["id"]: Dish(**row) for row in CONTENT_V2_RAW["dishes.json"]["dishes"]}
 
 _LAKE_CONTENT = CONTENT_V2_RAW["lakes.json"]
 ZONE_ORDER = tuple(_LAKE_CONTENT["zone_order"])

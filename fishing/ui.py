@@ -65,7 +65,7 @@ BOOK_STAGE_UP_COUNTS = frozenset(
     threshold for threshold, _stage in BOOK_STAGES if threshold >= 3
 )
 
-SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes")
+SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes", "Kitchen")
 _TABS = SHOP_TABS
 TEXT_SIZE_SCALES = (0.9, 1.0, 1.15)
 MODES = comfort.MODES
@@ -348,6 +348,8 @@ class UIState:
     check_i: int = 0
     haul_index: int = 0
     haul_timer: float = 0.0
+    haul_picnic_factor: float = 1.0
+    haul_picnic_started: bool = False
     haul_phase: str = "rise"
     haul_phase_timer: float = 0.0
     haul_badge_enabled: bool = True
@@ -381,6 +383,15 @@ class UIState:
     needs_kind: str = ""
     nap_timer: float = 0.0
     nap_forced: bool = False
+    kitchen_from: str = "play"
+    kitchen_hitboxes: list = field(default_factory=list)
+    cook_kind: str = ""
+    cook_arg: str = ""
+    cook_fish: int = 0
+    cook_label: str = ""
+    cook_text: str = ""
+    cook_timer: float = 0.0
+    cook_from: str = "shop"
     note: str = ""
     has_save: bool = False
     conversation: object = None
@@ -399,6 +410,9 @@ def comfort_controls(viewport):
 
 
 def shop_rows(state, tab: int) -> list[Row]:
+    if tab == 6:
+        from .kitchen import rows
+        return rows(state, state._world)
     rows: list[Row] = []
     if tab == 0:
         saleable = [catch for catch in state.well if not catch.treasured]
@@ -421,6 +435,8 @@ def shop_rows(state, tab: int) -> list[Row]:
             ))
     elif tab == 1:
         for bait in BAITS:
+            if not ({"all", state.lake_id} & set(bait.sold_at)):
+                continue
             have = state.bait.get(bait.id, 0)
             rows.append(Row(
                 f"{bait.name}    {have} aboard", f"{dollars(bait.price)} / doz",
@@ -629,6 +645,9 @@ class UI:
             self._toasts(frame, state, ui.input_device)
         elif mode == "shop":
             self._shop(frame, state, ui)
+        elif mode in {"kitchen", "cook_confirm", "cooking"}:
+            from .kitchenview import draw
+            draw(self, frame, state, ui)
         elif mode == "setbait":
             self._setbait(frame, state, ui)
         elif mode == "haul":
@@ -767,7 +786,7 @@ class UI:
         settings = state.v2.get("settings", {}) if isinstance(state.v2, dict) else {}
         reduced = bool(settings.get("reduced_motion", False))
         speed = settings.get("haul_speed", "normal")
-        cadence = haul_cadence(state)
+        cadence = haul_cadence(state) * ui.haul_picnic_factor
         progress = (1.0 if ui.haul_phase == "surface" else
                     min(1.0, max(0.0, ui.haul_timer / cadence)))
         water_y = int(h * 0.61)
@@ -1154,6 +1173,11 @@ class UI:
         frame[y:y + mh, x:x + mw] = scaled
         for line in state.lines:
             self._seg(frame, line.x0, line.z0, line.x1, line.z1, x, y, mw, mh, self._line_color(line))
+            if comfort.has_buff(state, "glow_buoys"):
+                for bx, bz in line.buoys():
+                    bu, bv = self.world.map_pixel(bx, bz, mw, mh)
+                    self._dot(frame, x + bu, y + bv, 3, GOLD)
+        self._plot_invitation(frame, state, x, y, mw, mh)
         self._plot_trinidad_cove(frame, x, y, mw, mh)
         self._plot_npcs(frame, state, x, y, mw, mh)
         self._plot_boat(frame, state, x, y, mw, mh, radius=3)
@@ -1208,6 +1232,10 @@ class UI:
         for line in state.lines:
             color = self._line_color(line)
             self._seg(frame, line.x0, line.z0, line.x1, line.z1, x, y, mw, mh, color)
+            if comfort.has_buff(state, "glow_buoys"):
+                for bx, bz in line.buoys():
+                    bu, bv = self.world.map_pixel(bx, bz, mw, mh)
+                    self._dot(frame, x + bu, y + bv, 4, GOLD)
             n = max(1, len(line.hooks))
             for i, hook in enumerate(line.hooks):
                 t = (i + 0.5) / n
@@ -1224,6 +1252,7 @@ class UI:
                 u, v = self.world.map_pixel(hx, hz, mw, mh)
                 self._dot(frame, x + u, y + v, 2 if hook.catch is not None else 1, dot)
         self._plot_trinidad_cove(frame, x, y, mw, mh, labels=True)
+        self._plot_invitation(frame, state, x, y, mw, mh)
         self._plot_npcs(frame, state, x, y, mw, mh, labels=True)
         self._plot_boat(frame, state, x, y, mw, mh, radius=4)
         self._plot_bot(frame, state, x, y, mw, mh)
@@ -1232,6 +1261,17 @@ class UI:
         self._text(frame, "Fish gold   soak green   tired red   NPC blue", x, y + mh + 12, size, DIM, shadow=False)
         close_hint = self._controls(ui, "Tab closes the chart", "B closes the chart")
         self._text(frame, close_hint, x + mw - 20 * self.cell(size)[0], y + mh + 14 + self.cell(size)[1], size, DIM, shadow=False)
+
+    def _plot_invitation(self, frame, state, x, y, mw, mh):
+        mark = getattr(state, "v2", {}).get("calendar", {}).get("invitation_mark")
+        if (not isinstance(mark, dict) or mark.get("lake_id") != self.world.id
+                or comfort.number(mark.get("until_game_minutes")) <= state.game_minutes):
+            return
+        if any(type(mark.get(key)) not in (int, float) or not math.isfinite(mark[key]) for key in ("x", "z")):
+            return
+        u, v = self.world.map_pixel(mark["x"], mark["z"], mw, mh)
+        self._dot(frame, x + u, y + v, 5, GOLD)
+        self._dot(frame, x + u, y + v, 2, INK)
 
     def _plot_trinidad_cove(self, frame, x, y, mw, mh, labels=False):
         if self.world.id != "cedar":
@@ -1400,7 +1440,8 @@ class UI:
             title = "A little rest?" if energy else "A bite to eat?"
             body = ("Bot: Your eyes are getting heavy. Hauling is 25% slower while Drowsy. Shall we anchor safely for a two-hour catnap?"
                     if energy else "Bot: A meal would be nice. While Peckish, the boat runs 20% slower. You can still steer, haul and call the tow boat.")
-            labels = ("Anchor & nap" if energy else "Keep going", "Later (30 min)")
+            eat = state.v2["pantry"].get("kibble", 0) > 0
+            labels = ("Anchor & nap" if energy else "Eat Kibble Tin" if eat else "Keep going", "Later (30 min)")
             selected = ui.comfort_i
         else:
             progress = 1 - max(0., min(1., ui.nap_timer / 3))
@@ -1478,6 +1519,8 @@ class UI:
             labels.append("Peckish")
         if comfort.rested(state.v2, state.narrative.active_play_game_minutes):
             labels.append("Rested")
+        if comfort.active_buff(state):
+            labels.append("Picnic")
         if not labels:
             return
         h, w = frame.shape[:2]
@@ -1492,6 +1535,10 @@ class UI:
         self._text(frame, label, margin + 12, y + 6, size, GOLD, False, "sans")
 
     def _shop(self, frame, state, ui: UIState):
+        if ui.shop_tab == 6:
+            from .kitchenview import draw
+            draw(self, frame, state, ui)
+            return
         rows = shop_rows(state, ui.shop_tab)
         ui.shop_i = _clamp(ui.shop_i, len(rows))
         h, w = frame.shape[:2]
@@ -1509,11 +1556,18 @@ class UI:
         self._text(frame, meta, x + m, y + 12 + self.cell(head)[1], small, GOLD, shadow=False)
         tab_y = y + 18 + self.cell(head)[1] + self.cell(small)[1]
         tx = x + m
-        for i, name in enumerate(_TABS):
+        tab_font = body
+        while tab_font > 10 and sum(self._measure(name, tab_font, "mono") + 24 for name in _TABS) > pw - m * 2:
+            tab_font -= 1
+        indexes = list(range(len(_TABS)))
+        if sum(self._measure(name, tab_font, "mono") + 24 for name in _TABS) > pw - m * 2:
+            indexes = [(ui.shop_tab + delta) % len(_TABS) for delta in (-1, 0, 1)]
+        for i in indexes:
+            name = _TABS[i]
             color = GOLD if i == ui.shop_tab else DIM
             label = f"[{name}]" if i == ui.shop_tab else f" {name} "
-            tw = self._text(frame, label, tx, tab_y, body, color)
-            tx += tw + 18
+            tw = self._text(frame, label, tx, tab_y, tab_font, color)
+            tx += tw + 8
         list_top = tab_y + ch + 10
         list_h = ph - (list_top - y) - ch * 3
         visible = max(4, list_h // (ch + 2))
@@ -1576,21 +1630,24 @@ class UI:
                    x + m, y + 17 + self.cell(head)[1] + self.cell(small)[1],
                    small, DIM, shadow=False)
         top = y + 30 + self.cell(head)[1] + self.cell(small)[1] * 2
-        for i, bait in enumerate(BAITS):
+        visible = max(1, (y + ph - ch * 2 - 42 - top) // (ch + 4))
+        start = _window(ui.set_bait, len(BAITS), visible)
+        need = sum(1 for hook_index in range(spec["hooks"])
+                   if hook_index * ui.set_sections // spec["hooks"] == ui.set_section)
+        for offset, bait in enumerate(BAITS[start:start + visible]):
+            i = start + offset
             have = state.bait.get(bait.id, 0)
-            need = sum(1 for hook_index in range(spec["hooks"])
-                       if hook_index * ui.set_sections // spec["hooks"] == ui.set_section)
             label = f"{i + 1}  {bait.name}"
             right = f"{have} aboard"
             selected = i == section_baits[ui.set_section]
             color = GOLD if selected else INK
             if have < need and selected:
                 color = WARN
-            ry = top + i * (ch + 4)
+            ry = top + offset * (ch + 4)
             if selected:
                 self._fill(frame, x + 8, ry - 1, pw - 16, ch + 2, (46, 42, 28), 0.85)
-            self._text(frame, label, x + m, ry, body, color, shadow=False)
             rw = len(right) * self.cell(body)[0]
+            self._text(frame, self._trim(label, body, pw - m * 2 - rw - 16), x + m, ry, body, color, shadow=False)
             self._text(frame, right, x + pw - m - rw, ry, body, color, shadow=False)
         bait = BAITS[section_baits[ui.set_section]]
         note = ui.note or f"Editing section {ui.set_section + 1}: needs {need}. {bait.blurb}"
@@ -1747,8 +1804,8 @@ class UI:
             color = GOLD if i == ui.pause_i else INK
             prefix = "> " if i == ui.pause_i else "  "
             self._text(frame, prefix + label, x + 18, y + 24 + self.cell(head)[1] + i * (self.cell(body)[1] + 8), body, color)
-        foot = ui.note or self._controls(ui, "Arrows · Enter selects · Z catnap",
-                                        "D-pad · A selects · B resumes · X catnap")
+        foot = ui.note or self._controls(ui, "Arrows · Enter · Z nap · K pantry",
+                                        "D-pad · A · X nap · Y pantry")
         self._text(frame, foot, x + 18, y + ph - self.cell(small)[1] - 12, small,
                    WARN if ui.note else DIM, shadow=False)
 
@@ -1908,6 +1965,17 @@ class UI:
         if not settings.get("captions", True) or ui.caption_timer <= 0 or not ui.caption:
             return
         h, w = frame.shape[:2]
+        if ui.mode in {"kitchen", "cook_confirm", "cooking"} or (ui.mode == "shop" and ui.shop_tab == 6):
+            size = self._size(frame, "small")
+            while size > 9 and self._render(ui.caption, size, INK, "sans").shape[0] > 18:
+                size -= 1
+            label = self._trim(ui.caption, size, w - 48)
+            glyph_h = self._render(label, size, INK, "sans").shape[0]
+            width = self._measure(label, size) + 20
+            x, y = (w - width) // 2, h - glyph_h - 8
+            self._round_fill(frame, x, y, width, glyph_h + 6, (17, 31, 32), 1)
+            self._text(frame, label, x + 10, y + 3, size, DIM, False, "sans")
+            return
         size = self._size(frame, "body")
         text_w = self._measure(ui.caption, size)
         pw = min(w - 24, text_w + 32)

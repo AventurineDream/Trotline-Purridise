@@ -243,6 +243,7 @@ def _book_defaults(state) -> dict:
 
 def default_v2(state=None) -> dict:
     """Build the guide's v2 defaults, seeded only from existing save data."""
+    from .data import PANTRY
     schedule_seed = 0
     journal_species = {}
     scenes_seen = []
@@ -263,7 +264,7 @@ def default_v2(state=None) -> dict:
         },
         "needs": deepcopy(DEFAULT_NEEDS),
         "buff": None,
-        "pantry": {"herbs": 0},
+        "pantry": {item_id: 0 for item_id in PANTRY},
         "recipes": [], "dishes_known": [],
         "boat_extras": {},
         "book": {"species": journal_species, "tracked": None,
@@ -317,6 +318,8 @@ def merge_v2_defaults(state, saved_v2: object) -> dict:
     normalized["mode"] = mode
     normalized["settings"]["mode"] = mode
     normalize_needs(normalized)
+    from .comfort import normalize_food
+    normalize_food(normalized)
 
     saved_profile = saved_v2.get("profile")
     saved_collar = saved_profile.get("collar") if isinstance(saved_profile, dict) else None
