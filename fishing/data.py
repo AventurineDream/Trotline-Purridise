@@ -56,6 +56,11 @@ class BotShell:
     name: str
     chapter: int
     tool_id: str
+    body: tuple[float, float, float]
+    trim: tuple[float, float, float]
+    secondary: tuple[float, float, float]
+    chime: str
+    caption: str
 
 
 @dataclass(frozen=True)
@@ -69,7 +74,7 @@ class BotTool:
 _BOT_DATA = CONTENT_V2_RAW["bot.json"]
 BOT_PREFIXES = tuple(_BOT_DATA["name_prefixes"])
 BOT_SUFFIX_MIN, BOT_SUFFIX_MAX = _BOT_DATA["suffix_min"], _BOT_DATA["suffix_max"]
-BOT_SHELLS = {row["id"]: BotShell(**row) for row in _BOT_DATA["shells"]}
+BOT_SHELLS = {row["id"]: BotShell(**{**row, **{key: tuple(row[key]) for key in ("body", "trim", "secondary")}}) for row in _BOT_DATA["shells"]}
 BOT_TOOLS = {row["id"]: BotTool(**row) for row in _BOT_DATA["tools"]}
 BOT_COLLAR_STAGES = {row["id"]: row["name"] for row in _BOT_DATA["collar_stages"]}
 BOT_KNOTS = {row["id"]: row["name"] for row in _BOT_DATA["knots"]}

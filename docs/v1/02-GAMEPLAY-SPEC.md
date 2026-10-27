@@ -436,6 +436,10 @@ saves remain fixed; old placeholder suffixes below 011 are repaired once.
   keeps the active scout target, phase, notes and progress. Tool purchases need
   the earned shell, independent of the shell currently worn; Sonar Grid also
   needs the Depth Finder. Already owned tools cannot be charged twice.
+- The five procedural shell models sit on the bow and animate during scouting.
+  Wool and the chosen knot render on every shell after receipt; reduced motion
+  freezes decorative joints. Astral chrome and star freckles glow at night in
+  both rendering backends.
 - Collar state is saved as none → received → loose → retied → favorite. The
   marker scene enables the square knot, bow or sailor’s hitch choice in chapter
   4; the saved knot survives every shell change. Visibility never changes this
@@ -684,8 +688,10 @@ visibility.
   finale nights).
 - **Music:** a gentle procedural or sequenced score, one motif per lake, played
   sparsely: dawn, dusk, chapter moments. Silence is a valid default.
-- Each Bot shell has a chime timbre (tin = triangle, duck = squeak, frog = wooden
-  "ribbit" click, sub = bubbly tick, astral = glass bell).
+- Each Bot shell has a synthesized chime timbre (tin = triangle, duck = squeak,
+  frog = wooden "ribbit" click, sub = bubbly tick, astral = glass bell), with a
+  matching caption. Launch, recall, reports and shell swaps use the equipped
+  shell’s voice through the existing SFX bus and caption setting.
 
 ---
 
