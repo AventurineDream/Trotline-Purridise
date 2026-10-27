@@ -604,8 +604,8 @@ matches from `03 §1.2`; Cedar's survey, zones and geometry stay unchanged.
 
 Flathead, Crater and Nebula use bounded, driveable flat maps with their own
 habitat labels and safe landing slips. Crater has springs and no inlet;
-Nebula has reeds and current. These maps intentionally have no ordinary fish
-roster or NPC cast until the content tickets land. They allocate only the active
+Nebula has reeds and current. V1-24 populates their ordinary fish rosters and temporary soundings. Their NPC
+casts remain empty until the character-content tickets land. They allocate only the active
 world, and the native renderer supports an empty foliage buffer. The play loop
 also releases its startup reference when changing lakes.
 
@@ -628,3 +628,43 @@ day/night water, route locks and warmed full-frame benchmarks. Add `--software`
 for the CPU path. `--lakes=briar,flathead,crater,nebula` explicitly selects a
 subset on checkouts missing Cedar's binary; full CI still exercises the actual
 five-water travel paths. See `docs/issue-51/README.md` for evidence and limits.
+
+### V1-24 species data
+
+`species.json` now contains all 144 standard fish, with counts 36/36/34/34/34
+across the five waters. All 108 new rows transcribe `03 §1.3–1.6`: tier defaults,
+weights/prices, depths, time bands, bait and habitat priorities, tags, food and
+shiny palettes. Their folk names and attributed rumors match the existing Book
+manifest. Each row carries a bounded anatomical look using the shared family
+meshes, so its catch and Book page render immediately.
+
+New rows declare ordered `baits` and `zones`; validation checks their 1.0/0.6 and
+1.0/0.7 matches against the global tables and lake habitats. Optional
+`weather_affinities` supply the exact fog/clear ×1.4 and Nebula aurora ×1.25
+modifiers. The validator checks 144 unique species and reciprocal lake rosters.
+Cedar's six additions are Cedar-only. Existing 36 species rows and the original
+five bait/habitat profiles retain regression hashes and seeded-catch coverage.
+Roe gains a 0.6 secondary match for the two legacy shad, whose previous best bait
+was 0.3; buying specialty bait elsewhere and returning with it is supported.
+
+The flat maps have provisional data-driven `placeholder_depths`, derived from
+the authored habitat depth ranges. Their dry terrain stays flat. This lets real
+lines reach deep-water fish before the dedicated lake environments arrive;
+Briar and Cedar depths are unchanged. `specieschecks.py` floods a conservative
+four-metre boating grid from the landing, checks hull/obstacle/draft clearance,
+and records real coordinates, depths, bait stock sources and live rate queries.
+Every species must have at least one witness at ≥0.5× its authored default rate.
+Legacy rows keep their explicit rate overrides. A species present in two lakes
+can meet the threshold in either one. Both unit tests and the full gameplay
+self-test run this check; no fishing RNG is consumed.
+
+Migration adds empty journal entries for newly supported species while retaining
+all prior records and future fields. Tiny weights use up to three decimals so a
+0.005 lb minnow never reads as zero. Book hints now name the actual home water.
+The 1,200-frame benchmark gives the journal two blocks per cycle to retain full
+coverage of 144 fish, twelve quests and every Book tab.
+
+`python -m fishing --shots shots/species --species` produces all 288 normal/shiny
+cards, new Book entries, roe stock, a placeholder sounding chart and a warmed
+full-frame benchmark. Add `--software` for the CPU path. See
+`docs/issue-52/README.md` for captures and measurements.

@@ -23,13 +23,13 @@ from .world import World
 class ContentV2Checks(unittest.TestCase):
     def test_data_loaders_keep_the_existing_gameplay_apis(self):
         content = load_content_v2()
-        self.assertEqual(len(content.species), 36)
+        self.assertEqual(len(content.species), 144)
         self.assertEqual(len(content.baits), 17)
         self.assertEqual(len(content.pantry), 6)
         self.assertEqual(len(content.dishes), 10)
         self.assertEqual(set(content.boats), {"jon", "rowboat", "sail", "pontoon"})
         self.assertEqual(set(content.lakes), {"briar", "cedar", "flathead", "crater", "nebula"})
-        self.assertEqual(len(SPECIES), 36)
+        self.assertEqual(len(SPECIES), 144)
         self.assertEqual(SPECIES_BY_ID["bluegill"].folk_name, "Sunny")
         self.assertEqual(SPECIES_BY_ID["bluegill"].lakes, ("briar", "cedar"))
         self.assertEqual(set(BAIT_BY_ID), {bait.id for bait in BAITS})
@@ -161,7 +161,7 @@ class ContentV2Checks(unittest.TestCase):
             validate_content_v2(broken)
 
         self.assertIn(
-            "species.json:species[36](new_fish).lakes: species must belong to at least one lake",
+            "species.json:species[144](new_fish).lakes: species must belong to at least one lake",
             str(caught.exception),
         )
 
@@ -290,10 +290,10 @@ class ContentV2Checks(unittest.TestCase):
         with self.assertRaises(ContentError) as caught:
             validate_content_v2(broken)
         message = str(caught.exception)
-        self.assertIn("species.json:species[36](bluegill).price", message)
-        self.assertIn("species.json:species[37].price", message)
-        self.assertIn("species.json:species[36](bluegill).id: duplicate ID 'bluegill'", message)
-        self.assertIn("species.json:species[37].id: expected non-empty text", message)
+        self.assertIn("species.json:species[144](bluegill).price", message)
+        self.assertIn("species.json:species[145].price", message)
+        self.assertIn("species.json:species[144](bluegill).id: duplicate ID 'bluegill'", message)
+        self.assertIn("species.json:species[145].id: expected non-empty text", message)
 
     def test_unparseable_file_does_not_cascade_unknown_reference_errors(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -1,0 +1,23 @@
+{
+  "backend": "CPU fallback",
+  "render_size": [
+    480,
+    270
+  ],
+  "presentation_size": [
+    1280,
+    720
+  ],
+  "species": 144,
+  "card_variants": 288,
+  "contact_sheet_ms": 7689.885,
+  "frames": 60,
+  "warmup_frames": 12,
+  "median_ms": 150.664,
+  "p95_ms": 165.439,
+  "peak_rss_bytes": 183390208,
+  "memory_limit_bytes": 3000000000,
+  "cpu_card_cache_bytes": 20054016,
+  "persistent_graphics_objects": 0,
+  "scope": "All normal/shiny cards, then warmed full lake/resize/new Book, stock and chart frames"
+}

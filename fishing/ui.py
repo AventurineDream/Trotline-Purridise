@@ -52,6 +52,7 @@ from .boat import (
     BATTERY_CHARGE_KWH, ELECTRICITY_PRICE,
 )
 from .lakes import LAKES, LAKE_ZONE_NAMES, travel_lock_reason
+from .data import weight_string
 from .weather import wind_at
 from . import comfort
 
@@ -432,7 +433,7 @@ def shop_rows(state, tab: int) -> list[Row]:
             q = quality_name(catch.quality)
             mark = " · Treasured" if catch.treasured else ""
             rows.append(Row(
-                f"{catch.weight:.1f} lb {name}, {q}{mark}", dollars(catch.value()),
+                f"{weight_string(catch.weight)} {name}, {q}{mark}", dollars(catch.value()),
                 f"Caught on {BAIT_BY_ID[catch.bait].name.lower()}.",
                 True, "sell_one", str(i),
             ))
@@ -576,7 +577,7 @@ def check_rows(state, line_index: int) -> list[Row]:
             if catch.treasured:
                 choice += " · TREASURED"
             rows.append(Row(
-                f"{i + 1:2d}  {section_label}  {catch.weight:.1f} lb {name}, {q}", choice,
+                f"{i + 1:2d}  {section_label}  {weight_string(catch.weight)} {name}, {q}", choice,
                 "", not forced_release, "hook", str(i),
             ))
     rows.append(Row("Resolve catches", "", "Applies the Keep / Release choices.", True, "take_all"))
@@ -920,7 +921,7 @@ class UI:
                      small, ribbon_color)
         species = SPECIES_BY_ID[catch.species]
         quality = quality_name(catch.quality)
-        detail = f"{catch.weight:.1f} lb  ·  {species.name}  ·  {quality}"
+        detail = f"{weight_string(catch.weight)}  ·  {species.name}  ·  {quality}"
         self._center(frame, detail, w / 2, image_y + image_h + 12, body, INK)
         if catch.shiny:
             self._center(frame, "SHINY CATCH", w / 2, image_y + image_h + 12 + self.cell(body)[1],
@@ -1800,7 +1801,7 @@ class UI:
                     name = "✦ " + name
                 q = quality_name(catch.quality)
                 mark = " · TREASURED" if catch.treasured else ""
-                label = f"{catch.weight:.1f} lb {name}, {q}{mark}"
+                label = f"{weight_string(catch.weight)} {name}, {q}{mark}"
                 color = GOLD if i == ui.well_i else INK
                 ry = top + n * (ch + 2)
                 self._text(frame, self._trim(label, body, int(pw * 0.68)), x + m, ry, body, color, shadow=False)
