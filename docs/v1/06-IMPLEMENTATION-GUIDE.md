@@ -282,8 +282,12 @@ build and remains serialized until a recognized boat is selected.
   fish, using a saved `picnic_pity_credited` catch field. It does not reroll a
   hooked fish or change base shiny odds. The next catch honors an earned pity
   guarantee through the existing `roll_shiny` path.
-- Soup's meal allowance saves `needs.meal_hours=48` until another meal. Extra
-  pie dreams use `book.dream_queue`; the existing unread slot stays first.
+- Meals save a finite `needs.meal_hours` threshold between 24 hours and the
+  longest configured meal. Before resetting `since_meal_h`, `comfort.meal`
+  keeps `max(new_meal_duration, previous_threshold - elapsed_since_meal)`.
+  Normalization and slowdown queries retain fractional carryover, including
+  through save/load; a snack or new dish cannot shorten Soup's 48-hour window.
+  Extra pie dreams use `book.dream_queue`; the existing unread slot stays first.
 - Bot scouting, fuel burn, software fog/buoys, GL fog/buoys and chart markers
   query the current effect. No fishing-rate modifier is added. The five legacy
   bait maps and 360 sampled base-rate tables have regression fingerprints.

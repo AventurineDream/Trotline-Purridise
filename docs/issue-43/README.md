@@ -11,7 +11,7 @@ per item. Known dish cards cannot be bought twice.
 
 ## Acceptance evidence
 
-`test_kitchen.py` adds 24 acceptance/regression tests covering every buff:
+`test_kitchen.py` adds 26 acceptance/regression tests covering every buff:
 
 | Dish | Verified effect |
 | --- | --- |
@@ -39,8 +39,9 @@ The original five bait-match maps and 360 sampled ordinary rate tables retain
 their baseline fingerprints. Seeded no-buff fishing matches a save with an
 unknown future buff; no rate modifier was added.
 
-**157 selected local unit/persistence/UI checks passed**, plus the final 38
-kitchen/comfort checks after preserving the 48-hour meal through a mode switch.
+**157 selected local unit/persistence/UI checks passed** before the review
+correction; **40 kitchen/comfort checks** cover the correction, including snack
+and later-dish carryover across reloads.
 The two Cedar migration methods require the terrain binary absent from this
 local source mirror; the complete suite and software self-test run in CI against
 the repository assets. Native bounds checks cover both fonts, three text sizes,
@@ -63,8 +64,13 @@ Pudding awards bonus progress at a check because ordinary shiny rolls already
 happen during soaking. An earned guarantee applies to the next new catch.
 The saved per-fish marker prevents reopening a line or reloading from granting
 the same bonus twice. Pie's extra lead waits in `book.dream_queue`; the ordinary
-unread slot remains first. Soup's meal allowance lasts until another meal and
-survives mode changes independently of the visual buff.
+unread slot remains first. A later meal keeps the larger of its own duration
+and the previous meal's remaining window. Soup followed by either a snack or a
+new dish after 5 h, 5 h 1 min or 5 h 15 min still avoids Peckish at 30 h, 40 h
+and exactly 48 h, then becomes Peckish just after 48 h. Those fractional
+carryovers survive save/load. A late snack still grants a full 24 h, a fresh
+soup grants 48 h, and mode changes preserve the allowance independently of the
+visual buff.
 
 ## Screenshots and performance
 

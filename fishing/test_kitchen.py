@@ -366,6 +366,58 @@ class KitchenChecks(unittest.TestCase):
         comfort.meal(state.v2)
         self.assertEqual(state.v2['needs']['meal_hours'], 24)
 
+    def test_snack_and_later_dish_preserve_remaining_soup_window_through_reload(self):
+        for replacement in ('snack', 'dish'):
+            for elapsed_minutes in (300, 301, 315):
+                with self.subTest(replacement=replacement, elapsed_minutes=elapsed_minutes):
+                    state = State.new(self.world, seed=43015)
+                    reference = State.new(self.world, seed=43015)
+                    for item in (state, reference):
+                        comfort.change_mode(item.v2, 'old_salt')
+                        comfort.serve_dish(item, DISHES['starlight_soup'])
+                        item.advance_bulk(elapsed_minutes)
+                    state.v2['pantry'].update({'kibble': 1, 'herbs': 1})
+                    state.v2['dishes_known'] = ['pan_fritters']
+                    state.well = [Catch('bluegill', 1, 1, 0, 'flats', 'worm', 8)]
+                    if replacement == 'snack':
+                        buff = deepcopy(state.v2['buff'])
+                        self.assertIsNone(kitchen.snack(state))
+                        self.assertEqual(state.v2['buff'], buff)
+                    else:
+                        self.assertIsNone(kitchen.cook_dish(state, self.world, 'pan_fritters'))
+                        self.assertTrue(comfort.has_buff(state, 'quick_haul'))
+                    self.assertEqual(state.v2['needs']['meal_hours'], 48 - elapsed_minutes / 60)
+                    self.assertEqual(state.v2['needs']['since_meal_h'], 0)
+                    state.save(self.path, update_stamp=False)
+                    state = State.load(self.path, self.world)
+                    self.assertEqual(state.v2['needs']['meal_hours'], 48 - elapsed_minutes / 60)
+                    previous = elapsed_minutes
+                    for minute in (30 * 60, 40 * 60, 48 * 60, 48 * 60 + 1):
+                        state.advance_bulk(minute - previous)
+                        reference.advance_bulk(minute - previous)
+                        expected = 1 if minute <= 48 * 60 else .8
+                        self.assertEqual(comfort.speed_factor(state.v2), expected)
+                        self.assertEqual(comfort.speed_factor(state.v2), comfort.speed_factor(reference.v2))
+                        previous = minute
+
+    def test_late_meal_extends_satiation_and_fresh_soup_grants_full_duration(self):
+        state = self.state
+        comfort.change_mode(state.v2, 'old_salt')
+        self.buff('starlight_soup')
+        state.advance_bulk(30 * 60)
+        state.v2['pantry']['kibble'] = 1
+        self.assertIsNone(kitchen.snack(state))
+        self.assertEqual(state.v2['needs']['meal_hours'], 24)
+        state.advance_bulk(24 * 60)
+        self.assertEqual(comfort.speed_factor(state.v2), 1)
+        state.advance_bulk(1)
+        self.assertEqual(comfort.speed_factor(state.v2), .8)
+        self.buff('starlight_soup')
+        state.advance_bulk(5 * 60)
+        self.buff('starlight_soup')
+        self.assertEqual(state.v2['needs']['meal_hours'], 48)
+        self.assertEqual(state.v2['needs']['since_meal_h'], 0)
+
     def test_buffs_never_stack_and_pantry_recipes_future_fields_round_trip(self):
         self.food()
         state = self.state

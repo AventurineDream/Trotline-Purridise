@@ -12,6 +12,8 @@ NAP_MINUTES = 120
 RESTED_MINUTES = 360
 PROMPT_INTERVAL = 600.0
 SNOOZE_SECONDS = 1800.0
+MAX_MEAL_HOURS = max([24.0, *(dish.value for dish in DISHES.values()
+                            if dish.effect == "glow_buoys")])
 DEFAULT_NEEDS = {
     "awake_h": 0.0, "since_meal_h": 0.0, "rested_until": None,
     "meal_hours": 24.0,
@@ -27,6 +29,10 @@ def number(value, default=0.0):
         return max(0.0, value) if math.isfinite(value) else default
     except (ValueError, TypeError, OverflowError):
         return default
+
+
+def _meal_hours(value):
+    return min(MAX_MEAL_HOURS, max(24.0, number(value, 24.0)))
 
 
 def mode(v2):
@@ -48,7 +54,7 @@ def normalize_needs(v2):
         needs[key] = number(needs[key])
     if needs["rested_until"] is not None:
         needs["rested_until"] = number(needs["rested_until"], None)
-    needs["meal_hours"] = 48.0 if needs.get("meal_hours") == 48 else 24.0
+    needs["meal_hours"] = _meal_hours(needs.get("meal_hours"))
     needs["prompt_shown"] = needs["prompt_shown"] is True
     for key in ("prompted", "snooze_until"):
         if not isinstance(needs[key], dict):
@@ -97,7 +103,7 @@ def doze_due(v2):
 
 
 def speed_factor(v2):
-    limit = 48.0 if _view(v2).get("meal_hours") == 48 else 24.0
+    limit = _meal_hours(_view(v2).get("meal_hours"))
     peckish = mode(v2) == "old_salt" and number(_view(v2).get("since_meal_h")) > limit
     return .8 if peckish else 1.0
 
@@ -108,10 +114,11 @@ def rested(v2, active_game_minutes):
 
 
 def meal(v2, *, hours=24):
-    """Kitchen/snack hook; a meal clears hunger without changing any buff."""
+    """Reset hunger without shortening existing satiation or changing a buff."""
     needs = normalize_needs(v2)
+    remaining = max(0.0, needs["meal_hours"] - needs["since_meal_h"])
     needs["since_meal_h"] = 0.0
-    needs["meal_hours"] = 48.0 if hours == 48 else 24.0
+    needs["meal_hours"] = max(_meal_hours(hours), remaining)
     needs["prompted"]["hunger"] = False
     needs["snooze_until"]["hunger"] = 0.0
 
