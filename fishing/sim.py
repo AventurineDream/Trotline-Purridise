@@ -990,6 +990,7 @@ class State:
                         movement_propulsion = "oar"
                 else:
                     burn = self.boat.fuel_burn*(1.0 if self.boat_id=="sail" else 1+self.motor*0.75)
+                    burn *= comfort.fuel_factor(self)
                     needed = burn*(0.12+0.88*abs(engine)**1.7)*dt/60.0
                     available = min(self.fuel,needed)
                     engine *= available/max(needed,1e-12)
@@ -1039,6 +1040,11 @@ class State:
             if not moved:
                 break
         self.yaw = (self.yaw+math.pi)%math.tau-math.pi
+        weather = weather_at(self.game_minutes)
+        if not self.anchored and weather == "snow_mist" and "wind_steady" not in self.boat.traits:
+            heading, wind = wind_at(self.game_minutes)
+            push = wind * .015 * math.sin(self.anim * .7) * dt * comfort.gust_factor(self, weather)
+            self._move(self.x + math.sin(heading) * push, self.z + math.cos(heading) * push, world)
         self.traveled += math.hypot(self.x-old_x,self.z-old_z)
         self._maybe_snag(world)
         self._tutorial()
@@ -1546,7 +1552,9 @@ class State:
         return True
 
     def buy_bait(self, bait_id: str) -> str | None:
-        bait = BAIT_BY_ID[bait_id]
+        bait = BAIT_BY_ID.get(bait_id)
+        if bait is None or not ({"all", self.lake_id} & set(bait.sold_at)):
+            return "That bait is cooked or sold at another landing."
         if self.bait_count() + DOZEN > self.box_cap():
             return "The bait box is full."
         if not self._spend(bait.price):

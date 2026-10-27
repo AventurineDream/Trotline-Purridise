@@ -33,7 +33,10 @@
         "black_buffalo": 0.8,
         "gizzard_shad": 0.3,
         "threadfin_shad": 0.3
-      }
+      },
+      "sold_at": [
+        "all"
+      ]
     },
     {
       "id": "liver",
@@ -50,7 +53,10 @@
         "buffalo": 0.2,
         "black_bullhead": 1.0,
         "brown_bullhead": 1.0
-      }
+      },
+      "sold_at": [
+        "all"
+      ]
     },
     {
       "id": "shad",
@@ -76,7 +82,10 @@
         "blue_sucker": 0.35,
         "bigmouth_buffalo": 0.35,
         "black_buffalo": 0.35
-      }
+      },
+      "sold_at": [
+        "all"
+      ]
     },
     {
       "id": "minnow",
@@ -102,7 +111,10 @@
         "spotted_gar": 0.8,
         "shortnose_gar": 0.8,
         "alligator_gar": 0.8
-      }
+      },
+      "sold_at": [
+        "all"
+      ]
     },
     {
       "id": "craw",
@@ -122,6 +134,260 @@
         "longear": 0.35,
         "golden_shiner": 0.35,
         "spotted_bass": 0.9
+      },
+      "sold_at": [
+        "all"
+      ]
+    },
+    {
+      "id": "dough",
+      "name": "Dough balls",
+      "price": 5,
+      "sold_at": [
+        "all"
+      ],
+      "blurb": "Cheap universal secondary bait.",
+      "matches": {
+        "bluegill": 0.25,
+        "bullhead": 0.25,
+        "crappie": 0.25,
+        "carp": 0.25,
+        "drum": 0.25,
+        "channel": 0.25,
+        "blue": 0.25,
+        "flathead": 0.25,
+        "largemouth": 0.25,
+        "smallmouth": 0.25,
+        "gar": 0.25,
+        "buffalo": 0.25,
+        "white_crappie": 0.25,
+        "redear": 0.25,
+        "green_sunfish": 0.25,
+        "warmouth": 0.25,
+        "redbreast": 0.25,
+        "longear": 0.25,
+        "spotted_bass": 0.25,
+        "white_bass": 0.25,
+        "yellow_bass": 0.25,
+        "hybrid_striper": 0.25,
+        "striped_bass": 0.25,
+        "bowfin": 0.25,
+        "spotted_gar": 0.25,
+        "shortnose_gar": 0.25,
+        "alligator_gar": 0.25,
+        "black_bullhead": 0.25,
+        "brown_bullhead": 0.25,
+        "blue_sucker": 0.25,
+        "bigmouth_buffalo": 0.25,
+        "black_buffalo": 0.25,
+        "golden_shiner": 0.25,
+        "gizzard_shad": 0.25,
+        "threadfin_shad": 0.25,
+        "chain_pickerel": 0.25
+      }
+    },
+    {
+      "id": "roe",
+      "name": "Trout roe",
+      "price": 15,
+      "sold_at": [
+        "flathead",
+        "crater"
+      ],
+      "blurb": "Roe for cold-water fishing.",
+      "matches": {
+        "flathead": 1.0,
+        "largemouth": 1.0,
+        "crappie": 1.0,
+        "smallmouth": 0.7,
+        "channel": 0.28,
+        "bluegill": 0.15,
+        "warmouth": 1.0,
+        "white_crappie": 1.0,
+        "chain_pickerel": 1.0,
+        "spotted_bass": 1.0,
+        "white_bass": 1.0,
+        "yellow_bass": 1.0,
+        "hybrid_striper": 1.0,
+        "striped_bass": 1.0,
+        "bowfin": 0.8,
+        "spotted_gar": 0.8,
+        "shortnose_gar": 0.8,
+        "alligator_gar": 0.8
+      }
+    },
+    {
+      "id": "grub",
+      "name": "Ember grubs",
+      "price": 15,
+      "sold_at": [
+        "crater"
+      ],
+      "blurb": "A warm-water morsel.",
+      "matches": {
+        "bluegill": 1.0,
+        "bullhead": 1.0,
+        "carp": 0.9,
+        "buffalo": 0.65,
+        "channel": 0.4,
+        "crappie": 0.22,
+        "drum": 0.2,
+        "largemouth": 0.18,
+        "smallmouth": 0.12,
+        "blue": 0.12,
+        "redear": 1.0,
+        "green_sunfish": 1.0,
+        "redbreast": 1.0,
+        "longear": 1.0,
+        "golden_shiner": 1.0,
+        "warmouth": 0.3,
+        "white_crappie": 0.3,
+        "chain_pickerel": 0.3,
+        "black_bullhead": 0.9,
+        "brown_bullhead": 0.9,
+        "blue_sucker": 0.8,
+        "bigmouth_buffalo": 0.8,
+        "black_buffalo": 0.8,
+        "gizzard_shad": 0.3,
+        "threadfin_shad": 0.3
+      }
+    },
+    {
+      "id": "stardust",
+      "name": "Star-dust",
+      "price": 18,
+      "sold_at": [
+        "nebula"
+      ],
+      "blurb": "A bright morsel from the lagoon.",
+      "matches": {}
+    },
+    {
+      "id": "lantern_liver",
+      "name": "Lantern Liver",
+      "price": 0,
+      "sold_at": [],
+      "blurb": "Cook liver + dough + herbs into a dozen.",
+      "matches": {},
+      "recipe": {
+        "parents": [
+          "liver",
+          "dough"
+        ],
+        "ingredient": "herbs",
+        "teller": "grandmother_whiskers"
+      }
+    },
+    {
+      "id": "queens_breakfast",
+      "name": "Queen's Breakfast",
+      "price": 0,
+      "sold_at": [],
+      "blurb": "Cook minnow + craw + herbs into a dozen.",
+      "matches": {},
+      "recipe": {
+        "parents": [
+          "minnow",
+          "craw"
+        ],
+        "ingredient": "herbs",
+        "teller": "willow"
+      }
+    },
+    {
+      "id": "pecan_smoked_shad",
+      "name": "Pecan-Smoked Shad",
+      "price": 0,
+      "sold_at": [],
+      "blurb": "Cook shad + liver + pecan into a dozen.",
+      "matches": {},
+      "recipe": {
+        "parents": [
+          "shad",
+          "liver"
+        ],
+        "ingredient": "pecan",
+        "teller": "hank_mudpaw"
+      }
+    },
+    {
+      "id": "phantom_roe",
+      "name": "Phantom Roe",
+      "price": 0,
+      "sold_at": [],
+      "blurb": "Cook roe + minnow + huckleberries into a dozen.",
+      "matches": {},
+      "recipe": {
+        "parents": [
+          "roe",
+          "minnow"
+        ],
+        "ingredient": "huckleberries",
+        "teller": "freya"
+      }
+    },
+    {
+      "id": "huckleberry_mash",
+      "name": "Huckleberry Minnow Mash",
+      "price": 0,
+      "sold_at": [],
+      "blurb": "Cook minnow + dough + huckleberries into a dozen.",
+      "matches": {},
+      "recipe": {
+        "parents": [
+          "minnow",
+          "dough"
+        ],
+        "ingredient": "huckleberries",
+        "teller": "torvald"
+      }
+    },
+    {
+      "id": "mineral_shad",
+      "name": "Mineral Shad",
+      "price": 0,
+      "sold_at": [],
+      "blurb": "Cook shad + grub + salt into a dozen.",
+      "matches": {},
+      "recipe": {
+        "parents": [
+          "shad",
+          "grub"
+        ],
+        "ingredient": "salt",
+        "teller": "ignis"
+      }
+    },
+    {
+      "id": "ember_dumpling",
+      "name": "Ember Grub Dumpling",
+      "price": 0,
+      "sold_at": [],
+      "blurb": "Cook grub + dough + salt into a dozen.",
+      "matches": {},
+      "recipe": {
+        "parents": [
+          "grub",
+          "dough"
+        ],
+        "ingredient": "salt",
+        "teller": "nyx"
+      }
+    },
+    {
+      "id": "moonmilk_stardust",
+      "name": "Moon-Milk Stardust",
+      "price": 0,
+      "sold_at": [],
+      "blurb": "Cook stardust + roe + moonmilk into a dozen.",
+      "matches": {},
+      "recipe": {
+        "parents": [
+          "stardust",
+          "roe"
+        ],
+        "ingredient": "moonmilk",
+        "teller": "nebula_paws"
       }
     }
   ]

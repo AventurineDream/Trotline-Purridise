@@ -11,6 +11,8 @@ import math
 import numpy as np
 
 from .world import Face
+from . import comfort
+from .data import weather_at
 
 _PHASES = ("home", "go", "out", "back")
 # Feet position in the level boat frame: starboard, up, forward of the eye.
@@ -95,7 +97,7 @@ def tick(state, world, dt: float) -> str | None:
         return sound
     dist = _step(state, world, min(_SPEED * dt, 2.5))
     leash = math.hypot(state.bot_x - state.x, state.bot_z - state.z)
-    if state.bot_phase == "go" and leash > 170.0:
+    if state.bot_phase == "go" and leash > 170.0 * comfort.scout_range_factor(state, weather_at(state.game_minutes)):
         state.bot_phase = "back"
         state.bot_target_line_id = None
         state.toast("Bot is turning around. That's far enough.")
@@ -238,19 +240,20 @@ def _afloat(world, x: float, z: float) -> bool:
 
 
 def _target(state, world):
+    reach = comfort.scout_range_factor(state, weather_at(state.game_minutes))
     best = None
     best_d = 1.0e9
     for line in state.lines:
         mx = (line.x0 + line.x1) * 0.5
         mz = (line.z0 + line.z1) * 0.5
         dist = math.hypot(mx - state.x, mz - state.z)
-        if dist < best_d and dist < 140.0 and _afloat(world, mx, mz):
+        if dist < best_d and dist < 140.0 * reach and _afloat(world, mx, mz):
             best = (mx, mz, line.line_id)
             best_d = dist
     if best is not None:
         return best
     fx, fz = math.sin(state.yaw), math.cos(state.yaw)
-    for dist in (18.0, 12.0, 8.0, 5.0):
+    for dist in (18.0 * reach, 12.0 * reach, 8.0 * reach, 5.0):
         x = state.x + fx * dist
         z = state.z + fz * dist
         if _afloat(world, x, z):
@@ -307,8 +310,11 @@ def _report(state, world) -> str:
     hour = hour_of_day(state.game_minutes)
     weather = weather_at(state.game_minutes)
     best_bait, best_sp, best = "worm", "bluegill", -1.0
+    likelihood = {}
     for bait in BAIT_BY_ID:
         rates = species_rates(zone, bait, hour, weather, depth, state.lake_id)
+        for sid, rate in rates.items():
+            likelihood[sid] = max(likelihood.get(sid, 0), rate)
         sp = max(rates, key=rates.get)
         if rates[sp] > best:
             best, best_bait, best_sp = rates[sp], bait, sp
@@ -317,7 +323,13 @@ def _report(state, world) -> str:
         return f"Bot: {where}, the {place}. Quiet for a trotline."
     bait = BAIT_BY_ID[best_bait].name.lower()
     fish = SPECIES_BY_ID[best_sp].name.lower()
-    return f"Bot: {where}, the {place}. {bait.capitalize()} for {fish}."
+    report = f"Bot: {where}, the {place}. {bait.capitalize()} for {fish}."
+    if comfort.has_buff(state, "scout_species"):
+        best_two = sorted((sid for sid in likelihood if likelihood[sid] > 0),
+                          key=lambda sid: (-likelihood[sid], sid))[:2]
+        names = ' and '.join(SPECIES_BY_ID[sid].name.lower() for sid in best_two)
+        report += f" Likeliest here: {names}."
+    return report
 
 
 def _mesh(origin, right, up, facing, bob: float, scale: float = 1.0,
