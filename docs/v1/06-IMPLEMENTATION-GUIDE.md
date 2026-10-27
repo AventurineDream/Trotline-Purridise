@@ -715,3 +715,10 @@ hulls and records full first-frame load, 60 warmed frames, RSS, resource counts,
 finite native colors and all34 real-map catchability witnesses.
 [Issue54 evidence](../issue-54/README.md) documents measured Mesa/CPU limits and
 the remaining hardware-GPU load measurement.
+
+
+Crater save loading also relocates deployed ropes buried by the new cinder isle
+into a hull-checked launch approach. It preserves deployment IDs, hook/catch and
+future fields and updates any matching Bot target. Wet ropes are unchanged; a
+save/reload cannot repeatedly relocate a recovered deployment. This keeps the
+existing pull-all-lines travel rule from trapping an older save.
