@@ -321,12 +321,13 @@ def begin_haul(state, line):
 
 def weather_spot(state):
     """Find nearby water favored by the current weather and time, or stay silent."""
-    from .data import band_of, hour_of_day, weather_at, weather_mult, time_mult
+    from .data import band_of, hour_of_day, weather_mult, time_mult
+    from . import calendar
     from .sim import species_rates
     world = state._world
     if world is None:
         return None
-    hour, weather = hour_of_day(state.game_minutes), weather_at(state.game_minutes)
+    hour, weather = hour_of_day(state.game_minutes), calendar.weather_at(state)
     candidates = []
     for zone, x, z, _radius in world.zones:
         if math.hypot(x - state.x, z - state.z) > 300 or zone in ('shore', 'landing'):
@@ -334,8 +335,9 @@ def weather_spot(state):
         depth = float(world.depth(x, z))
         if depth <= 0:
             continue
-        rates = species_rates(zone, state.preferred_bait, hour, weather, depth, world.id)
-        favorable = [sp for sp in SPECIES if weather_mult(sp.id, weather) > 1
+        rates = species_rates(zone, state.preferred_bait, hour, weather, depth, world.id, game_minutes=state.game_minutes)
+        favorable = [sp for sp in SPECIES if (weather_mult(sp.id, weather) > 1
+                         or calendar.rate_multiplier(world.id, state.game_minutes, sp.id, zone) > 1)
                      and time_mult(sp.pref_time, hour) == 1 and rates.get(sp.id, 0) > .004]
         if favorable:
             candidates.append((sum(rates[sp.id] for sp in favorable), zone, x, z))

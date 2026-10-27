@@ -355,6 +355,7 @@ class UIState:
     haul_badge_enabled: bool = True
     haul_counts_before: dict = field(default_factory=dict)
     journal_i: int = 0
+    book_week_i: int = 0
     journal_page: int = 0
     journal_quest_i: int = 0
     book_entry_i: int = 0
@@ -1050,8 +1051,9 @@ class UI:
         unit = h / 720 * scale
         size,small = max(16,int(22*unit/scale)),max(11,int(12*unit/scale))
         m = max(12,int(26*unit))
-        weather = weather_at(state.game_minutes).upper()
-        clock = clock_string(state.game_minutes)
+        from . import calendar
+        weather = calendar.weather_at(state).replace("_", " ").upper()
+        clock = calendar.day_name(state.game_minutes)[:3] + " " + clock_string(state.game_minutes)
         self._panel(frame,m,m,int(205*unit)+34,int(92*unit)+10,0.66)
         self._text(frame,self.world.name.upper(),m+16,m+int(11*unit),small,GOLD,False,"sans")
         self._text(frame,clock,m+16,m+int(31*unit),max(22,int(30*unit)),INK,False,"serif")
@@ -1094,7 +1096,7 @@ class UI:
             self._text(frame,fuel,rx+16,m+int(111*unit),small,
                        WARN if state.fuel<state.boat.tank*0.15 else DIM,False,"sans")
         if state.boat_id=="sail":
-            wind,wind_speed = wind_at(state.game_minutes+state.minute_acc)
+            wind,wind_speed = wind_at(state.game_minutes+state.minute_acc, state)
             coming_from = (wind+np.pi)%(2*np.pi)
             direction = ("N","NE","E","SE","S","SW","W","NW")[int(coming_from/(np.pi/4)+0.5)%8]
             sail = "SAIL UP" if state.sail_raised else "SAIL DOWN"
@@ -1705,7 +1707,8 @@ class UI:
         self._text(frame, self._trim(foot, small, pw - m * 2), x + m, y + ph - self.cell(small)[1] - 10, small, WARN if ui.note else DIM, shadow=False)
 
     def _journal(self, frame, state, ui: UIState):
-        ui.journal_page %= 5
+        from .bookview import BOOK_TABS
+        ui.journal_page %= len(BOOK_TABS)
         BookView(self, frame, state, ui).draw()
 
     def _draw_journal_text(self, frame, value, x, y, width, size, color,

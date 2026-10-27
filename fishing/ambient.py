@@ -57,7 +57,7 @@ def _bird(out, x, y, z, yaw, species, t, phase):
 
 
 def faces(state, world, light=None):
-    light = lighting_at(state.game_minutes+state.minute_acc) if light is None else light
+    light = lighting_at(state.game_minutes+state.minute_acc, state) if light is None else light
     out = []
     t = float(state.anim)
     # Only two nearby stable habitats are active, regardless of world size.
@@ -81,6 +81,9 @@ def faces(state, world, light=None):
         return out
     # A 5x5 cell neighborhood is bounded and anchored to the bank. No spawning
     # history or retained particle arrays accumulate during long sessions.
+    from .calendar import lake_day
+    special = lake_day(world.id, state.game_minutes)
+    firefly_day = bool(special and special.fireflies and light["night"] > .25)
     cx,cz = math.floor(state.x/8),math.floor(state.z/8)
     count = 0
     for iz in range(cz-2,cz+3):
@@ -95,7 +98,7 @@ def faces(state, world, light=None):
             y = max(0,float(world.sample_height(x,z)))+0.65+0.35*math.sin(t*1.3+seed)
             if light['night']>0.25:
                 pulse = (0.5+0.5*math.sin(t*1.8+seed))**4
-                if pulse<0.12:
+                if pulse < (.04 if firefly_day else .12):
                     continue
                 r = 0.018+0.025*pulse
                 col = (0.98,0.69+0.12*pulse,0.12)
@@ -108,6 +111,6 @@ def faces(state, world, light=None):
                 for dz in (-0.04,0.04):
                     _quad(out,[(x-.13,y+flap,z+dz-.025),(x+.13,y-flap,z+dz-.025),(x+.10,y-flap,z+dz+.025),(x-.10,y+flap,z+dz+.025)],(0.63,0.74,0.70))
             count += 1
-            if count>=12:
+            if count >= (20 if firefly_day else 12):
                 return out
     return out

@@ -1,0 +1,14 @@
+{
+  "frames": 140,
+  "resolution": [
+    1280,
+    720
+  ],
+  "text_size": 2,
+  "accessibility_font": true,
+  "p50_ms": 14.73,
+  "p95_ms": 18.59,
+  "peak_rss_mib": 175.5,
+  "text_cache_mb": 8.39,
+  "scope": "Warmed week view and cookout UI composition; excludes lake rendering"
+}

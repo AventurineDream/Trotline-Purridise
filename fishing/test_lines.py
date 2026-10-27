@@ -67,7 +67,7 @@ class LineCapacityAndBaitChecks(unittest.TestCase):
         )
         observed_baits = []
 
-        def rates(_zone, bait, _hour, _weather, _depth, _lake):
+        def rates(_zone, bait, _hour, _weather, _depth, _lake, *, game_minutes=None):
             observed_baits.append(bait)
             return {"bluegill": 1.0}
 

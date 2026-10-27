@@ -40,7 +40,6 @@ from .data import (
     line_length,
     piece_price,
     quality_of,
-    weather_at,
     bait_mult,
     zone_mult,
     time_mult,
@@ -55,6 +54,8 @@ from .boat import (
     BATTERY_CHARGE_KWH,
 )
 from .weather import wind_at
+from . import calendar
+from .calendar import weather_at
 from .lakes import LAKES
 from .narrative import NarrativeState, deployment_id
 from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, confirm_shiny, lose_shiny,
@@ -403,7 +404,7 @@ def _zone_path_segments(world: World, x0: float, z0: float,
     return out
 
 
-def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float, lake_id="briar") -> dict[str, float]:
+def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float, lake_id="briar", *, game_minutes=None) -> dict[str, float]:
     out = {}
     lake_rates = LAKE_RATE_MULTIPLIERS.get(lake_id, {})
     for sp in SPECIES:
@@ -416,6 +417,9 @@ def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float,
             * depth_mult(sp, depth)
             * lake_rates.get(sp.id, 0.0)
         )
+    if game_minutes is not None:
+        out = {sid: rate * calendar.rate_multiplier(lake_id, game_minutes, sid, zone)
+               for sid, rate in out.items()}
     return out
 
 
@@ -428,10 +432,10 @@ def fishing_hint(state, world) -> str | None:
         return None
     depth = float(world.depth(state.x, state.z))
     hour = hour_of_day(state.game_minutes)
-    weather = weather_at(state.game_minutes)
+    weather = weather_at(state)
     best_bait, best_sp, best = "worm", "bluegill", -1.0
     for bait in BAIT_BY_ID:
-        rates = species_rates(zone, bait, hour, weather, depth, state.lake_id)
+        rates = species_rates(zone, bait, hour, weather, depth, state.lake_id, game_minutes=state.game_minutes)
         sp = max(rates, key=rates.get)
         if rates[sp] > best:
             best, best_bait, best_sp = rates[sp], bait, sp
@@ -624,7 +628,7 @@ class State:
     def sail_drive(self):
         if not self.sail_raised or self.anchored:
             return 0.0
-        heading,speed = wind_at(self.game_minutes+self.minute_acc)
+        heading,speed = wind_at(self.game_minutes+self.minute_acc, self)
         return sailing_speed(self.yaw,heading,speed,self.boat.sail_speed)
 
     def buy_boat(self,boat_id,world) -> str | None:
@@ -757,6 +761,8 @@ class State:
             hooked += h
             spoiled += s
             self.game_minutes += 1.0
+        if int(self.game_minutes // calendar.WEEK_MINUTES) != int(before // calendar.WEEK_MINUTES):
+            calendar.ensure_plans(self)
         self.narrative.active_play_game_minutes += max(0.0, self.game_minutes - before)
         comfort.advance_needs(self.v2, max(0.0, self.game_minutes - before) / 60)
         if spoiled:
@@ -841,12 +847,16 @@ class State:
             hooked += h
             spoiled += s
             self.game_minutes += 60.0
+            if int(self.game_minutes // calendar.WEEK_MINUTES) != int((self.game_minutes-60) // calendar.WEEK_MINUTES):
+                calendar.ensure_plans(self)
         return hooked, spoiled
 
     def _advance_minute(self, announce: bool = True) -> tuple[list[tuple[int, str, float, float, float]], int]:
         got = []
         h, s, events = self._one_span(1.0 / 60.0, collect=True, announce=announce)
         self.game_minutes += 1.0
+        if int(self.game_minutes // calendar.WEEK_MINUTES) != int((self.game_minutes-1) // calendar.WEEK_MINUTES):
+            calendar.ensure_plans(self)
         return events, s
 
     def _one_span(self, hours: float, collect: bool = False, announce: bool = False):
@@ -856,7 +866,7 @@ class State:
         events: list[tuple[int, str, float]] = []
         # Representative hour is "now", before the caller bumps the clock.
         hour = hour_of_day(self.game_minutes)
-        weather = weather_at(self.game_minutes)
+        weather = weather_at(self)
         # Depth and zone come from the world via a callback set on the state.
         world = self._world
         for li, line in enumerate(self.lines):
@@ -880,7 +890,7 @@ class State:
                 zone = world.zone_at(x, z)
                 depth = float(world.depth(x, z))
                 bait = line.bait_for_hook(i)
-                rates = species_rates(zone, bait, hour, weather, depth,self.lake_id)
+                rates = species_rates(zone, bait, hour, weather, depth,self.lake_id, game_minutes=self.game_minutes)
                 total = sum(rates.values())
                 if total <= 0:
                     continue
@@ -944,6 +954,7 @@ class State:
     def bind(self, world: World):
         self._world = world
         self.lake_id = world.id
+        calendar.ensure_plans(self)
 
     def emit_quest_event(self, event: dict) -> None:
         """Send a live transition to the attached session quest manager."""
@@ -1040,9 +1051,9 @@ class State:
             if not moved:
                 break
         self.yaw = (self.yaw+math.pi)%math.tau-math.pi
-        weather = weather_at(self.game_minutes)
+        weather = weather_at(self)
         if not self.anchored and weather == "snow_mist" and "wind_steady" not in self.boat.traits:
-            heading, wind = wind_at(self.game_minutes)
+            heading, wind = wind_at(self.game_minutes, self)
             push = wind * .015 * math.sin(self.anim * .7) * dt * comfort.gust_factor(self, weather)
             self._move(self.x + math.sin(heading) * push, self.z + math.cos(heading) * push, world)
         self.traveled += math.hypot(self.x-old_x,self.z-old_z)
@@ -1639,13 +1650,13 @@ class State:
     def advice(self, world: World) -> str:
         zone = world.zone_at(self.x, self.z)
         hour = hour_of_day(self.game_minutes)
-        weather = weather_at(self.game_minutes)
+        weather = weather_at(self)
         depth = float(world.depth(self.x, self.z))
         best_bait = "worm"
         best_score = -1.0
         best_sp = "bluegill"
         for bait in BAIT_BY_ID:
-            rates = species_rates(zone, bait, hour, weather, depth,self.lake_id)
+            rates = species_rates(zone, bait, hour, weather, depth,self.lake_id, game_minutes=self.game_minutes)
             sp = max(rates, key=rates.get)
             if rates[sp] > best_score:
                 best_score = rates[sp]

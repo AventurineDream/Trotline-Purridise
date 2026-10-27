@@ -423,3 +423,11 @@ supplies display labels (existing pattern: `CEDAR_ZONES`).
 - **Keepsakes** (quest B rewards): 44 small decorations. Each is a 2D icon on the
   Keepsakes page, and a decal or prop on boats with a `trophy_rail` or on the
   houseboat shelf. Ids `ks_<npc_id>`, names in `04`.
+
+
+V1-16 copies Briar/Cedar §8 Lake Days and all §3 legendary weather/clock requirements into
+validated `content_v2/calendar.json`. Briar/Cedar modifiers are active now;
+future legendary weather rows prepare forecasts without unlocking their worlds. Game-day
+weekday boundaries are 06:00. Cookout gifts contain one host-specialty pantry
+item or Kibble Tin, chosen reproducibly, with at most one claim per lake each
+Sunday; no fish is spent when that item's pantry slot is full.

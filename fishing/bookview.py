@@ -11,7 +11,7 @@ from .data import BAIT_BY_ID, CEDAR_FISH, LAKES, SPECIES_BY_ID
 from .imageops import resize_rgb
 from .narrative import QUEST_IDS, RIPPLE_BY_QUEST
 
-BOOK_TABS = ("Fish", "Book", "Ripples & Keepsakes", "Story", "Watch")
+BOOK_TABS = ("Fish", "Book", "Ripples & Keepsakes", "Story", "Watch", "Week")
 BOOK_TITLES = {"fishypedia": "Fishypedia", "book_of_five_waters": "The Book of Five Waters",
                "pescapedia": "Pescapedia"}
 ENTRY_IDS = BOOK_SPECIES_IDS + LEGENDARY_IDS
@@ -51,7 +51,7 @@ def book_layout(width, height):
     margin = max(8, min(28, width // 35))
     x, y, w, h = margin, margin, width - margin * 2, height - margin * 2
     pad = 20 if width >= 700 else 10
-    weights = (0.75, 0.75, 1.65, 0.8, 0.8)
+    weights = (0.75, 0.75, 1.65, 0.8, 0.8, 0.7)
     tabs, tx = [], x + pad
     for weight in weights:
         tw = int((w - pad * 2) * weight / sum(weights))
@@ -67,6 +67,14 @@ def book_layout(width, height):
 def contains(rect, point):
     x, y, w, h = rect
     return x <= point[0] < x + w and y <= point[1] < y + h
+
+
+def week_rects(layout):
+    x, y, w, h = layout.content
+    if w < 620 or h < 300:
+        return ()
+    row_h = (h - 48) // 7
+    return tuple((x, y + 48 + i * row_h, int(w * .42), row_h - 4) for i in range(7))
 
 
 def tracker_species(state, ui):
@@ -95,7 +103,8 @@ def move_selection(state, ui, content, delta):
                     ("book_entry_i", len(ENTRY_IDS)),
                     ("book_collection_i", len(collection_rows(state, content, ui.book_shelf))),
                     ("journal_quest_i", len(QUEST_IDS)),
-                    ("book_watch_i", len(LEGENDARY_IDS)))[ui.journal_page]
+                    ("book_watch_i", len(LEGENDARY_IDS)),
+                    ("book_week_i", 7))[ui.journal_page]
     setattr(ui, field, (getattr(ui, field) + delta) % max(1, count))
     ui.book_detail_page = 0
     ui.book_detail_pages = 1
@@ -106,7 +115,7 @@ def turn_page(state, ui, viewport=(1280, 720)):
         ui.book_entry_i = ui.journal_i
         ui.journal_page = 1
         ui.book_detail_page, ui.book_detail_pages = 0, 1
-    elif ui.journal_page in (1, 3):
+    elif ui.journal_page in (1, 3, 5):
         # Actual font metrics determine the pages; input must not impose a cap.
         ui.book_detail_page += 1
     elif ui.book_detail_page + 1 < ui.book_detail_pages:
@@ -316,7 +325,7 @@ class BookView:
         if self.ui.book_ceremony:
             self.ceremony()
         else:
-            (self.grid, self.entry, self.shelf, self.story, self.watch)[self.ui.journal_page]()
+            (self.grid, self.entry, self.shelf, self.story, self.watch, self.week)[self.ui.journal_page]()
         for name, rect in book_controls(l, self.state, self.ui).items():
             if name != "close":
                 self.fill(rect, (218, 210, 185))
@@ -532,12 +541,57 @@ class BookView:
         self.footer(f"Page {page + 1}/{len(pages)} · Enter turns")
 
     def watch(self):
+        from . import calendar
         sid = LEGENDARY_IDS[self.ui.book_watch_i % len(LEGENDARY_IDS)]
         page = legendary_page(sid, self.state.v2, remember=False)
         values = ["Recorded" if page["verified"] else "A lead from " + page["teller"],
                   page["story"], *(_note_text(clue) for clue in page["clues"])]
+        start, end = calendar.next_legendary_window(calendar.forecast_seed(self.state), sid, self.state.game_minutes)
+        values.append("Next weather opportunity: " + calendar.day_name(start) + " "
+                      + calendar.clock_string(start) + "–" + calendar.clock_string(end)
+                      + ". Story, equipment, bait and location requirements still apply.")
         index, count = self.paginated("Watch cards · " + sid.replace("_", " ").title(), values)
         self.footer(f"Watch {self.ui.book_watch_i + 1}/{len(LEGENDARY_IDS)} · Page {index}/{count}")
+
+    def week(self):
+        from . import calendar
+        state, ui = self.state, self.ui
+        today = calendar.day_number(state.game_minutes)
+        first = today // 7 * 7
+        selected = first + ui.book_week_i % 7
+        special = calendar.lake_day(state.lake_id, selected * 1440)
+        values = [special.name + f" · {special.band} catches ×{special.multiplier:g}" if special else "A quiet lake day."]
+        if selected % 7 == 6:
+            values += ["Landing Cookout · 5–8 PM", "All lake friends gather. Bring one ordinary fish for a pantry gift; no cost for missing it."]
+        values += ["Forecast · dawn to dawn", *calendar.forecast_text(state, selected),
+                   "Days begin at 6 AM. Rain is shown as drizzle. Rare-weather opportunities repeat daily; story and equipment gates still apply."]
+        title = f"{calendar.WEEKDAYS[selected % 7]} · Day {selected + 1}"
+        rects = week_rects(self.layout)
+        if not rects:
+            index, count = self.paginated(f"Week {first // 7 + 1} · " + title, values)
+        else:
+            self.text(f"Week {first // 7 + 1} · {state._world.name}", self.x, self.y, self.w, self.body)
+            for i, rect in enumerate(rects):
+                day = first + i
+                event = calendar.lake_day(state.lake_id, day * 1440)
+                label = calendar.WEEKDAYS[i][:3] + (" · Today" if day == today else "")
+                label += " · " + ("Cookout" if i == 6 else event.name if event else "Quiet day")
+                self.fill(rect, LEATHER if i == ui.book_week_i % 7 else (218, 210, 185))
+                size = self.small
+                while size > 1 and self.u.cell(size)[1] > rect[3] - 8:
+                    size -= 1
+                self.text(label, rect[0] + 8, rect[1] + 4, rect[2] - 16, size,
+                          PAPER if i == ui.book_week_i % 7 else INK)
+            x = self.x + rects[0][2] + 24
+            width = self.w - rects[0][2] - 24
+            top = self.text(title, x, self.y + 48, width, self.body) + 8
+            pages = self.text_pages(values, width, top)
+            ui.book_detail_pages = len(pages)
+            page = ui.book_detail_page % len(pages)
+            ui.book_detail_page = page
+            self.draw_lines(pages[page], x, top, width)
+            index, count = page + 1, len(pages)
+        self.footer(f"Day {selected + 1} · Forecast {index}/{count} · Enter turns")
 
     def ceremony(self):
         if self.compact:
@@ -676,7 +730,7 @@ def book_gallery(destination, *, text=None, world=None):
         state.v2["settings"].update({"text_size": 2, "dyslexia_font": False})
         timings = []
         for index in range(150):
-            panel = UIState(mode="journal", journal_page=index % 5, book_entry_i=3)
+            panel = UIState(mode="journal", journal_page=index % len(BOOK_TABS), book_entry_i=3)
             frame = np.full((720, 1280, 3), LEATHER, dtype=np.uint8)
             start = time.perf_counter()
             renderer.draw(frame, state, panel)

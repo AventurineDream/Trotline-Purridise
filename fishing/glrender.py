@@ -282,7 +282,7 @@ class LakeRenderer(SoftwareRenderer):
             tanx=cam.tanx,tany=cam.tany,anim=float(state.anim)%10000,viewport=viewport,
             sun=tuple(light["sun"]),sun_i=light["sun_i"],moon=tuple(light["moon"]),moon_i=light["moon_i"],
             night=light["night"],gold=light["gold"],horizon=tuple(light["horizon"]),zenith=tuple(light["zenith"]),
-            cloud_cover=light["cloud_cover"],rain=light["rain"],mirror=float(mirror),
+            cloud_cover=light["cloud_cover"],rain=light["rain"],mist=light.get("mist", 0.0),mirror=float(mirror),
             lake_kind=float(self.world.id=="cedar"),lake_bounds=self.world.bounds,
             lake_grid=(self.world.nx,self.world.nz),lake_shore=3,lake_depth=4,
             lily_centre=next((tuple(row[1:3]) for row in self.world.zones if row[0]=="lilies"),(-175,-115)),
@@ -389,7 +389,7 @@ class LakeRenderer(SoftwareRenderer):
     def _render_frame(self,state,cam:Camera|None=None):
         t0 = time.perf_counter()
         cam = self.camera_for(state) if cam is None else cam
-        light = lighting_at(state.game_minutes + state.minute_acc)
+        light = lighting_at(state.game_minutes + state.minute_acc, state)
         self.shore_tex.use(3)
         self.depth_tex.use(4)
         buoys = self._buoys(state)

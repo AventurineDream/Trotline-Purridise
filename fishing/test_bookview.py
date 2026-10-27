@@ -31,10 +31,10 @@ class BookNavigationChecks(unittest.TestCase):
         self.session = Session(self.world, self.path, self.state, False)
         self.session.ui.mode = "journal"
 
-    def test_all_five_tabs_wrap_with_keyboard_and_gamepad(self):
+    def test_all_tabs_wrap_with_keyboard_and_gamepad(self):
         for source in ("keyboard", "gamepad"):
             self.session.ui.journal_page = 0
-            for expected in (1, 2, 3, 4, 0):
+            for expected in (*range(1, len(BOOK_TABS)), 0):
                 keys = Input()
                 setattr(keys, source + "_pressed", {"right"})
                 keys.device = source
@@ -43,7 +43,7 @@ class BookNavigationChecks(unittest.TestCase):
                 self.assertEqual(self.session.ui.journal_page, expected)
                 self.assertEqual(self.state.game_minutes, before)
             self.session.tick(Keys(pressed={"a"}), .1)
-            self.assertEqual(self.session.ui.journal_page, 4)
+            self.assertEqual(self.session.ui.journal_page, len(BOOK_TABS)-1)
 
     def test_every_species_and_legendary_page_is_reachable(self):
         self.session.tick(Keys(pressed={"up"}), .1)
@@ -69,6 +69,7 @@ class BookNavigationChecks(unittest.TestCase):
         for index, rect in enumerate(layout.tabs):
             click(rect)
             self.assertEqual(self.session.ui.journal_page, index)
+        click(layout.tabs[4])
         click(book_controls(layout)["turn"])
         self.assertEqual(self.session.ui.book_entry_i, len(BOOK_SPECIES_IDS))
         click(book_controls(layout)["close"])
