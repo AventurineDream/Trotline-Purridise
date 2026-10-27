@@ -1,0 +1,38 @@
+{
+  "backend": "CPU fallback",
+  "software_gl": false,
+  "render_size": [
+    480,
+    270
+  ],
+  "presentation_size": [
+    1280,
+    720
+  ],
+  "world_load_ms": 194.123,
+  "first_frame_load_ms": 545.14,
+  "load_limit_ms": 6000,
+  "hardware_gpu_measured": false,
+  "scope": "Warmed full alpine frames, resize and play/map/Lakes UI; snow/night/Larch Gold",
+  "warmup_frames": 9,
+  "frames": 60,
+  "median_ms": 198.367,
+  "p95_ms": 219.273,
+  "rss_baseline_bytes": 39964672,
+  "rss_before_bytes": 83169280,
+  "rss_after_bytes": 83173376,
+  "peak_rss_bytes": 149118976,
+  "memory_limit_bytes": 3000000000,
+  "persistent_graphics_objects": 0,
+  "finite_scene_probes": 0,
+  "species_witnesses": 34,
+  "minimum_rate_ratio": 0.7,
+  "capture_weather": {
+    "dawn": "clear",
+    "noon": "clear",
+    "dusk": "clear",
+    "night": "snow_mist",
+    "snow-mist": "snow_mist"
+  },
+  "world_released": true
+}
