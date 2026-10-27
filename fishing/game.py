@@ -26,6 +26,8 @@ from .imageops import resize_rgb
 from .guardian import maybe_start_sighting, pause_sighting_clock
 from .haul import haul_cadence
 from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_rumor
+from .book import take_dream_clue
+from . import comfort
 from .bookview import (BOOK_TABS, ENTRY_IDS, book_controls, book_layout, contains,
                        move_selection, tracker_species, turn_page)
 from .bot import reset as reset_bot
@@ -33,7 +35,8 @@ from .bot import summon as summon_bot
 from .bot import tick as tick_bot
 from .sim import State
 from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
-from .ui import UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, check_rows, shop_rows, title_options
+from .ui import (UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, check_rows,
+                 comfort_controls, shop_rows, title_options)
 from .world import World
 
 DRIVING = {"play"}
@@ -160,6 +163,9 @@ class Session:
         sid = ENTRY_IDS[self.ui.book_entry_i % len(ENTRY_IDS)]
         if sid in BOOK_SPECIES_IDS:
             remember_rumor(self.state.v2["book"], sid)
+            clue = self.state.v2["book"].get("dream_clue")
+            if isinstance(clue, dict) and clue.get("species") == sid:
+                take_dream_clue(self.state.v2["book"])
         else:
             legendary_page(sid, self.state.v2)
 
@@ -254,6 +260,11 @@ class Session:
         mode = self.ui.mode
         state = self.state
         if self.world_running():
+            if comfort.doze_due(state.v2):
+                self._start_catnap(forced=True)
+                state.tick_toasts(dt)
+                return
+            comfort.active_time(state.v2, dt)
             # A held menu direction must be released before it drives or looks
             # around, even when Enter/Esc closes the menu in this same tick.
             driving_pressed = set(driving_presses)
@@ -300,6 +311,16 @@ class Session:
             self._refresh_npcs()
             if self.conversation and not any(n.id == self.conversation.npc_id for n in state.npcs):
                 self._close_dialogue()
+        if self.world_running():
+            if comfort.doze_due(state.v2):
+                self._start_catnap(forced=True)
+            else:
+                kind = comfort.next_prompt(state.v2)
+                if kind:
+                    self.ui.needs_kind = kind
+                    self.ui.comfort_i = 0
+                    self.ui.mode = "needs"
+                    self.save()
         state.tick_toasts(dt)
 
     def _react_to_nearby_npc(self):
@@ -321,6 +342,13 @@ class Session:
             self.state.muted = not self.state.muted
         if mode == "title":
             self._title_keys(keys, dt)
+        elif mode in {"new_mode", "needs"}:
+            self._comfort_keys(keys, dt)
+        elif mode == "catnap":
+            if self.focused:
+                self.ui.nap_timer = max(0.0, self.ui.nap_timer - dt)
+                if keys.pressed or getattr(keys, "mouse_click", None) or not self.ui.nap_timer:
+                    self.ui.mode = "play"
         elif mode == "play":
             self._play_keys(keys)
         elif mode == "dialogue":
@@ -368,22 +396,9 @@ class Session:
             if "esc" in keys.pressed:
                 self.ui.confirm_new = False
             elif "return" in keys.pressed or "space" in keys.pressed:
-                previous_settings = deepcopy(
-                    self.state.v2.get("settings", {})
-                    if isinstance(self.state.v2, dict) else {}
-                )
-                new_state = State.new(self.world)
-                new_state.v2["settings"] = previous_settings
-                new_state.v2["mode"] = previous_settings.get(
-                    "mode", new_state.v2.get("mode", "cozy"))
-                new_state.v2["profile"]["collar"]["visible"] = previous_settings.get(
-                    "collar_visible", True)
-                self.state = new_state
-                self._attach_quest_manager()
-                self._title_catchup_pending = False
                 self.ui.confirm_new = False
-                self.ui.mode = "play"
-                self.ui.note = ""
+                self.ui.new_mode_i = 0
+                self.ui.mode = "new_mode"
             return
         if keys.tap("up", dt):
             self.ui.title_i = (self.ui.title_i - 1) % len(options)
@@ -409,16 +424,83 @@ class Session:
             elif choice == "New morning":
                 self.ui.confirm_new = True
             else:
-                self._title_catchup_pending = False
+                self.ui.new_mode_i = 0
+                self.ui.mode = "new_mode"
+
+    def _comfort_keys(self, keys, dt):
+        choosing_mode = self.ui.mode == "new_mode"
+        if not choosing_mode and comfort.mode(self.state.v2) != "old_salt":
+            self.ui.mode = "play"
+            return
+        if "esc" in keys.pressed or (not choosing_mode and "f" in keys.pressed):
+            if choosing_mode:
+                self.ui.mode = "title"
+            else:
+                comfort.snooze(self.state.v2, self.ui.needs_kind)
                 self.ui.mode = "play"
+                self.save()
+            return
+        field = "new_mode_i" if choosing_mode else "comfort_i"
+        if any(keys.tap(key, dt) for key in ("left", "right", "up", "down")):
+            setattr(self.ui, field, 1 - getattr(self.ui, field))
+        select = bool(keys.pressed & {"return", "space"})
+        click = getattr(keys, "mouse_click", None)
+        if click is not None:
+            for index, rect in enumerate(comfort_controls(getattr(keys, "viewport", (1280, 720)))):
+                if contains(rect, click):
+                    setattr(self.ui, field, index)
+                    select = True
+        if not select:
+            return
+        if choosing_mode:
+            selected = comfort.MODES[self.ui.new_mode_i]
+            previous = deepcopy(self.state.v2["settings"])
+            state = State.new(self.world)
+            state.v2["settings"] = previous
+            comfort.change_mode(state.v2, selected)
+            state.v2["profile"]["collar"]["visible"] = previous.get("collar_visible", True)
+            self.state = state
+            self._attach_quest_manager()
+            self._title_catchup_pending = False
+            self.ui = UIState(mode="play", input_device=self.ui.input_device,
+                              dialogue_content=self._npc_content)
+            self.save()
+        else:
+            kind, later = self.ui.needs_kind, self.ui.comfort_i == 1
+            self.ui.mode = "play"
+            if later:
+                comfort.snooze(self.state.v2, kind)
+            elif kind == "energy":
+                self.state.anchored = True
+                self._start_catnap()
+            self.save()
+
+    def _start_catnap(self, *, forced=False):
+        if not self.world_running():
+            return False
+        before = self.state.game_minutes
+        error = self.state.catnap(self.world, forced=forced)
+        if error:
+            self.state.toast(error)
+            return False
+        self._record_world_advance(before)
+        self.ui.nap_forced = forced
+        self.ui.nap_timer = 3.0
+        self.ui.mode = "catnap"
+        self.save()
+        return True
 
     def _play_keys(self, keys):
         if "esc" in keys.pressed:
             self.ui.mode = "pause"
             self.ui.pause_i = 0
+            self.ui.note = ""
             return
         if "h" in keys.pressed:
             self._open_help("play")
+            return
+        if "z" in keys.pressed:
+            self._start_catnap()
             return
         if "c" in keys.pressed:
             self._hail()
@@ -442,8 +524,11 @@ class Session:
             self.ui.journal_quest_i = 0
             self.ui.book_detail_page = 0
             self.ui.book_detail_pages = 1
-            if self.ui.book_prompt_species in BOOK_SPECIES_IDS:
-                self.ui.book_entry_i = BOOK_SPECIES_IDS.index(self.ui.book_prompt_species)
+            clue = self.state.v2["book"].get("dream_clue")
+            dream_sid = clue.get("species") if isinstance(clue, dict) else None
+            sid = self.ui.book_prompt_species or dream_sid
+            if sid in BOOK_SPECIES_IDS:
+                self.ui.book_entry_i = BOOK_SPECIES_IDS.index(sid)
                 self.ui.journal_i = self.ui.book_entry_i
                 self.ui.journal_page = 1
                 self.ui.book_prompt_species = ""
@@ -522,11 +607,13 @@ class Session:
     def _tow(self):
         if not self.world_running():
             return
+        before = self.state.game_minutes
         error = self.state.tow_to_landing(self.world)
         if error:
             self.state.toast(error)
         else:
             reset_bot(self.state)
+            self._record_world_advance(before)
 
     def change_lake(self,lake_id):
         if self.state.lines:
@@ -991,6 +1078,12 @@ class Session:
             self.save()
 
     def _pause_keys(self, keys, dt):
+        if keys.pressed & {"z", "f"}:
+            self.ui.mode = "play"
+            if not self._start_catnap():
+                self.ui.mode = "pause"
+                self.ui.note = "Anchor or dock for a catnap."
+            return
         if "esc" in keys.pressed:
             self.ui.mode = "play"
             return
@@ -1049,8 +1142,7 @@ class Session:
         if row == 0:
             mode = settings.get("mode", self.state.v2.get("mode", "cozy"))
             mode = "old_salt" if mode == "cozy" else "cozy"
-            settings["mode"] = mode
-            self.state.v2["mode"] = mode
+            comfort.change_mode(self.state.v2, mode)
         elif row == 1:
             current = settings.get("text_size", 1)
             if type(current) is not int or current not in range(3):

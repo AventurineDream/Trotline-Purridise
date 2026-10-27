@@ -141,7 +141,10 @@ their new ids, rather than starting a second ledger.
     "profile": {"bot_name": "Copper-316", "shell": "tin", "shells": ["tin"],
                 "tools": [], "collar": {"stage": "none", "knot": null, "visible": true}},
     "needs": {"awake_h": 0.0, "since_meal_h": 0.0, "rested_until": null,
-              "last_prompt_real_s": 0},
+              "last_prompt_real_s": 0, "active_real_s": 0,
+              "prompt_shown": false,
+              "prompted": {"energy": false, "hunger": false},
+              "snooze_until": {"energy": 0, "hunger": 0}},
     "buff": null,
     "pantry": {"herbs": 0},
     "recipes": [], "dishes_known": [],
@@ -232,6 +235,26 @@ build and remains serialized until a recognized boat is selected.
 - Catnap calls the existing bulk-advance path (as the tow does) for 120 game
   minutes, with interpolated visuals. It counts as active play for quest timers.
 - Offline catch-up stays as implemented (lines only).
+- `comfort.py` owns mode checks, need thresholds, prompt throttling, meals,
+  nap rewards and the tow quote. Effects read the current mode at use time;
+  switching clears Energy/Hunger while retaining Rested, dream notes and the
+  global prompt throttle. Entering Old Salt starts fresh counters.
+- `State.advance` and `advance_bulk` advance Old Salt needs by the actual game
+  delta. Offline `catch_up` does not. Rested uses
+  `narrative.active_play_game_minutes`, including naps and tow time.
+- `Session._start_catnap` validates eligibility, calls `State.catnap`, samples
+  quest/NPC time, and saves the complete 120-minute advance before presenting a
+  three-second skippable fade. A due forced nap anchors before the next driving
+  step. Skipping or resuming a saved game cannot repeat the advance.
+- Active real seconds accumulate only behind `Session.world_running()` and
+  persist in `v2.needs.active_real_s`. `last_prompt_real_s` uses that clock;
+  `prompted` and `snooze_until` keep per-need offer/snooze state. Menus, focus
+  loss, the fade and time offline do not consume snooze time.
+- `comfort.meal(v2)` is the kitchen/snack integration hook: clears hunger and
+  its offer state without replacing a buff. Pantry and meal content are V1-15.
+- `remember_dream_clue` retains a dream in `book.species[id].dreams` while
+  `book.dream_clue` holds the one unread lead. Reading its entry clears that
+  slot; drawing pages is read-only and never rolls a lead.
 
 ## 5. Simulation formulas
 

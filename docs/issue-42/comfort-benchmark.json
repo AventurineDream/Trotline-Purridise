@@ -1,0 +1,14 @@
+{
+  "frames": 140,
+  "resolution": [
+    1280,
+    720
+  ],
+  "p50_ms": 11.58,
+  "p95_ms": 15.88,
+  "peak_rss_mib": 173.5,
+  "text_cache_mb": 8.39,
+  "text_size": 2,
+  "accessibility_font": true,
+  "scope": "Warmed comfort UI composition including Drowsy edges; excludes lake rendering"
+}
