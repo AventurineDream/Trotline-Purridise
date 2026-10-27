@@ -11,7 +11,7 @@ SPOIL_HOURS = 13.0
 DOZEN = 12
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 _CONTENT_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
-                  "pantry.json", "dishes.json", "calendar.json")
+                  "pantry.json", "dishes.json", "calendar.json", "bot.json")
 
 
 def _unique_json_keys(pairs):
@@ -48,6 +48,31 @@ def _validate_content_v2_files(raw_files: dict) -> None:
 
 
 _validate_content_v2_files(CONTENT_V2_RAW)
+
+
+@dataclass(frozen=True)
+class BotShell:
+    id: str
+    name: str
+    chapter: int
+    tool_id: str
+
+
+@dataclass(frozen=True)
+class BotTool:
+    id: str
+    name: str
+    price: int
+    requires_finder: bool
+
+
+_BOT_DATA = CONTENT_V2_RAW["bot.json"]
+BOT_PREFIXES = tuple(_BOT_DATA["name_prefixes"])
+BOT_SUFFIX_MIN, BOT_SUFFIX_MAX = _BOT_DATA["suffix_min"], _BOT_DATA["suffix_max"]
+BOT_SHELLS = {row["id"]: BotShell(**row) for row in _BOT_DATA["shells"]}
+BOT_TOOLS = {row["id"]: BotTool(**row) for row in _BOT_DATA["tools"]}
+BOT_COLLAR_STAGES = {row["id"]: row["name"] for row in _BOT_DATA["collar_stages"]}
+BOT_KNOTS = {row["id"]: row["name"] for row in _BOT_DATA["knots"]}
 
 
 @dataclass(frozen=True)

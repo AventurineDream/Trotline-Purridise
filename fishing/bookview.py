@@ -55,9 +55,9 @@ def book_layout(width, height):
     tabs, tx = [], x + pad
     for weight in weights:
         tw = int((w - pad * 2) * weight / sum(weights))
-        tabs.append((tx, y + (46 if width >= 700 else 38), tw, 36 if width >= 700 else 30))
+        tabs.append((tx, y + (78 if width >= 700 else 38), tw, 36 if width >= 700 else 30))
         tx += tw
-    content_top = 96 if width >= 700 else 76
+    content_top = 128 if width >= 700 else 76
     content = (x + pad, y + content_top, w - pad * 2, max(54, h - content_top - 68))
     return BookLayout(x, y, w, h, tuple(tabs), content,
                       4 if width >= 960 else (3 if width >= 640 else 2),
@@ -309,7 +309,23 @@ class BookView:
         self.fill((l.x - 5, l.y - 5, l.w + 10, l.h + 10), LEATHER)
         self.fill((l.x, l.y, l.w, l.h), PAPER)
         title = BOOK_TITLES.get(self.state.v2["book"].get("title"), "Fishypedia")
-        self.text(title, self.x, l.y + 9, self.w - 130, self.head)
+        title_size = self.head
+        while title_size > 1 and self.u.cell(title_size)[1] > (36 if self.frame.shape[1] >= 700 else 26):
+            title_size -= 1
+        from .botidentity import book_credit, name as bot_name
+        credit_size = self.small
+        while credit_size > 1 and self.u.cell(credit_size)[1] > (22 if self.frame.shape[1] >= 700 else 14):
+            credit_size -= 1
+        if self.frame.shape[1] < 700:
+            # Keep the compact three-line quest overview: the name shares the
+            # title row instead of taking height from the page's text.
+            credit = bot_name(self.state)
+            credit_w = self.u._render(credit, credit_size, INK).shape[1]
+            self.text(title, self.x, l.y + 9, self.w - 142 - credit_w, title_size)
+            self.text(credit, self.x + self.w - 130 - credit_w, l.y + 15, credit_w, credit_size)
+        else:
+            self.text(title, self.x, l.y + 9, self.w - 130, title_size)
+            self.text(book_credit(self.state), self.x, l.y + 48, self.w, credit_size)
         self.text("× Close", l.x + l.w - 112, l.y + 12, 102)
         for index, rect in enumerate(l.tabs):
             active = index == self.ui.journal_page

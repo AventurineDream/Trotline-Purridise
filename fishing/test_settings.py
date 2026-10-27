@@ -195,6 +195,7 @@ class SettingsChecks(unittest.TestCase):
 
     def test_collar_visibility_controls_bot_rendering(self):
         state = State.new(self.world, seed=17)
+        state.v2["profile"]["collar"]["stage"] = "received"
         state.v2["settings"]["collar_visible"] = True
         visible = bot_faces(state)
         self.assertTrue(any(np.allclose(face.color, _COLLAR_WOOL) for face in visible))

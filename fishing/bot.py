@@ -137,6 +137,7 @@ def faces(state) -> list[Face]:
     profile = v2.get("profile", {}) if isinstance(v2, dict) else {}
     collar = profile.get("collar", {}) if isinstance(profile, dict) else {}
     collar_visible = settings.get("collar_visible", collar.get("visible", True))
+    collar_visible = collar_visible and collar.get("stage", "none") != "none"
     if state.bot_phase == "home":
         eye, right, up, forward = _boat_basis(state)
         lx, ly, lz = _PERCH.get(state.boat_id, _PERCH["jon"])
