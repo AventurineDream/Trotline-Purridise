@@ -1078,7 +1078,7 @@
       "name": "Crater Caldera",
       "landing": "Caldera Rim Dock",
       "region": "A quiet volcanic caldera",
-      "blurb": "Cobalt water, obsidian cliffs and thermal springs.",
+      "blurb": "A steep volcanic bowl, obsidian cinder isle and warm springs. Clear nights hold the whole sky.",
       "species_count": 34,
       "species_ids": [
         "alvord_chub",
@@ -1149,7 +1149,7 @@
           0.3
         ]
       },
-      "placeholder": true,
+      "placeholder": false,
       "unlock_chapter": 3,
       "travel_caption": "Huckleberry knows a cat with a truck.",
       "lake_days": [
@@ -1184,6 +1184,209 @@
         "springs": [
           0.9,
           40.0
+        ]
+      },
+      "environment": {
+        "kind": "caldera",
+        "seed": 307,
+        "bounds": [
+          -900,
+          -900,
+          900,
+          900
+        ],
+        "grid": [
+          601,
+          601
+        ],
+        "outline": [
+          [
+            0,
+            475
+          ],
+          [
+            45,
+            480
+          ],
+          [
+            90,
+            470
+          ],
+          [
+            135,
+            483
+          ],
+          [
+            180,
+            475
+          ],
+          [
+            225,
+            469
+          ],
+          [
+            270,
+            478
+          ],
+          [
+            315,
+            481
+          ],
+          [
+            360,
+            475
+          ]
+        ],
+        "slip_angle": 3.02,
+        "snow_line": 500,
+        "tree_count": 420,
+        "sky_zenith": [
+          0.19,
+          0.29,
+          0.56
+        ],
+        "sky_horizon": [
+          0.7,
+          0.73,
+          0.84
+        ],
+        "water_shallow": [
+          0.14,
+          0.23,
+          0.48
+        ],
+        "water_deep": [
+          0.015,
+          0.025,
+          0.16
+        ],
+        "zones": [
+          [
+            "flats",
+            -15,
+            -340,
+            105
+          ],
+          [
+            "lilies",
+            -380,
+            -125,
+            105
+          ],
+          [
+            "cypress",
+            330,
+            140,
+            110
+          ],
+          [
+            "rocks",
+            150,
+            -60,
+            152
+          ],
+          [
+            "deep",
+            -95,
+            20,
+            155
+          ],
+          [
+            "springs",
+            285,
+            -235,
+            100
+          ]
+        ],
+        "depths": {
+          "flats": [
+            0.9,
+            15.0
+          ],
+          "lilies": [
+            0.9,
+            10.0
+          ],
+          "cypress": [
+            0.9,
+            12.0
+          ],
+          "rocks": [
+            0.9,
+            25.0
+          ],
+          "deep": [
+            2.0,
+            60.0
+          ],
+          "springs": [
+            0.9,
+            40.0
+          ]
+        },
+        "peaks": [
+          [
+            -640,
+            -250,
+            60,
+            130
+          ],
+          [
+            -540,
+            480,
+            80,
+            130
+          ],
+          [
+            -60,
+            670,
+            100,
+            150
+          ],
+          [
+            530,
+            490,
+            75,
+            140
+          ],
+          [
+            670,
+            -40,
+            90,
+            130
+          ],
+          [
+            200,
+            -640,
+            85,
+            160
+          ]
+        ],
+        "ambience": [
+          "caldera_wind"
+        ],
+        "rim": [
+          125,
+          62
+        ],
+        "islands": [
+          [
+            150,
+            -60,
+            84,
+            70,
+            54
+          ]
+        ],
+        "thermal": [
+          [
+            315,
+            -250
+          ],
+          [
+            335,
+            -270
+          ]
         ]
       }
     },

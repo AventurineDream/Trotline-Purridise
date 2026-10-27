@@ -1,4 +1,4 @@
-uniform sampler2D reflection;
+uniform sampler2D reflection, reflection_depth;
 uniform vec4 line_segments[8];
 uniform float line_heat[8];
 uniform int line_count;
@@ -18,6 +18,10 @@ void main() {
         vec3 earth = mix(vec3(0.38,0.31,0.21),vec3(0.57,0.48,0.33),patch);
         vec3 bank = mix(earth,grass,smoothstep(1.0,9.0,sd));
         if (lake_kind>2.5) bank = mix(vec3(.49,.50,.46),vec3(.22,.31,.23),smoothstep(2.0,16.0,sd));
+        if (lake_kind>3.5) {
+            bank = mix(vec3(.22,.23,.28),vec3(.49,.49,.52),patch);
+            if (length((pos.xz-cinder_island.xy)/cinder_island.zw)<1.12) bank = vec3(.08,.09,.13);
+        }
         float canopy = smoothstep(3.0,12.0,sd)*(1.0-smoothstep(55.0,95.0,sd));
         bank *= 1.0-canopy*(0.12+0.18*noise(pos.xz*0.10));
         float ambient = mix(0.67,0.14,night)+moon_i*0.17;
@@ -35,14 +39,21 @@ void main() {
     float crossphase = pos.x*3.4-pos.z*1.3-anim*1.1;
     float wave = sin(phase)*(1.0-smoothstep(0.8,2.8,fwidth(phase)));
     float crosswave = sin(crossphase)*(1.0-smoothstep(0.8,2.8,fwidth(crossphase)));
-    float ripple = 1.0+rain*0.5;
+    float ripple = (1.0+rain*0.5)*(1.0-still_reflection*.95);
     vec3 n = normalize(vec3((cos(a)*0.045+(wave*0.012+crosswave*0.006)*fine)*ripple,1,
                             (cos(b)*0.040+(wave*0.009-crosswave*0.010)*fine)*ripple));
     vec3 v = normalize(eye-pos);
     float fres = 0.12+0.78*pow(1.0-clamp(dot(v,n),0.0,1.0),4.0);
+    fres = mix(fres,.96,still_reflection);
     vec2 screen = gl_FragCoord.xy/viewport;
     vec2 distortion = n.xz*0.070*vec2(1.0,0.65);
     vec3 reflected = texture(reflection,clamp(screen+distortion,0.002,0.998)).rgb;
+    if (lake_kind>3.5 && still_reflection>0.0 && texture(reflection_depth,screen+distortion).r>.999999) {
+        // The reflection depth preserves the rim/island silhouette. Only open
+        // sky gets a full-resolution celestial sample, keeping small stars.
+        vec3 celestial = sky(reflect(-v,n));
+        reflected = mix(reflected,celestial,still_reflection);
+    }
     float depth = 0.5+5.0*(1.0-exp(min(sd,0.0)/28.0));
     depth += 10.0*exp(-dot(pos.xz-vec2(75,-28),pos.xz-vec2(75,-28))/(2.0*72.0*72.0));
     if (lake_kind>2.5) depth = texture(lake_depth,lake_uv(pos.xz)).r;
@@ -56,6 +67,8 @@ void main() {
         body = mix(vec3(0.055,0.20,0.23),vec3(0.26,0.27,0.17),upper*0.65);
         body = mix(body,vec3(0.31,0.31,0.22),1.0-smoothstep(0.5,3.0,depth));
     }
+    if (lake_kind>3.5 && distance(pos.xz,lily_centre)<110.0)
+        body = mix(body,vec3(.09,.19,.15),(1.0-smoothstep(3.0,12.0,depth))*.65);
     body *= mix(0.85,0.30,night)+moon_i*0.1;
     vec3 c = mix(body,reflected,fres);
     // Restrained rippled highlights give open water detail away from reflections.
@@ -80,7 +93,8 @@ void main() {
         (1.0-smoothstep(.22,.38,abs(f.y)))*step(.64,seed)*float(cove && dist>9.0 && !slip);
     vec3 pad = mix(vec3(0.07,0.20,0.09),vec3(0.24,0.35,0.13),seed);
     pad += vec3(0.06,0.07,0.015)*exp(-abs(f.y)*100.0);
-    c = mix(c,pad*mix(1.0,0.25,night),leaf);
+    if (lake_kind<3.5) c = mix(c,pad*mix(1.0,0.25,night),leaf);
+    if (lake_kind>3.5) leaf = 0.0;
     float flower = (1.0-smoothstep(0.0,0.028,length(f)))*step(0.94,seed)*leaf;
     if (lake_kind<2.5) c = mix(c,vec3(0.91,0.77,0.48),flower);
     for (int i=0;i<line_count;i++) {

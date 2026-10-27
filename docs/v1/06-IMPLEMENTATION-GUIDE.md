@@ -602,7 +602,7 @@ there is one source of truth. The old eight habitat indices stay in place;
 `reeds`, `springs` and `current` are appended. Briar gains the Reed Passage
 matches from `03 §1.2`; Cedar's survey, zones and geometry stay unchanged.
 
-Crater and Nebula use bounded, driveable flat maps with their own
+Nebula uses a bounded, driveable flat map with its own
 habitat labels and safe landing slips. Crater has springs and no inlet;
 Nebula has reeds and current. V1-24 populates their ordinary fish rosters and temporary soundings. Their NPC
 casts remain empty until the character-content tickets land. They allocate only the active
@@ -691,3 +691,27 @@ records first-frame load, 60 warmed full frames, memory, fixed GPU resources,
 floating-point native probes and all 34 real-map catchability witnesses.
 See [issue 53](../issue-53/README.md) for evidence and the explicit Mesa versus
 hardware-GPU measurement distinction.
+
+
+## Implemented Crater environment (V1-26)
+
+Crater uses `LakeFields` with a near-round polar shore, a steep authored rim,
+an elliptical obsidian cinder isle, six habitat depth profiles and thermal vent
+coordinates. Its 601×601 float32 fields feed collision, terrain, chart and water.
+Briar, Cedar and Flathead geometry remain unchanged. The active lake owns its
+fields and can be released after travel.
+
+Hemlock, whitebark and drowned-pine atlas layers load for Crater. The dock uses
+the existing conservative marina footprints, with a physical brass survey marker
+for the later chapter-four ticket. Bounded steam/bubble faces freeze in Reduced
+Motion. Height-dependent fog reveals the rim as the forecast clears. A calm
+clear-night reflection hook strengthens the sky mirror without changing story
+or travel state. The native reflection depth protects terrain silhouettes; the
+CPU fallback supplies a simpler moon/star mirror.
+
+`python -m fishing --shots PATH --caldera [--software]` records fog, clearing,
+noon, sunset, clear night, springs, isle, survey dock and chart. It checks capture
+hulls and records full first-frame load, 60 warmed frames, RSS, resource counts,
+finite native colors and all34 real-map catchability witnesses.
+[Issue54 evidence](../issue-54/README.md) documents measured Mesa/CPU limits and
+the remaining hardware-GPU load measurement.

@@ -7,7 +7,7 @@ import numpy as np
 from .sprites import bake
 
 W, H = 160, 256
-KINDS = ("pine", "oak", "cypress", "larch", "larchgold", "spruce")
+KINDS = ("pine", "oak", "cypress", "larch", "larchgold", "spruce", "hemlock", "whitebark", "deadpine")
 
 
 def _leaf(img, cx, cy, rx, ry, rgb, rng):
@@ -37,7 +37,14 @@ def tree(kind, variant):
     bark = 0.7+np.sin(xx*1.8+np.sin(yy*0.06))*0.12+(W/2-xx)*0.025
     img[trunk,:3] = np.clip(np.array([111,92,64])*bark[trunk,None],0,255).astype(np.uint8)
     img[trunk,3] = 255
-    if kind=="oak":
+    if kind=="deadpine":
+        for tier in range(6):
+            cy = 70+tier*22
+            spread = 10+tier*5
+            for sign in (-1,1):
+                branch = (np.abs(yy-(cy+(xx-80)*sign*.18))<1.4) & (xx>=80-spread) & (xx<=80+spread)
+                img[branch] = (100,97,88,255)
+    elif kind=="oak":
         # An irregular spreading crown built from many overlapping leaf masses.
         for _ in range(90):
             a = rng.uniform(0,2*np.pi)
@@ -51,14 +58,15 @@ def tree(kind, variant):
         for sign in (-1,1):
             branch = (yy>108)&(yy<174)&(abs(xx-(80+sign*(174-yy)*0.35))<2)
             img[branch] = (92,77,54,255)
-    elif kind in ("pine", "larch", "larchgold", "spruce"):
+    elif kind in ("pine", "larch", "larchgold", "spruce", "hemlock", "whitebark"):
         for tier in range(11,0,-1):
             cy = 18+tier*14
             spread = 7+tier*4.8
             for j in range(7):
                 cx = 80+rng.uniform(-spread,spread)
                 base = {"pine": [48,78,54], "larch": [91,118,57],
-                        "larchgold": [195,151,49], "spruce": [48,85,81]}[kind]
+                        "larchgold": [195,151,49], "spruce": [48,85,81],
+                        "hemlock": [38,67,56], "whitebark": [107,125,105]}[kind]
                 rgb = np.array(base)+rng.uniform(-8,10,3)
                 _leaf(img,cx,cy+rng.uniform(-6,7),rng.uniform(8,16),rng.uniform(7,12),rgb,rng)
         _leaf(img,80,17,5,11,base if kind != "pine" else [76,99,61],rng)
@@ -101,9 +109,9 @@ def _bleed_edges(img):
     return out
 
 
-def atlas(buoy_rgb, *, alpine=False):
+def atlas(buoy_rgb, *, alpine=False, caldera=False):
     names, images = [], []
-    for kind in (KINDS if alpine else KINDS[:3]):
+    for kind in (KINDS[6:] if caldera else (KINDS[:6] if alpine else KINDS[:3])):
         for variant in range(3):
             names.append(f"{kind}{variant}")
             images.append(tree(kind,variant))
