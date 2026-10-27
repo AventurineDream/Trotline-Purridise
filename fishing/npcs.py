@@ -33,6 +33,9 @@ def active_npcs(state, world, content):
     intervals are computed directly on return, without replaying offscreen days.
     """
     lake, seed, day, night, cookout = schedule_key(state, world)
+    if lake not in DAY_NPCS or lake not in HOSTS:
+        # Flat systems maps have no authored cast yet. Do not borrow Briar's.
+        return ()
     pool = DAY_NPCS[lake]
     ledger = state.narrative
     selected = pool[(seed + day) % len(pool)]

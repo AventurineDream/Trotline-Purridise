@@ -51,7 +51,7 @@ from .boat import (
     BOATS, FUEL_PRICE, ROWBOAT_MOTOR_PRICE, ROWBOAT_BATTERY_KWH,
     BATTERY_CHARGE_KWH, ELECTRICITY_PRICE,
 )
-from .lakes import LAKES
+from .lakes import LAKES, LAKE_ZONE_NAMES, travel_lock_reason
 from .weather import wind_at
 from . import comfort
 
@@ -154,6 +154,8 @@ def _zone_label(zone_id: str) -> str:
     lake, separator, zone = zone_id.partition(":")
     if not separator:
         return zone_id
+    if zone in LAKE_ZONE_NAMES.get(lake, {}):
+        return LAKE_ZONE_NAMES[lake][zone]
     return f"{_LAKE_LABELS.get(lake, lake.title())} · {zone.replace('_', ' ')}"
 
 
@@ -542,8 +544,12 @@ def shop_rows(state, tab: int) -> list[Row]:
     elif tab==5:
         for lake_id,lake in LAKES.items():
             here = lake_id==state.lake_id
-            detail = lake["blurb"] if not state.lines else "Pick up your deployed lines before towing to another lake."
-            rows.append(Row(lake["name"],"here" if here else "travel",detail,not here,"lake",lake_id))
+            locked = travel_lock_reason(state, lake_id)
+            lines = bool(state.lines)
+            detail = (locked or "Pick up your deployed lines before towing to another lake."
+                      if lines or locked else lake["blurb"])
+            rows.append(Row(lake["name"], "here" if here else "locked" if locked else "travel",
+                            detail, not (here or locked or lines), "lake", lake_id))
     return rows
 
 
@@ -1253,6 +1259,7 @@ class UI:
                     dot = (90, 104, 98)
                 u, v = self.world.map_pixel(hx, hz, mw, mh)
                 self._dot(frame, x + u, y + v, 2 if hook.catch is not None else 1, dot)
+        self._plot_habitats(frame, x, y, mw, mh)
         self._plot_trinidad_cove(frame, x, y, mw, mh, labels=True)
         self._plot_invitation(frame, state, x, y, mw, mh)
         self._plot_npcs(frame, state, x, y, mw, mh, labels=True)
@@ -1274,6 +1281,19 @@ class UI:
         u, v = self.world.map_pixel(mark["x"], mark["z"], mw, mh)
         self._dot(frame, x + u, y + v, 5, GOLD)
         self._dot(frame, x + u, y + v, 2, INK)
+
+    def _plot_habitats(self, frame, x, y, mw, mh):
+        size = self._size(frame, "small")
+        for zone, cx, cz, _radius in self.world.zones:
+            # Preserve the established charts apart from Briar's new passage.
+            if not self.world.placeholder and zone != "reeds":
+                continue
+            u, v = self.world.map_pixel(cx, cz, mw, mh)
+            label = self._trim(self.world.zone_name(zone), size, mw * 0.42)
+            width = len(label) * self.cell(size)[0]
+            tx = max(x, min(x + u + 6, x + mw - width))
+            ty = max(y, min(y + v + 6, y + mh - self.cell(size)[1]))
+            self._text(frame, label, tx, ty, size, INK)
 
     def _plot_trinidad_cove(self, frame, x, y, mw, mh, labels=False):
         if self.world.id != "cedar":

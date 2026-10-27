@@ -40,6 +40,7 @@ from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
 from .ui import (UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, check_rows,
                  comfort_controls, shop_rows, title_options)
 from .world import World
+from .lakes import travel_caption, travel_lock_reason
 
 DRIVING = {"play"}
 MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
@@ -635,6 +636,10 @@ class Session:
             return "Return to the landing to tow to another lake."
         if lake_id==self.world.id:
             return "You are already on this lake."
+        error = travel_lock_reason(self.state, lake_id)
+        if error:
+            return error
+        caption = travel_caption(self.world.id, lake_id)
         destination = World(lake_id)
         self.world = destination
         self.state.bind(destination)
@@ -643,7 +648,7 @@ class Session:
         reset_bot(self.state)
         self.ui.mode = "play"
         self.ui.note = ""
-        self.state.toast(f"Welcome to {destination.name}. All your gear came along.")
+        self.state.toast(caption)
         self.save()
         return None
 
@@ -1458,6 +1463,8 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
                            max(18,height//30),(238,233,216),"serif")
                 platform.present(loading)
                 renderer.close()
+                # The startup variable must not retain the first lake's grids.
+                world = session.world
                 ui = UI(text,session.world)
                 renderer = Renderer(session.world,width,height,
                                     software=software or platform.context is None,context=platform.context)

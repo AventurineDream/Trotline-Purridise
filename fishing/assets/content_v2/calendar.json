@@ -64,6 +64,112 @@
       ],
       "weather_bias": "",
       "fireflies": false
+    },
+    {
+      "id": "clear_sky_trout",
+      "lake": "flathead",
+      "weekday": 0,
+      "name": "Clear-Sky Trout",
+      "band": "dawn",
+      "multiplier": 1.3,
+      "foods": [
+        "trout"
+      ],
+      "species": [],
+      "zones": [],
+      "weather_bias": "clear",
+      "fireflies": false
+    },
+    {
+      "id": "larch_gold",
+      "lake": "flathead",
+      "weekday": 2,
+      "name": "Larch Gold",
+      "band": "day",
+      "multiplier": 1.25,
+      "foods": [],
+      "species": [
+        "yellow_perch",
+        "northern_pike"
+      ],
+      "zones": [],
+      "weather_bias": "",
+      "fireflies": false
+    },
+    {
+      "id": "warm_springs",
+      "lake": "crater",
+      "weekday": 1,
+      "name": "Warm Springs",
+      "band": "any",
+      "multiplier": 1.3,
+      "foods": [],
+      "species": [
+        "redband_trout",
+        "speckled_dace",
+        "alvord_chub",
+        "ember_char",
+        "cinder_sculpin",
+        "fumarole_perch",
+        "sulfur_shiner",
+        "lava_belly_sunfish",
+        "geyser_goby",
+        "steam_carp",
+        "vent_catfish"
+      ],
+      "zones": [],
+      "weather_bias": "",
+      "fireflies": false
+    },
+    {
+      "id": "fog_lift",
+      "lake": "crater",
+      "weekday": 4,
+      "name": "Fog Lift",
+      "band": "dawn",
+      "multiplier": 1.4,
+      "foods": [],
+      "species": [
+        "mistfin_dace",
+        "fog_mudminnow"
+      ],
+      "zones": [],
+      "weather_bias": "fog_clear",
+      "fireflies": false
+    },
+    {
+      "id": "meteor_shower",
+      "lake": "nebula",
+      "weekday": 2,
+      "name": "Meteor Shower",
+      "band": "night",
+      "multiplier": 1.15,
+      "foods": [],
+      "species": [],
+      "zones": [],
+      "weather_bias": "",
+      "fireflies": false
+    },
+    {
+      "id": "aurora_tide",
+      "lake": "nebula",
+      "weekday": 5,
+      "name": "Aurora Tide",
+      "band": "any",
+      "multiplier": 1.3,
+      "foods": [],
+      "species": [
+        "galaxy_gar",
+        "aurora_trout",
+        "saturnfin_puffer",
+        "twinkle_shad",
+        "constellation_char",
+        "supernova_salmon",
+        "ion_icefish"
+      ],
+      "zones": [],
+      "weather_bias": "aurora",
+      "fireflies": false
     }
   ],
   "legendary_windows": [
@@ -222,7 +328,7 @@
     {
       "lake": "flathead",
       "start_hour": 5,
-      "end_hour": 9,
+      "end_hour": 7,
       "weathers": [
         "snow_mist"
       ]

@@ -86,6 +86,9 @@ def weekly_plan(seed, lake_id, week):
             hour = (slot + 6) % 24
             biased = special and special.weather_bias and (special.band == 'any' or special.band == band_of(hour))
             value = special.weather_bias if biased else condition
+            if value == 'fog_clear':
+                # Fog Lift's two dawn hours: the mist clears after 06:00.
+                value = 'fog' if hour == 6 else 'clear'
             for reservation, weather in reserved:
                 if in_hours(hour, reservation.start_hour, reservation.end_hour):
                     value = weather
