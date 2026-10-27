@@ -166,7 +166,11 @@ each ordinary tracked fish on an affected check, at most once per fish. It
 never rerolls an existing catch; the next newly hooked fish uses an earned
 guarantee. Huckleberry Fish Pie preserves an unread dream and queues its extra
 lead. Reading advances the queue in order. Starlight Soup's 48-hour meal
-allowance lasts until the next meal, independently of its six-hour buoy light.
+allowance is independent of its six-hour buoy light. A later meal keeps the
+longer of its own duration and the previous meal's remaining duration, so a
+snack or different dish cannot bring hunger forward. A snack five hours after
+the soup resets the counter with a 43-hour threshold; both meals then expire
+at the original 48-hour boundary. Fractional thresholds survive save/load.
 
 Hosts teach their dishes while `story.chapter` equals the host's chapter.
 Missing cards become available once the chapter is complete (the chapter cursor

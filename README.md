@@ -144,7 +144,8 @@ visibility. Huckleberry Fish Pie queues an extra dream without discarding an
 unread one. Moon-Milk Pudding gives an extra guarantee credit per tracked fish
 on the next three checks; the next newly hooked fish uses an earned guarantee.
 Starlight Soup lights your buoys for six game hours and makes its Old Salt meal
-last 48 game hours. Other meals last 24.
+last 48 game hours. Later snacks or dishes retain any longer remaining meal
+window while granting at least 24 hours from when they are eaten.
 
 Recipe bait uses **one piece of each parent bait plus one pantry item** and
 makes **twelve pieces**, subject to bait-box capacity. It takes the better
