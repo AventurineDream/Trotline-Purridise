@@ -467,9 +467,10 @@ _SAVE_REFERENCED_IDS = {
     }),
     "baits": frozenset({"worm", "liver", "shad", "minnow", "craw"}),
     "boats": frozenset({"jon", "rowboat", "sail", "pontoon"}),
-    "lakes": frozenset({"briar", "cedar"}),
+    "lakes": frozenset({"briar", "cedar", "flathead", "crater", "nebula"}),
     "zones": frozenset({
         "landing", "inlet", "flats", "lilies", "cypress", "rocks", "deep", "open", "shore",
+        "reeds", "springs", "current",
     }),
 }
 _BASELINE_CEDAR_EXCLUSIONS = frozenset({
@@ -478,6 +479,7 @@ _BASELINE_CEDAR_EXCLUSIONS = frozenset({
 })
 _FALLBACK_FISHING_ZONE_ORDER = (
     "landing", "inlet", "flats", "lilies", "cypress", "rocks", "deep", "open",
+    "reeds", "springs", "current",
 )
 _BASELINE_LAKE_MEMBERSHIPS = {
     species_id: frozenset({"briar"} | (set() if species_id in _BASELINE_CEDAR_EXCLUSIONS else {"cedar"}))
@@ -683,8 +685,9 @@ class _ContentV2Validator:
                         minimum=0, maximum=1)
         zones = self.table(docs, lakes_file, "zones", {"id", "name", "cedar_name", "fishing", "matches"})
         lakes = self.table(docs, lakes_file, "lakes", {
-            "id", "name", "landing", "region", "blurb", "species_count", "species_ids"},
-            {"rate_multipliers", "zone_labels"})
+            "id", "name", "landing", "region", "blurb", "species_count", "species_ids",
+            "zone_ids", "zone_labels", "palette", "placeholder", "unlock_chapter",
+            "travel_caption", "lake_days"}, {"rate_multipliers"})
         self.require_saved_ids(lakes_file, "zones", zones)
         self.require_saved_ids(lakes_file, "lakes", lakes)
         if lakes_file not in self.unavailable_files and not {"briar", "cedar"}.issubset(lakes):
@@ -845,7 +848,11 @@ class _ContentV2Validator:
                 self.text(lakes_file, where + "." + key, row.get(key))
             listed_ids = self.id_list(lakes_file, where + ".species_ids", row.get("species_ids"), species_refs)
             count = row.get("species_count")
-            self.number(lakes_file, where + ".species_count", count, integer=True, minimum=1)
+            placeholder = row.get("placeholder")
+            if type(placeholder) is not bool:
+                self.error(lakes_file, where + ".placeholder", "expected a boolean")
+            self.number(lakes_file, where + ".species_count", count, integer=True,
+                        minimum=0 if placeholder is True else 1)
             if type(count) is int and count != len(listed_ids):
                 self.error(lakes_file, where + ".species_count", f"declares {count}, but lists {len(listed_ids)} species")
             if "rate_multipliers" in row:
@@ -866,6 +873,34 @@ class _ContentV2Validator:
                                 f"{where}.rate_multipliers({sid})",
                                 "must be positive exactly when the species is listed in species_ids",
                             )
+            available = self.id_list(lakes_file, where + ".zone_ids", row.get("zone_ids"), fishing_zones)
+            if not {"landing", "open"}.issubset(available):
+                self.error(lakes_file, where + ".zone_ids", "must include landing and open")
+            self.number(lakes_file, where + ".unlock_chapter", row.get("unlock_chapter"),
+                        integer=True, minimum=0, maximum=5)
+            self.text(lakes_file, where + ".travel_caption", row.get("travel_caption"))
+            palette = row.get("palette")
+            if not isinstance(palette, dict) or set(palette) != {"water", "land"}:
+                self.error(lakes_file, where + ".palette", "expected water and land RGB colors")
+            else:
+                for key, color in palette.items():
+                    if not isinstance(color, list) or len(color) != 3:
+                        self.error(lakes_file, where + ".palette." + key, "expected three color components")
+                    else:
+                        for index, value in enumerate(color):
+                            self.number(lakes_file, f"{where}.palette.{key}[{index}]", value,
+                                        minimum=0, maximum=1)
+            days = self.id_list(lakes_file, where + ".lake_days", row.get("lake_days"), None)
+            if "calendar.json" not in self.unavailable_files:
+                calendar_doc = docs.get("calendar.json")
+                authored_days = calendar_doc.get("lake_days", []) if isinstance(calendar_doc, dict) else []
+                if not isinstance(authored_days, list):
+                    authored_days = []
+                expected_days = {d.get("id") for d in authored_days
+                                 if isinstance(d, dict) and d.get("lake") == lid
+                                 and isinstance(d.get("id"), str)}
+                if set(days) != expected_days or len(days) != 2:
+                    self.error(lakes_file, where + ".lake_days", "must reference this lake's two calendar specials")
             if "zone_labels" in row:
                 labels = row.get("zone_labels")
                 if not isinstance(labels, dict):
@@ -875,10 +910,14 @@ class _ContentV2Validator:
                         if zone_id not in zone_ids and lakes_file not in self.unavailable_files:
                             self.error(lakes_file, where + ".zone_labels." + str(zone_id), f"unknown zone {zone_id!r}")
                         self.text(lakes_file, where + ".zone_labels." + str(zone_id), label)
-                    if (lakes_file not in self.unavailable_files and set(labels) != zone_ids):
-                        for zone_id in sorted(zone_ids - set(labels)):
+                    expected_labels = set(available) | {"shore"}
+                    if lakes_file not in self.unavailable_files:
+                        for zone_id in sorted(expected_labels - set(labels)):
                             self.error(lakes_file, f"{where}.zone_labels.{zone_id}",
                                        f"missing label for zone {zone_id!r}")
+                        for zone_id in sorted(set(labels) - expected_labels):
+                            self.error(lakes_file, f"{where}.zone_labels.{zone_id}",
+                                       "label has no habitat on this lake")
 
         for sid, row, _where in self.rows(species_file, "species"):
             if not isinstance(sid, str):
@@ -984,7 +1023,7 @@ class _ContentV2Validator:
                           "multiplier", "foods", "species", "zones", "weather_bias", "fireflies"})
         windows = self.table(docs, filename, "legendary_windows", {"id", "lake", "start_hour", "end_hour",
                              "weathers", "recent_rain", "minimum_minutes"})
-        if len(days) != 4:
+        if len(days) != 10:
             self.error(filename, "lake_days", "expected two Lake Days per playable lake")
         if len(windows) != 12:
             self.error(filename, "legendary_windows", "expected all twelve legendary windows")
@@ -1001,7 +1040,7 @@ class _ContentV2Validator:
                 values = row.get(key)
                 if not isinstance(values, list) or any(not isinstance(v, str) or not v for v in values):
                     self.error(filename, where + "." + key, "expected a list of stable IDs")
-            self.enum(filename, where + ".weather_bias", row.get("weather_bias"), weather | {""})
+            self.enum(filename, where + ".weather_bias", row.get("weather_bias"), weather | {"", "fog_clear"})
             if type(row.get("fireflies")) is not bool:
                 self.error(filename, where + ".fireflies", "expected a boolean")
             if row.get("lake") in ("briar", "cedar") and "species.json" not in self.unavailable_files:
@@ -1013,7 +1052,7 @@ class _ContentV2Validator:
             if pair in seen:
                 self.error(filename, where, "duplicate lake/weekday")
             seen.add(pair)
-        for lake in ("briar", "cedar"):
+        for lake in lakes:
             if sum(row.get("lake") == lake for row in days.values()) != 2:
                 self.error(filename, "lake_days", f"expected two specials for {lake}")
         for lake in lakes:

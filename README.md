@@ -10,6 +10,13 @@ and reel, no fail states, no hurry.
 The **V1.0 beta** is in production. The design is final, and implementation is
 tracked as GitHub issues labeled `v1.0`.
 
+The landing's **Lakes** tab lists all five waters. Briar and Cedar remain open
+from the start. Completing chapter 2 opens Flathead, chapter 3 opens Crater,
+and chapter 4 opens Nebula; pull every line and return to the landing before
+travelling. The three new waters currently use driveable flat maps while their
+landscapes, fish and neighbors are developed. Briar's chart now includes the
+Reed Passage. [Implementation and captures](docs/issue-51/README.md).
+
 | | |
 | --- | --- |
 | **Repository** | [`AventurineDream/Trotline-Purridise`](https://github.com/AventurineDream/Trotline-Purridise) |

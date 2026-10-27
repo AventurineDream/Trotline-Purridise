@@ -1420,14 +1420,14 @@ class State:
         })
         from .world import zone_label
         bait_text = ", ".join(BAIT_BY_ID[bait].name.lower() for bait in line.bait_sections)
-        self.toast(f"Line set on the {zone_label(zone).lower()}. {hooks} hooks, {bait_text}.")
+        self.toast(f"Line set on the {zone_label(zone, self.lake_id).lower()}. {hooks} hooks, {bait_text}.")
         return None
 
     def line_label(self, index: int) -> str:
         from .world import zone_label
         zone = self.lines[index].zone
         same = [i for i, ln in enumerate(self.lines) if ln.zone == zone]
-        name = zone_label(zone)
+        name = zone_label(zone, self.lake_id)
         if len(same) == 1:
             return name
         return f"{name} {same.index(index) + 1}"

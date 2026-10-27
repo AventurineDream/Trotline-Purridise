@@ -123,7 +123,7 @@ class LakeRenderer(SoftwareRenderer):
         corners = np.array([[-.5,0],[.5,0],[.5,1],[-.5,0],[.5,1],[-.5,1]],np.float32)
         self.tree_quad = self.own(ctx.buffer(corners.tobytes()))
         self.prop_data = self._props()
-        self.prop_buf = self.own(ctx.buffer(self.prop_data.tobytes()))
+        self.prop_buf = self.own(ctx.buffer(self.prop_data.tobytes() or bytes(7*4)))
         self.prop_vao = self.tree_vao(self.prop_buf)
         self.buoy_buf = self.own(ctx.buffer(reserve=7*4*24,dynamic=True))
         self.buoy_vao = self.tree_vao(self.buoy_buf)
@@ -153,6 +153,9 @@ class LakeRenderer(SoftwareRenderer):
         coords = np.unique(np.concatenate([
             np.arange(-1400,-520,20),np.arange(-520,522,3),np.arange(540,1401,20)])).astype(np.float32)
         xs,zs = coords,coords
+        if self.world.placeholder:
+            xs = np.arange(-600, 601, 10, dtype=np.float32)
+            zs = np.arange(-500, 501, 10, dtype=np.float32)
         if self.world.id=="cedar":
             x0,z0,x1,z1 = self.world.bounds
             xs = np.arange(x0-300,x1+301,6,dtype=np.float32)
@@ -283,7 +286,9 @@ class LakeRenderer(SoftwareRenderer):
             sun=tuple(light["sun"]),sun_i=light["sun_i"],moon=tuple(light["moon"]),moon_i=light["moon_i"],
             night=light["night"],gold=light["gold"],horizon=tuple(light["horizon"]),zenith=tuple(light["zenith"]),
             cloud_cover=light["cloud_cover"],rain=light["rain"],mist=light.get("mist", 0.0),mirror=float(mirror),
-            lake_kind=float(self.world.id=="cedar"),lake_bounds=self.world.bounds,
+            lake_kind=2.0 if self.world.placeholder else float(self.world.id=="cedar"),
+            lake_bounds=self.world.bounds,
+            lake_water=tuple(self.world.palette["water"]),
             lake_grid=(self.world.nx,self.world.nz),lake_shore=3,lake_depth=4,
             lily_centre=next((tuple(row[1:3]) for row in self.world.zones if row[0]=="lilies"),(-175,-115)),
             boat_pos=(state.x,state.z),boat_forward=(math.sin(state.yaw),math.cos(state.yaw)),
@@ -359,7 +364,8 @@ class LakeRenderer(SoftwareRenderer):
         self.camp.render()
         self._uniforms(self.tree_p,state,cam,light,mirror,fb.size)
         self.atlas.use(0)
-        self.prop_vao.render(instances=len(self.prop_data))
+        if len(self.prop_data):
+            self.prop_vao.render(instances=len(self.prop_data))
         if buoys:
             self.buoy_vao.render(instances=buoys)
         if corks:

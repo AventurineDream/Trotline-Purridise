@@ -39,6 +39,9 @@ _ZONE_TINT = np.array([
     [0.78, 0.96, 1.08],  # rocks
     [0.68, 0.88, 1.08],  # deep
     [0.92, 1.00, 1.02],  # open
+    [0.88, 1.12, 0.76],  # reeds
+    [0.88, 0.98, 1.12],  # springs
+    [1.08, 0.86, 1.14],  # current
 ], dtype=np.float32)
 
 _LILY = ZONE_ORDER.index("lilies")
@@ -365,6 +368,8 @@ class SoftwareRenderer:
         body = shallow * (1.0 - t1) + mid * t1
         body = body * (1.0 - t2) + deep * t2
         body *= tint
+        if world.placeholder:
+            body = body * 0.25 + np.array(world.palette["water"], np.float32) * tint * 0.75
         # Bottom shows through the skinniest water.
         sand = np.array([0.55, 0.50, 0.32], np.float32)
         clear = np.clip(depth / 1.1, 0.0, 1.0)[:, None]
