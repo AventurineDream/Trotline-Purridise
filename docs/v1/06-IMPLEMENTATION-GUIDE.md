@@ -57,6 +57,7 @@ fishing/assets/content_v2/
   baits.json         # 9 baits + 8 recipe baits (03 §2)
   pantry.json        # 6 items (02 §4.2)
   dishes.json        # 10 dishes (03 §5)
+  calendar.json      # validated Lake Days, weather reservations, cookout lines (V1-16)
   boats.json         # 24 boats + traits (03 §6)
   bot.json           # prefixes, shells, tools (03 §7)
   lakes.json         # 5 lakes: labels, zones, Lake Days, weather sets, palettes
@@ -433,7 +434,7 @@ Cat NPC boats reuse the same generators.
 ### 6.5 UI as a book
 
 - Paper and ink palette, stitched tabs (Fish · Book · Ripples & Keepsakes · Story ·
-  Watch), stamps for stages, a watercolor fish grid, and a title-page ceremony
+  Watch · Week), stamps for stages, a watercolor fish grid, and a title-page ceremony
   for each rename.
 - Dialogue: portrait left, name ribbon, text with a type-on effect (instant with
   reduced motion), and choices as tabs.
@@ -463,7 +464,7 @@ The collection tab cycles Ripples, Keepsakes and Trophies. `--shots` includes
 every tab at text sizes 0 and 2, extra shelf and ceremony views, a contact sheet,
 and `book-benchmark.json` for the warmed 1280×720 book presentation.
 `book-story-compact.png` shows every page of The Deep-Water Drift at 480×270 with
-large text. The full-frame verifier includes all five book tabs in its coverage.
+large text. The full-frame verifier includes all six book tabs in its coverage.
 `book-*-compact-text{0,1,2}.png` captures every page of each tab, all shelf types,
 recorded and unrecorded legendary examples, and the title ceremony at 480×270
 for every text size. The compact quest selection falls back to the first quest
@@ -547,3 +548,48 @@ with an LRU; the `--benchmark` run logs per-subsystem estimates
   each give a clear review of the current pull request head before merging.
 - **Definition of Done:** acceptance criteria met; CI green; docs updated; no new
   warnings in `--selftest`; benchmark under budget when relevant; saves migrate.
+
+
+### V1-16 calendar implementation
+
+`calendar.json` supplies typed Briar/Cedar Lake Days, all twelve legendary clock/weather
+requirements, daily weather reservations and cookout dialogue. Briar/Cedar are
+the playable implementation; future-lake plan data does not load terrain or
+unlock content. Their future visual spectacles and full NPC/species rosters
+arrive with those lake tickets.
+
+`calendar.py` forks `sim.RNG` with a stable SHA-256 digest of the saved calendar
+seed, lake, absolute week and plan version. New saves capture the initial fishing
+seed; old saves without a calendar seed capture their saved RNG state on bind.
+Fishing never consumes a forecast draw. Current and next 168-hour plans for all
+five lake IDs live under `v2.calendar.weather_windows`, bounded to ten records;
+unknown future calendar fields/keys survive. Plans are reconstructed from the
+same seed during reads, so drawing and menus cannot mutate saved state.
+Clock changes refresh saved plans only when crossing a week; lake binding repairs
+or initializes them. Lake travel therefore cannot reroll weather.
+
+Daily hard reservations guarantee every legendary at least 120 continuous game
+minutes of matching weather and clock, within three days of any eligibility
+instant. Flathead's conflicting clear/snow windows and Nebula's clear/aurora
+windows get separate intervals. Cedar's rain condition checks only the preceding
+six hours. The planner exposes `next_legendary_window`; the future encounter
+system still owns non-weather gates and catch replacement. Unreserved weather
+uses seeded two-hour blocks, while visuals crossfade over one hour. Fishing,
+Bot, HUD, audio, sail wind and both renderers use the same state-aware forecast;
+the old no-state weather/rate APIs remain available to reference regressions.
+
+Cookout claims and per-friend chats are saved as bounded last-day ledgers. All
+current lake cats use landing anchors from 17:00 until 20:00 Sunday, with normal
+schedule restoration at the end. Fish/gift validation happens before any
+transaction; the confirmation saves exactly once before the two-second scene.
+Only an explicit share consumes a fish. Offline soak advances forecasts without
+replaying invitations, chats, morning notes or gifts. Automatic invitations
+share the kitchen quota but never consume the tacos' optional extra request.
+
+`test_calendar.py` exercises 1,000 seeded weeks × twelve legendaries × two
+fractional eligibility instants, checking complete two-hour windows and the
+three-day bound. It also covers reload, lake binding, week rollover, Lake Day
+rate isolation, event boundaries, atomic gifts, protected choices, pause/focus,
+read-only drawing and keyboard/pointer forecast pagination. `--shots` adds the
+calendar gallery and a warmed UI benchmark (week, Sunday, cookout and fish
+confirmation), including large text, accessibility font and 480×270 layouts.

@@ -22,15 +22,30 @@ _WEATHER = {
     "drizzle": dict(cloud_cover=1.20, cloud_shade=1.0, overcast=0.70,
                     rain=1.0, ripple=1.75, transmission=0.30),
 }
+for _name, _base, _mist in (("mist", "overcast", .65), ("snow_mist", "overcast", .85),
+                           ("fog", "overcast", 1.0), ("aurora", "clear", 0.0)):
+    _WEATHER[_name] = {**_WEATHER[_base], "mist": _mist}
+for _properties in _WEATHER.values():
+    _properties.setdefault("mist", 0.0)
 
 
-def weather_visuals(game_minutes: float) -> dict:
+def weather_visuals(game_minutes: float, state=None) -> dict:
     """Blend visual properties without changing the fishing weather schedule.
 
     Midnight changes the hour branch, while 6 AM changes the schedule's day
     index. Both boundaries must be included, along with the daytime changes.
     """
     minutes = max(0.0, game_minutes)
+    if state is not None:
+        from .calendar import weather_at as planned
+        boundary = round(minutes / 60) * 60
+        if boundary > 0 and abs(minutes-boundary) < BLEND_MINUTES / 2:
+            before = _WEATHER[planned(state, boundary - .001)]
+            after = _WEATHER[planned(state, boundary + .001)]
+            t = (minutes-boundary) / BLEND_MINUTES + .5
+            t = t*t*(3-2*t)
+            return {key: before[key]*(1-t) + after[key]*t for key in before}
+        return dict(_WEATHER[planned(state, minutes)])
     solar_day = math.floor((minutes + 360.0) / 1440.0)
     for day in (solar_day - 1, solar_day, solar_day + 1):
         for clock_minute in (0.0, 360.0, 600.0, 990.0, 1230.0):
@@ -101,14 +116,15 @@ def frame_light(hour: float, weather: str, conditions: dict | None = None) -> di
     }
 
 
-def lighting_at(game_minutes: float) -> dict:
-    return frame_light(hour_of_day(game_minutes), weather_at(game_minutes),
-                       weather_visuals(game_minutes))
+def lighting_at(game_minutes: float, state=None) -> dict:
+    from .calendar import weather_at as planned
+    weather = weather_at(game_minutes) if state is None else planned(state, game_minutes)
+    return frame_light(hour_of_day(game_minutes), weather, weather_visuals(game_minutes, state))
 
 
-def wind_at(game_minutes: float) -> tuple[float,float]:
+def wind_at(game_minutes: float, state=None) -> tuple[float,float]:
     """Direction the wind blows toward, in heading radians, and metres/second."""
-    conditions = weather_visuals(game_minutes)
+    conditions = weather_visuals(game_minutes, state)
     heading = 0.85 + 0.30*math.sin(game_minutes*math.tau/1440.0) + 0.10*math.sin(game_minutes/210.0)
     speed = 4.6 + 1.3*conditions["cloud_shade"] + 1.5*conditions["rain"] + 0.65*math.sin(game_minutes/170.0)
     return heading,speed

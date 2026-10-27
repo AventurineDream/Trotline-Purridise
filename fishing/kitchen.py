@@ -1,6 +1,7 @@
 """Pantry transactions and fish-safe cooking, shared by landing and galley UI."""
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from . import comfort
 from .data import (BAIT_BY_ID, BAIT_RECIPES, DISHES, DISH_CARD_PRICE, DOZEN,
@@ -73,13 +74,13 @@ def buy_card(state, world, dish_id):
     return None
 
 
-def eligible_fish(state, food):
+def eligible_fish(state, food, *, food_only=True):
     """Only ordinary food fish, with a stable smallest-first automatic choice."""
     result = []
     for index, fish in enumerate(state.well):
         species = SPECIES_BY_ID.get(fish.species)
         if (species is None or fish.shiny or fish.treasured or fish.legendary
-                or 'protected' in species.tags or species.food == 'none'):
+                or 'protected' in species.tags or (food_only and species.food == 'none')):
             continue
         if food == 'any' or species.food == food:
             result.append(index)
@@ -161,6 +162,12 @@ class MenuRow:
     arg: str = ''
 
 
+@lru_cache(maxsize=1)
+def _cookout_content():
+    from .content import load_content
+    return load_content()
+
+
 def rows(state, world):
     """Read-only menu model; purchases and learning happen only on input."""
     result = [MenuRow('Eat Kibble Tin', f"{state.v2['pantry'].get('kibble', 0)} aboard",
@@ -169,6 +176,15 @@ def rows(state, world):
               MenuRow('Ask Bot about nearby water', 'Mark',
                       'Bot marks favorable water once a day; tacos allow one extra. Quiet if none is nearby.', True, 'weather')]
     landing = at_landing(state, world)
+    from . import calendar
+    if calendar.cookout_active(state.game_minutes):
+        error = calendar.cookout_error(state, world)
+        result.insert(0, MenuRow("Share a fish at the Sunday cookout", "One gift",
+                                error or "Choose one ordinary fish for a pantry gift.",
+                                error is None, "cookout"))
+        for friend in calendar.cookout_friends(_cookout_content(), world.id):
+            result.insert(1, MenuRow("Chat: " + friend["name"], "Cookout",
+                         calendar.CALENDAR_DATA["cookout_lines"][friend["id"]], landing, "cookout_chat", friend["id"]))
     for item in PANTRY.values():
         if item.lake in ('all', world.id):
             count = state.v2['pantry'].get(item.id, 0)
