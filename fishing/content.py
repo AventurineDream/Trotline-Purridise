@@ -988,7 +988,7 @@ class _ContentV2Validator:
             self.error(filename, "name_prefixes", "expected the twelve canonical prefixes, including Rivet and excluding Pebble")
         self.number(filename, "suffix_min", raw.get("suffix_min"), integer=True, minimum=11, maximum=11)
         self.number(filename, "suffix_max", raw.get("suffix_max"), integer=True, minimum=999, maximum=999)
-        shells = self.table(docs, filename, "shells", {"id", "name", "chapter", "tool_id"})
+        shells = self.table(docs, filename, "shells", {"id", "name", "chapter", "tool_id", "body", "trim", "secondary", "chime", "caption"})
         tools = self.table(docs, filename, "tools", {"id", "name", "price", "requires_finder"})
         stages = self.table(docs, filename, "collar_stages", {"id", "name"})
         knots = self.table(docs, filename, "knots", {"id", "name"})
@@ -1003,6 +1003,17 @@ class _ContentV2Validator:
         for _id, row, where in self.rows(filename, "shells"):
             self.number(filename, where + ".chapter", row.get("chapter"), integer=True, minimum=0, maximum=5)
             self.enum(filename, where + ".tool_id", row.get("tool_id"), tools)
+            self.enum(filename, where + ".chime", row.get("chime"), {"bot_tin", "bot_frog", "bot_duck", "bot_sub", "bot_astral"})
+            self.text(filename, where + ".caption", row.get("caption"))
+            if isinstance(_id, str) and row.get("chime") != "bot_" + _id:
+                self.error(filename, where + ".chime", "each shell must have its own chime")
+            for color in ("body", "trim", "secondary"):
+                value = row.get(color)
+                if not isinstance(value, list) or len(value) != 3:
+                    self.error(filename, where + "." + color, "expected an RGB triple")
+                else:
+                    for i, channel in enumerate(value):
+                        self.number(filename, where + f".{color}[{i}]", channel, minimum=0, maximum=1)
         refs = [row.get("tool_id") for row in shells.values()]
         if len(refs) != len(tools) or any(refs.count(tool) != 1 for tool in tools):
             self.error(filename, "shells", "each tool must belong to exactly one shell")
