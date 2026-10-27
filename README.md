@@ -13,10 +13,11 @@ tracked as GitHub issues labeled `v1.0`.
 The landing's **Lakes** tab lists all five waters. Briar and Cedar remain open
 from the start. Completing chapter 2 opens Flathead, chapter 3 opens Crater,
 and chapter 4 opens Nebula; pull every line and return to the landing before
-travelling. The three new waters currently use driveable flat maps while their
-landscapes and neighbors are developed. All 144 standard fish are now authored
+travelling. Flathead now has a procedural alpine landscape, snow mist, larch
+and spruce, and Glacial Peak Outpost. Crater and Nebula still use driveable flat
+maps while their landscapes and neighbors are developed. All 144 standard fish are now authored
 and catchable: 36 each on Briar and Cedar, and 34 on each new water. Briar's chart now includes the
-Reed Passage. [Lake framework](docs/issue-51/README.md) · [Fish data and captures](docs/issue-52/README.md).
+Reed Passage. [Lake framework](docs/issue-51/README.md) · [Fish data and captures](docs/issue-52/README.md) · [Flathead captures and load evidence](docs/issue-53/README.md).
 
 | | |
 | --- | --- |

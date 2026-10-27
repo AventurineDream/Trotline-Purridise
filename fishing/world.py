@@ -1,4 +1,4 @@
-"""The loaded water: Briar, Cedar's survey, or a small flat systems map.
+"""The active water: Briar, Cedar, generated alpine terrain, or a flat systems map.
 
 Coordinates are meters. +X is east, +Z is north, Y is up. The water is y = 0.
 The shoreline is an ellipse with a northwest creek cove, so the same function
@@ -208,6 +208,8 @@ class World:
         self.name = LAKES[lake_id]["name"]
         self.landing = LAKES[lake_id]["landing"]
         self.zone_names = LAKE_ZONE_NAMES[lake_id]
+        self.environment = LAKES[lake_id].get("environment")
+        self.generated = self.environment is not None
         self.placeholder = LAKES[lake_id]["placeholder"]
         self.palette = LAKES[lake_id]["palette"]
         self.bounds = (X0,Z0,X1,Z1)
@@ -225,6 +227,15 @@ class World:
             ix,iz = self.metadata["slip_inland"]
             ox,oz = self.metadata["slip_origin"]
             self.slip = Slip(ox,oz,(ix,iz),(-iz,ix),3.0,10.0,10.0)
+        elif self.generated:
+            from .lakegen import LakeFields
+            self.fields = LakeFields(self.environment)
+            self.bounds, self.nx, self.nz = self.fields.bounds, self.fields.nx, self.fields.nz
+            self.shore_grid, self.depth_grid, self.coast = self.fields.bake()
+            angle = self.environment['slip_angle']
+            ix, iz = math.cos(angle), math.sin(angle)
+            radius = float(self.fields.radius(angle))
+            self.slip = Slip(ix*radius, iz*radius, (ix, iz), (-iz, ix), 4.5, 12, 22)
         elif self.placeholder:
             self.bounds = (-420.0, -320.0, 420.0, 320.0)
             self.nx, self.nz = 169, 129
@@ -235,6 +246,9 @@ class World:
         self.zones = self._zone_table()
         self.height = self._bake_height()
         self.faces = self._build_camp()
+        if self.generated:
+            from .lakegen import chimney_faces
+            self.faces.extend(chimney_faces(self))
         if self.id == "cedar":
             self.faces.extend(self._build_trinidad_cove())
         from .marina import Marina, build_marina
@@ -299,6 +313,8 @@ class World:
         return shore_sd(x,z) if self.shore_grid is None else self._sample_grid(self.shore_grid,x,z)
 
     def _zone_table(self):
+        if self.generated:
+            return self.fields.zones
         if self.id=="cedar":
             return tuple(tuple(row) for row in self.metadata["zones"])
         if self.placeholder:
@@ -338,7 +354,7 @@ class World:
                 depth = np.where(ids == ZONE_ORDER.index(zone), lo + (hi-lo)*blend, depth)
             depth = np.where(ids == ZONE_ORDER.index("landing"), 4.0, depth)
             return np.where((sd < 0) | self.slip.contains(x, z), depth, 0.0).astype(np.float32)
-        if self.id=="cedar":
+        if self.id=="cedar" or self.generated:
             depth = np.where(sd<0,self._sample_grid(self.depth_grid,x,z),0.0)
             return np.where(self.slip.contains(x,z),np.maximum(depth,1.35),depth).astype(np.float32)
         x = _as(x)
@@ -420,6 +436,12 @@ class World:
         sd = self.shore_sd(x, z)
         if self.placeholder:
             return np.where((sd < 0) | self.slip.contains(x, z), 0.0, 0.45).astype(np.float32)
+        if self.generated:
+            height = self.fields.ground(x, z)
+            a, s = self.slip.local(x, z)
+            pad = (a > -3) & (a < 40) & (np.abs(s) < 42) & (sd >= 0)
+            height = np.where(pad, .45, height)
+            return np.where(self.slip.contains(x, z), 0, height).astype(np.float32)
         inland = np.clip(sd, 0.0, None)
         h = inland * np.float32(0.035)
         h = h + smoothstep(inland, 1.5, 40.0) * np.float32(4.2)
@@ -447,7 +469,7 @@ class World:
         return self._ground(x, z)
 
     def sample_height(self, x, z) -> np.ndarray:
-        if self.id=="cedar" or self.placeholder:
+        if self.id=="cedar" or self.placeholder or self.generated:
             return self._sample_grid(self.height,x,z)
         x = _as(x)
         z = _as(z)
@@ -586,6 +608,9 @@ class World:
         return faces
 
     def _place_props(self) -> list[Prop]:
+        if self.generated:
+            from .lakegen import alpine_props
+            return alpine_props(self, Prop)
         if self.id=="cedar":
             return self._cedar_props()
         rng = np.random.default_rng(7)
@@ -735,7 +760,7 @@ class World:
     def _bake_map(self):
         w, h = 360, 240
         x0,z0,x1,z1 = self.bounds
-        if self.id=="cedar":
+        if self.id=="cedar" or self.generated:
             h = int(w*(z1-z0)/(x1-x0))
         xs = np.linspace(x0,x1,w,dtype=np.float32)
         zs = np.linspace(z1,z0,h,dtype=np.float32)  # row 0 is north

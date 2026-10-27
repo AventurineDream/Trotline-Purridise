@@ -59,6 +59,9 @@ def _bird(out, x, y, z, yaw, species, t, phase):
 def faces(state, world, light=None):
     light = lighting_at(state.game_minutes+state.minute_acc, state) if light is None else light
     out = []
+    if world.generated:
+        from .lakegen import smoke_faces
+        out.extend(smoke_faces(state, world))
     t = float(state.anim)
     # Only two nearby stable habitats are active, regardless of world size.
     nearby = sorted(world.zones, key=lambda row: (row[1]-state.x)**2+(row[2]-state.z)**2)[:2]

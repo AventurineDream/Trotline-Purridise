@@ -6,7 +6,8 @@ uniform vec3 slip_size;
 uniform float cloud_cover, rain, mist, speed, spotlight;
 uniform float comfort_fog_radius;
 uniform float mirror;
-uniform float lake_kind;
+uniform float lake_kind, snow, snow_anim, snow_line;
+uniform vec3 alpine_shallow, alpine_deep;
 uniform vec3 lake_water;
 uniform sampler2D lake_shore, lake_depth;
 uniform vec4 lake_bounds;
@@ -32,6 +33,7 @@ vec2 lake_uv(vec2 p) {
     return (f*(lake_grid-1.0)+0.5)/lake_grid;
 }
 float shore(vec2 p) {
+    if (lake_kind>2.5) return texture(lake_shore,lake_uv(p)).r;
     if (lake_kind>1.5) return max(abs(p.x)-320.0,abs(p.y)-240.0);
     if (lake_kind>0.5) return texture(lake_shore,lake_uv(p)).r;
     float a = atan(p.y, p.x);

@@ -13,6 +13,13 @@ void main() {
         vec3 earth = mix(vec3(0.38,0.31,0.21),vec3(0.57,0.48,0.33),patch);
         c = mix(earth,grass,smoothstep(1.0,9.0,sd));
         c = mix(c,vec3(0.26,0.29,0.25),smoothstep(18.0,62.0,pos.y)*0.6);
+        if (lake_kind>2.5) {
+            vec3 gravel = mix(vec3(.40,.43,.42),vec3(.57,.58,.53),patch);
+            c = mix(gravel,vec3(.22,.31,.23),smoothstep(2.0,16.0,sd));
+            c = mix(c,vec3(.37,.42,.44),smoothstep(18.0,83.0,pos.y));
+            float snowcap = smoothstep(snow_line-12.0,snow_line+18.0,pos.y+patch*18.0);
+            c = mix(c,vec3(.84,.89,.91),snowcap);
+        }
         // Dappled shadows along the forest edge, fixed in world space.
         float canopy = smoothstep(3.0,12.0,sd)*(1.0-smoothstep(55.0,95.0,sd));
         c *= 1.0-canopy*(0.12+0.18*noise(pos.xz*0.10));
