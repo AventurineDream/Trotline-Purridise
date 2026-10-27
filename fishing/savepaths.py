@@ -15,6 +15,7 @@ from typing import Callable, Sequence, Type
 
 from .book import BOOK_STAGES, book_stage, seed_stage_claims
 from .gamepad import KEY_NAMES, default_key_bindings
+from .comfort import DEFAULT_NEEDS, normalize_needs
 
 
 SAVE_FILENAME = "save.json"
@@ -260,8 +261,7 @@ def default_v2(state=None) -> dict:
             "shell": "tin", "shells": ["tin"], "tools": [],
             "collar": {"stage": "none", "knot": None, "visible": True},
         },
-        "needs": {"awake_h": 0.0, "since_meal_h": 0.0, "rested_until": None,
-                  "last_prompt_real_s": 0},
+        "needs": deepcopy(DEFAULT_NEEDS),
         "buff": None,
         "pantry": {"herbs": 0},
         "recipes": [], "dishes_known": [],
@@ -316,6 +316,7 @@ def merge_v2_defaults(state, saved_v2: object) -> dict:
         mode = "cozy"
     normalized["mode"] = mode
     normalized["settings"]["mode"] = mode
+    normalize_needs(normalized)
 
     saved_profile = saved_v2.get("profile")
     saved_collar = saved_profile.get("collar") if isinstance(saved_profile, dict) else None

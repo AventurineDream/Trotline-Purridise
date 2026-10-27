@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .comfort import drowsy
 
 def haul_cadence(state) -> float:
     """Return the time for one hook at the current speed and fatigue level."""
@@ -13,12 +14,6 @@ def haul_cadence(state) -> float:
         settings.get("haul_speed"), 0.25,
     )
 
-    needs = v2.get("needs", {})
-    try:
-        awake_hours = float(needs.get("awake_h", 0.0)) if isinstance(needs, dict) else 0.0
-    except (TypeError, ValueError, OverflowError):
-        awake_hours = 0.0
-    mode = settings.get("mode", v2.get("mode", "cozy"))
-    if mode == "old_salt" and awake_hours >= 16.0:
+    if drowsy(v2):
         cadence *= 1.25
     return cadence

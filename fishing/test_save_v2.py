@@ -14,6 +14,7 @@ import numpy as np
 
 from . import savepaths
 from .gamepad import default_key_bindings
+from .comfort import DEFAULT_NEEDS
 from .narrative import QUEST_IDS
 from .savepaths import (UnsupportedSaveVersionError, book_stage,
                         load_game_save, merge_v2_defaults)
@@ -112,10 +113,7 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(defaults["profile"]["tools"], [])
         self.assertEqual(defaults["profile"]["collar"],
                          {"stage": "none", "knot": None, "visible": True})
-        self.assertEqual(defaults["needs"], {
-            "awake_h": 0.0, "since_meal_h": 0.0, "rested_until": None,
-            "last_prompt_real_s": 0,
-        })
+        self.assertEqual(defaults["needs"], DEFAULT_NEEDS)
         self.assertIsNone(defaults["buff"])
         self.assertEqual(defaults["pantry"], {"herbs": 0})
         self.assertEqual(defaults["recipes"], [])

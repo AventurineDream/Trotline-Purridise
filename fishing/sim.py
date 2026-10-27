@@ -64,6 +64,7 @@ from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, confirm_shiny, lose_sh
                    shiny_tracker, stage_up_events)
 from .savepaths import (UnsupportedSaveVersionError, V2_REWARD_KINDS,
                         merge_v2_defaults)
+from . import comfort
 
 MASK = (1 << 64) - 1
 SAVE_VERSION = 2
@@ -591,11 +592,13 @@ class State:
 
     def max_speed(self) -> float:
         if self.boat_id=="sail":
-            return 1.8  # small auxiliary; powered-boat upgrades stay available
-        if self.boat_id=="rowboat":
-            return (ROWBOAT_ELECTRIC_SPEED if self.rowboat_trolling_motor
+            base = 1.8  # small auxiliary; powered-boat upgrades stay available
+        elif self.boat_id=="rowboat":
+            base = (ROWBOAT_ELECTRIC_SPEED if self.rowboat_trolling_motor
                     and self.rowboat_battery_kwh > 0.0 else ROWBOAT_ROW_SPEED)
-        return MOTORS[self.motor]["speed"] * self.boat.speed_factor
+        else:
+            base = MOTORS[self.motor]["speed"] * self.boat.speed_factor
+        return base * comfort.speed_factor(self.v2)
 
     @property
     def boat(self):
@@ -711,13 +714,35 @@ class State:
     def tow_to_landing(self,world) -> str | None:
         if self.sail_raised or abs(self.speed)>0.5 or abs(self.throttle_setting)>0.02:
             return "Lower the sail and idle before calling the tow boat."
-        fee = min(10.0,max(0.0,self.money))
+        fee = comfort.tow_fee(self.v2, self.money, self.boat.price)
         self._spend(fee)
         self._park(world)
         if self.fuel<0.75:
             self.fuel = 0.75
         self.advance_bulk(60)
         self.toast(f"Tow to {world.landing}: {dollars(fee)}. Lines kept soaking.")
+        return None
+
+    def catnap(self, world, *, forced=False) -> str | None:
+        if forced:
+            if not comfort.doze_due(self.v2):
+                return "No doze is due in the current mode."
+        elif not (self.anchored or self.slip_status(world) == "docked"
+                  or ("hammock" in self.boat.traits and abs(self.speed) < .25
+                      and abs(self.throttle) <= .01 and abs(self.throttle_setting) <= .01
+                      and not self.sail_raised)):
+            return "Anchor or return to the landing for a catnap."
+        eligible = not comfort.rested(self.v2, self.narrative.active_play_game_minutes)
+        if forced:
+            self.anchored = True
+        self.speed = self.throttle = self.throttle_setting = 0.0
+        self.sail_raised = False
+        self.advance_bulk(comfort.NAP_MINUTES)
+        clue = comfort.finish_nap(self, world, eligible)
+        self.toast("A two-hour catnap. Rested, with room for a dream." if eligible
+                   else "A two-hour catnap. The lines kept soaking.")
+        if clue:
+            self.toast("Bot's dream left a habitat lead in your book.")
         return None
 
     def advance_bulk(self, game_minutes: int) -> tuple[int, int]:
@@ -733,6 +758,7 @@ class State:
             spoiled += s
             self.game_minutes += 1.0
         self.narrative.active_play_game_minutes += max(0.0, self.game_minutes - before)
+        comfort.advance_needs(self.v2, max(0.0, self.game_minutes - before) / 60)
         if spoiled:
             self.toast(self._spoilage_copy(spoiled))
         return hooked, spoiled
@@ -763,6 +789,7 @@ class State:
                 self.splash_x, self.splash_z = float(x), float(z)
                 self.splash_anim = self.anim
         self.narrative.active_play_game_minutes += max(0.0, self.game_minutes - before)
+        comfort.advance_needs(self.v2, max(0.0, self.game_minutes - before) / 60)
         for line_i, items in notes.items():
             zone = self.lines[line_i].zone if line_i < len(self.lines) else "open"
             from .world import zone_label
@@ -973,8 +1000,9 @@ class State:
                         self.toast("Tank empty. Refuel at the landing; R calls the tow boat.")
                     if abs(engine) > 0.01:
                         movement_propulsion = "motor"
-            target_speed = engine*self.max_speed()+self.sail_drive()
-            target_speed = min(target_speed,max(self.max_speed(),self.boat.sail_speed))
+            factor = comfort.speed_factor(self.v2)
+            target_speed = engine*self.max_speed()+self.sail_drive()*factor
+            target_speed = min(target_speed,max(self.max_speed(),self.boat.sail_speed*factor))
             rate = self.boat.acceleration if abs(target_speed) > abs(self.speed) else 0.65
             self.speed += (target_speed - self.speed) * min(1.0, dt * rate)
         auth = 0.40 + 0.60 * (1.0 - min(1.0, abs(self.speed) / max(0.5, self.max_speed())))

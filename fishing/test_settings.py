@@ -214,6 +214,10 @@ class SettingsChecks(unittest.TestCase):
         session.ui.mode = "title"
         session.ui.confirm_new = True
         session.tick(Keys(pressed={"return"}), 0.05)
+        self.assertEqual(session.ui.mode, "new_mode")
+        # The new mode choice defaults to Cozy; select Old Salt explicitly.
+        session.tick(Keys(pressed={"right"}), 0)
+        session.tick(Keys(pressed={"return"}), 0)
         self.assertEqual(session.state.v2["settings"], settings)
         self.assertEqual(session.state.v2["mode"], "old_salt")
         self.assertFalse(session.state.v2["profile"]["collar"]["visible"])

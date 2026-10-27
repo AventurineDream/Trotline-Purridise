@@ -320,7 +320,7 @@ def window_smoke():
                     break
                 keys = Keys()
                 elapsed=now-start
-                if session.ui.mode=="title" and elapsed>=0.4:
+                if session.ui.mode in {"title", "new_mode"} and elapsed>=0.4:
                     keys = Keys(pressed={"return"})
                 elif 0.4<=elapsed<1.5 and session.ui.mode=="play":
                     keys = Keys(held={"w"})

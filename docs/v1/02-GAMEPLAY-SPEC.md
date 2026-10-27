@@ -44,6 +44,8 @@ cook the catch → sell, upgrade, travel.
 Mode is chosen on **New Game** (default **Cozy**), saved, and changeable at any
 time from Pause → Settings. Both modes have identical story, collection, shops and
 travel.
+The choice follows the existing start-over confirmation. Escape cancels before
+the save is overwritten; selecting a mode saves the new morning immediately.
 
 ### 2.1 Cozy (default)
 
@@ -66,6 +68,9 @@ checks the **current** mode when it fires.
 
 **Prompts:** at most one needs prompt per 10 *real* minutes of active play, and
 each can be snoozed ("Later") for 30 real minutes.
+Energy and hunger each offer once per episode, with snooze allowing a later
+reminder. The shared throttle and per-need snoozes are saved. Paused menus and
+time offline do not count toward these real-play timers.
 
 ---
 
@@ -76,8 +81,9 @@ each can be snoozed ("Later") for 30 real minutes.
    needs, drift, NPC schedules and encounter timers.
 2. **Time scale (T)** stays as today (1×/3×/6×/12× while idle or anchored).
 3. **Catnap (Z)** is the only way to skip time on purpose. It advances 2 game
-   hours. The simulation runs accelerated with a skippable dusk-to-dawn style
-   fade, and any key ends it early.
+   hours. The existing bulk simulation advances the full 120 minutes once and
+   saves the result before a dusk-to-dawn style fade. Any key or click finishes
+   the fade. Naps count as active game time for needs and quest timers.
 4. **Offline soak (existing)** stays: lines keep fishing for up to 6 real hours
    while the game is closed. Needs, NPC timers and quest durations do **not**
    advance offline.
@@ -105,6 +111,11 @@ each can be snoozed ("Later") for 30 real minutes.
   Only one unread dream-clue can wait at a time. In Old Salt, a nap also resets
   Energy.
 - Extra naps just pass time. Nothing is lost by napping or by never napping.
+- Rested and its cooldown use the saved active-game clock, so both pause in
+  menus and offline. Rested is granted at the end of an eligible nap; extra naps
+  do not extend its expiry. Bot's dream is selected with the saved RNG from
+  available species with no catch or previous dream lead on the current lake.
+  It stays in the entry's heard notes; opening that entry clears the unread slot.
 
 ### 4.2 Pantry — new
 

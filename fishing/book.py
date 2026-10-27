@@ -319,6 +319,19 @@ def take_dream_clue(book: dict) -> object | None:
     return deepcopy(clue)
 
 
+def remember_dream_clue(book: dict, clue: dict) -> bool:
+    """Keep a dream in its species' heard notes and reserve the unread slot."""
+    sid = clue.get("species")
+    if sid not in SPECIES_RUMORS or not set_dream_clue(book, clue):
+        return False
+    entry = _book_record(book, sid)
+    dreams = entry.setdefault("dreams", [])
+    if not isinstance(dreams, list):
+        dreams = entry["dreams"] = []
+    dreams.append(deepcopy(clue))
+    return True
+
+
 def _legendary_record(v2: dict, legendary_id: str) -> dict:
     pages = v2.setdefault("legendaries", {})
     if not isinstance(pages, dict):
@@ -412,6 +425,7 @@ def species_page(book: dict, species_id: str, count: int,
         "count": count,
         "stage": book_stage(count),
         "heard": heard,
+        "dreams": deepcopy(entry.get("dreams", [])) if isinstance(entry.get("dreams", []), list) else [],
         "found": found,
         "best_bait": best_bait,
         "tracker_unlocked": count >= 5,
