@@ -265,7 +265,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             "coverage_complete":coverage_complete,
             "checks":["fixed anchored depth","matching camera projections","eleven UI modes, including dialogue",
                       "both lakes with repeated renderer release and rebuild","all four boats and raised sail",
-                      "seven shop tabs, four help pages, 36 fish and 12 quest journal entries",
+                      "eight shop tabs, four help pages, 36 fish and 12 quest journal entries",
                       "twelve dialogue givers and four saved quest statuses","changing fuel and battery gauges",
                       "clear, fair, night, drizzle and 12x midnight fades","five heavy lines and fifteen buoys",
                       "all paint colors","changing look and steering","bounded text cache"],
