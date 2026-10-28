@@ -1,10 +1,10 @@
 """Measured, scrolling pantry menus and the quiet cooking vignette."""
 
 from . import calendar, comfort, kitchen
-from .data import BAIT_BY_ID, BAIT_RECIPES, DISHES, PANTRY, SPECIES_BY_ID
+from .data import BAIT_BY_ID, BAIT_RECIPES, DISHES, PANTRY
 
 
-def draw(renderer, frame, state, ui):
+def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_meta=None):
     from .ui import DIM, GOLD, INK, WARN, comfort_controls
     h, w = frame.shape[:2]
     x = y = 12
@@ -20,6 +20,8 @@ def draw(renderer, frame, state, ui):
             value = value[:-1]
         return value + '…'
     title = 'Kitchen' if ui.mode == 'shop' else 'Pantry & galley'
+    if menu_title is not None:
+        title = menu_title
     if ui.mode in ('cook_confirm', 'cooking'):
         title = ui.cook_label
     while head > 10 and renderer._measure(title, head) > width - 32:
@@ -31,13 +33,13 @@ def draw(renderer, frame, state, ui):
             if ui.cook_kind == 'cookout':
                 candidates = kitchen.eligible_fish(state, 'any', food_only=False)
                 fish = state.well[candidates[ui.cook_fish % len(candidates)]] if candidates else None
-                picked = f'{fish.weight:.1f} lb {SPECIES_BY_ID[fish.species].name}' if fish else 'No eligible fish'
+                picked = kitchen.pick_label(fish) if fish else 'No eligible fish'
                 message = f'Share {picked} for one {PANTRY[calendar.cookout_gift(state)].name}.\nUp / Down chooses a fish.\nOne gift per lake each Sunday. Special fish stay safe.'
             elif ui.cook_kind == 'dish':
                 dish = DISHES[ui.cook_arg]
                 candidates = kitchen.eligible_fish(state, dish.food)
                 fish = state.well[candidates[ui.cook_fish % len(candidates)]] if candidates else None
-                picked = (f'{fish.weight:.1f} lb {SPECIES_BY_ID[fish.species].name}' if fish else 'No eligible fish')
+                picked = (kitchen.pick_label(fish) if fish else 'No eligible fish')
                 message = f'Use {picked} + one {PANTRY[dish.ingredient].name}.\n{dish.blurb}'
                 message += '\nUp / Down chooses a fish.' if ui.input_device != 'gamepad' else '\nD-pad Up / Down chooses a fish.'
             else:
@@ -85,7 +87,9 @@ def draw(renderer, frame, state, ui):
         return
     buff = comfort.active_buff(state)
     meta = f'${state.money:.2f} · ' + (buff.name if buff else 'No picnic buff')
-    rows = kitchen.rows(state, renderer.world)
+    if menu_meta is not None:
+        meta = menu_meta
+    rows = kitchen.rows(state, renderer.world) if menu_rows is None else menu_rows
     count = f'{ui.shop_i % len(rows) + 1} / {len(rows)}'
     count_w = renderer._measure(count, small)
     text(trim(meta, small, width - count_w - 48), x + 16, top, small, GOLD)
