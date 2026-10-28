@@ -1507,16 +1507,16 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
             if session.world_running() and not motion_reduced:
                 renderer.poke_splashes(session.state)
             minutes = session.state.game_minutes
+            boat = session.state.boat
+            electric = (session.state.boat_id=="rowboat" and session.state.rowboat_trolling_motor
+                        and session.state.rowboat_battery_kwh>0)
             audio.update(dt, session.state.throttle, session.state.speed, session.state.muted,
                          hour=hour_of_day(minutes), lake_id=session.state.lake_id,
                          rain=float(weather_visuals(minutes, session.state)["rain"]),
                          sailing=session.state.sail_raised,
-                         motorized=(session.state.boat_id!="rowboat"
-                                    or (session.state.rowboat_trolling_motor
-                                        and session.state.rowboat_battery_kwh>0)),
-                         rowing=(session.state.boat_id=="rowboat"
-                                 and (not session.state.rowboat_trolling_motor
-                                      or session.state.rowboat_battery_kwh<=0)
+                         # A starlight barge glides without either sound.
+                         motorized=electric or (boat.fuelled and session.state.boat_id!="rowboat"),
+                         rowing=(boat.power in ("paddle", "oars") and not electric
                                  and abs(session.state.throttle)>0.01),
                          volumes=session.state.v2.get("settings", {}).get("volumes", {}))
             if session.ui.mode != "title" or session.ui.has_save:

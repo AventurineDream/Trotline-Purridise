@@ -452,6 +452,13 @@ _BOAT_TRAITS = {
     "shallow", "silent", "hammock", "wind_steady", "trophy_rail", "glow",
     "galley", "ice_hull",
 }
+_BOAT_FAMILIES = {"pioneer", "rowed", "jon", "utility", "runabout", "sail_trawler", "pontoon", "cosmic"}
+_BOAT_POWERS = {"paddle", "oars", "tiller", "console", "inboard", "sail", "starlight"}
+# Powers whose speed is the table's top speed rather than motor upgrades or sail.
+_FIXED_SPEED_POWERS = {"paddle", "oars", "console", "inboard", "starlight"}
+# Boats with a dedicated mesh; new boats borrow one until V1-22's parametric hulls.
+_BOAT_MESHES = {"jon", "rowboat", "sail", "pontoon"}
+_SHALLOW_DRAFT = 0.32  # draft + 0.08 clearance reaches 0.4 m water (02 §9)
 
 # These IDs are persisted in saves and must remain loadable when content grows.
 # New IDs may be added; existing IDs cannot be renamed or removed.
@@ -781,7 +788,8 @@ class _ContentV2Validator:
         boats = self.table(docs, boats_file, "boats", {
             "id", "name", "bow", "stern", "half_beam", "draft", "eye_height", "price",
             "lines", "tank", "fuel_burn", "speed_factor", "turn_factor", "acceleration",
-            "well_bonus", "sail_speed", "traits"})
+            "well_bonus", "sail_speed", "traits", "tier", "family", "power", "blurb"},
+            {"top_speed", "hull", "sold_at"})
 
         self.require_saved_ids(species_file, "species", species)
         self.require_saved_ids(baits_file, "baits", baits)
@@ -963,7 +971,27 @@ class _ContentV2Validator:
                         minimum=3, maximum=8, integer=True)
             for key in ("bow", "stern", "half_beam", "draft", "eye_height", "price", "tank",
                         "fuel_burn", "speed_factor", "turn_factor", "acceleration", "well_bonus", "sail_speed"):
-                self.number(boats_file, where + "." + key, row.get(key), minimum=None if key == "stern" else 0)
+                # A tier-1 well may sit below the 40 lb base; the bonus is then negative.
+                minimum = None if key == "stern" else -40 if key == "well_bonus" else 0
+                self.number(boats_file, where + "." + key, row.get(key), minimum=minimum)
+            self.text(boats_file, where + ".blurb", row.get("blurb"))
+            self.number(boats_file, where + ".tier", row.get("tier"), minimum=1, maximum=8, integer=True)
+            self.enum(boats_file, where + ".family", row.get("family"), _BOAT_FAMILIES)
+            self.enum(boats_file, where + ".power", row.get("power"), _BOAT_POWERS)
+            if row.get("power") in _FIXED_SPEED_POWERS or "top_speed" in row:
+                self.number(boats_file, where + ".top_speed", row.get("top_speed"), minimum=0.1)
+            if "hull" in row:
+                self.enum(boats_file, where + ".hull", row["hull"], _BOAT_MESHES)
+                if bid in _BOAT_MESHES and row["hull"] != bid:
+                    self.error(boats_file, where + ".hull", "a boat with its own mesh cannot borrow another")
+            elif bid not in _BOAT_MESHES:
+                self.error(boats_file, where + ".hull", "a new boat must name an existing hull")
+            if "sold_at" in row:
+                self.id_list(boats_file, where + ".sold_at", row["sold_at"],
+                             {"briar", "cedar", "flathead", "crater", "nebula"})
+            if (isinstance(row.get("traits"), list) and "shallow" in row["traits"]
+                    and type(row.get("draft")) in (int, float) and row["draft"] > _SHALLOW_DRAFT):
+                self.error(boats_file, where + ".draft", f"a shallow boat draws at most {_SHALLOW_DRAFT} m")
             for key in ("speed_factor", "turn_factor", "acceleration"):
                 value = row.get(key)
                 if type(value) in (int, float) and value <= 0:

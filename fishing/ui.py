@@ -34,7 +34,7 @@ from .data import (
 )
 from .content import load_content
 from .guardian import draw_sighting
-from . import bottools, sonar
+from . import bottools, fleet, sonar
 from .haul import haul_cadence
 from .book import BOOK_STAGES
 from .bookview import BookView
@@ -504,16 +504,20 @@ def shop_rows(state, tab: int) -> list[Row]:
                     True, "paint", f"{slot}:{pid}",
                 ))
     if tab==4:
-        descriptions = {
-            "jon":"Light and nimble. A 12 L tank and your familiar 12-foot hull.",
-            "sail":"Wind power uses no fuel. Small auxiliary, 6 L tank. Q raises or lowers the sail.",
-            "pontoon":"Wide deck, sheltered helm, 36 L tank, and 40 lb of extra livewell capacity.",
-            "rowboat":"Blue 10-foot plastic hull, cream interior, two-place front bench, backless center stool, and two aft seats. Row with W/S; steer with A/D.",
-        }
-        for model in BOATS.values():
+        for model in fleet.shop_boats():
             owned = model.id in state.owned_boats
-            right = "aboard" if model.id==state.boat_id else ("owned" if owned else dollars(model.price))
-            rows.append(Row(model.name,right,descriptions[model.id],model.id!=state.boat_id,"boat",model.id))
+            locked = fleet.shop_error(state, state.lake_id, model.id)
+            if model.id==state.boat_id:
+                right = "aboard"
+            elif owned:
+                right = "owned"
+            elif locked:
+                right = (f"After ch. {fleet.unlock_chapter(model.id)}"
+                         if not fleet.chapter_finished(state, fleet.unlock_chapter(model.id)) else "Other landing")
+            else:
+                right = dollars(model.price)
+            description = f"{locked} {model.blurb}" if locked else model.blurb
+            rows.append(Row(model.name,right,description,model.id!=state.boat_id and not locked,"boat",model.id))
         if "rowboat" in state.owned_boats:
             if state.rowboat_trolling_motor:
                 rows.append(Row("9.9 hp electric trolling motor", "installed",
@@ -1095,6 +1099,9 @@ class UI:
             power = ("E-MOTOR" if state.rowboat_trolling_motor
                      and state.rowboat_battery_kwh>0 else "OARS")
             throttle = f"{power}  IDLE" if gear=="IDLE" else f"{power}  {gear} {percent}%"
+        elif not state.boat.fuelled:
+            power = {"paddle":"PADDLE","oars":"OARS","starlight":"GLIDE"}[state.boat.power]
+            throttle = f"{power}  IDLE" if gear=="IDLE" else f"{power}  {gear} {percent}%"
         else:
             throttle = "THROTTLE  IDLE" if gear=="IDLE" else f"THROTTLE  {gear} {percent}%"
         self._text(frame,throttle,rx+16,m+int(91*unit),small,
@@ -1105,11 +1112,13 @@ class UI:
             low_power = (state.rowboat_trolling_motor
                          and state.rowboat_battery_kwh<ROWBOAT_BATTERY_KWH*0.15)
             self._text(frame,power,rx+16,m+int(111*unit),small,WARN if low_power else DIM,False,"sans")
+        elif not state.boat.fuelled:
+            self._text(frame,"NO FUEL NEEDED",rx+16,m+int(111*unit),small,DIM,False,"sans")
         else:
             fuel = f"FUEL  {state.fuel:.1f} / {state.boat.tank:.0f} L"
             self._text(frame,fuel,rx+16,m+int(111*unit),small,
                        WARN if state.fuel<state.boat.tank*0.15 else DIM,False,"sans")
-        if state.boat_id=="sail":
+        if state.boat.power=="sail":
             wind,wind_speed = wind_at(state.game_minutes+state.minute_acc, state)
             coming_from = (wind+np.pi)%(2*np.pi)
             direction = ("N","NE","E","SE","S","SW","W","NW")[int(coming_from/(np.pi/4)+0.5)%8]
@@ -1173,7 +1182,7 @@ class UI:
         if ui.input_device == "gamepad":
             hint = "LS drive  LT/RT lever  Y Bot / hold Nap  X Set  A Check  RB Hail  Back Chart  Start Pause"
         else:
-            hint = "B Bot  Shift Idle Q Sail  F Set  E Landing  Z Nap  C Hail  H Help" if state.boat_id=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  Z Nap  C Hail  H Help"
+            hint = "B Bot  Shift Idle Q Sail  F Set  E Landing  Z Nap  C Hail  H Help" if state.boat.power=="sail" else "B Bot  Shift Idle  F Set  E Check  R Tow  Z Nap  C Hail  H Help"
         hint_w = self._measure(hint,small)
         hint_h = small + 16
         hint_x, hint_y = (w-hint_w-24)//2, h-m-hint_h
