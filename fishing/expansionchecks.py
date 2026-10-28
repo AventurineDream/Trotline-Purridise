@@ -22,15 +22,15 @@ from .world import World
 def expansion_checks(briar,software=False):
     if SCAN.get("q")!=20 or SCAN.get("r")!=21:
         raise AssertionError("sail or tow controls missing from native input")
-    if len(SPECIES)!=36 or len(SPECIES_BY_ID)!=36:
-        raise AssertionError("fish catalog must contain exactly 36 unique entries")
-    for fish in SPECIES:
-        depth = sum(fish.depth)/2
-        best = max(species_rates(zone,bait.id,hour,"fair",depth)[fish.id]
-                   for zone in ZONE_ORDER for bait in BAITS for hour in (6,12,18,23))
-        if (best<=0 or fish.min_lb>=fish.max_lb
-                or fish.price<0 or (fish.price==0 and "protected" not in fish.tags)):
-            raise AssertionError(f"unreachable or invalid fish: {fish.id}")
+    if len(SPECIES)!=144 or len(SPECIES_BY_ID)!=144:
+        raise AssertionError("fish catalog must contain exactly 144 unique entries")
+    from .specieschecks import validate_catchability
+    witnesses = validate_catchability()
+    if len({row['species'] for row in witnesses}) != 144:
+        raise AssertionError("real-map catchability omitted a species")
+    minimum = min(max(row['ratio'] for row in witnesses if row['species'] == sid) for sid in SPECIES_BY_ID)
+    print(f"catchability ok  144 species, {len(witnesses)} lake witnesses, "
+          f"minimum best rate {minimum:.3f}x authored default")
     cedar = World("cedar")
     assets = Path(__file__).with_name("assets")
     metadata = json.loads((assets/"cedar.json").read_text())
@@ -54,7 +54,7 @@ def expansion_checks(briar,software=False):
         old["journal"] = {key:value for key,value in old["journal"].items() if key in [fish.id for fish in SPECIES[:12]]}
         path.write_text(json.dumps(old))
         migrated = State.load(path,briar)
-        if migrated.money!=123.45 or migrated.game_minutes!=2222 or migrated.fuel!=12 or len(migrated.journal)!=36:
+        if migrated.money!=123.45 or migrated.game_minutes!=2222 or migrated.fuel!=12 or len(migrated.journal)!=144:
             raise AssertionError("legacy save lost progress, starter fuel, or new journal entries")
         if migrated.boat_id!="jon" or migrated.owned_boats!=["jon"]:
             raise AssertionError("legacy save granted or lost boat ownership")
@@ -239,7 +239,7 @@ def expansion_checks(briar,software=False):
             state.drive(0.05,1,0,cedar)
             if not cedar.hull_clear(state.x,state.z,state.yaw,boat_id):
                 raise AssertionError(f"{boat_id} crossed the Cedar landing barriers")
-    print("expansion gameplay ok  36 fish, survey asset, wet habitats, paid boats, retained tanks, "
+    print("expansion gameplay ok  144 fish, survey asset, wet habitats, paid boats, retained tanks, "
           "fuel, free sailing, auxiliary, tow, wider collisions, lake travel and old/new saves")
 
     renderer=Renderer(cedar,960,540,software=software)

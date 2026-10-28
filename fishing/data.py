@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from pathlib import Path
 
@@ -145,6 +145,9 @@ class Species:
     food: str = "none"
     tags: tuple[str, ...] = ()
     shiny: str = "albino"
+    baits: tuple[str, ...] = ()
+    zones: tuple[str, ...] = ()
+    weather_affinities: dict[str, float] = field(default_factory=dict)
 
 
 def _species_values(row: dict) -> dict:
@@ -158,7 +161,8 @@ def _species_values(row: dict) -> dict:
 
 SPECIES: tuple[Species, ...] = tuple(
     Species(**{**_species_values(row), "depth": tuple(row["depth"]), "lakes": tuple(row["lakes"]),
-               "tags": tuple(row["tags"])})
+               "tags": tuple(row["tags"]), "baits": tuple(row.get("baits", ())),
+               "zones": tuple(row.get("zones", ()))})
     for row in CONTENT_V2_RAW["species.json"]["species"]
 )
 
@@ -370,6 +374,9 @@ _BASS = {"largemouth", "smallmouth", "crappie", "white_crappie", "spotted_bass",
 
 
 def weather_mult(species: str, weather: str) -> float:
+    fish = SPECIES_BY_ID.get(species)
+    if fish is not None and fish.weather_affinities:
+        return fish.weather_affinities.get(weather, 1.0)
     if weather == "drizzle":
         if species in _CATS:
             return 1.40
@@ -420,6 +427,12 @@ def quality_name(q: float) -> str:
 
 def fish_value(species_id: str, weight: float, quality: float) -> float:
     return round(SPECIES_BY_ID[species_id].price * weight * quality, 2)
+
+
+def weight_string(weight: float) -> str:
+    """Keep tiny minnows visible while retaining the usual one-decimal weight."""
+    value = f"{weight:.3f}".rstrip('0').rstrip('.') if 0 < weight < .1 else f"{weight:.1f}"
+    return value + " lb"
 
 
 def line_length(hooks: int) -> float:
