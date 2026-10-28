@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .botidentity import grant_tool
 from .camera import self_check
 from .data import SPECIES_BY_ID, dollars
 from .game import Keys, Session
@@ -465,6 +466,13 @@ def shots(dest: str) -> int:
     night.finder = True
     _move(night, 260.0, 10.0, math.pi / 2, (21.0 - 6.0) * 60.0)
     grab(night, "play", "night.png")
+
+    reed_chart = State.new(world, seed=2)
+    reed_chart.finder = True
+    grant_tool(reed_chart, "sonar_grid")
+    grant_tool(reed_chart, "reed_anchor")
+    reed_chart.lines = [SetLine("std", "worm", -360.0, -42.0, -316.0, -42.0, "reeds", [Hook(True)])]
+    grab(reed_chart, "map", "reed-passage-sonar.png")
 
     shop = State.new(world, seed=2)
     shop.money = 86.50

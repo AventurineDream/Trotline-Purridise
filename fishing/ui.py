@@ -34,6 +34,7 @@ from .data import (
 )
 from .content import load_content
 from .guardian import draw_sighting
+from . import sonar
 from .haul import haul_cadence
 from .book import BOOK_STAGES
 from .bookview import BookView
@@ -60,6 +61,8 @@ INK = (238, 233, 216)
 DIM = (169, 183, 175)
 GOLD = (218, 187, 124)
 WARN = (220, 126, 96)
+# Shallow to deep; the last colour also covers anything deeper.
+SONAR_BAND_COLORS = ((120, 204, 214), (92, 172, 196), (70, 136, 176), (52, 104, 150))
 GOOD = (150, 196, 140)
 GAME_TITLE = "Trotline Purridise"
 BOOK_STAGE_UP_COUNTS = frozenset(
@@ -1265,6 +1268,8 @@ class UI:
                 u, v = self.world.map_pixel(hx, hz, mw, mh)
                 self._dot(frame, x + u, y + v, 2 if hook.catch is not None else 1, dot)
         self._plot_habitats(frame, x, y, mw, mh)
+        sonar_cells = sonar.overlay(state, self.world)
+        self._plot_sonar(frame, sonar_cells, x, y, mw, mh)
         self._plot_trinidad_cove(frame, x, y, mw, mh, labels=True)
         self._plot_invitation(frame, state, x, y, mw, mh)
         self._plot_npcs(frame, state, x, y, mw, mh, labels=True)
@@ -1272,9 +1277,17 @@ class UI:
         self._plot_bot(frame, state, x, y, mw, mh)
         size = self._size(frame, "small")
         self._text(frame, self.world.name, x, y - self.cell(size)[1] - 14, size, INK)
-        self._text(frame, "Fish gold   soak green   tired red   NPC blue", x, y + mh + 12, size, DIM, shadow=False)
+        legend = "Fish gold   soak green   tired red   NPC blue"
+        if sonar_cells:
+            legend += "   sonar depth bands"
+        self._text(frame, legend, x, y + mh + 12, size, DIM, shadow=False)
         close_hint = self._controls(ui, "Tab closes the chart", "B closes the chart")
         self._text(frame, close_hint, x + mw - 20 * self.cell(size)[0], y + mh + 14 + self.cell(size)[1], size, DIM, shadow=False)
+
+    def _plot_sonar(self, frame, cells, x, y, mw, mh):
+        for cell in cells:
+            u, v = self.world.map_pixel(cell.x, cell.z, mw, mh)
+            self._dot(frame, x + u, y + v, 1, SONAR_BAND_COLORS[min(cell.band, len(SONAR_BAND_COLORS) - 1)])
 
     def _plot_invitation(self, frame, state, x, y, mw, mh):
         mark = getattr(state, "v2", {}).get("calendar", {}).get("invitation_mark")
