@@ -244,6 +244,7 @@ def _book_defaults(state) -> dict:
 def default_v2(state=None) -> dict:
     """Build the guide's v2 defaults, seeded only from existing save data."""
     from .data import PANTRY
+    from .botidentity import default_profile
     schedule_seed = 0
     journal_species = {}
     scenes_seen = []
@@ -257,11 +258,7 @@ def default_v2(state=None) -> dict:
 
     return {
         "mode": "cozy",
-        "profile": {
-            "bot_name": f"Copper-{abs(int(schedule_seed)) % 1000:03d}",
-            "shell": "tin", "shells": ["tin"], "tools": [],
-            "collar": {"stage": "none", "knot": None, "visible": True},
-        },
+        "profile": default_profile(schedule_seed),
         "needs": deepcopy(DEFAULT_NEEDS),
         "buff": None,
         "pantry": {item_id: 0 for item_id in PANTRY},
@@ -332,6 +329,8 @@ def merge_v2_defaults(state, saved_v2: object) -> dict:
         collar_visible = True
     normalized["settings"]["collar_visible"] = collar_visible
     normalized["profile"]["collar"]["visible"] = collar_visible
+    from .botidentity import normalize_profile
+    normalize_profile(normalized, state.narrative.schedule_seed if state is not None else 0)
     if state is not None:
         seed_stage_claims(normalized, state.journal)
     return normalized
