@@ -747,9 +747,9 @@ class SoftwareRenderer:
 
     def _boat_faces(self, state) -> list[Face]:
         """Square-bow jon boat, camera space. Sides stay parallel. The bow is a flat plate."""
-        if state.boat_id!="jon":
-            from .boatmesh import boat_faces
-            return boat_faces(state)
+        from .boatmesh import boat_faces, glow_hull
+        if state.boat.mesh_id!="jon":
+            return glow_hull(state, boat_faces(state))
         hull = np.array(paint_rgb("hull", state.look_paint["hull"]), np.float32)
         deck = np.array(paint_rgb("deck", state.look_paint["deck"]), np.float32)
         till = np.array(paint_rgb("motor", state.look_paint["motor"]), np.float32)
@@ -841,7 +841,7 @@ class SoftwareRenderer:
             [(px, py, pz), (ex, py, ez), (ex, py + 0.045, ez), (px, py + 0.045, pz)],
             (0, 1, 0), till,
         ))
-        return faces
+        return glow_hull(state, faces)
 
     def _snow(self, anim: float, amount: float):
         # A fixed foreground lattice: no particle history or scene depth changes.

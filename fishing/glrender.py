@@ -211,7 +211,7 @@ class LakeRenderer(SoftwareRenderer):
 
     def _detailed_boat(self, state):
         faces = self._boat_faces(state)
-        if state.boat_id!="jon":
+        if state.boat.mesh_id!="jon":
             return faces
         def q(pts,normal,color):
             faces.append(Face(np.array(pts,np.float32),np.array(normal,np.float32),

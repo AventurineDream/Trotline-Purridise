@@ -27,6 +27,7 @@ CHIME_LAST_MINUTES = 60.0
 CHIME_COOLDOWN_MINUTES = 120.0
 CHIME_SURFACE_MULT = 1.6
 WINCH_CURRENT_MULT = 1.2
+SILENT_SHY_MULT = 1.15  # a `silent` hull, for `shy` species (02 §9)
 
 FLOW_M_PER_MINUTE = 0.5
 DRIFT_CAP_M = 60.0
@@ -35,11 +36,12 @@ DRIFT_MIN_GAP_M = 16.0  # the same spacing try_set enforces between lines
 
 @dataclass(frozen=True)
 class ToolState:
-    """What the owned tools do to one line's bites during one span of time."""
+    """What the owned tools and the boat's hull do to one line's bites during one span."""
 
     cold_layer_m: float | None = None  # None on lakes without a thermocline
     chime: bool = False
     winch: bool = False
+    silent: bool = False
 
 
 def cold_layer_m(lake_id: str, hour: float, weather: str) -> float | None:
@@ -63,6 +65,8 @@ def species_factor(tags, depth: float, tool: ToolState | None) -> float:
         factor *= CHIME_SURFACE_MULT
     if "current" in tags and tool.winch:
         factor *= WINCH_CURRENT_MULT
+    if "shy" in tags and tool.silent:
+        factor *= SILENT_SHY_MULT
     return factor
 
 
