@@ -1289,15 +1289,29 @@ class UI:
 
     def _plot_habitats(self, frame, x, y, mw, mh):
         size = self._size(frame, "small")
+        occupied = []
         for zone, cx, cz, _radius in self.world.zones:
             # Preserve the established charts apart from Briar's new passage.
-            if not self.world.placeholder and zone != "reeds":
+            if not self.world.placeholder and not self.world.generated and zone != "reeds":
                 continue
             u, v = self.world.map_pixel(cx, cz, mw, mh)
             label = self._trim(self.world.zone_name(zone), size, mw * 0.42)
             width = len(label) * self.cell(size)[0]
             tx = max(x, min(x + u + 6, x + mw - width))
             ty = max(y, min(y + v + 6, y + mh - self.cell(size)[1]))
+            if self.world.generated:
+                width = self._measure(label, size)
+                height = self.cell(size)[1]
+                candidates = ((x+u+6,y+v+6),(x+u-width-6,y+v+6),
+                              (x+u-width/2,y+v-height-6),(x+u-width/2,y+v+height+8))
+                for px,py in candidates:
+                    tx=max(x,min(x+mw-width,px))
+                    ty=max(y,min(y+mh-height,py))
+                    box=(tx,ty,tx+width,ty+height)
+                    if all(box[2]+4 < old[0] or old[2]+4 < box[0]
+                           or box[3]+3 < old[1] or old[3]+3 < box[1] for old in occupied):
+                        break
+                occupied.append(box)
             self._text(frame, label, tx, ty, size, INK)
 
     def _plot_trinidad_cove(self, frame, x, y, mw, mh, labels=False):

@@ -17,6 +17,7 @@ void main() {
         vec3 grass = mix(vec3(0.16,0.24,0.13),vec3(0.31,0.36,0.18),patch);
         vec3 earth = mix(vec3(0.38,0.31,0.21),vec3(0.57,0.48,0.33),patch);
         vec3 bank = mix(earth,grass,smoothstep(1.0,9.0,sd));
+        if (lake_kind>2.5) bank = mix(vec3(.49,.50,.46),vec3(.22,.31,.23),smoothstep(2.0,16.0,sd));
         float canopy = smoothstep(3.0,12.0,sd)*(1.0-smoothstep(55.0,95.0,sd));
         bank *= 1.0-canopy*(0.12+0.18*noise(pos.xz*0.10));
         float ambient = mix(0.67,0.14,night)+moon_i*0.17;
@@ -44,10 +45,12 @@ void main() {
     vec3 reflected = texture(reflection,clamp(screen+distortion,0.002,0.998)).rgb;
     float depth = 0.5+5.0*(1.0-exp(min(sd,0.0)/28.0));
     depth += 10.0*exp(-dot(pos.xz-vec2(75,-28),pos.xz-vec2(75,-28))/(2.0*72.0*72.0));
-    if (lake_kind>1.5) depth = 4.0;
+    if (lake_kind>2.5) depth = texture(lake_depth,lake_uv(pos.xz)).r;
+    else if (lake_kind>1.5) depth = 4.0;
     else if (lake_kind>0.5) depth = texture(lake_depth,lake_uv(pos.xz)).r;
     vec3 body = mix(vec3(0.22,0.32,0.23),vec3(0.035,0.14,0.16),smoothstep(0.5,8.0,depth));
-    if (lake_kind>1.5) body = lake_water;
+    if (lake_kind>2.5) body = mix(alpine_shallow,alpine_deep,smoothstep(.5,20.0,depth));
+    else if (lake_kind>1.5) body = lake_water;
     else if (lake_kind>0.5) {
         float upper = smoothstep(-0.25,0.6,lake_uv(pos.xz).y);
         body = mix(vec3(0.055,0.20,0.23),vec3(0.26,0.27,0.17),upper*0.65);
@@ -73,11 +76,13 @@ void main() {
     float leaf = 1.0-smoothstep(radius-0.025,radius,length(f));
     leaf *= step(0.64,seed)*float(cove && dist>9.0 && !slip);
     leaf *= 1.0-float(f.x>0.0 && abs(f.y)<f.x*0.2);
+    if (lake_kind>2.5) leaf = (1.0-smoothstep(.035,.075,abs(f.x)))*
+        (1.0-smoothstep(.22,.38,abs(f.y)))*step(.64,seed)*float(cove && dist>9.0 && !slip);
     vec3 pad = mix(vec3(0.07,0.20,0.09),vec3(0.24,0.35,0.13),seed);
     pad += vec3(0.06,0.07,0.015)*exp(-abs(f.y)*100.0);
     c = mix(c,pad*mix(1.0,0.25,night),leaf);
     float flower = (1.0-smoothstep(0.0,0.028,length(f)))*step(0.94,seed)*leaf;
-    c = mix(c,vec3(0.91,0.77,0.48),flower);
+    if (lake_kind<2.5) c = mix(c,vec3(0.91,0.77,0.48),flower);
     for (int i=0;i<line_count;i++) {
         vec2 ab = line_segments[i].zw-line_segments[i].xy;
         float t = clamp(dot(pos.xz-line_segments[i].xy,ab)/max(dot(ab,ab),0.001),0.0,1.0);

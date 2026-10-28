@@ -7,7 +7,7 @@ import numpy as np
 from .sprites import bake
 
 W, H = 160, 256
-KINDS = ("pine", "oak", "cypress")
+KINDS = ("pine", "oak", "cypress", "larch", "larchgold", "spruce")
 
 
 def _leaf(img, cx, cy, rx, ry, rgb, rng):
@@ -29,7 +29,7 @@ def _leaf(img, cx, cy, rx, ry, rgb, rng):
 
 
 def tree(kind, variant):
-    rng = np.random.default_rng(180+variant*17+KINDS.index(kind)*83)
+    rng = np.random.default_rng(180+variant*17+KINDS.index("larch" if kind == "larchgold" else kind)*83)
     img = np.zeros((H,W,4),np.uint8)
     yy, xx = np.mgrid[0:H,0:W]
     trunk_w = 3.5+(yy/H)**6*(9 if kind=="cypress" else 4)
@@ -51,15 +51,17 @@ def tree(kind, variant):
         for sign in (-1,1):
             branch = (yy>108)&(yy<174)&(abs(xx-(80+sign*(174-yy)*0.35))<2)
             img[branch] = (92,77,54,255)
-    elif kind=="pine":
+    elif kind in ("pine", "larch", "larchgold", "spruce"):
         for tier in range(11,0,-1):
             cy = 18+tier*14
             spread = 7+tier*4.8
             for j in range(7):
                 cx = 80+rng.uniform(-spread,spread)
-                rgb = np.array([48,78,54])+rng.uniform(-8,10,3)
+                base = {"pine": [48,78,54], "larch": [91,118,57],
+                        "larchgold": [195,151,49], "spruce": [48,85,81]}[kind]
+                rgb = np.array(base)+rng.uniform(-8,10,3)
                 _leaf(img,cx,cy+rng.uniform(-6,7),rng.uniform(8,16),rng.uniform(7,12),rgb,rng)
-        _leaf(img,80,17,5,11,[76,99,61],rng)
+        _leaf(img,80,17,5,11,base if kind != "pine" else [76,99,61],rng)
     else:
         for tier in range(10,0,-1):
             cy = 20+tier*15
@@ -99,9 +101,9 @@ def _bleed_edges(img):
     return out
 
 
-def atlas(buoy_rgb):
+def atlas(buoy_rgb, *, alpine=False):
     names, images = [], []
-    for kind in KINDS:
+    for kind in (KINDS if alpine else KINDS[:3]):
         for variant in range(3):
             names.append(f"{kind}{variant}")
             images.append(tree(kind,variant))

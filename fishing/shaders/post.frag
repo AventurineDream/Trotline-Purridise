@@ -26,5 +26,12 @@ void main() {
                        (1.0-smoothstep(0.02,0.07,fract(p.x)))*smoothstep(0.15,0.8,fract(p.y));
         c = mix(c,vec3(0.64,0.71,0.73),streak*0.25*rain);
     }
+    if (snow>0.0) {
+        vec2 p = vec2(uv.x*28.0+sin(uv.y*6.0+snow_anim*.18)*.18,uv.y*18.0+snow_anim*.20);
+        vec2 cell = floor(p);
+        vec2 centre = vec2(.18+.64*hash(cell),.18+.64*hash(cell+3.7));
+        float flake = (1.0-smoothstep(.018,.055,length(fract(p)-centre)))*step(.78,hash(cell+8.1));
+        c = mix(c,vec3(.85,.90,.94),flake*snow*.65);
+    }
     frag = vec4(clamp(c,0.0,1.0),1);
 }

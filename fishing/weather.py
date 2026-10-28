@@ -27,6 +27,7 @@ for _name, _base, _mist in (("mist", "overcast", .65), ("snow_mist", "overcast",
     _WEATHER[_name] = {**_WEATHER[_base], "mist": _mist}
 for _properties in _WEATHER.values():
     _properties.setdefault("mist", 0.0)
+    _properties["snow"] = float(_properties is _WEATHER["snow_mist"])
 
 
 def weather_visuals(game_minutes: float, state=None) -> dict:
@@ -119,7 +120,15 @@ def frame_light(hour: float, weather: str, conditions: dict | None = None) -> di
 def lighting_at(game_minutes: float, state=None) -> dict:
     from .calendar import weather_at as planned
     weather = weather_at(game_minutes) if state is None else planned(state, game_minutes)
-    return frame_light(hour_of_day(game_minutes), weather, weather_visuals(game_minutes, state))
+    light = frame_light(hour_of_day(game_minutes), weather, weather_visuals(game_minutes, state))
+    if state is not None:
+        from .lakes import LAKES
+        environment = LAKES[state.lake_id].get("environment")
+        if environment:
+            strength = (1-light["night"])*(1-light["gold"])*(1-light["overcast"])*.65
+            for key in ("zenith", "horizon"):
+                light[key] = _lerp(light[key], np.array(environment["sky_"+key], np.float32), strength)
+    return light
 
 
 def wind_at(game_minutes: float, state=None) -> tuple[float,float]:
@@ -127,4 +136,6 @@ def wind_at(game_minutes: float, state=None) -> tuple[float,float]:
     conditions = weather_visuals(game_minutes, state)
     heading = 0.85 + 0.30*math.sin(game_minutes*math.tau/1440.0) + 0.10*math.sin(game_minutes/210.0)
     speed = 4.6 + 1.3*conditions["cloud_shade"] + 1.5*conditions["rain"] + 0.65*math.sin(game_minutes/170.0)
+    if state is not None and state.lake_id == "flathead":
+        speed += .7 + .45*math.sin(game_minutes/37.0)
     return heading,speed

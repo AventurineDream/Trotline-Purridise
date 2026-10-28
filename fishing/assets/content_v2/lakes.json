@@ -747,7 +747,7 @@
       "name": "Flathead Alpine Lake",
       "landing": "Glacial Peak Outpost",
       "region": "Montana, glacier country",
-      "blurb": "Clear water and a long view toward the mountains.",
+      "blurb": "Glacial water, gravel reefs and pondweed bays beneath snow-capped ridges. Larch and spruce shelter Glacial Peak Outpost.",
       "species_count": 34,
       "species_ids": [
         "arctic_grayling",
@@ -818,7 +818,7 @@
           0.42
         ]
       },
-      "placeholder": true,
+      "placeholder": false,
       "unlock_chapter": 2,
       "travel_caption": "Doc's trailer rattles north toward the mountains.",
       "lake_days": [
@@ -857,6 +857,219 @@
         "open": [
           1.0,
           40.0
+        ]
+      },
+      "environment": {
+        "kind": "alpine",
+        "seed": 109,
+        "bounds": [
+          -1050,
+          -850,
+          1050,
+          850
+        ],
+        "grid": [
+          673,
+          545
+        ],
+        "outline": [
+          [
+            0.0,
+            600.0
+          ],
+          [
+            22.5,
+            575.74
+          ],
+          [
+            45.0,
+            564.94
+          ],
+          [
+            67.5,
+            557.62
+          ],
+          [
+            90.0,
+            560.0
+          ],
+          [
+            112.5,
+            526.92
+          ],
+          [
+            135.0,
+            532.35
+          ],
+          [
+            157.5,
+            604.82
+          ],
+          [
+            180.0,
+            612.0
+          ],
+          [
+            202.5,
+            564.11
+          ],
+          [
+            225.0,
+            516.05
+          ],
+          [
+            247.5,
+            532.04
+          ],
+          [
+            270.0,
+            505.0
+          ],
+          [
+            292.5,
+            501.35
+          ],
+          [
+            315.0,
+            559.51
+          ],
+          [
+            337.5,
+            587.37
+          ],
+          [
+            360.0,
+            600.0
+          ]
+        ],
+        "slip_angle": 2.95,
+        "snow_line": 95,
+        "tree_count": 560,
+        "sky_zenith": [
+          0.22,
+          0.48,
+          0.71
+        ],
+        "sky_horizon": [
+          0.72,
+          0.84,
+          0.89
+        ],
+        "water_shallow": [
+          0.17,
+          0.49,
+          0.43
+        ],
+        "water_deep": [
+          0.015,
+          0.15,
+          0.23
+        ],
+        "zones": [
+          [
+            "inlet",
+            -315,
+            325,
+            115
+          ],
+          [
+            "flats",
+            -15,
+            335,
+            150
+          ],
+          [
+            "lilies",
+            -350,
+            -180,
+            130
+          ],
+          [
+            "cypress",
+            395,
+            75,
+            150
+          ],
+          [
+            "rocks",
+            170,
+            -310,
+            145
+          ],
+          [
+            "deep",
+            55,
+            -45,
+            210
+          ]
+        ],
+        "depths": {
+          "inlet": [
+            1,
+            13
+          ],
+          "flats": [
+            1,
+            19
+          ],
+          "lilies": [
+            1,
+            8
+          ],
+          "cypress": [
+            1.2,
+            12
+          ],
+          "rocks": [
+            2,
+            20
+          ],
+          "deep": [
+            10,
+            45
+          ]
+        },
+        "peaks": [
+          [
+            -850,
+            -350,
+            175,
+            210
+          ],
+          [
+            -710,
+            620,
+            220,
+            230
+          ],
+          [
+            -90,
+            760,
+            265,
+            210
+          ],
+          [
+            690,
+            620,
+            235,
+            230
+          ],
+          [
+            900,
+            100,
+            200,
+            220
+          ],
+          [
+            480,
+            -690,
+            190,
+            230
+          ]
+        ],
+        "ambience": [
+          "loon",
+          "larch_wind"
         ]
       }
     },
