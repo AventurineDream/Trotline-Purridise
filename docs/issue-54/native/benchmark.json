@@ -1,0 +1,142 @@
+{
+  "backend": "llvmpipe (LLVM 23.1.3, 256 bits)",
+  "software_gl": true,
+  "hardware_gpu_measured": false,
+  "render_size": [
+    640,
+    360
+  ],
+  "presentation_size": [
+    1280,
+    720
+  ],
+  "world_load_ms": 281.212,
+  "first_frame_load_ms": 1530.439,
+  "load_limit_ms": 6000,
+  "scope": "Warmed full caldera frames, resize and play/map/Lakes UI; fog/lift/noon/clear night",
+  "frames": 60,
+  "warmup_frames": 9,
+  "median_ms": 99.718,
+  "p95_ms": 110.305,
+  "rss_baseline_bytes": 39927808,
+  "rss_before_bytes": 298856448,
+  "rss_after_bytes": 298856448,
+  "peak_rss_bytes": 364756992,
+  "memory_limit_bytes": 3000000000,
+  "persistent_graphics_objects": 36,
+  "finite_scene_probes": 6,
+  "clear_night_float_probes": 2,
+  "species_witnesses": 34,
+  "minimum_rate_ratio": 1.0,
+  "captures": [
+    {
+      "name": "dawn-fog",
+      "minute": 5780,
+      "pose": [
+        -230,
+        40,
+        1.828
+      ],
+      "weather": "fog",
+      "mist": 0.9259259259259258,
+      "still_reflection": 0.0
+    },
+    {
+      "name": "lifting-fog",
+      "minute": 5820,
+      "pose": [
+        -230,
+        40,
+        1.828
+      ],
+      "weather": "clear",
+      "mist": 0.5,
+      "still_reflection": 0.0
+    },
+    {
+      "name": "noon",
+      "minute": 6120,
+      "pose": [
+        -230,
+        40,
+        1.828
+      ],
+      "weather": "clear",
+      "mist": 0.0,
+      "still_reflection": 0.0
+    },
+    {
+      "name": "dusk",
+      "minute": 6540,
+      "pose": [
+        -230,
+        40,
+        1.828
+      ],
+      "weather": "clear",
+      "mist": 0.0,
+      "still_reflection": 0.1433863639831543
+    },
+    {
+      "name": "clear-night",
+      "minute": 6720,
+      "pose": [
+        -230,
+        40,
+        1.828
+      ],
+      "weather": "clear",
+      "mist": 0.0,
+      "still_reflection": 1.0
+    },
+    {
+      "name": "thermal-springs",
+      "minute": 6120,
+      "pose": [
+        270,
+        -270,
+        1.5707963267948966
+      ],
+      "weather": "clear",
+      "mist": 0.0,
+      "still_reflection": 0.0
+    },
+    {
+      "name": "cinder-isle",
+      "minute": 6120,
+      "pose": [
+        5,
+        -70,
+        1.5707963267948966
+      ],
+      "weather": "clear",
+      "mist": 0.0,
+      "still_reflection": 0.0
+    },
+    {
+      "name": "dock-survey-marker",
+      "minute": 6120,
+      "pose": [
+        -464.78138770847175,
+        56.79417487537108,
+        -1.4492036732051035
+      ],
+      "weather": "clear",
+      "mist": 0.0,
+      "still_reflection": 0.0
+    },
+    {
+      "name": "habitat-chart",
+      "minute": 6120,
+      "pose": [
+        -230,
+        40,
+        1.828
+      ],
+      "weather": "clear",
+      "mist": 0.0,
+      "still_reflection": 0.0
+    }
+  ],
+  "world_released": true
+}

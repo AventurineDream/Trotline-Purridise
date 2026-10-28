@@ -112,7 +112,8 @@ class SoftwareRenderer:
         self._buoy_id = "orange"
         if world.generated:
             from .forest import tree
-            self.sprites.update({kind: tree(kind, 0) for kind in ("larch", "larchgold", "spruce")})
+            kinds = ("hemlock", "whitebark", "deadpine") if world.caldera else ("larch", "larchgold", "spruce")
+            self.sprites.update({kind: tree(kind, 0) for kind in kinds})
         self.last_ms = 0.0
         self.splashes: list[tuple[float, float, float]] = []
         px = np.array([p.x for p in world.props],np.float32)
@@ -383,6 +384,9 @@ class SoftwareRenderer:
             shallow = np.array(world.environment["water_shallow"], np.float32)
             deep = np.array(world.environment["water_deep"], np.float32)
             body = shallow*(1-blend) + deep*blend
+        if world.caldera:
+            moss = (ids == _LILY)[:,None] * np.clip(1-depth/12,0,1)[:,None]*.65
+            body = body*(1-moss) + np.array([.09,.19,.15],np.float32)*moss
         # Bottom shows through the skinniest water.
         sand = np.array([0.55, 0.50, 0.32], np.float32)
         clear = np.clip(depth / 1.1, 0.0, 1.0)[:, None]
@@ -395,9 +399,12 @@ class SoftwareRenderer:
         crest = np.float32(0.5) + np.float32(0.5) * np.sin(ph1)
         body = body * (0.72 + 0.26 * patch + 0.28 * crest)[:, None]
 
-        ripple = light["ripple"]
+        from .caldera import reflection_strength
+        still = reflection_strength(state, light)
+        ripple = light["ripple"]*(1-still*.95)
         amp = np.float32(0.22 * ripple)
         chop = np.sin(hx * np.float32(1.15) + anim * np.float32(2.4)) * np.float32(0.06 * ripple)
+        chop *= 1-still*.95
         nx = amp * np.float32(0.46) * np.cos(ph1) + chop
         nz = amp * np.float32(0.32) * np.cos(ph2) + chop * np.float32(0.6)
         ny = np.ones_like(nx)
@@ -409,8 +416,16 @@ class SoftwareRenderer:
         ry = dy - 2 * nd * ny
         rz = dz - 2 * nd * nz
         reflected = _reflect_sky(rx, ry, rz, light)
+        if still>0:
+            full_sky = sky_color(rx,ry,rz,light)
+            qx,qy,qz = (np.floor(axis*200).astype(np.int64) for axis in (rx,ry,rz))
+            stars = hash21(qx+qz*13,qy+31)
+            bright = np.clip((stars-.9965)/.0035,0,1)*(ry>.08)
+            full_sky += bright[:,None]*np.array([.85,.88,1.0],np.float32)
+            reflected = reflected*(1-still) + full_sky*still
         fres = 0.05 + 0.24 * np.power(1.0 - np.clip(-dy, 0.0, 1.0), 3.0)
         fres = np.clip(fres, 0.0, 0.30)
+        fres = fres*(1-still) + .94*still
         sun = light["sun"]
         sdot = np.clip(rx * sun[0] + ry * sun[1] + rz * sun[2], 0.0, 1.0)
         glitter = (np.sin(ph1 * 1.7) + np.sin(ph2 * 1.4)) > 0.35
@@ -445,6 +460,8 @@ class SoftwareRenderer:
         )
         if world.generated:
             pad &= (ids == _LILY) & (np.abs(fx) < .075) & (np.abs(fz) < .38)
+        if world.caldera:
+            pad[:] = False
         rim = pad & (r2 > 0.055)
         green = np.array([0.22, 0.55, 0.16], np.float32)
         leaf = np.array([0.08, 0.30, 0.10], np.float32)
@@ -587,6 +604,16 @@ class SoftwareRenderer:
             colr = bank*(1-rocky) + alpine_rock*rocky
             snow = np.clip((h-world.environment["snow_line"]+nse*24)/26, 0, 1)[:, None]
             colr = colr*(1-snow) + np.array([.84,.89,.91], np.float32)*snow
+        if world.caldera:
+            ash = np.array([.42,.43,.46],np.float32)
+            basalt = np.array([.16,.18,.23],np.float32)
+            colr = ash*(1-nse[:,None]) + basalt*nse[:,None]
+            cx,cz,rx,rz,_height = world.environment['islands'][0]
+            island = (hx-cx)**2/rx**2 + (hz-cz)**2/rz**2 < 1.3
+            colr = np.where(island[:,None],np.array([.07,.08,.12],np.float32)*(1+nse[:,None]*.45),colr)
+            _,mx,mz,_radius = next(row for row in world.zones if row[0]=="lilies")
+            moss = np.hypot(hx-mx,hz-mz)<110
+            colr = np.where((moss & (sdv<30))[:,None],np.array([.14,.28,.19],np.float32),colr)
         # Shade under the treeline so the bank is not one flat stripe.
         canopy = np.clip((sdv - 2.0) / 5.0, 0.0, 1.0) * np.clip((16.0 - sdv) / 8.0, 0.0, 1.0)
         colr = colr * (1.0 - 0.32 * canopy)[:, None]
@@ -601,6 +628,9 @@ class SoftwareRenderer:
             fall = np.clip(1.0 - dd / 48.0, 0.0, 1.0) ** 2
             colr = colr + (cone * fall * light["night"])[:, None] * np.array([0.45, 0.38, 0.24], np.float32)
         fog_density = (1.0 - light["rain"]) / 480.0 + light["rain"] / 220.0 + light.get("mist", 0.0) / 250.0
+        if world.caldera:
+            mist = light.get("mist",0)
+            fog_density *= .35+.65*np.exp(-np.maximum(h,0)/(12+mist*35))
         fog = np.clip(1.0 - np.exp(-dist * fog_density), 0.0, 1.0)
         fog *= comfort.fog_factor(state, dist)
         colr = colr * (1.0 - fog)[:, None] + light["horizon"] * fog[:, None]
@@ -621,7 +651,7 @@ class SoftwareRenderer:
             prop = self.world.props[i]
             if zz > 750 or sx < -80 or sx > self.w + 80:
                 continue
-            tree = prop.kind in ("pine", "oak", "cypress", "larch", "spruce")
+            tree = prop.kind in ("pine", "oak", "cypress", "larch", "spruce", "hemlock", "whitebark", "deadpine")
             kind = prop.kind
             if kind == "larch":
                 kind = "larchgold" if gold else kind

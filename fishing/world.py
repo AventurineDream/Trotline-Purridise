@@ -1,4 +1,4 @@
-"""The active water: Briar, Cedar, generated alpine terrain, or a flat systems map.
+"""The active water: Briar, Cedar, generated terrain, or a flat systems map.
 
 Coordinates are meters. +X is east, +Z is north, Y is up. The water is y = 0.
 The shoreline is an ellipse with a northwest creek cove, so the same function
@@ -213,6 +213,7 @@ class World:
         self.zone_names = LAKE_ZONE_NAMES[lake_id]
         self.environment = LAKES[lake_id].get("environment")
         self.generated = self.environment is not None
+        self.caldera = self.generated and self.environment["kind"] == "caldera"
         self.placeholder = LAKES[lake_id]["placeholder"]
         self.palette = LAKES[lake_id]["palette"]
         self.bounds = (X0,Z0,X1,Z1)
@@ -249,9 +250,12 @@ class World:
         self.zones = self._zone_table()
         self.height = self._bake_height()
         self.faces = self._build_camp()
-        if self.generated:
+        if self.generated and not self.caldera:
             from .lakegen import chimney_faces
             self.faces.extend(chimney_faces(self))
+        if self.caldera:
+            from .caldera import survey_faces
+            self.faces.extend(survey_faces(self))
         if self.id == "cedar":
             self.faces.extend(self._build_trinidad_cove())
         from .marina import Marina, build_marina
@@ -274,7 +278,7 @@ class World:
         self.dock_barriers = np.vstack((self.dock_barriers,self.marina.barriers))
         self.solid_props = np.array([
             (p.x,p.z,max(0.16,p.h*0.23)) for p in self.props
-            if p.kind in ("rock","stump","knee")],np.float64).reshape(-1,3)
+            if p.kind in ("rock","stump","knee","deadpine")],np.float64).reshape(-1,3)
         self.map_rgb, self.map_small = self._bake_map()
         from .anchors import anchors_for_lake
         self.anchors = anchors_for_lake(self.id)
@@ -611,6 +615,9 @@ class World:
         return faces
 
     def _place_props(self) -> list[Prop]:
+        if self.caldera:
+            from .caldera import caldera_props
+            return caldera_props(self, Prop)
         if self.generated:
             from .lakegen import alpine_props
             return alpine_props(self, Prop)
