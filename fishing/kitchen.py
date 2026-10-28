@@ -5,7 +5,12 @@ from functools import lru_cache
 
 from . import comfort
 from .data import (BAIT_BY_ID, BAIT_RECIPES, DISHES, DISH_CARD_PRICE, DOZEN,
-                   PANTRY, PANTRY_CAPACITY, SPECIES_BY_ID)
+                   PANTRY, PANTRY_CAPACITY, SPECIES_BY_ID, weight_string)
+
+
+def pick_label(fish):
+    """Weight and name for a fish offered in the galley; tiny minnows keep their weight."""
+    return f'{weight_string(fish.weight)} {SPECIES_BY_ID[fish.species].name}'
 
 
 def at_landing(state, world):
@@ -196,7 +201,7 @@ def rows(state, world):
             error = dish_error(state, world, dish.id)
             fish = eligible_fish(state, dish.food)
             choice = state.well[fish[0]] if fish else None
-            picked = (f' Uses {choice.weight:.1f} lb {SPECIES_BY_ID[choice.species].name}; choose another before cooking.'
+            picked = (f' Uses {pick_label(choice)}; choose another before cooking.'
                       if choice is not None else '')
             result.append(MenuRow(dish.name, 'Cook', error or dish.blurb + picked,
                                   error is None, 'dish', dish.id))
