@@ -70,6 +70,9 @@ from . import comfort
 
 MASK = (1 << 64) - 1
 SAVE_VERSION = 2
+# Dense reed beds (`reeds` zones) slow every boat to a crawl. Lines still need
+# the Reed Anchor there; see State.try_set.
+REEDS_CRAWL_SPEED = 0.6  # m/s
 
 _SAVE_FIELDS = frozenset({
     "version", "lake_id", "boat_id", "owned_boats", "fuel_tanks",
@@ -1018,6 +1021,8 @@ class State:
             target_speed = min(target_speed,max(self.max_speed(),self.boat.sail_speed*factor))
             rate = self.boat.acceleration if abs(target_speed) > abs(self.speed) else 0.65
             self.speed += (target_speed - self.speed) * min(1.0, dt * rate)
+            if world.zone_at(self.x, self.z) == "reeds":
+                self.speed = max(-REEDS_CRAWL_SPEED, min(REEDS_CRAWL_SPEED, self.speed))
         auth = 0.40 + 0.60 * (1.0 - min(1.0, abs(self.speed) / max(0.5, self.max_speed())))
         if abs(self.speed) < 0.2 and abs(self.throttle) < 0.1:
             auth *= 0.2
@@ -1340,6 +1345,12 @@ class State:
 
     # --- lines ----------------------------------------------------------
 
+    def owns_tool(self, tool_id: str) -> bool:
+        """Bot tools are kept in the profile and work with any shell worn."""
+        profile = self.v2.get("profile", {})
+        tools = profile.get("tools", []) if isinstance(profile, dict) else []
+        return isinstance(tools, list) and tool_id in tools
+
     def try_set(self, world: World, held_index: int,
                 bait_sections: str | list[str] | tuple[str, ...]) -> str | None:
         if abs(self.speed) > 0.5:
@@ -1400,6 +1411,8 @@ class State:
         zone = world.zone_at(mx, mz)
         if zone in ("landing", "shore"):
             return "The landing is a no-line zone."
+        if zone == "reeds" and not self.owns_tool("reed_anchor"):
+            return "Reeds hold a line only with the Reed Anchor from Frog Bot."
         for bait, amount in needed.items():
             self.bait[bait] -= amount
         self.held.pop(held_index)
