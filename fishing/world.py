@@ -1,4 +1,4 @@
-"""Little Briar: one lake, a landing, and the trees around it.
+"""The loaded water: Briar, Cedar's survey, or a small flat systems map.
 
 Coordinates are meters. +X is east, +Z is north, Y is up. The water is y = 0.
 The shoreline is an ellipse with a northwest creek cove, so the same function
@@ -16,7 +16,7 @@ import numpy as np
 
 from .data import ZONE_NAME, ZONE_ORDER
 from .boat import BOATS, hull_samples, hits_rectangles, hits_round_props
-from .lakes import LAKES, CEDAR_ZONES
+from .lakes import LAKES, LAKE_ZONE_NAMES
 
 RX = 430.0
 RZ = 285.0
@@ -210,7 +210,9 @@ class World:
         self.id = lake_id
         self.name = LAKES[lake_id]["name"]
         self.landing = LAKES[lake_id]["landing"]
-        self.zone_names = CEDAR_ZONES if lake_id=="cedar" else ZONE_NAME
+        self.zone_names = LAKE_ZONE_NAMES[lake_id]
+        self.placeholder = LAKES[lake_id]["placeholder"]
+        self.palette = LAKES[lake_id]["palette"]
         self.bounds = (X0,Z0,X1,Z1)
         self.nx,self.nz = NX,NZ
         self.shore_grid = None
@@ -226,6 +228,10 @@ class World:
             ix,iz = self.metadata["slip_inland"]
             ox,oz = self.metadata["slip_origin"]
             self.slip = Slip(ox,oz,(ix,iz),(-iz,ix),3.0,10.0,10.0)
+        elif self.placeholder:
+            self.bounds = (-420.0, -320.0, 420.0, 320.0)
+            self.nx, self.nz = 169, 129
+            self.slip = Slip(-320, 0, (-1, 0), (0, -1), 3.5, 12, 18)
         else:
             self.slip = make_slip()
         self.dock = (self.slip.ox, self.slip.oz)
@@ -234,15 +240,16 @@ class World:
         self.faces = self._build_camp()
         if self.id == "cedar":
             self.faces.extend(self._build_trinidad_cove())
-        from .marina import build_marina
-        self.marina = build_marina(self)
+        from .marina import Marina, build_marina
+        self.marina = Marina([], (), ()) if self.placeholder else build_marina(self)
         self.faces.extend(self.marina.faces)
-        self.props = self._place_props()
+        self.props = [] if self.placeholder else self._place_props()
         # Static buildings and piers occupy these clearings. Keep random old
         # scenery from growing through them as the shoreline becomes richer.
         self.props = [p for p in self.props if not self._in_marina_clearing(p.x,p.z)]
         from .shoreline import shoreline_props
-        self.props.extend(shoreline_props(self, Prop))
+        if not self.placeholder:
+            self.props.extend(shoreline_props(self, Prop))
         # Physical footprints of the two piers and the crossbeam. The values
         # match the camp meshes, including their extent into the slip.
         self.dock_barriers = np.array([
@@ -290,11 +297,23 @@ class World:
                 +(grid[iz+1,ix]*(1-fx)+grid[iz+1,ix+1]*fx)*fz).astype(np.float32)
 
     def shore_sd(self,x,z):
+        if self.placeholder:
+            return np.maximum(np.abs(_as(x)) - 320.0, np.abs(_as(z)) - 240.0)
         return shore_sd(x,z) if self.shore_grid is None else self._sample_grid(self.shore_grid,x,z)
 
     def _zone_table(self):
         if self.id=="cedar":
             return tuple(tuple(row) for row in self.metadata["zones"])
+        if self.placeholder:
+            # Shared flat test water; later lake art can replace these charts.
+            centres = (
+                ("inlet", -170.0, 130.0, 60.0), ("flats", 20.0, 150.0, 62.0),
+                ("lilies", -160.0, -120.0, 62.0), ("cypress", 220.0, 30.0, 62.0),
+                ("rocks", 20.0, -160.0, 62.0), ("deep", 65.0, -20.0, 65.0),
+                ("reeds", -230.0, 10.0, 42.0), ("springs", -180.0, 120.0, 62.0),
+                ("current", 170.0, 110.0, 65.0),
+            )
+            return tuple(row for row in centres if row[0] in self.zone_names)
         # (id, x, z, radius). Landing is forced separately.
         return (
             ("inlet", -210.0, 155.0, 100.0),
@@ -303,10 +322,13 @@ class World:
             ("cypress", 330.0, 20.0, 130.0),
             ("rocks", 15.0, -195.0, 120.0),
             ("deep", 75.0, -25.0, 100.0),
+            ("reeds", -338.0, -42.0, 44.0),
         )
 
     def depth(self, x, z) -> np.ndarray:
         sd = self.shore_sd(x, z)
+        if self.placeholder:
+            return np.where((sd < 0) | self.slip.contains(x, z), 4.0, 0.0).astype(np.float32)
         if self.id=="cedar":
             depth = np.where(sd<0,self._sample_grid(self.depth_grid,x,z),0.0)
             return np.where(self.slip.contains(x,z),np.maximum(depth,1.35),depth).astype(np.float32)
@@ -387,6 +409,8 @@ class World:
     def _ground(self, x, z) -> np.ndarray:
         """Smooth bank. One formula, baked once so the march stays cheap."""
         sd = self.shore_sd(x, z)
+        if self.placeholder:
+            return np.where((sd < 0) | self.slip.contains(x, z), 0.0, 0.45).astype(np.float32)
         inland = np.clip(sd, 0.0, None)
         h = inland * np.float32(0.035)
         h = h + smoothstep(inland, 1.5, 40.0) * np.float32(4.2)
@@ -414,7 +438,7 @@ class World:
         return self._ground(x, z)
 
     def sample_height(self, x, z) -> np.ndarray:
-        if self.id=="cedar":
+        if self.id=="cedar" or self.placeholder:
             return self._sample_grid(self.height,x,z)
         x = _as(x)
         z = _as(z)
@@ -721,12 +745,19 @@ class World:
             [48, 52, 44],    # rocks
             [14, 32, 48],    # deep
             [20, 48, 56],    # open
+            [42, 82, 48],    # reeds
+            [42, 72, 90],    # springs
+            [52, 42, 94],    # current
         ], dtype=np.float32)
         col = palette[ids]
         shade = np.clip(1.05 - dep / 16.0, 0.45, 1.05)
         col = col * np.where(water, shade, np.float32(1.0))[..., None]
         land = np.array([34, 48, 30], dtype=np.float32)
         sand = np.array([92, 78, 52], dtype=np.float32)
+        if self.placeholder:
+            col = col * 0.35 + np.array(self.palette["water"], np.float32) * 255 * 0.65
+            land = np.array(self.palette["land"], np.float32) * 255
+            sand = land * 1.15
         bank = (sd >= 0) & (sd < 8)
         rgb = np.where(water[..., None], col, land)
         rgb = np.where(bank[..., None] & ~water[..., None], sand, rgb)
@@ -745,5 +776,5 @@ class World:
 
 
 # Module-level convenience for tests and data that don't need the grids.
-def zone_label(zone: str) -> str:
-    return ZONE_NAME.get(zone, zone)
+def zone_label(zone: str, lake_id="briar") -> str:
+    return LAKE_ZONE_NAMES.get(lake_id, ZONE_NAME).get(zone, zone)

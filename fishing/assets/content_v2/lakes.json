@@ -8,7 +8,10 @@
     "cypress",
     "rocks",
     "deep",
-    "open"
+    "open",
+    "reeds",
+    "springs",
+    "current"
   ],
   "zones": [
     {
@@ -193,6 +196,33 @@
       "cedar_name": "Bank",
       "matches": {},
       "fishing": false
+    },
+    {
+      "id": "reeds",
+      "name": "Reed Passage",
+      "cedar_name": "Reeds",
+      "matches": {
+        "golden_shiner": 1.0,
+        "warmouth": 0.8,
+        "chain_pickerel": 0.8,
+        "bluegill": 0.6,
+        "bowfin": 0.6
+      },
+      "fishing": true
+    },
+    {
+      "id": "springs",
+      "name": "Thermal springs",
+      "cedar_name": "Springs",
+      "matches": {},
+      "fishing": true
+    },
+    {
+      "id": "current",
+      "name": "Astral current",
+      "cedar_name": "Current",
+      "matches": {},
+      "fishing": true
     }
   ],
   "lakes": [
@@ -240,6 +270,48 @@
         "white_bass",
         "white_crappie",
         "yellow_bass"
+      ],
+      "zone_ids": [
+        "landing",
+        "inlet",
+        "flats",
+        "lilies",
+        "cypress",
+        "rocks",
+        "deep",
+        "open",
+        "reeds"
+      ],
+      "zone_labels": {
+        "landing": "Briar Landing",
+        "inlet": "Creek inlet",
+        "flats": "North flats",
+        "lilies": "Lily cove",
+        "cypress": "Cypress shore",
+        "rocks": "South rocks",
+        "deep": "Deep hole",
+        "open": "Open water",
+        "reeds": "Reed Passage",
+        "shore": "Bank"
+      },
+      "palette": {
+        "water": [
+          0.035,
+          0.14,
+          0.16
+        ],
+        "land": [
+          0.14,
+          0.2,
+          0.12
+        ]
+      },
+      "placeholder": false,
+      "unlock_chapter": 0,
+      "travel_caption": "The boat rides the trailer back to Briar Landing.",
+      "lake_days": [
+        "mayfly_morning",
+        "firefly_night"
       ]
     },
     {
@@ -329,7 +401,187 @@
         "deep": "Southern basin",
         "open": "Cedar open water",
         "shore": "Bank"
-      }
+      },
+      "zone_ids": [
+        "landing",
+        "inlet",
+        "flats",
+        "lilies",
+        "cypress",
+        "rocks",
+        "deep",
+        "open"
+      ],
+      "palette": {
+        "water": [
+          0.055,
+          0.2,
+          0.23
+        ],
+        "land": [
+          0.36,
+          0.31,
+          0.22
+        ]
+      },
+      "placeholder": false,
+      "unlock_chapter": 0,
+      "travel_caption": "The jon boat rides the trailer down the county road.",
+      "lake_days": [
+        "shad_run",
+        "breezy_bass"
+      ]
+    },
+    {
+      "id": "flathead",
+      "name": "Flathead Alpine Lake",
+      "landing": "Glacial Peak Outpost",
+      "region": "Montana, glacier country",
+      "blurb": "Clear water and a long view toward the mountains.",
+      "species_count": 0,
+      "species_ids": [],
+      "zone_ids": [
+        "landing",
+        "inlet",
+        "flats",
+        "lilies",
+        "cypress",
+        "rocks",
+        "deep",
+        "open"
+      ],
+      "zone_labels": {
+        "landing": "Glacial Peak Outpost",
+        "inlet": "Snowmelt inlet",
+        "flats": "Gravel flats",
+        "lilies": "Pondweed bay",
+        "cypress": "Larch snags",
+        "rocks": "Gravel reefs",
+        "deep": "Glacial trench",
+        "open": "Big open water",
+        "shore": "Bank"
+      },
+      "palette": {
+        "water": [
+          0.03,
+          0.28,
+          0.32
+        ],
+        "land": [
+          0.45,
+          0.49,
+          0.42
+        ]
+      },
+      "placeholder": true,
+      "unlock_chapter": 2,
+      "travel_caption": "Doc's trailer rattles north toward the mountains.",
+      "lake_days": [
+        "clear_sky_trout",
+        "larch_gold"
+      ]
+    },
+    {
+      "id": "crater",
+      "name": "Crater Caldera",
+      "landing": "Caldera Rim Dock",
+      "region": "A quiet volcanic caldera",
+      "blurb": "Cobalt water, obsidian cliffs and thermal springs.",
+      "species_count": 0,
+      "species_ids": [],
+      "zone_ids": [
+        "landing",
+        "flats",
+        "lilies",
+        "cypress",
+        "rocks",
+        "deep",
+        "open",
+        "springs"
+      ],
+      "zone_labels": {
+        "landing": "Caldera Rim Dock",
+        "flats": "Pumice shelf",
+        "lilies": "Moss gardens",
+        "cypress": "Drowned pines",
+        "rocks": "Obsidian cliffs (cinder isle)",
+        "deep": "Cobalt deep",
+        "open": "Caldera open",
+        "springs": "Thermal springs",
+        "shore": "Bank"
+      },
+      "palette": {
+        "water": [
+          0.045,
+          0.09,
+          0.32
+        ],
+        "land": [
+          0.24,
+          0.24,
+          0.3
+        ]
+      },
+      "placeholder": true,
+      "unlock_chapter": 3,
+      "travel_caption": "Huckleberry knows a cat with a truck.",
+      "lake_days": [
+        "warm_springs",
+        "fog_lift"
+      ]
+    },
+    {
+      "id": "nebula",
+      "name": "Starlight Nebula Lagoon",
+      "landing": "Cosmic Drift Station",
+      "region": "Beyond the reflection",
+      "blurb": "Gentle water under a sky full of starlight.",
+      "species_count": 0,
+      "species_ids": [],
+      "zone_ids": [
+        "landing",
+        "inlet",
+        "flats",
+        "lilies",
+        "cypress",
+        "rocks",
+        "deep",
+        "open",
+        "reeds",
+        "current"
+      ],
+      "zone_labels": {
+        "landing": "Cosmic Drift Station",
+        "inlet": "Comet stream",
+        "flats": "Stardust shoals",
+        "lilies": "Zero-G lily drifts",
+        "cypress": "Crystal kelp forest",
+        "rocks": "Meteor reefs",
+        "deep": "Void well",
+        "open": "Nebula open",
+        "reeds": "Light-reeds",
+        "current": "Astral current",
+        "shore": "Bank"
+      },
+      "palette": {
+        "water": [
+          0.19,
+          0.06,
+          0.3
+        ],
+        "land": [
+          0.27,
+          0.2,
+          0.36
+        ]
+      },
+      "placeholder": true,
+      "unlock_chapter": 4,
+      "travel_caption": "The reflection deepens, and the boat tips gently into starlight.",
+      "lake_days": [
+        "meteor_shower",
+        "aurora_tide"
+      ]
     }
   ],
   "zone_fallback_multiplier": 0.07

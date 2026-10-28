@@ -554,10 +554,9 @@ with an LRU; the `--benchmark` run logs per-subsystem estimates
 
 ### V1-16 calendar implementation
 
-`calendar.json` supplies typed Briar/Cedar Lake Days, all twelve legendary clock/weather
-requirements, daily weather reservations and cookout dialogue. Briar/Cedar are
-the playable implementation; future-lake plan data does not load terrain or
-unlock content. Their future visual spectacles and full NPC/species rosters
+`calendar.json` supplies typed Lake Days, all twelve legendary clock/weather
+requirements, daily weather reservations and cookout dialogue. Briar/Cedar have full landscapes; V1-23 adds flat maps for the other waters.
+Forecast data itself does not load terrain or unlock content. Their future visual spectacles and full NPC/species rosters
 arrive with those lake tickets.
 
 `calendar.py` forks `sim.RNG` with a stable SHA-256 digest of the saved calendar
@@ -596,6 +595,41 @@ read-only drawing and keyboard/pointer forecast pagination. `--shots` adds the
 calendar gallery and a warmed UI benchmark (week, Sunday, cookout and fish
 confirmation), including large text, accessibility font and 480×270 layouts.
 
+### V1-23 five-water framework
+
+`lakes.json` now defines all five destinations, each with `zone_ids`, display
+labels, water/land palette stubs, the required completed story chapter and its
+two `lake_days` IDs. The actual Lake Day rules remain in `calendar.json` so
+there is one source of truth. The old eight habitat indices stay in place;
+`reeds`, `springs` and `current` are appended. Briar gains the Reed Passage
+matches from `03 §1.2`; Cedar's survey, zones and geometry stay unchanged.
+
+Flathead, Crater and Nebula use bounded, driveable flat maps with their own
+habitat labels and safe landing slips. Crater has springs and no inlet;
+Nebula has reeds and current. These maps intentionally have no ordinary fish
+roster or NPC cast until the content tickets land. They allocate only the active
+world, and the native renderer supports an empty foliage buffer. The play loop
+also releases its startup reference when changing lakes.
+
+Travel reads `v2.story.chapter` (earlier chapters completed) or explicit integer
+`completed_chapters`: completing 2/3/4 opens Flathead/Crater/Nebula. Briar and
+Cedar remain open for existing saves. Querying the menu never grants rewards or
+changes story state. Captions come from `05 §10`, including the return from the
+reflection. New saves and migrated v1 saves keep the same schema version; new
+lake IDs round-trip through the existing save loader.
+
+All ten Lake Days are authored. The new species selectors are canonical future
+IDs and take effect when those fish arrive. Monday's Flathead clear bias leaves
+the 05:00–07:00 snow reservation intact; clear weather follows at 07:00, retaining
+two-hour legendary opportunities. Friday's Crater dawn changes from fog at
+06:00 to clear at 07:00. Rare-weather reservations still take precedence;
+future meteor and aurora artwork belongs to the lake art tickets.
+
+`python -m fishing --shots shots/lakes --lake-framework` captures all five maps,
+day/night water, route locks and warmed full-frame benchmarks. Add `--software`
+for the CPU path. `--lakes=briar,flathead,crater,nebula` explicitly selects a
+subset on checkouts missing Cedar's binary; full CI still exercises the actual
+five-water travel paths. See `docs/issue-51/README.md` for evidence and limits.
 
 ### V1-17 Bot identity and progression
 

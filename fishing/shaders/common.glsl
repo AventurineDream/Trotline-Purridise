@@ -7,6 +7,7 @@ uniform float cloud_cover, rain, mist, speed, spotlight;
 uniform float comfort_fog_radius;
 uniform float mirror;
 uniform float lake_kind;
+uniform vec3 lake_water;
 uniform sampler2D lake_shore, lake_depth;
 uniform vec4 lake_bounds;
 uniform vec2 lake_grid, lily_centre;
@@ -31,6 +32,7 @@ vec2 lake_uv(vec2 p) {
     return (f*(lake_grid-1.0)+0.5)/lake_grid;
 }
 float shore(vec2 p) {
+    if (lake_kind>1.5) return max(abs(p.x)-320.0,abs(p.y)-240.0);
     if (lake_kind>0.5) return texture(lake_shore,lake_uv(p)).r;
     float a = atan(p.y, p.x);
     float inlet = exp(-square(a-2.5393053)/(2.0*0.16*0.16));
