@@ -160,13 +160,15 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                 state.x,state.z,state.yaw = spot[1],spot[2],locations[(i//60)%len(locations)][2]
             else:
                 state.x,state.z,state.yaw = locations[(i//60)%len(locations)]
-            state.boat_id = tuple(BOATS)[(i//100)%len(BOATS)]
+            # Each lake gets two 300-frame blocks of twelve 25-frame boats, so all
+            # 24 boats visit both lakes within 1200 frames.
+            state.boat_id = tuple(BOATS)[((i%300)//25 + 12*((i//600)%2)) % len(BOATS)]
             # Exercise oars, powered travel and the depleted-battery fallback.
-            rowboat_variant = (i//20)%3
+            rowboat_variant = (i//8)%3  # all three within the rowboat's 25-frame slot
             state.rowboat_trolling_motor = rowboat_variant!=0
             state.rowboat_battery_kwh = (ROWBOAT_BATTERY_KWH*(0.1+0.8*((i%100)/100))
                                          if rowboat_variant==1 else 0.0)
-            state.sail_raised = state.boat_id=="sail" and (i//20)%2==1
+            state.sail_raised = state.boat.power=="sail" and (i//20)%2==1
             state.fuel = state.boat.tank*(0.1+0.8*((i%100)/100))
             state.yaw += math.sin(i*0.02)*0.18
             state.look = math.sin(i*0.03)*0.12
@@ -267,7 +269,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             "coverage":{name:sorted(values) for name,values in coverage.items()},
             "coverage_complete":coverage_complete,
             "checks":["fixed anchored depth","matching camera projections","eleven UI modes, including dialogue",
-                      "both lakes with repeated renderer release and rebuild","all four boats and raised sail",
+                      "both lakes with repeated renderer release and rebuild",f"all {len(BOATS)} boats and raised sails",
                       f"eight shop tabs, four help pages, {len(SPECIES)} fish and 12 quest journal entries",
                       "twelve dialogue givers and four saved quest statuses","changing fuel and battery gauges",
                       "clear, fair, night, drizzle and 12x midnight fades","five heavy lines and fifteen buoys",

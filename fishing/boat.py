@@ -7,7 +7,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .data import BOAT_DATA
+from .data import BOAT_DATA, WELLS
+
+# Paddled, rowed and starlight boats carry no fuel (03 §6 "Power").
+UNFUELLED_POWER = frozenset({"paddle", "oars", "starlight"})
+# Existing livewell upgrades (+40/+100 lb) apply to tiers 2-7 only.
+WELL_UPGRADE_TIERS = range(2, 8)
 
 HULL_BOW = 2.86
 HULL_STERN = -0.80
@@ -45,14 +50,34 @@ class BoatModel:
     well_bonus: float = 0.0
     sail_speed: float = 0.0
     traits: tuple[str, ...] = ()
+    tier: int = 3
+    family: str = "jon"
+    power: str = "tiller"
+    top_speed: float = 0.0  # m/s for powers without motor upgrades
+    hull: str = ""  # existing boat whose mesh and footprint this one borrows
+    blurb: str = ""
+    sold_at: tuple[str, ...] = ()  # lake ids; empty means every landing
 
     @property
     def length(self):
         return self.bow - self.stern
 
+    @property
+    def mesh_id(self) -> str:
+        return self.hull or self.id
+
+    @property
+    def fuelled(self) -> bool:
+        return self.power not in UNFUELLED_POWER
+
+    def well_cap(self, well_tier: int) -> float:
+        upgraded = WELLS[well_tier] if self.tier in WELL_UPGRADE_TIERS else WELLS[0]
+        return upgraded + self.well_bonus
+
 
 BOATS = {
-    row["id"]: BoatModel(**{**row, "traits": tuple(row["traits"])})
+    row["id"]: BoatModel(**{**row, "traits": tuple(row["traits"]),
+                            "sold_at": tuple(row.get("sold_at", ()))})
     for row in BOAT_DATA
 }
 

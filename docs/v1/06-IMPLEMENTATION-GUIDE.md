@@ -835,3 +835,43 @@ line bite ×1.2.
 0.5 m per game minute in a deterministic flow field. Its midpoint stays within
 60 m of the set point (`drift_origin`, saved only once the line drifts). A step
 that would leave the water or bring the line within 16 m of another is skipped.
+
+## Implemented fleet data and shop tiers (V1-21)
+
+`boats.json` holds all 24 boats from `03 §6`. Each row now carries `tier`,
+`family`, `power`, `blurb`, and optionally `top_speed`, `hull` and `sold_at`. The
+validator checks the new fields, allows a well bonus down to −40 lb for tier-1
+wells under the 40 lb base, and holds every `shallow` boat to a draft of at most
+0.32 m. The four older boats keep every physics and geometry number. Only their
+display names change: Aluminum Jon Boat, Reinforced Rowboat, Cat-Rigged
+Daysailer and Classic Pontoon. The pontoon already had six lines and `hammock`.
+
+**Power.** `tiller` keeps the motor-upgrade speed and fuel factor. `console`,
+`inboard`, `paddle`, `oars` and `starlight` use the table's top speed, with no
+motor upgrades. Paddles, oars and starlight burn no fuel, and the HUD shows
+`NO FUEL NEEDED`. `sail` boats use the daysailer's auxiliary and sail rules; the
+Small Sloop's sail is 1.2× the daysailer's. The rowboat's oars and electric motor
+are unchanged.
+
+**Hulls.** Until V1-22 builds parametric families, each new boat borrows the
+mesh, collision footprint, eye height and Bot perch of an existing hull (`hull`):
+Pioneer and Rowed boats use the rowboat, the sloop uses the daysailer, pontoons
+and two Cosmic barges use the pontoon, and the rest use the jon. Shallow boats
+lower only the draft. Every boat therefore passes the existing collision, anchor
+and catchability checks.
+
+**Traits.** `shallow` boats reach water down to 0.4 m. `silent` hulls give `shy`
+species ×1.15. `galley`, `hammock`, `trophy_rail` and `wind_steady` keep their
+existing rules. `ice_hull` boats skip the Flathead snow-mist chop, which slows
+every other hull to 0.8× top speed. `glow` hulls get a 0.55 night-emission
+strength in both renderers. The Reed Dugout may set lines in reeds without the
+Reed Anchor.
+
+**Shop.** `fleet.py` gates new boats by chapter: tiers 1–2 from the start, 3–4
+after chapter 2, 5–6 after chapter 3, 7 after chapter 4 and 8 after chapter 5.
+"After" uses the dish-card reading: past the chapter, or listed as completed.
+Tier 8 is sold only at Cosmic Drift Station and sails on every lake. The older
+four stay buyable from the start, and owned boats always switch. The Boats tab
+lists the older four first, then new boats by tier and price, with the lock
+reason. Livewell upgrades apply to tiers 2–7 only. The benchmark visits all 48
+lake/boat pairs within 1200 frames.
