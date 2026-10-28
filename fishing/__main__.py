@@ -543,6 +543,10 @@ def shots(dest: str) -> int:
     kitchen_gallery(out, text=text, world=world, background=renderer.render(dawn))
     from .calendarview import calendar_gallery
     calendar_gallery(out, text=text, world=world, background=renderer.render(dawn))
+    from .botview import bot_gallery
+    bot_gallery(out, text=text, world=world, background=renderer.render(dawn))
+    from .botshots import bot_shell_gallery
+    bot_shell_gallery(out, text=text, renderer=renderer)
     renderer.close()
     software_renderer.close()
     text.close()

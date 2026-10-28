@@ -13,6 +13,8 @@ import numpy as np
 from .world import Face
 from . import comfort
 from . import calendar
+from .data import BOT_SHELLS
+from .botmesh import WOOL as _COLLAR_WOOL
 
 _PHASES = ("home", "go", "out", "back")
 # Feet position in the level boat frame: starboard, up, forward of the eye.
@@ -23,7 +25,6 @@ _PERCH = {
     "rowboat": (0.0, -0.36, 1.05),
 }
 _SPEED = 7.5  # metres per real second
-_COLLAR_WOOL = (0.72, 0.20, 0.28)
 
 
 def reset(state) -> None:
@@ -137,20 +138,25 @@ def faces(state) -> list[Face]:
     profile = v2.get("profile", {}) if isinstance(v2, dict) else {}
     collar = profile.get("collar", {}) if isinstance(profile, dict) else {}
     collar_visible = settings.get("collar_visible", collar.get("visible", True))
+    collar_visible = collar_visible and collar.get("stage", "none") != "none"
+    shell = profile.get("shell", "tin")
+    shell = shell if isinstance(shell, str) and shell in BOT_SHELLS else "tin"
+    pose = dict(shell=shell, stage=collar.get("stage", "none"), knot=collar.get("knot"),
+                anim=float(state.anim), reduced_motion=bool(settings.get("reduced_motion", False)))
     if state.bot_phase == "home":
         eye, right, up, forward = _boat_basis(state)
         lx, ly, lz = _PERCH.get(state.boat_id, _PERCH["jon"])
         origin = eye + right * lx + up * ly + forward * lz
         # Look back at the skipper so the lamp is in view.
         return _mesh(origin, -right, up, -forward, bob=0.0,
-                     collar_visible=collar_visible)
-    y = 0.05 + math.sin(state.anim * 5.0) * 0.018
+                     collar_visible=collar_visible, **pose)
+    y = 0.05 + (0.0 if pose["reduced_motion"] else math.sin(state.anim * 5.0) * 0.018)
     origin = np.array([state.bot_x, y, state.bot_z], np.float32)
     facing = np.array([math.sin(state.bot_yaw), 0.0, math.cos(state.bot_yaw)], np.float32)
     right = np.array([math.cos(state.bot_yaw), 0.0, -math.sin(state.bot_yaw)], np.float32)
     up = np.array([0.0, 1.0, 0.0], np.float32)
     mesh = _mesh(origin, right, up, facing, bob=0.0, scale=1.7,
-                 collar_visible=collar_visible)
+                 collar_visible=collar_visible, scouting=True, **pose)
     try:
         from .life import extra_faces
         mesh.extend(extra_faces(state))
@@ -333,47 +339,25 @@ def _report(state, world) -> str:
 
 
 def _mesh(origin, right, up, facing, bob: float, scale: float = 1.0,
-          collar_visible: bool = True) -> list[Face]:
-    basis = np.stack([
-        np.asarray(right, np.float32),
-        np.asarray(up, np.float32),
-        np.asarray(facing, np.float32),
-    ], axis=1)
-    origin = np.asarray(origin, np.float32) + np.array([0.0, bob, 0.0], np.float32)
-    tin = (0.78, 0.82, 0.84)
-    dark = (0.16, 0.18, 0.20)
-    lamp = (1.0, 0.62, 0.16)
-    rubber = (0.10, 0.12, 0.13)
-    out: list[Face] = []
+          collar_visible: bool = True, **pose) -> list[Face]:
+    from .botmesh import faces as shell_faces
+    origin = np.asarray(origin, np.float32) + np.array((0., bob, 0.), np.float32)
+    return shell_faces(origin, right, up, facing, scale=scale,
+                       collar_visible=collar_visible, **pose)
 
-    def put(local_pts, color):
-        pts = np.stack([origin + basis @ (np.array(p, np.float32) * np.float32(scale)) for p in local_pts])
-        normal = basis @ np.cross(
-            np.array(local_pts[1], np.float32) - np.array(local_pts[0], np.float32),
-            np.array(local_pts[2], np.float32) - np.array(local_pts[0], np.float32),
-        )
-        normal = normal / (np.linalg.norm(normal) + 1e-8)
-        out.append(Face(pts.astype(np.float32), normal.astype(np.float32), np.array(color, np.float32), "world"))
 
-    def box(center, size, color):
-        x, y, z = center
-        a, b, d = (np.array(size, np.float32) * 0.5).tolist()
-        put([(x - a, y + b, z - d), (x + a, y + b, z - d), (x + a, y + b, z + d), (x - a, y + b, z + d)], color)
-        put([(x - a, y - b, z - d), (x - a, y - b, z + d), (x + a, y - b, z + d), (x + a, y - b, z - d)], color)
-        put([(x - a, y - b, z - d), (x + a, y - b, z - d), (x + a, y + b, z - d), (x - a, y + b, z - d)], color)
-        put([(x - a, y - b, z + d), (x - a, y + b, z + d), (x + a, y + b, z + d), (x + a, y - b, z + d)], color)
-        put([(x - a, y - b, z - d), (x - a, y + b, z - d), (x - a, y + b, z + d), (x - a, y - b, z + d)], color)
-        put([(x + a, y - b, z - d), (x + a, y - b, z + d), (x + a, y + b, z + d), (x + a, y + b, z - d)], color)
+def sound_kind(state, kind):
+    """Keep the scouting API's legacy 'bot' cue; resolve its shell at playback."""
+    if kind != "bot":
+        return kind
+    profile = getattr(state, "v2", {}).get("profile", {})
+    shell = profile.get("shell", "tin") if isinstance(profile, dict) else "tin"
+    return BOT_SHELLS.get(shell, BOT_SHELLS["tin"]).chime if isinstance(shell, str) else BOT_SHELLS["tin"].chime
 
-    # Body, lamp face, antenna and bobber, skids, and a little propeller.
-    box((0.0, 0.11, 0.0), (0.16, 0.14, 0.18), tin)
-    if collar_visible:
-        box((0.0, 0.19, 0.0), (0.17, 0.035, 0.19), _COLLAR_WOOL)
-    box((0.0, 0.22, 0.02), (0.11, 0.09, 0.11), tin)
-    put([(-0.028, 0.19, 0.08), (0.028, 0.19, 0.08), (0.028, 0.25, 0.08), (-0.028, 0.25, 0.08)], lamp)
-    box((0.0, 0.36, 0.0), (0.012, 0.16, 0.012), dark)
-    box((0.0, 0.45, 0.0), (0.04, 0.04, 0.04), lamp)
-    box((-0.06, 0.03, 0.01), (0.045, 0.03, 0.12), rubber)
-    box((0.06, 0.03, 0.01), (0.045, 0.03, 0.12), rubber)
-    box((0.0, 0.07, -0.11), (0.05, 0.05, 0.03), dark)
-    return out
+
+def chime_caption(state):
+    profile = getattr(state, "v2", {}).get("profile")
+    if not isinstance(profile, dict):
+        return "Bot's chime sounds."
+    shell = profile.get("shell", "tin")
+    return BOT_SHELLS.get(shell, BOT_SHELLS["tin"]).caption if isinstance(shell, str) else BOT_SHELLS["tin"].caption

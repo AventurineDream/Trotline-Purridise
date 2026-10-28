@@ -113,7 +113,7 @@ class SaveV2Checks(unittest.TestCase):
         _, fresh, _ = self.migrate_fixture("fresh.json")
         defaults = fresh["v2"]
         self.assertEqual(defaults["mode"], "cozy")
-        self.assertEqual(defaults["profile"]["bot_name"], "Copper-000")
+        self.assertEqual(defaults["profile"]["bot_name"], "Cobalt-774")
         self.assertEqual(defaults["profile"]["shell"], "tin")
         self.assertEqual(defaults["profile"]["shells"], ["tin"])
         self.assertEqual(defaults["profile"]["tools"], [])
@@ -157,7 +157,7 @@ class SaveV2Checks(unittest.TestCase):
             "found": [{"zone": "flats", "bait": "worm", "band": "dawn"}],
             "shiny": 0, "since_shiny": 0,
         })
-        self.assertEqual(mid["v2"]["profile"]["bot_name"], "Copper-517")
+        self.assertEqual(mid["v2"]["profile"]["bot_name"], "Zed-621")
         self.assertEqual(mid["v2"]["story"]["scene_states"], {"prologue": "done"})
         self.assertIn("prologue", mid["v2"]["story"]["scenes_seen"])
 
@@ -167,7 +167,7 @@ class SaveV2Checks(unittest.TestCase):
 
         _, guardian, _ = self.migrate_fixture("guardian_seen.json")
         self.assertTrue(guardian["narrative_v1"]["guardian_seen"])
-        self.assertEqual(guardian["v2"]["profile"]["bot_name"], "Copper-316")
+        self.assertEqual(guardian["v2"]["profile"]["bot_name"], "Cobalt-479")
         self.assertEqual([book_stage(n) for n in (0, 1, 3, 5, 10)],
                          ["rumor", "identified", "bait_known", "verified", "mastered"])
 

@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from . import kitchen
 from .book import BOOK_SPECIES_IDS, SPECIES_RUMORS
 from .content import ContentError, validate_content_v2
 from .data import (BAIT_BY_ID, BAIT_MATCH, CONTENT_V2_RAW, LAKE_SPECIES_IDS,
@@ -37,6 +38,10 @@ class SpeciesDataChecks(unittest.TestCase):
         self.assertEqual(weight_string(.02), '0.02 lb')
         self.assertEqual(weight_string(2.34), '2.3 lb')
         self.assertEqual(weight_string(0), '0.0 lb')
+
+    def test_galley_picks_never_show_tiny_fish_as_zero_weight(self):
+        minnow = Catch('bluntnose_minnow', .015, 1.0, 0.0, 'flats', 'worm', 8.0)
+        self.assertEqual(kitchen.pick_label(minnow), f"0.015 lb {SPECIES_BY_ID['bluntnose_minnow'].name}")
 
     def test_all_108_rows_match_the_canonical_table_and_rumor_attribution(self):
         rows = _canonical_rows()

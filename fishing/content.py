@@ -16,7 +16,7 @@ from .narrative import DAY_NPCS, QUEST_IDS, RIPPLE_BY_QUEST
 CONTENT_PATH = Path(__file__).with_name("assets") / "narrative_v1.json"
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
-                    "pantry.json", "dishes.json", "calendar.json")
+                    "pantry.json", "dishes.json", "calendar.json", "bot.json")
 BOOK_CONTENT_PATH = CONTENT_V2_PATH / "book.json"
 BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
 _GAMEPLAY_REFS_LOADED = False
@@ -1147,9 +1147,59 @@ class _ContentV2Validator:
                 self.error(baits_file, where + ".recipe", "recipe bait is cooked, never sold")
 
         self.calendar(docs, species)
+        self.bot(docs)
         if self.errors:
             raise ContentError("\n".join(self.errors))
         return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes)
+
+    def bot(self, docs):
+        filename = "bot.json"
+        raw = self.root(docs, filename, {"schema_version", "name_prefixes", "suffix_min", "suffix_max",
+                                       "shells", "tools", "collar_stages", "knots"})
+        if filename in self.unavailable_files:
+            return
+        prefixes = raw.get("name_prefixes")
+        expected = {"Copper", "Quark", "Zed", "Brass", "Sprocket", "Clinker", "Whirly",
+                    "Widget", "Cobalt", "Anchor", "Rivet", "Echo"}
+        if (not isinstance(prefixes, list) or len(prefixes) != 12
+                or any(not isinstance(p, str) for p in prefixes)
+                or set(prefixes) != expected):
+            self.error(filename, "name_prefixes", "expected the twelve canonical prefixes, including Rivet and excluding Pebble")
+        self.number(filename, "suffix_min", raw.get("suffix_min"), integer=True, minimum=11, maximum=11)
+        self.number(filename, "suffix_max", raw.get("suffix_max"), integer=True, minimum=999, maximum=999)
+        shells = self.table(docs, filename, "shells", {"id", "name", "chapter", "tool_id", "body", "trim", "secondary", "chime", "caption"})
+        tools = self.table(docs, filename, "tools", {"id", "name", "price", "requires_finder"})
+        stages = self.table(docs, filename, "collar_stages", {"id", "name"})
+        knots = self.table(docs, filename, "knots", {"id", "name"})
+        for group, rows, ids in (("shells", shells, {"tin", "frog", "duck", "sub", "astral"}),
+                ("tools", tools, {"sonar_grid", "reed_anchor", "wave_chime", "thermo_scanner", "zero_g_winch"}),
+                ("collar_stages", stages, {"none", "received", "loose", "retied", "favorite"}),
+                ("knots", knots, {"square", "bow", "sailors_hitch"})):
+            if set(rows) != ids:
+                self.error(filename, group, "canonical IDs differ")
+            for _id, row, where in self.rows(filename, group):
+                self.text(filename, where + ".name", row.get("name"))
+        for _id, row, where in self.rows(filename, "shells"):
+            self.number(filename, where + ".chapter", row.get("chapter"), integer=True, minimum=0, maximum=5)
+            self.enum(filename, where + ".tool_id", row.get("tool_id"), tools)
+            self.enum(filename, where + ".chime", row.get("chime"), {"bot_tin", "bot_frog", "bot_duck", "bot_sub", "bot_astral"})
+            self.text(filename, where + ".caption", row.get("caption"))
+            if isinstance(_id, str) and row.get("chime") != "bot_" + _id:
+                self.error(filename, where + ".chime", "each shell must have its own chime")
+            for color in ("body", "trim", "secondary"):
+                value = row.get(color)
+                if not isinstance(value, list) or len(value) != 3:
+                    self.error(filename, where + "." + color, "expected an RGB triple")
+                else:
+                    for i, channel in enumerate(value):
+                        self.number(filename, where + f".{color}[{i}]", channel, minimum=0, maximum=1)
+        refs = [row.get("tool_id") for row in shells.values()]
+        if len(refs) != len(tools) or any(refs.count(tool) != 1 for tool in tools):
+            self.error(filename, "shells", "each tool must belong to exactly one shell")
+        for _id, row, where in self.rows(filename, "tools"):
+            self.number(filename, where + ".price", row.get("price"), integer=True, minimum=1)
+            if type(row.get("requires_finder")) is not bool:
+                self.error(filename, where + ".requires_finder", "expected a boolean")
 
     def calendar(self, docs, species):
         filename = "calendar.json"

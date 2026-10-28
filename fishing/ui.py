@@ -66,7 +66,7 @@ BOOK_STAGE_UP_COUNTS = frozenset(
     threshold for threshold, _stage in BOOK_STAGES if threshold >= 3
 )
 
-SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes", "Kitchen")
+SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes", "Kitchen", "Bot")
 _TABS = SHOP_TABS
 TEXT_SIZE_SCALES = (0.9, 1.0, 1.15)
 MODES = comfort.MODES
@@ -414,6 +414,9 @@ def comfort_controls(viewport):
 
 
 def shop_rows(state, tab: int) -> list[Row]:
+    if tab == 7:
+        from .botidentity import rows
+        return rows(state, state._world)
     if tab == 6:
         from .kitchen import rows
         return rows(state, state._world)
@@ -689,12 +692,13 @@ class UI:
         margin = 16
         width = min(w - 24, 1000)
         cols = max(8, (width - margin*2) // cw)
-        lines = textwrap.wrap(node['text'], cols)
+        from .botidentity import format_text
+        lines = textwrap.wrap(format_text(node['text'], state), cols)
         choices = node.get('choices', [])
         rows = lines + ['']
         colors = [INK] * len(lines) + [DIM]
         for i, choice in enumerate(choices):
-            label = f"{'>' if i == chat.selected else ' '} {i+1}. {choice['text']}"
+            label = f"{'>' if i == chat.selected else ' '} {i+1}. {format_text(choice['text'], state)}"
             wrapped = textwrap.wrap(label, cols)
             rows.extend(wrapped)
             colors.extend([GOLD if i == chat.selected else DIM] * len(wrapped))
@@ -1422,13 +1426,19 @@ class UI:
             return
         for i, label in enumerate(options):
             oy = y2+i*(body_h+27*gap_scale)
+            from .botidentity import name as bot_name
+            display = label + ' · ' + bot_name(state) if label == 'Continue' else label
+            button_w = min(w - x * 2, max(210, int(w * .21), self._measure(display, body, 'sans') + 90 * gap_scale))
+            option_size = body
+            while option_size > 9 and self._measure(display, option_size, 'sans') > button_w - 80 * gap_scale:
+                option_size -= 1
             if i==ui.title_i:
-                self._round_fill(frame,x,oy-4*gap_scale,max(210,int(w*0.21)),body_h+24*gap_scale,GOLD,0.95)
-                self._text(frame,label,x+15,oy+4,body,(22,39,39),False,"sans")
+                self._round_fill(frame,x,oy-4*gap_scale,button_w,body_h+24*gap_scale,GOLD,0.95)
+                self._text(frame,display,x+15,oy+4,option_size,(22,39,39),False,"sans")
                 select = "A" if ui.input_device == "gamepad" else "ENTER"
-                self._text(frame,select,x+max(210,int(w*0.21))-55*gap_scale,oy+9*gap_scale,small,(42,56,50),False,"sans")
+                self._text(frame,select,x+button_w-55*gap_scale,oy+9*gap_scale,small,(42,56,50),False,"sans")
             else:
-                self._text(frame,label,x+15,oy+4,body,INK,False,"sans")
+                self._text(frame,display,x+15,oy+4,option_size,INK,False,"sans")
         controls = self._controls(ui, "H  Field guide     W / S  Choose",
                                   "D-pad / stick choose     A select")
         self._text(frame,controls,x,h-small_h-24*gap_scale,small,DIM,False,"sans")
@@ -1572,6 +1582,10 @@ class UI:
         self._text(frame, label, margin + 12, y + 6, size, GOLD, False, "sans")
 
     def _shop(self, frame, state, ui: UIState):
+        if ui.shop_tab == 7:
+            from .botview import draw
+            draw(self, frame, state, ui)
+            return
         if ui.shop_tab == 6:
             from .kitchenview import draw
             draw(self, frame, state, ui)
@@ -2003,7 +2017,7 @@ class UI:
         if not settings.get("captions", True) or ui.caption_timer <= 0 or not ui.caption:
             return
         h, w = frame.shape[:2]
-        if ui.mode in {"kitchen", "cook_confirm", "cooking"} or (ui.mode == "shop" and ui.shop_tab == 6):
+        if ui.mode in {"kitchen", "cook_confirm", "cooking"} or (ui.mode == "shop" and ui.shop_tab in (6, 7)):
             size = self._size(frame, "small")
             while size > 9 and self._render(ui.caption, size, INK, "sans").shape[0] > 18:
                 size -= 1
