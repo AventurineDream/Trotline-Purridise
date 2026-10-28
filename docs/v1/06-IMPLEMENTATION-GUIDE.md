@@ -808,3 +808,30 @@ purchased grid. "Scouted" means a zone with a line in the water or the boat
 inside it; a saved scouting record would need a save change and is not added
 here. Open water outside habitat circles gets no overlay yet. The chart draws the
 bands and adds a legend. `--shots` writes `reed-passage-sonar.png`.
+
+## Implemented bot tools II (V1-20)
+
+`bottools.py` holds the rules as pure functions. The cold layer is
+`d(h) = base + amp·sin(2π(h − 15)/24) + weather`, clamped to [3 m, 0.8 × the
+lake's deepest authored depth]. Flathead uses base 12 and amp 3; Crater uses 18
+and 4. Fog and snow mist add 1.5 m and clear subtracts 1.0. A `cold` species
+keeps ×1.0 inside `[d, d+6]` and drops to ×0.35 outside, with or without the
+scanner. Briar and Cedar have no thermocline and are unchanged.
+
+The Thermocline Scanner adds `Cold layer N m` to the HUD line under the boat and
+to the Bot status line while Bot is out. The book's per-species band display is
+not built yet.
+
+**Wave Chime (G on the water):** needs the boat slower than 0.5 m/s and a line
+within 30 m. The nearest such line gets `chime_until = now + 60` game minutes.
+`surface` species on that line bite ×1.6 while it rings. The cooldown is 120 game
+minutes, stored in `v2.bot_tools.chime_ready_at`. `SetLine.chime_until` is saved
+only when a chime has rung, so older saves keep their shape.
+
+**Zero-G Winch:** while owned, lines hold still and `current` species on every
+line bite ×1.2.
+
+**Nebula currents:** without the winch, each line in a `current` zone drifts at
+0.5 m per game minute in a deterministic flow field. Its midpoint stays within
+60 m of the set point (`drift_origin`, saved only once the line drifts). A step
+that would leave the water or bring the line within 16 m of another is skipped.

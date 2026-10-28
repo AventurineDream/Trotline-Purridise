@@ -11,7 +11,7 @@ import json
 import math
 import time
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, ClassVar
 from uuid import uuid4
@@ -67,6 +67,7 @@ from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, confirm_shiny, lose_sh
 from .savepaths import (UnsupportedSaveVersionError, V2_REWARD_KINDS,
                         merge_v2_defaults)
 from . import comfort
+from . import bottools
 
 MASK = (1 << 64) - 1
 SAVE_VERSION = 2
@@ -272,6 +273,9 @@ class SetLine:
     snag_minute: float = -999.0
     line_id: str = field(default_factory=lambda: str(uuid4()))
     extra_fields: dict = field(default_factory=dict, repr=False)
+    chime_until: float = -999.0  # game minute the Wave Chime stops ringing on this line
+    # Endpoints when the line was set; currents may drift it up to DRIFT_CAP_M away.
+    drift_origin: tuple[float, float, float, float] | None = None
 
     def __post_init__(self):
         if isinstance(self.bait_sections, str):
@@ -333,17 +337,29 @@ class SetLine:
             "snag_minute": self.snag_minute,
             "line_id": self.line_id,
         })
+        # Written only once a bot tool has touched the line, so older saves keep their shape.
+        if self.chime_until > -999.0:
+            result["chime_until"] = self.chime_until
+        if self.drift_origin is not None:
+            result["drift_origin"] = list(self.drift_origin)
         return result
 
     @classmethod
     def from_json(cls, raw: dict) -> "SetLine":
         known = {"tier", "bait", "bait_sections", "x0", "z0", "x1", "z1", "zone", "hooks",
-                 "snag_minute", "line_id"}
+                 "snag_minute", "line_id", "chime_until", "drift_origin"}
         sections = raw.get("bait_sections")
         if (not isinstance(sections, list) or not 1 <= len(sections) <= 3
                 or any(not isinstance(bait, str) for bait in sections)):
             legacy_bait = raw.get("bait", "worm")
             sections = [legacy_bait if isinstance(legacy_bait, str) else "worm"]
+        origin = raw.get("drift_origin")
+        if (not isinstance(origin, list) or len(origin) != 4
+                or any(type(v) not in (int, float) or not math.isfinite(v) for v in origin)):
+            origin = None
+        chime_until = raw.get("chime_until", -999)
+        if type(chime_until) not in (int, float) or not math.isfinite(chime_until):
+            chime_until = -999.0
         return cls(
             raw["tier"], sections, float(raw["x0"]), float(raw["z0"]),
             float(raw["x1"]), float(raw["z1"]), raw["zone"],
@@ -351,6 +367,8 @@ class SetLine:
             float(raw.get("snag_minute", -999)),
             deployment_id(raw.get("line_id")) or str(uuid4()),
             {key: deepcopy(value) for key, value in raw.items() if key not in known},
+            float(chime_until),
+            tuple(float(v) for v in origin) if origin else None,
         )
 
 
@@ -408,7 +426,7 @@ def _zone_path_segments(world: World, x0: float, z0: float,
     return out
 
 
-def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float, lake_id="briar", *, game_minutes=None) -> dict[str, float]:
+def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float, lake_id="briar", *, game_minutes=None, tool: bottools.ToolState | None = None) -> dict[str, float]:
     out = {}
     lake_rates = LAKE_RATE_MULTIPLIERS.get(lake_id, {})
     for sp in SPECIES:
@@ -420,6 +438,7 @@ def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float,
             * weather_mult(sp.id, weather)
             * depth_mult(sp, depth)
             * lake_rates.get(sp.id, 0.0)
+            * bottools.species_factor(sp.tags, depth, tool)
         )
     if game_minutes is not None:
         out = {sid: rate * calendar.rate_multiplier(lake_id, game_minutes, sid, zone)
@@ -873,6 +892,10 @@ class State:
         weather = weather_at(self)
         # Depth and zone come from the world via a callback set on the state.
         world = self._world
+        if world is not None:
+            self.drift_lines(world, hours * 60.0)
+        cold_layer = bottools.cold_layer_m(self.lake_id, hour, weather)
+        winched = self.owns_tool("zero_g_winch")
         for li, line in enumerate(self.lines):
             for i, hook in enumerate(line.hooks):
                 if hook.catch is not None:
@@ -894,7 +917,9 @@ class State:
                 zone = world.zone_at(x, z)
                 depth = float(world.depth(x, z))
                 bait = line.bait_for_hook(i)
-                rates = species_rates(zone, bait, hour, weather, depth,self.lake_id, game_minutes=self.game_minutes)
+                bot_tool = bottools.ToolState(cold_layer, self.game_minutes < line.chime_until, winched)
+                rates = species_rates(zone, bait, hour, weather, depth,self.lake_id,
+                                      game_minutes=self.game_minutes, tool=bot_tool)
                 total = sum(rates.values())
                 if total <= 0:
                     continue
@@ -1350,6 +1375,58 @@ class State:
         profile = self.v2.get("profile", {})
         tools = profile.get("tools", []) if isinstance(profile, dict) else []
         return isinstance(tools, list) and tool_id in tools
+
+    def drift_lines(self, world: World, minutes: float) -> None:
+        """Nebula currents carry lines in `current` zones unless the winch holds them.
+
+        A line moves as a whole, its midpoint at most DRIFT_CAP_M from where it was
+        set. A step that would leave the water or crowd another line is skipped.
+        """
+        if minutes <= 0 or self.owns_tool("zero_g_winch"):
+            return
+        for line in self.lines:
+            if line.zone != "current":
+                continue
+            if line.drift_origin is None:
+                line.drift_origin = (line.x0, line.z0, line.x1, line.z1)
+            ox0, oz0, ox1, oz1 = line.drift_origin
+            mid_x, mid_z = (line.x0 + line.x1) * 0.5, (line.z0 + line.z1) * 0.5
+            flow_x, flow_z = bottools.flow_at(mid_x, mid_z)
+            off_x = mid_x - (ox0 + ox1) * 0.5 + flow_x * minutes
+            off_z = mid_z - (oz0 + oz1) * 0.5 + flow_z * minutes
+            reach = math.hypot(off_x, off_z)
+            if reach > bottools.DRIFT_CAP_M:
+                off_x *= bottools.DRIFT_CAP_M / reach
+                off_z *= bottools.DRIFT_CAP_M / reach
+            moved = replace(line, x0=ox0 + off_x, z0=oz0 + off_z, x1=ox1 + off_x, z1=oz1 + off_z)
+            ends_wet = all(world.navigable(px, pz) for px, pz in
+                           ((moved.x0, moved.z0), (moved.x1, moved.z1)))
+            if ends_wet and not any(other is not line and _seg_gap(moved, other) < bottools.DRIFT_MIN_GAP_M
+                                    for other in self.lines):
+                line.x0, line.z0, line.x1, line.z1 = moved.x0, moved.z0, moved.x1, moved.z1
+
+    def use_chime(self, world: World) -> str | None:
+        """G on the water: ring the Wave Chime on the nearest line within 30 m."""
+        if not self.owns_tool("wave_chime"):
+            return "The Wave Chime is not aboard. Rubber Duck Bot sells it."
+        if abs(self.speed) >= bottools.CHIME_SLOW_MPS:
+            return "Slow the boat before you ring the chime."
+        tools = self.v2.get("bot_tools")
+        if not isinstance(tools, dict):
+            tools = self.v2["bot_tools"] = {}
+        ready = comfort.number(tools.get("chime_ready_at"))
+        if self.game_minutes < ready:
+            return f"The chime rests for {math.ceil(ready - self.game_minutes)} more game minutes."
+        near = [(_point_seg(self.x, self.z, line.x0, line.z0, line.x1, line.z1), line)
+                for line in self.lines]
+        near = [(distance, line) for distance, line in near if distance <= bottools.CHIME_RADIUS_M]
+        if not near:
+            return "No line of yours is within 30 m of the chime."
+        _distance, line = min(near, key=lambda item: item[0])
+        line.chime_until = self.game_minutes + bottools.CHIME_LAST_MINUTES
+        tools["chime_ready_at"] = self.game_minutes + bottools.CHIME_COOLDOWN_MINUTES
+        self.toast("The Wave Chime rings out over your line.")
+        return None
 
     def try_set(self, world: World, held_index: int,
                 bait_sections: str | list[str] | tuple[str, ...]) -> str | None:

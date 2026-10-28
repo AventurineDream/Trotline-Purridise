@@ -34,7 +34,7 @@ from .data import (
 )
 from .content import load_content
 from .guardian import draw_sighting
-from . import sonar
+from . import bottools, sonar
 from .haul import haul_cadence
 from .book import BOOK_STAGES
 from .bookview import BookView
@@ -1117,12 +1117,20 @@ class UI:
             self._text(frame,f"{sail} / {direction} {wind_speed*1.94384:.0f} KT",rx+16,m+int(131*unit),small,GOLD,False,"sans")
         elif state.bot_phase != "home":
             from .bot import status as bot_status
-            self._text(frame, bot_status(state), rx+16, m+int(131*unit), small, GOLD, False, "sans")
+            from .sim import hour_of_day
+            from .calendar import weather_at
+            cold = bottools.scanner_text(state.owns_tool("thermo_scanner"), self.world.id,
+                                         hour_of_day(state.game_minutes), weather_at(state))
+            report = " · ".join(part for part in (bot_status(state), cold) if part)
+            self._text(frame, self._trim(report, small, rw - 32), rx+16, m+int(131*unit), small, GOLD, False, "sans")
         else:
-            from .sim import fishing_hint
-            hint = fishing_hint(state, self.world)
-            label = self._trim(hint, small, rw - 32) if hint else state.boat.name
-            self._text(frame, label, rx+16, m+int(131*unit), small, GOLD if hint else DIM, False, "sans")
+            from .sim import fishing_hint, hour_of_day
+            from .calendar import weather_at
+            cold = bottools.scanner_text(state.owns_tool("thermo_scanner"), self.world.id,
+                                         hour_of_day(state.game_minutes), weather_at(state))
+            parts = [part for part in (cold, fishing_hint(state, self.world)) if part]
+            label = self._trim(" · ".join(parts), small, rw - 32) if parts else state.boat.name
+            self._text(frame, label, rx+16, m+int(131*unit), small, GOLD if parts else DIM, False, "sans")
         sw,stat_h = int(208*unit)+32,int(106*unit)+12
         sx,sy = w-m-sw,h-m-stat_h
         self._panel(frame,sx,sy,sw,stat_h,0.80)
