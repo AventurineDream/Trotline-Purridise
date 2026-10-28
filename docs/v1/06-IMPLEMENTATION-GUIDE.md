@@ -793,3 +793,18 @@ five WAV samples and an incremental memory/rig report. The memory probe excludes
 renderer/context and exported image buffers, warms all shell/collar variants and
 all voices, and records RSS growth plus traced Python/NumPy peak. The same active
 world/context serves native snapshots; software studio frames need no lake.
+
+## Implemented Reed Passage tools (V1-19)
+
+`reeds` zones slow every boat to 0.6 m/s while it is inside one. Lines whose
+midpoint lands in a reed bed are refused unless the save owns the Reed Anchor
+(Frog Bot's chapter-one grant, `profile.tools`). Owned tools work with any shell
+worn, as §10.2 requires. The `reed_dugout` alternative waits for the boat work in
+V1-22, when that hull exists.
+
+`sonar.py` builds the Sonar Grid overlay as pure data: a 24 m grid inside each
+habitat circle, with a 2 m depth band per cell. It needs the depth finder and the
+purchased grid. "Scouted" means a zone with a line in the water or the boat
+inside it; a saved scouting record would need a save change and is not added
+here. Open water outside habitat circles gets no overlay yet. The chart draws the
+bands and adds a legend. `--shots` writes `reed-passage-sonar.png`.
