@@ -44,9 +44,11 @@ void main() {
     vec3 reflected = texture(reflection,clamp(screen+distortion,0.002,0.998)).rgb;
     float depth = 0.5+5.0*(1.0-exp(min(sd,0.0)/28.0));
     depth += 10.0*exp(-dot(pos.xz-vec2(75,-28),pos.xz-vec2(75,-28))/(2.0*72.0*72.0));
-    if (lake_kind>0.5) depth = texture(lake_depth,lake_uv(pos.xz)).r;
+    if (lake_kind>1.5) depth = 4.0;
+    else if (lake_kind>0.5) depth = texture(lake_depth,lake_uv(pos.xz)).r;
     vec3 body = mix(vec3(0.22,0.32,0.23),vec3(0.035,0.14,0.16),smoothstep(0.5,8.0,depth));
-    if (lake_kind>0.5) {
+    if (lake_kind>1.5) body = lake_water;
+    else if (lake_kind>0.5) {
         float upper = smoothstep(-0.25,0.6,lake_uv(pos.xz).y);
         body = mix(vec3(0.055,0.20,0.23),vec3(0.26,0.27,0.17),upper*0.65);
         body = mix(body,vec3(0.31,0.31,0.22),1.0-smoothstep(0.5,3.0,depth));

@@ -1,0 +1,89 @@
+{
+  "scope": "Warmed full frames: lake render, resize and play/map/Lakes UI; one map at a time",
+  "warmup_frames_per_lake": 9,
+  "memory_limit_bytes": 3000000000,
+  "peak_rss_bytes": 378781696,
+  "maps_released": 4,
+  "lakes": [
+    {
+      "lake": "briar",
+      "placeholder": false,
+      "backend": "llvmpipe (LLVM 23.1.3, 256 bits)",
+      "render_size": [
+        640,
+        360
+      ],
+      "presentation_size": [
+        1280,
+        720
+      ],
+      "frames": 60,
+      "median_ms": 103.012,
+      "p95_ms": 120.814,
+      "rss_before_bytes": 309972992,
+      "rss_after_bytes": 312045568,
+      "persistent_graphics_objects": 36,
+      "finite_scene_probes": 4
+    },
+    {
+      "lake": "flathead",
+      "placeholder": true,
+      "backend": "llvmpipe (LLVM 23.1.3, 256 bits)",
+      "render_size": [
+        640,
+        360
+      ],
+      "presentation_size": [
+        1280,
+        720
+      ],
+      "frames": 60,
+      "median_ms": 64.077,
+      "p95_ms": 77.139,
+      "rss_before_bytes": 297259008,
+      "rss_after_bytes": 297259008,
+      "persistent_graphics_objects": 36,
+      "finite_scene_probes": 4
+    },
+    {
+      "lake": "crater",
+      "placeholder": true,
+      "backend": "llvmpipe (LLVM 23.1.3, 256 bits)",
+      "render_size": [
+        640,
+        360
+      ],
+      "presentation_size": [
+        1280,
+        720
+      ],
+      "frames": 60,
+      "median_ms": 65.171,
+      "p95_ms": 78.078,
+      "rss_before_bytes": 298946560,
+      "rss_after_bytes": 298946560,
+      "persistent_graphics_objects": 36,
+      "finite_scene_probes": 4
+    },
+    {
+      "lake": "nebula",
+      "placeholder": true,
+      "backend": "llvmpipe (LLVM 23.1.3, 256 bits)",
+      "render_size": [
+        640,
+        360
+      ],
+      "presentation_size": [
+        1280,
+        720
+      ],
+      "frames": 60,
+      "median_ms": 64.425,
+      "p95_ms": 77.719,
+      "rss_before_bytes": 299012096,
+      "rss_after_bytes": 299012096,
+      "persistent_graphics_objects": 36,
+      "finite_scene_probes": 4
+    }
+  ]
+}

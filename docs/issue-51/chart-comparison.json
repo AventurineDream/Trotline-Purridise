@@ -1,0 +1,52 @@
+{
+  "height": {
+    "before_sha256": "422ac05d1d30815bd2f6b877bfe119a38dbcc7f417444bf513875de8705e5b7f",
+    "after_sha256": "422ac05d1d30815bd2f6b877bfe119a38dbcc7f417444bf513875de8705e5b7f",
+    "identical": true
+  },
+  "shore": {
+    "before_sha256": "4eaeb8c0b8a8dfa5e5c2d91e25ddc09705af8281a99cd3c6b0aee1d11cbfcd9c",
+    "after_sha256": "4eaeb8c0b8a8dfa5e5c2d91e25ddc09705af8281a99cd3c6b0aee1d11cbfcd9c",
+    "identical": true
+  },
+  "depth": {
+    "before_sha256": "b3d1e08ccbb3028498c6819a21004f6fae4ea540ca5f24ebb4799587ce279e11",
+    "after_sha256": "b3d1e08ccbb3028498c6819a21004f6fae4ea540ca5f24ebb4799587ce279e11",
+    "identical": true
+  },
+  "map": {
+    "before_sha256": "d607054b2b3626a60ab96bdcc965ed1af35b9b3f084688a312dffeefefa13609",
+    "after_sha256": "ebcaf8aaa7efaed6d7076507b94b618d79401bc2a0e4fc53c774eb045019bde7",
+    "identical": false
+  },
+  "zones": {
+    "before_sha256": "d6a3271567e7a402c88f952535013a29e6b3388ac695570b36ad2130f6dddc0a",
+    "after_sha256": "fef5daaedd59e4aa99e9b35ac2df8958905103f8c2c4b936a6cd2dcae5a9e33e",
+    "identical": false
+  },
+  "changed_chart_pixels": 267,
+  "changes_outside_reed_passage": 0,
+  "cedar_npz_preserved_git_blob": "c9df54cbbece17a4b9574ad9bf0ad86a0902d624",
+  "base_commit": "05d58a780e5b87816cd78e3c30117270b696db3a",
+  "sampling": {
+    "height_shape": [
+      992,
+      1240
+    ],
+    "probe_grid": [
+      240,
+      360
+    ],
+    "bounds": [
+      -780,
+      -620,
+      780,
+      620
+    ],
+    "chart_shape": [
+      240,
+      360,
+      3
+    ]
+  }
+}

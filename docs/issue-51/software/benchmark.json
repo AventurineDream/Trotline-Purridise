@@ -1,0 +1,89 @@
+{
+  "scope": "Warmed full frames: lake render, resize and play/map/Lakes UI; one map at a time",
+  "warmup_frames_per_lake": 9,
+  "memory_limit_bytes": 3000000000,
+  "peak_rss_bytes": 184446976,
+  "maps_released": 4,
+  "lakes": [
+    {
+      "lake": "briar",
+      "placeholder": false,
+      "backend": "CPU fallback",
+      "render_size": [
+        480,
+        270
+      ],
+      "presentation_size": [
+        1280,
+        720
+      ],
+      "frames": 60,
+      "median_ms": 295.551,
+      "p95_ms": 317.48,
+      "rss_before_bytes": 76480512,
+      "rss_after_bytes": 76525568,
+      "persistent_graphics_objects": 0,
+      "finite_scene_probes": 0
+    },
+    {
+      "lake": "flathead",
+      "placeholder": true,
+      "backend": "CPU fallback",
+      "render_size": [
+        480,
+        270
+      ],
+      "presentation_size": [
+        1280,
+        720
+      ],
+      "frames": 60,
+      "median_ms": 144.441,
+      "p95_ms": 162.934,
+      "rss_before_bytes": 72306688,
+      "rss_after_bytes": 72306688,
+      "persistent_graphics_objects": 0,
+      "finite_scene_probes": 0
+    },
+    {
+      "lake": "crater",
+      "placeholder": true,
+      "backend": "CPU fallback",
+      "render_size": [
+        480,
+        270
+      ],
+      "presentation_size": [
+        1280,
+        720
+      ],
+      "frames": 60,
+      "median_ms": 143.684,
+      "p95_ms": 167.732,
+      "rss_before_bytes": 74768384,
+      "rss_after_bytes": 74768384,
+      "persistent_graphics_objects": 0,
+      "finite_scene_probes": 0
+    },
+    {
+      "lake": "nebula",
+      "placeholder": true,
+      "backend": "CPU fallback",
+      "render_size": [
+        480,
+        270
+      ],
+      "presentation_size": [
+        1280,
+        720
+      ],
+      "frames": 60,
+      "median_ms": 145.353,
+      "p95_ms": 159.87,
+      "rss_before_bytes": 74899456,
+      "rss_after_bytes": 74899456,
+      "persistent_graphics_objects": 0,
+      "finite_scene_probes": 0
+    }
+  ]
+}

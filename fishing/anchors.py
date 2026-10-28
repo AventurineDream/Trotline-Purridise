@@ -58,7 +58,8 @@ ANCHORS = MappingProxyType({anchor.id: anchor for anchor in _ANCHORS})
 
 def anchors_for_lake(lake_id):
     """Immutable location lookup for only the loaded lake; reject unknown lakes."""
-    if lake_id not in ("briar", "cedar"):
+    from .lakes import LAKES
+    if lake_id not in LAKES:
         raise ValueError(f"Unknown anchor lake: {lake_id}")
     return MappingProxyType({key: anchor for key, anchor in ANCHORS.items()
                              if anchor.lake_id == lake_id})
