@@ -677,7 +677,8 @@ class SoftwareRenderer:
             poly = clip_near(pts, 0.22)
             if len(poly) < 3:
                 continue
-            rgb = np.clip(face.color * np.float32(lit), 0.0, 1.0)
+            emission = 0.0 if face.emissive is None else face.emissive
+            rgb = np.clip(face.color * np.float32(lit + light["night"] * emission * .85), 0.0, 1.0)
             for i in range(1, len(poly) - 1):
                 tri = np.stack([poly[0], poly[i], poly[i + 1]])
                 sx, sy, zz = cam.cam_to_screen(tri)

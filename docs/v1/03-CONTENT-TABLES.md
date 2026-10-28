@@ -384,6 +384,10 @@ collides with the Pip & Pebble cat.)* Suffix 011–999, `f"{n:03d}"`.
 
 ---
 
+V1-18 stores each shell’s body, trim and secondary RGB palette, distinct chime ID
+and sound caption in `content_v2/bot.json`. Raised wool stitches and all three
+knots share one rig; these cosmetic assets preserve identity and progression.
+
 ## 8. Zones and Lake Days
 
 Internal zone ids are shared habitat archetypes (existing `landing, inlet, flats,

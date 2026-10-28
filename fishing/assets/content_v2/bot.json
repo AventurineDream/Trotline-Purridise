@@ -1,0 +1,204 @@
+{
+  "schema_version": 2,
+  "name_prefixes": [
+    "Copper",
+    "Quark",
+    "Zed",
+    "Brass",
+    "Sprocket",
+    "Clinker",
+    "Whirly",
+    "Widget",
+    "Cobalt",
+    "Anchor",
+    "Rivet",
+    "Echo"
+  ],
+  "suffix_min": 11,
+  "suffix_max": 999,
+  "shells": [
+    {
+      "id": "tin",
+      "name": "Classic Tin Deckhand",
+      "chapter": 0,
+      "tool_id": "sonar_grid",
+      "body": [
+        0.78,
+        0.82,
+        0.84
+      ],
+      "trim": [
+        0.64,
+        0.39,
+        0.17
+      ],
+      "secondary": [
+        0.18,
+        0.24,
+        0.27
+      ],
+      "chime": "bot_tin",
+      "caption": "Bot's tin triangle rings softly."
+    },
+    {
+      "id": "frog",
+      "name": "Frog Bot",
+      "chapter": 1,
+      "tool_id": "reed_anchor",
+      "body": [
+        0.25,
+        0.56,
+        0.31
+      ],
+      "trim": [
+        0.72,
+        0.51,
+        0.22
+      ],
+      "secondary": [
+        0.74,
+        0.82,
+        0.49
+      ],
+      "chime": "bot_frog",
+      "caption": "Bot gives a wooden ribbit-click."
+    },
+    {
+      "id": "duck",
+      "name": "Rubber Duck Bot",
+      "chapter": 2,
+      "tool_id": "wave_chime",
+      "body": [
+        0.98,
+        0.77,
+        0.12
+      ],
+      "trim": [
+        0.93,
+        0.39,
+        0.07
+      ],
+      "secondary": [
+        0.7,
+        0.47,
+        0.21
+      ],
+      "chime": "bot_duck",
+      "caption": "Bot's duck shell gives a soft squeak."
+    },
+    {
+      "id": "sub",
+      "name": "Clockwork Copper Sub",
+      "chapter": 3,
+      "tool_id": "thermo_scanner",
+      "body": [
+        0.67,
+        0.36,
+        0.19
+      ],
+      "trim": [
+        0.84,
+        0.62,
+        0.3
+      ],
+      "secondary": [
+        0.18,
+        0.49,
+        0.56
+      ],
+      "chime": "bot_sub",
+      "caption": "Bot's sub gives a bubbly tick."
+    },
+    {
+      "id": "astral",
+      "name": "Astral Starlight Bot",
+      "chapter": 5,
+      "tool_id": "zero_g_winch",
+      "body": [
+        0.42,
+        0.25,
+        0.68
+      ],
+      "trim": [
+        0.2,
+        0.72,
+        0.7
+      ],
+      "secondary": [
+        0.68,
+        0.92,
+        0.86
+      ],
+      "chime": "bot_astral",
+      "caption": "Bot's glass bell shimmers."
+    }
+  ],
+  "tools": [
+    {
+      "id": "sonar_grid",
+      "name": "Sonar Grid",
+      "price": 150,
+      "requires_finder": true
+    },
+    {
+      "id": "reed_anchor",
+      "name": "Reed Anchor",
+      "price": 120,
+      "requires_finder": false
+    },
+    {
+      "id": "wave_chime",
+      "name": "Wave Chime",
+      "price": 180,
+      "requires_finder": false
+    },
+    {
+      "id": "thermo_scanner",
+      "name": "Thermocline Scanner",
+      "price": 260,
+      "requires_finder": false
+    },
+    {
+      "id": "zero_g_winch",
+      "name": "Zero-G Winch",
+      "price": 400,
+      "requires_finder": false
+    }
+  ],
+  "collar_stages": [
+    {
+      "id": "none",
+      "name": "Not received"
+    },
+    {
+      "id": "received",
+      "name": "Wool collar"
+    },
+    {
+      "id": "loose",
+      "name": "Loose loop"
+    },
+    {
+      "id": "retied",
+      "name": "Adjustable knot"
+    },
+    {
+      "id": "favorite",
+      "name": "Still my favorite"
+    }
+  ],
+  "knots": [
+    {
+      "id": "square",
+      "name": "Square knot"
+    },
+    {
+      "id": "bow",
+      "name": "Bow"
+    },
+    {
+      "id": "sailors_hitch",
+      "name": "Sailor's hitch"
+    }
+  ]
+}
