@@ -151,6 +151,9 @@ class Audio:
             self._volumes[name] = max(0.0, min(1.0, value))
 
     def _tone(self, kind: str) -> np.ndarray:
+        from .botchimes import CHIMES, synthesize
+        if kind in CHIMES:
+            return synthesize(kind)
         if kind == "bite":
             n = int(SR * 0.32)
             t = np.arange(n, dtype=np.float32) / SR
