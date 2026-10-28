@@ -530,6 +530,10 @@ class Session:
             err = self.state.cycle_scale()
             if err:
                 self.state.toast(err)
+        if "g" in keys.pressed:
+            err = self.state.use_chime(self.world)
+            if err:
+                self.state.toast(err)
         if "tab" in keys.pressed:
             self.ui.mode = "map"
         if "j" in keys.pressed:
