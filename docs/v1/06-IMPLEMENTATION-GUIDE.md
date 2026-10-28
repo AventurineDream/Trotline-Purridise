@@ -208,8 +208,10 @@ build and remains serialized until a recognized boat is selected.
   Mode is `cozy`. Story chapter is 0, but the **prologue is marked seen** for any
   save with catches, so a veteran isn't asked to set a first line. Existing
   counts derive the book stage at 0/1/3/5/10 catches; a saved zone, bait and band
-  seed the first `found` condition. The Bot name is `Copper-` followed by the
-  absolute schedule seed modulo 1000, padded to three digits. Unlocks: Cedar is
+  seed the first `found` condition. The Bot name uses a private `sim.RNG` fork of the
+  schedule seed: one of the twelve `bot.json` prefixes plus suffix 011–999.
+  Existing valid assigned names survive; old out-of-range placeholders such as
+  `Copper-000` are repaired once. Unlocks: Cedar is
   open. Guardian sightings carry over.
 - Historical book thresholds are seeded into `book_stage_up` as
   `<species id>:<stage>` claim keys during migration or normalization. Loading
@@ -668,3 +670,70 @@ coverage of 144 fish, twelve quests and every Book tab.
 cards, new Book entries, roe stock, a placeholder sounding chart and a warmed
 full-frame benchmark. Add `--software` for the CPU path. See
 `docs/issue-52/README.md` for captures and measurements.
+### V1-17 Bot identity and progression
+
+`bot.json` is validated with the other v2 content files and supplies twelve name
+prefixes, five shells, tool prices/Depth Finder prerequisites, collar stages and
+three knots. `data.py` exposes typed `BotShell` / `BotTool` views. The name fork
+is domain-separated with SHA-256 from the schedule seed and never advances the
+fishing RNG. The save slot and book header show the saved name, and dialogue
+expands only literal `{BotName}` and `{Skipper}` tokens; other braces stay literal.
+
+`botidentity.py` owns profile normalization and explicit story reward hooks:
+`grant_shell`, `grant_tool` (including the chapter-one free Reed Anchor),
+`advance_collar`, `choose_knot`, and `sync_story_rewards`. Shell awards never
+auto-equip. Completed chapters reconcile earned shells and the received/loose
+collar on load without replaying toasts, purchases or choices. The chapter-four
+marker scene enables knot choice with `story.scene_states.story_c4_knot` set to
+`ready`/`active`; finishing or skipping `end_02` adds the joint book credit, and
+`end_03` preserves the favorite knot. The future story system calls the same
+hooks when its authored scenes run.
+
+Landing → Bot swaps earned shells free, records tool purchases and offers the
+saved cosmetic knot choice when the marker scene is ready. Purchases validate
+landing/speed, earned shell, Depth Finder (Sonar Grid), money and duplicate
+ownership before spending. Owning the shell is sufficient; wearing it is not
+required. Free story tools can be granted before the corresponding shell award.
+A swap changes only `profile.shell`: name, notes, quest rewards, collar, tools,
+scouting phase/target and RNG remain untouched. Future profile fields and IDs
+survive normalization. The collar renders only after receipt; hiding it in
+Settings changes visibility without changing story state.
+
+V1-18 supplies the shell geometry, chosen-knot models and chimes; V1-19/V1-20
+supply tool effects. This ticket provides their state and purchase contracts.
+`--shots` includes the identity gallery and a warmed menu benchmark, using one
+shared active world for all snapshot states. Compact books keep the name in
+the title row so the inherited three-line quest overview remains intact.
+
+
+### V1-18 Bot shell art, collar rig and chimes
+
+`botmesh.py` builds Classic Tin, green Frog, yellow Duck, copper Sub and violet/
+teal Astral shells from boxes, ellipsoids, swept rods and rings. The shared wool
+collar has raised stitches, a loose loop and the three saved knots. Home poses
+stay fixed on each existing boat's bow. Scouting drives shell-specific propeller,
+webbed-foot, wing or crystal joints; reduced motion freezes decorative motion
+without changing scout travel. Unknown future shell IDs fall back visually to
+Tin without rewriting the saved identity.
+
+Twelve immutable local meshes bound the cache; transformed faces are temporary.
+The largest variant is 802 quads, below the existing 500 KB dynamic-buffer budget
+alongside the player boat. No texture atlas, extra framebuffer, actor history or
+per-lake resource is added. `Face.emissive=None` preserves legacy material
+inference; new actor faces use explicit zero or a 0–1 night-emission strength.
+This keeps yellow Duck enamel from being classified as a lamp, and makes Astral
+chrome/freckles glow in both OpenGL and software. The existing vertex stride and
+buffer sizes stay intact.
+
+Shell palette, chime ID and caption are validated `bot.json` fields. The legacy
+scouting API still emits `bot`; playback resolves that cue to the current shell,
+and captions use its matching authored sound description. `botchimes.py` caches
+five quiet, deterministic mono PCM voices: triangle, wooden ribbit-click, rubber
+squeak, bubbly tick and glass bell. They use the existing SFX volume/mute path.
+
+`--shots` adds four-view turntables for every shell × collar on/off × day/night,
+a knot comparison, scout-motion strip, the native GL comparison when available,
+five WAV samples and an incremental memory/rig report. The memory probe excludes
+renderer/context and exported image buffers, warms all shell/collar variants and
+all voices, and records RSS growth plus traced Python/NumPy peak. The same active
+world/context serves native snapshots; software studio frames need no lake.
