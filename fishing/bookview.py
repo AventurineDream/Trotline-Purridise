@@ -7,7 +7,7 @@ import numpy as np
 
 from .book import (BOOK_SPECIES_IDS, LEGENDARY_IDS, SPECIES_RUMORS,
                    legendary_page, shiny_tracker, species_page, tracker_unlocked)
-from .data import BAIT_BY_ID, CEDAR_FISH, LAKES, SPECIES_BY_ID
+from .data import BAIT_BY_ID, LAKES, SPECIES_BY_ID, weight_string
 from .imageops import resize_rgb
 from .narrative import QUEST_IDS, RIPPLE_BY_QUEST
 
@@ -404,7 +404,7 @@ class BookView:
                             remember=False)
         name = page["name"] or page["folk_name"]
         stage = page["stage"].replace("_", " ").upper()
-        stats = f"{page['count']} caught  ·  Best {page['best_weight']:.1f} lb"
+        stats = f"{page['count']} caught  ·  Best {weight_string(page['best_weight'])}"
         heard = ('“' + page["heard"]["text"] + '”', "— " + page["heard"]["teller"])
         heard += tuple("Bot's dream · " + str(dream.get("text", ""))
                        for dream in page["dreams"] if isinstance(dream, dict))
@@ -440,11 +440,12 @@ class BookView:
             if "depth_m" in row:
                 note += f" · {row['depth_m']*3.28084:.0f} ft"
             if "weight" in row:
-                note += f" · {row['weight']:.1f} lb"
+                note += f" · {weight_string(row['weight'])}"
             notes.append(note)
         if not notes:
-            notes.append("Find this one on Little Briar."
-                         if self.u.world.id == "cedar" and sid in CEDAR_FISH and not CEDAR_FISH[sid]
+            other_lakes = sp.lakes if sp and self.u.world.id not in sp.lakes else ()
+            notes.append("Find this one on " + " or ".join(LAKES[lake]['name'] for lake in other_lakes) + "."
+                         if other_lakes
                          else "No catch yet. A place to begin, and room for your own notes.")
         if self.compact:
             title_width = self.w - 162 if tracker["unlocked"] else self.w
@@ -491,7 +492,7 @@ class BookView:
         values = ["RECORDED" if page["verified"] else "A LAKE STORY",
                   '“' + page["story"] + '” — ' + page["teller"]]
         for index, record in enumerate(page["records"], 1):
-            values.append(f"Record {index}/{len(page['records'])} · {record.get('weight', 0):.1f} lb · {record.get('zone', '')}")
+            values.append(f"Record {index}/{len(page['records'])} · {weight_string(record.get('weight', 0))} · {record.get('zone', '')}")
             values.append("Eligibility notes: " + _note_text(record["eligibility"])
                           if record.get("eligibility") else "A memory of the fish, safely returned.")
         if not page["records"]:

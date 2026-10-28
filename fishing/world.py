@@ -328,7 +328,19 @@ class World:
     def depth(self, x, z) -> np.ndarray:
         sd = self.shore_sd(x, z)
         if self.placeholder:
-            return np.where((sd < 0) | self.slip.contains(x, z), 4.0, 0.0).astype(np.float32)
+            profiles = LAKES[self.id].get("placeholder_depths", {})
+            if not profiles:
+                return np.where((sd < 0) | self.slip.contains(x, z), 4.0, 0.0).astype(np.float32)
+            x, z = np.broadcast_arrays(_as(x), _as(z))
+            lo, hi = profiles.get("open", (4.0, 4.0))
+            depth = lo + (hi-lo) * np.clip((x + 320.0) / 640.0, 0, 1)
+            ids = self.zone_ids(x, z)
+            for zone, cx, cz, radius in self.zones:
+                lo, hi = profiles.get(zone, (4.0, 4.0))
+                blend = np.clip(1.0 - np.hypot(x-cx, z-cz) / radius, 0, 1)
+                depth = np.where(ids == ZONE_ORDER.index(zone), lo + (hi-lo)*blend, depth)
+            depth = np.where(ids == ZONE_ORDER.index("landing"), 4.0, depth)
+            return np.where((sd < 0) | self.slip.contains(x, z), depth, 0.0).astype(np.float32)
         if self.id=="cedar":
             depth = np.where(sd<0,self._sample_grid(self.depth_grid,x,z),0.0)
             return np.where(self.slip.contains(x,z),np.maximum(depth,1.35),depth).astype(np.float32)

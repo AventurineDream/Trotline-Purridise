@@ -1378,6 +1378,4909 @@
         "scale_pattern": "bars",
         "palette": "chain_pickerel"
       }
+    },
+    {
+      "id": "inland_silverside",
+      "name": "Inland silverside",
+      "tier": "C",
+      "price": 1.2,
+      "min_lb": 0.005,
+      "max_lb": 0.03,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "Glass Sliver is see-through and shy of nothing. Open water, worms.",
+      "folk_name": "Glass Sliver",
+      "lakes": [
+        "cedar"
+      ],
+      "food": "none",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "open",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "bluntnose_minnow",
+      "name": "Bluntnose minnow",
+      "tier": "C",
+      "price": 1.0,
+      "min_lb": 0.005,
+      "max_lb": 0.02,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "Button-Nose crowds the creek channels. Worms or dough.",
+      "folk_name": "Button-Nose",
+      "lakes": [
+        "cedar"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "inlet",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "river_carpsucker",
+      "name": "River carpsucker",
+      "tier": "U",
+      "price": 1.1,
+      "min_lb": 1.0,
+      "max_lb": 8.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "The Silver Vacuum cleans the creek bottom. Dough balls work.",
+      "folk_name": "Silver Vacuum",
+      "lakes": [
+        "cedar"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "albino",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "inlet",
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
+    },
+    {
+      "id": "orangespotted_sunfish",
+      "name": "Orangespotted sunfish",
+      "tier": "U",
+      "price": 2.1,
+      "min_lb": 0.05,
+      "max_lb": 0.3,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "Ember-Dot glows in the flooded shoreline. Worms by day.",
+      "folk_name": "Ember-Dot",
+      "lakes": [
+        "cedar"
+      ],
+      "food": "panfish",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "lilies",
+        "cypress"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.45,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "bluegill"
+      }
+    },
+    {
+      "id": "bigscale_logperch",
+      "name": "Bigscale logperch",
+      "tier": "U",
+      "price": 2.3,
+      "min_lb": 0.02,
+      "max_lb": 0.1,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        5.0
+      ],
+      "blurb": "Log-Roller flips pebbles on the dam riprap. Worms.",
+      "folk_name": "Log-Roller",
+      "lakes": [
+        "cedar"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "worm",
+        "craw"
+      ],
+      "zones": [
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sculpin",
+        "length_depth_ratio": 3.9,
+        "body_depth": 1.1,
+        "head_shape": "flat",
+        "snout": 0.05,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "warmouth"
+      }
+    },
+    {
+      "id": "bullhead_minnow",
+      "name": "Bullhead minnow",
+      "tier": "C",
+      "price": 1.0,
+      "min_lb": 0.005,
+      "max_lb": 0.02,
+      "pref_time": "dusk",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "Little Boss rules the channels at dusk. Worms.",
+      "folk_name": "Little Boss",
+      "lakes": [
+        "cedar"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "ink",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "inlet"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "lake_trout",
+      "name": "Lake trout",
+      "tier": "C",
+      "price": 4.2,
+      "min_lb": 2.0,
+      "max_lb": 30.0,
+      "pref_time": "dawn",
+      "depth": [
+        8.0,
+        40.0
+      ],
+      "blurb": "The Deep Mackinaw follows the cold down and down. Minnows at dawn.",
+      "folk_name": "Deep Mackinaw",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "minnow",
+        "roe"
+      ],
+      "zones": [
+        "deep",
+        "open"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "bull_trout",
+      "name": "Bull trout",
+      "tier": "R",
+      "price": 0.0,
+      "min_lb": 2.0,
+      "max_lb": 18.0,
+      "pref_time": "dawn",
+      "depth": [
+        6.0,
+        30.0
+      ],
+      "blurb": "Old Bull comes up the inlets at dawn. If you meet one, let it go home.",
+      "folk_name": "Old Bull",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "cold",
+        "protected"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "minnow",
+        "roe"
+      ],
+      "zones": [
+        "inlet",
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "westslope_cutthroat",
+      "name": "Westslope cutthroat trout",
+      "tier": "C",
+      "price": 4.6,
+      "min_lb": 0.5,
+      "max_lb": 4.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        10.0
+      ],
+      "blurb": "Red-Throat loves the inlet riffles. Worms by day.",
+      "folk_name": "Red-Throat",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "worm",
+        "roe"
+      ],
+      "zones": [
+        "inlet",
+        "rocks",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "rainbow_trout",
+      "name": "Rainbow trout",
+      "tier": "C",
+      "price": 4.4,
+      "min_lb": 0.5,
+      "max_lb": 8.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        12.0
+      ],
+      "blurb": "Sky-Side rises in the inlets and pondweed bay. Dough works too.",
+      "folk_name": "Sky-Side",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "inlet",
+        "lilies",
+        "open"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "brook_trout",
+      "name": "Brook trout",
+      "tier": "U",
+      "price": 5.2,
+      "min_lb": 0.3,
+      "max_lb": 3.0,
+      "pref_time": "dawn",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "Speckle is shy and lives in the snowmelt inlet. A quiet boat helps.",
+      "folk_name": "Speckle",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "worm",
+        "roe"
+      ],
+      "zones": [
+        "inlet",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "brown_trout",
+      "name": "Brown trout",
+      "tier": "U",
+      "price": 4.8,
+      "min_lb": 1.0,
+      "max_lb": 14.0,
+      "pref_time": "dusk",
+      "depth": [
+        2.0,
+        15.0
+      ],
+      "blurb": "Butter-Belly lurks by the larch snags at dusk. Minnow or craw.",
+      "folk_name": "Butter-Belly",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "minnow",
+        "craw"
+      ],
+      "zones": [
+        "rocks",
+        "cypress"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "kokanee",
+      "name": "Kokanee salmon",
+      "tier": "C",
+      "price": 4.1,
+      "min_lb": 0.5,
+      "max_lb": 3.0,
+      "pref_time": "dawn",
+      "depth": [
+        6.0,
+        25.0
+      ],
+      "blurb": "Silver Bullets school out deep at dawn. Roe, always roe.",
+      "folk_name": "Silver Bullet",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "roe",
+        "dough"
+      ],
+      "zones": [
+        "open",
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "lake_whitefish",
+      "name": "Lake whitefish",
+      "tier": "C",
+      "price": 3.2,
+      "min_lb": 1.0,
+      "max_lb": 8.0,
+      "pref_time": "day",
+      "depth": [
+        8.0,
+        30.0
+      ],
+      "blurb": "Snow-Belly grazes the trench bottom. Worms or roe.",
+      "folk_name": "Snow-Belly",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "fillet",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "worm",
+        "roe"
+      ],
+      "zones": [
+        "deep",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "mountain_whitefish",
+      "name": "Mountain whitefish",
+      "tier": "C",
+      "price": 2.9,
+      "min_lb": 0.5,
+      "max_lb": 3.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Pebble-Nose sniffs the inlet stones by day.",
+      "folk_name": "Pebble-Nose",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "fillet",
+      "tags": [],
+      "shiny": "starry",
+      "baits": [
+        "worm",
+        "craw"
+      ],
+      "zones": [
+        "inlet",
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "pygmy_whitefish",
+      "name": "Pygmy whitefish",
+      "tier": "U",
+      "price": 2.2,
+      "min_lb": 0.05,
+      "max_lb": 0.3,
+      "pref_time": "night",
+      "depth": [
+        15.0,
+        40.0
+      ],
+      "blurb": "Thimble lives so deep it's practically a rumor. Night, worms.",
+      "folk_name": "Thimble",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "none",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "northern_pike",
+      "name": "Northern pike",
+      "tier": "U",
+      "price": 3.6,
+      "min_lb": 2.0,
+      "max_lb": 25.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        6.0
+      ],
+      "blurb": "The Water Wolf waits in the pondweed with its teeth out.",
+      "folk_name": "Water Wolf",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "minnow",
+        "shad"
+      ],
+      "zones": [
+        "lilies",
+        "cypress"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "pike",
+        "length_depth_ratio": 5.0,
+        "body_depth": 0.8,
+        "head_shape": "pointed",
+        "snout": 0.25,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "chain_pickerel"
+      }
+    },
+    {
+      "id": "yellow_perch",
+      "name": "Yellow perch",
+      "tier": "C",
+      "price": 3.4,
+      "min_lb": 0.2,
+      "max_lb": 1.8,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Tiger-Stripes crowd the pondweed bay and the outpost dock.",
+      "folk_name": "Tiger-Stripe",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "fillet",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "worm",
+        "minnow"
+      ],
+      "zones": [
+        "lilies",
+        "flats",
+        "landing"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.2,
+        "body_depth": 0.96,
+        "head_shape": "rounded",
+        "snout": 0.1,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "largemouth"
+      }
+    },
+    {
+      "id": "burbot",
+      "name": "Burbot",
+      "tier": "U",
+      "price": 3.8,
+      "min_lb": 1.0,
+      "max_lb": 12.0,
+      "pref_time": "night",
+      "depth": [
+        10.0,
+        40.0
+      ],
+      "blurb": "The Eelpout comes up at night on the gravel reefs. It's all chin.",
+      "folk_name": "Eelpout",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "hearty",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "ink",
+      "baits": [
+        "minnow",
+        "roe"
+      ],
+      "zones": [
+        "deep",
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "eel",
+        "length_depth_ratio": 8.0,
+        "body_depth": 0.6,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "black_buffalo"
+      }
+    },
+    {
+      "id": "largescale_sucker",
+      "name": "Largescale sucker",
+      "tier": "C",
+      "price": 1.2,
+      "min_lb": 1.0,
+      "max_lb": 6.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        10.0
+      ],
+      "blurb": "Rubber-Lip vacuums the inlet. Dough balls.",
+      "folk_name": "Rubber-Lip",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "albino",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "inlet",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
+    },
+    {
+      "id": "longnose_sucker",
+      "name": "Longnose sucker",
+      "tier": "U",
+      "price": 1.3,
+      "min_lb": 0.5,
+      "max_lb": 4.0,
+      "pref_time": "day",
+      "depth": [
+        2.0,
+        15.0
+      ],
+      "blurb": "Snoot keeps to the cold reefs.",
+      "folk_name": "Snoot",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "hearty",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "rocks",
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
+    },
+    {
+      "id": "peamouth",
+      "name": "Peamouth",
+      "tier": "C",
+      "price": 1.6,
+      "min_lb": 0.2,
+      "max_lb": 1.2,
+      "pref_time": "dusk",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Pea-Pods dimple the bay at dusk.",
+      "folk_name": "Pea-Pod",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "panfish",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "lilies",
+        "inlet"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "northern_pikeminnow",
+      "name": "Northern pikeminnow",
+      "tier": "U",
+      "price": 1.8,
+      "min_lb": 1.0,
+      "max_lb": 8.0,
+      "pref_time": "dusk",
+      "depth": [
+        1.0,
+        10.0
+      ],
+      "blurb": "The Big-Mouth Minnow is no minnow at all. Gravel reefs, dusk.",
+      "folk_name": "Big-Mouth Minnow",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "starry",
+      "baits": [
+        "minnow"
+      ],
+      "zones": [
+        "rocks",
+        "open"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "redside_shiner",
+      "name": "Redside shiner",
+      "tier": "C",
+      "price": 1.4,
+      "min_lb": 0.02,
+      "max_lb": 0.2,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        4.0
+      ],
+      "blurb": "Sunset Flicker flashes pink over the flats.",
+      "folk_name": "Sunset Flicker",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "none",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "flats",
+        "lilies"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "slimy_sculpin",
+      "name": "Slimy sculpin",
+      "tier": "U",
+      "price": 1.5,
+      "min_lb": 0.02,
+      "max_lb": 0.1,
+      "pref_time": "night",
+      "depth": [
+        2.0,
+        20.0
+      ],
+      "blurb": "Puddle-Puss hides under reef stones on cold nights.",
+      "folk_name": "Puddle-Puss",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "none",
+      "tags": [
+        "cold",
+        "shy"
+      ],
+      "shiny": "ink",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sculpin",
+        "length_depth_ratio": 3.9,
+        "body_depth": 1.1,
+        "head_shape": "flat",
+        "snout": 0.05,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "warmouth"
+      }
+    },
+    {
+      "id": "mottled_sculpin",
+      "name": "Mottled sculpin",
+      "tier": "U",
+      "price": 1.5,
+      "min_lb": 0.02,
+      "max_lb": 0.12,
+      "pref_time": "night",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "Patchwork sits so still you'd think it was a pebble.",
+      "folk_name": "Patchwork",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "albino",
+      "baits": [
+        "worm",
+        "craw"
+      ],
+      "zones": [
+        "inlet",
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sculpin",
+        "length_depth_ratio": 3.9,
+        "body_depth": 1.1,
+        "head_shape": "flat",
+        "snout": 0.05,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "warmouth"
+      }
+    },
+    {
+      "id": "lake_chub",
+      "name": "Lake chub",
+      "tier": "C",
+      "price": 1.3,
+      "min_lb": 0.05,
+      "max_lb": 0.4,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "Button pops up anywhere shallow. Dough.",
+      "folk_name": "Button",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "flats",
+        "inlet"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "pumpkinseed",
+      "name": "Pumpkinseed",
+      "tier": "C",
+      "price": 2.4,
+      "min_lb": 0.1,
+      "max_lb": 0.8,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        4.0
+      ],
+      "blurb": "Penny-Cheek suns itself by the outpost dock.",
+      "folk_name": "Penny-Cheek",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "panfish",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "lilies",
+        "landing"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.45,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "bluegill"
+      }
+    },
+    {
+      "id": "cisco",
+      "name": "Cisco",
+      "tier": "U",
+      "price": 2.6,
+      "min_lb": 0.3,
+      "max_lb": 2.0,
+      "pref_time": "dawn",
+      "depth": [
+        6.0,
+        30.0
+      ],
+      "blurb": "Lake Herring flash in the open water at dawn.",
+      "folk_name": "Lake Herring",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "fillet",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "worm",
+        "roe"
+      ],
+      "zones": [
+        "open",
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "arctic_grayling",
+      "name": "Arctic grayling",
+      "tier": "R",
+      "price": 6.5,
+      "min_lb": 0.3,
+      "max_lb": 2.5,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        4.0
+      ],
+      "blurb": "Sail-Fin only shows itself to quiet boats in the inlet.",
+      "folk_name": "Sail-Fin",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "surface",
+        "shy"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "worm",
+        "roe"
+      ],
+      "zones": [
+        "inlet"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "golden_trout",
+      "name": "Golden trout",
+      "tier": "R",
+      "price": 7.2,
+      "min_lb": 0.2,
+      "max_lb": 2.5,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        4.0
+      ],
+      "blurb": "Sunbeam lives in the snowmelt shallows. Shy as morning.",
+      "folk_name": "Sunbeam",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "worm",
+        "roe"
+      ],
+      "zones": [
+        "inlet",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "tiger_trout",
+      "name": "Tiger trout",
+      "tier": "R",
+      "price": 6.0,
+      "min_lb": 1.0,
+      "max_lb": 8.0,
+      "pref_time": "dusk",
+      "depth": [
+        2.0,
+        10.0
+      ],
+      "blurb": "Marble-Back prowls the reefs at dusk. Minnows.",
+      "folk_name": "Marble-Back",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "minnow"
+      ],
+      "zones": [
+        "rocks",
+        "cypress"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "splake",
+      "name": "Splake",
+      "tier": "U",
+      "price": 4.9,
+      "min_lb": 1.0,
+      "max_lb": 8.0,
+      "pref_time": "dawn",
+      "depth": [
+        4.0,
+        20.0
+      ],
+      "blurb": "Twice-Char can't decide what it is, but it likes deep reefs at dawn.",
+      "folk_name": "Twice-Char",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "trout",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "minnow",
+        "roe"
+      ],
+      "zones": [
+        "deep",
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "longnose_dace",
+      "name": "Longnose dace",
+      "tier": "U",
+      "price": 1.4,
+      "min_lb": 0.01,
+      "max_lb": 0.06,
+      "pref_time": "day",
+      "depth": [
+        0.2,
+        2.0
+      ],
+      "blurb": "Riffle-Nose noses the inlet stones. Worms.",
+      "folk_name": "Riffle-Nose",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "inlet"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "mountain_sucker",
+      "name": "Mountain sucker",
+      "tier": "U",
+      "price": 1.3,
+      "min_lb": 0.1,
+      "max_lb": 0.8,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        5.0
+      ],
+      "blurb": "Cobble-Kiss kisses every stone in the inlet.",
+      "folk_name": "Cobble-Kiss",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "albino",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "inlet",
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
+    },
+    {
+      "id": "white_sturgeon",
+      "name": "White sturgeon",
+      "tier": "V",
+      "price": 0.0,
+      "min_lb": 20.0,
+      "max_lb": 150.0,
+      "pref_time": "night",
+      "depth": [
+        15.0,
+        40.0
+      ],
+      "blurb": "The Old Plates is older than the outpost. Deep, at night. Let it go.",
+      "folk_name": "The Old Plates",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "none",
+      "tags": [
+        "cold",
+        "protected"
+      ],
+      "shiny": "albino",
+      "baits": [
+        "shad",
+        "roe"
+      ],
+      "zones": [
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 6.2,
+        "body_depth": 0.74,
+        "head_shape": "flat",
+        "snout": 0.7,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "plain",
+        "palette": "alligator_gar"
+      }
+    },
+    {
+      "id": "walleye",
+      "name": "Walleye",
+      "tier": "U",
+      "price": 4.5,
+      "min_lb": 1.0,
+      "max_lb": 10.0,
+      "pref_time": "dusk",
+      "depth": [
+        3.0,
+        15.0
+      ],
+      "blurb": "Glass-Eye sees in the dark. Reefs at dusk, minnows.",
+      "folk_name": "Glass-Eye",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "fillet",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "minnow",
+        "worm"
+      ],
+      "zones": [
+        "rocks",
+        "open"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.2,
+        "body_depth": 0.96,
+        "head_shape": "rounded",
+        "snout": 0.1,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "largemouth"
+      }
+    },
+    {
+      "id": "sauger",
+      "name": "Sauger",
+      "tier": "U",
+      "price": 4.2,
+      "min_lb": 0.5,
+      "max_lb": 4.0,
+      "pref_time": "night",
+      "depth": [
+        3.0,
+        15.0
+      ],
+      "blurb": "Sand-Eye follows the cold into the trench at night.",
+      "folk_name": "Sand-Eye",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "fillet",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "minnow"
+      ],
+      "zones": [
+        "inlet",
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.2,
+        "body_depth": 0.96,
+        "head_shape": "rounded",
+        "snout": 0.1,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "largemouth"
+      }
+    },
+    {
+      "id": "shorthead_redhorse",
+      "name": "Shorthead redhorse",
+      "tier": "U",
+      "price": 1.4,
+      "min_lb": 1.0,
+      "max_lb": 5.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Rusty Tail flicks red in the inlet. Worms or craw.",
+      "folk_name": "Rusty Tail",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "rose",
+      "baits": [
+        "worm",
+        "craw"
+      ],
+      "zones": [
+        "inlet",
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "fathead_minnow",
+      "name": "Fathead minnow",
+      "tier": "C",
+      "price": 1.0,
+      "min_lb": 0.005,
+      "max_lb": 0.03,
+      "pref_time": "day",
+      "depth": [
+        0.2,
+        3.0
+      ],
+      "blurb": "Pudge is everyone's snack. Dough by the dock.",
+      "folk_name": "Pudge",
+      "lakes": [
+        "flathead"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "landing",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "redband_trout",
+      "name": "Redband trout",
+      "tier": "C",
+      "price": 5.0,
+      "min_lb": 0.5,
+      "max_lb": 6.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        12.0
+      ],
+      "blurb": "Ember-Stripe warms itself by the springs. Worms or grubs.",
+      "folk_name": "Ember-Stripe",
+      "lakes": [
+        "crater"
+      ],
+      "food": "trout",
+      "tags": [],
+      "shiny": "rose",
+      "baits": [
+        "worm",
+        "grub"
+      ],
+      "zones": [
+        "springs",
+        "rocks",
+        "open"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "coastal_cutthroat",
+      "name": "Coastal cutthroat trout",
+      "tier": "U",
+      "price": 5.4,
+      "min_lb": 0.5,
+      "max_lb": 4.0,
+      "pref_time": "dawn",
+      "depth": [
+        1.0,
+        10.0
+      ],
+      "blurb": "Rain-Throat hides among the drowned pines at dawn. Quiet boats.",
+      "folk_name": "Rain-Throat",
+      "lakes": [
+        "crater"
+      ],
+      "food": "trout",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "worm",
+        "roe"
+      ],
+      "zones": [
+        "cypress",
+        "lilies"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "lahontan_cutthroat",
+      "name": "Lahontan cutthroat trout",
+      "tier": "R",
+      "price": 0.0,
+      "min_lb": 2.0,
+      "max_lb": 20.0,
+      "pref_time": "dawn",
+      "depth": [
+        2.0,
+        20.0
+      ],
+      "blurb": "The Desert King is rare and royal. Deep at dawn. Let it go.",
+      "folk_name": "Desert King",
+      "lakes": [
+        "crater"
+      ],
+      "food": "trout",
+      "tags": [
+        "cold",
+        "protected"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "minnow",
+        "roe"
+      ],
+      "zones": [
+        "deep",
+        "open"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "chinook",
+      "name": "Chinook salmon",
+      "tier": "R",
+      "price": 6.2,
+      "min_lb": 5.0,
+      "max_lb": 40.0,
+      "pref_time": "dawn",
+      "depth": [
+        10.0,
+        40.0
+      ],
+      "blurb": "King's Supper roams the cobalt deep at dawn. Roe.",
+      "folk_name": "King's Supper",
+      "lakes": [
+        "crater"
+      ],
+      "food": "trout",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "roe",
+        "shad"
+      ],
+      "zones": [
+        "deep",
+        "open"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "coho",
+      "name": "Coho salmon",
+      "tier": "U",
+      "price": 5.8,
+      "min_lb": 3.0,
+      "max_lb": 15.0,
+      "pref_time": "dawn",
+      "depth": [
+        6.0,
+        30.0
+      ],
+      "blurb": "Silver-Side flashes in the open caldera at dawn.",
+      "folk_name": "Silver-Side",
+      "lakes": [
+        "crater"
+      ],
+      "food": "trout",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "roe",
+        "minnow"
+      ],
+      "zones": [
+        "open"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "tui_chub",
+      "name": "Tui chub",
+      "tier": "C",
+      "price": 1.8,
+      "min_lb": 0.1,
+      "max_lb": 1.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        10.0
+      ],
+      "blurb": "Button-Belly loafs on the pumice shelf.",
+      "folk_name": "Button-Belly",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "flats",
+        "lilies"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "speckled_dace",
+      "name": "Speckled dace",
+      "tier": "C",
+      "price": 1.6,
+      "min_lb": 0.01,
+      "max_lb": 0.05,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "Freckle dances in the warm spring shallows.",
+      "folk_name": "Freckle",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "springs",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "oregon_chub",
+      "name": "Oregon chub",
+      "tier": "U",
+      "price": 2.2,
+      "min_lb": 0.01,
+      "max_lb": 0.04,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "Moss Pip hides in the moss gardens. Shy, worms.",
+      "folk_name": "Moss Pip",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "lilies"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "klamath_smallscale_sucker",
+      "name": "Klamath smallscale sucker",
+      "tier": "U",
+      "price": 1.7,
+      "min_lb": 1.0,
+      "max_lb": 5.0,
+      "pref_time": "day",
+      "depth": [
+        2.0,
+        15.0
+      ],
+      "blurb": "Soft-Mouth grazes the shelf and the deep. Dough.",
+      "folk_name": "Soft-Mouth",
+      "lakes": [
+        "crater"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "albino",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "flats",
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
+    },
+    {
+      "id": "blue_chub",
+      "name": "Blue chub",
+      "tier": "C",
+      "price": 1.9,
+      "min_lb": 0.2,
+      "max_lb": 1.5,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Bluebell rings near the surface in the moss gardens.",
+      "folk_name": "Bluebell",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "worm",
+        "grub"
+      ],
+      "zones": [
+        "lilies",
+        "cypress"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "prickly_sculpin",
+      "name": "Prickly sculpin",
+      "tier": "U",
+      "price": 1.8,
+      "min_lb": 0.02,
+      "max_lb": 0.15,
+      "pref_time": "night",
+      "depth": [
+        2.0,
+        25.0
+      ],
+      "blurb": "Pincushion bristles under the cliffs at night.",
+      "folk_name": "Pincushion",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "ink",
+      "baits": [
+        "worm",
+        "grub"
+      ],
+      "zones": [
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sculpin",
+        "length_depth_ratio": 3.9,
+        "body_depth": 1.1,
+        "head_shape": "flat",
+        "snout": 0.05,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "warmouth"
+      }
+    },
+    {
+      "id": "umpqua_pikeminnow",
+      "name": "Umpqua pikeminnow",
+      "tier": "U",
+      "price": 2.2,
+      "min_lb": 1.0,
+      "max_lb": 6.0,
+      "pref_time": "dusk",
+      "depth": [
+        2.0,
+        12.0
+      ],
+      "blurb": "River Wolf hunts the drowned pines at dusk.",
+      "folk_name": "River Wolf",
+      "lakes": [
+        "crater"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "starry",
+      "baits": [
+        "minnow"
+      ],
+      "zones": [
+        "cypress",
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "chiselmouth",
+      "name": "Chiselmouth",
+      "tier": "C",
+      "price": 1.6,
+      "min_lb": 0.2,
+      "max_lb": 1.5,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "Scraper scrapes the cliff stones by day.",
+      "folk_name": "Scraper",
+      "lakes": [
+        "crater"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "worm",
+        "dough"
+      ],
+      "zones": [
+        "rocks",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "alvord_chub",
+      "name": "Alvord chub",
+      "tier": "R",
+      "price": 4.0,
+      "min_lb": 0.02,
+      "max_lb": 0.1,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        4.0
+      ],
+      "blurb": "Dust Pip lives only in the warmest springs. Grubs.",
+      "folk_name": "Dust Pip",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "grub"
+      ],
+      "zones": [
+        "springs"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "cobalt_cisco",
+      "name": "Cobalt cisco",
+      "tier": "C",
+      "price": 3.2,
+      "min_lb": 0.3,
+      "max_lb": 2.0,
+      "pref_time": "dawn",
+      "depth": [
+        15.0,
+        60.0
+      ],
+      "blurb": "The Blue Ghost lives where the water is bluest. Deep, dawn.",
+      "folk_name": "Blue Ghost",
+      "lakes": [
+        "crater"
+      ],
+      "food": "fillet",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "roe",
+        "dough"
+      ],
+      "zones": [
+        "deep",
+        "open"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "obsidian_darter",
+      "name": "Obsidian darter",
+      "tier": "U",
+      "price": 3.5,
+      "min_lb": 0.01,
+      "max_lb": 0.05,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        10.0
+      ],
+      "blurb": "Glass Bead darts along the obsidian. Grubs.",
+      "folk_name": "Glass Bead",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "grub"
+      ],
+      "zones": [
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "ember_char",
+      "name": "Ember char",
+      "tier": "R",
+      "price": 7.4,
+      "min_lb": 1.0,
+      "max_lb": 9.0,
+      "pref_time": "dusk",
+      "depth": [
+        4.0,
+        30.0
+      ],
+      "blurb": "Coal-Belly glows a little at dusk near the springs.",
+      "folk_name": "Coal-Belly",
+      "lakes": [
+        "crater"
+      ],
+      "food": "trout",
+      "tags": [],
+      "shiny": "glow",
+      "baits": [
+        "grub",
+        "roe"
+      ],
+      "zones": [
+        "springs",
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "ash_minnow",
+      "name": "Ash minnow",
+      "tier": "C",
+      "price": 1.4,
+      "min_lb": 0.01,
+      "max_lb": 0.04,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        4.0
+      ],
+      "blurb": "Smudge is grey as ash and everywhere on the shelf.",
+      "folk_name": "Smudge",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "albino",
+      "baits": [
+        "worm",
+        "grub"
+      ],
+      "zones": [
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "cinder_sculpin",
+      "name": "Cinder sculpin",
+      "tier": "U",
+      "price": 2.8,
+      "min_lb": 0.05,
+      "max_lb": 0.25,
+      "pref_time": "night",
+      "depth": [
+        2.0,
+        20.0
+      ],
+      "blurb": "Hot-Rock sits on warm stones at night.",
+      "folk_name": "Hot-Rock",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "ink",
+      "baits": [
+        "grub"
+      ],
+      "zones": [
+        "springs",
+        "rocks"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sculpin",
+        "length_depth_ratio": 3.9,
+        "body_depth": 1.1,
+        "head_shape": "flat",
+        "snout": 0.05,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "warmouth"
+      }
+    },
+    {
+      "id": "pumice_skipper",
+      "name": "Pumice skipper",
+      "tier": "C",
+      "price": 2.4,
+      "min_lb": 0.1,
+      "max_lb": 0.6,
+      "pref_time": "day",
+      "depth": [
+        0.0,
+        2.0
+      ],
+      "blurb": "Bobber-Fish floats like pumice. Dough at the surface.",
+      "folk_name": "Bobber-Fish",
+      "lakes": [
+        "crater"
+      ],
+      "food": "panfish",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "dough",
+        "worm"
+      ],
+      "zones": [
+        "flats",
+        "lilies"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "fumarole_perch",
+      "name": "Fumarole perch",
+      "tier": "C",
+      "price": 3.8,
+      "min_lb": 0.2,
+      "max_lb": 1.6,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Steam-Stripe loves the springs by day.",
+      "folk_name": "Steam-Stripe",
+      "lakes": [
+        "crater"
+      ],
+      "food": "panfish",
+      "tags": [],
+      "shiny": "rose",
+      "baits": [
+        "worm",
+        "grub"
+      ],
+      "zones": [
+        "springs"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.2,
+        "body_depth": 0.96,
+        "head_shape": "rounded",
+        "snout": 0.1,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "largemouth"
+      }
+    },
+    {
+      "id": "sulfur_shiner",
+      "name": "Sulfur shiner",
+      "tier": "C",
+      "price": 1.7,
+      "min_lb": 0.02,
+      "max_lb": 0.1,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        5.0
+      ],
+      "blurb": "Yellow Spark flickers in the spring water.",
+      "folk_name": "Yellow Spark",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "springs",
+        "lilies"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "basalt_bass",
+      "name": "Basalt bass",
+      "tier": "U",
+      "price": 5.2,
+      "min_lb": 1.0,
+      "max_lb": 7.0,
+      "pref_time": "dawn",
+      "depth": [
+        2.0,
+        12.0
+      ],
+      "blurb": "Black Brick guards the cliffs at dawn. Crawfish.",
+      "folk_name": "Black Brick",
+      "lakes": [
+        "crater"
+      ],
+      "food": "bass",
+      "tags": [],
+      "shiny": "starry",
+      "baits": [
+        "craw",
+        "minnow"
+      ],
+      "zones": [
+        "rocks",
+        "cypress"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.2,
+        "body_depth": 0.96,
+        "head_shape": "rounded",
+        "snout": 0.1,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "largemouth"
+      }
+    },
+    {
+      "id": "glasswing_trout",
+      "name": "Glasswing trout",
+      "tier": "R",
+      "price": 7.8,
+      "min_lb": 1.0,
+      "max_lb": 6.0,
+      "pref_time": "day",
+      "depth": [
+        2.0,
+        20.0
+      ],
+      "blurb": "Window-Fin is see-through on clear days in the open.",
+      "folk_name": "Window-Fin",
+      "lakes": [
+        "crater"
+      ],
+      "food": "trout",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "roe",
+        "grub"
+      ],
+      "zones": [
+        "open"
+      ],
+      "weather_affinities": {
+        "clear": 1.4
+      },
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "mistfin_dace",
+      "name": "Mistfin dace",
+      "tier": "U",
+      "price": 2.6,
+      "min_lb": 0.02,
+      "max_lb": 0.08,
+      "pref_time": "dawn",
+      "depth": [
+        0.5,
+        4.0
+      ],
+      "blurb": "Fog-Flicker only comes out when the fog does.",
+      "folk_name": "Fog-Flicker",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "starry",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "lilies",
+        "flats"
+      ],
+      "weather_affinities": {
+        "fog": 1.4
+      },
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "lava_belly_sunfish",
+      "name": "Lava-belly sunfish",
+      "tier": "C",
+      "price": 2.9,
+      "min_lb": 0.2,
+      "max_lb": 1.4,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        5.0
+      ],
+      "blurb": "Hot Penny glows orange in the spring shallows.",
+      "folk_name": "Hot Penny",
+      "lakes": [
+        "crater"
+      ],
+      "food": "panfish",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "worm",
+        "grub"
+      ],
+      "zones": [
+        "springs",
+        "lilies"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.45,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "bluegill"
+      }
+    },
+    {
+      "id": "geyser_goby",
+      "name": "Geyser goby",
+      "tier": "U",
+      "price": 2.7,
+      "min_lb": 0.02,
+      "max_lb": 0.12,
+      "pref_time": "night",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "Hiccup hops near the springs at night.",
+      "folk_name": "Hiccup",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "grub"
+      ],
+      "zones": [
+        "springs"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sculpin",
+        "length_depth_ratio": 3.9,
+        "body_depth": 1.1,
+        "head_shape": "flat",
+        "snout": 0.05,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "warmouth"
+      }
+    },
+    {
+      "id": "moonpool_whitefish",
+      "name": "Moonpool whitefish",
+      "tier": "U",
+      "price": 4.6,
+      "min_lb": 1.0,
+      "max_lb": 6.0,
+      "pref_time": "night",
+      "depth": [
+        10.0,
+        50.0
+      ],
+      "blurb": "Night-Lamp rises in the deep after dark.",
+      "folk_name": "Night-Lamp",
+      "lakes": [
+        "crater"
+      ],
+      "food": "fillet",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "roe",
+        "worm"
+      ],
+      "zones": [
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "snagtooth_pike",
+      "name": "Snagtooth pike",
+      "tier": "U",
+      "price": 4.4,
+      "min_lb": 3.0,
+      "max_lb": 20.0,
+      "pref_time": "dusk",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Old Crook-Jaw waits in the drowned pines at dusk.",
+      "folk_name": "Old Crook-Jaw",
+      "lakes": [
+        "crater"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "minnow",
+        "shad"
+      ],
+      "zones": [
+        "cypress"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "pike",
+        "length_depth_ratio": 5.0,
+        "body_depth": 0.8,
+        "head_shape": "pointed",
+        "snout": 0.25,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "chain_pickerel"
+      }
+    },
+    {
+      "id": "fog_mudminnow",
+      "name": "Fog mudminnow",
+      "tier": "U",
+      "price": 2.1,
+      "min_lb": 0.01,
+      "max_lb": 0.04,
+      "pref_time": "dawn",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "Hide-Away hides even better in fog.",
+      "folk_name": "Hide-Away",
+      "lakes": [
+        "crater"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "ink",
+      "baits": [
+        "worm"
+      ],
+      "zones": [
+        "cypress",
+        "lilies"
+      ],
+      "weather_affinities": {
+        "fog": 1.4
+      },
+      "look": {
+        "family": "minnow",
+        "length_depth_ratio": 5.2,
+        "body_depth": 0.72,
+        "head_shape": "pointed",
+        "snout": 0.02,
+        "mouth": "upturned",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "stripes",
+        "palette": "golden_shiner"
+      }
+    },
+    {
+      "id": "indigo_eelpout",
+      "name": "Indigo eelpout",
+      "tier": "R",
+      "price": 5.6,
+      "min_lb": 2.0,
+      "max_lb": 14.0,
+      "pref_time": "night",
+      "depth": [
+        20.0,
+        60.0
+      ],
+      "blurb": "Velvet Rope lives deeper than the light goes. Night, cut shad.",
+      "folk_name": "Velvet Rope",
+      "lakes": [
+        "crater"
+      ],
+      "food": "hearty",
+      "tags": [
+        "cold"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "shad",
+        "grub"
+      ],
+      "zones": [
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "eel",
+        "length_depth_ratio": 8.0,
+        "body_depth": 0.6,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "black_buffalo"
+      }
+    },
+    {
+      "id": "steam_carp",
+      "name": "Steam carp",
+      "tier": "C",
+      "price": 1.4,
+      "min_lb": 2.0,
+      "max_lb": 16.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        6.0
+      ],
+      "blurb": "Kettle-Lips blows bubbles in the springs. Dough.",
+      "folk_name": "Kettle-Lips",
+      "lakes": [
+        "crater"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "dough",
+        "worm"
+      ],
+      "zones": [
+        "springs",
+        "flats"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
+    },
+    {
+      "id": "rimrock_bullhead",
+      "name": "Rimrock bullhead",
+      "tier": "C",
+      "price": 2.6,
+      "min_lb": 0.3,
+      "max_lb": 2.5,
+      "pref_time": "night",
+      "depth": [
+        1.0,
+        10.0
+      ],
+      "blurb": "Pebble-Whisker pokes around the cliffs at night. Liver.",
+      "folk_name": "Pebble-Whisker",
+      "lakes": [
+        "crater"
+      ],
+      "food": "catfish",
+      "tags": [],
+      "shiny": "albino",
+      "baits": [
+        "liver",
+        "grub"
+      ],
+      "zones": [
+        "rocks",
+        "cypress"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.3,
+        "body_depth": 0.98,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "plain",
+        "palette": "channel"
+      }
+    },
+    {
+      "id": "vent_catfish",
+      "name": "Vent catfish",
+      "tier": "U",
+      "price": 4.2,
+      "min_lb": 2.0,
+      "max_lb": 25.0,
+      "pref_time": "night",
+      "depth": [
+        8.0,
+        40.0
+      ],
+      "blurb": "Warm-Whiskers naps by the deep springs and wakes at night for liver.",
+      "folk_name": "Warm-Whiskers",
+      "lakes": [
+        "crater"
+      ],
+      "food": "catfish",
+      "tags": [],
+      "shiny": "glow",
+      "baits": [
+        "liver",
+        "shad"
+      ],
+      "zones": [
+        "springs",
+        "deep"
+      ],
+      "weather_affinities": {},
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.3,
+        "body_depth": 0.98,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "plain",
+        "palette": "channel"
+      }
+    },
+    {
+      "id": "comet_minnow",
+      "name": "Comet minnow",
+      "tier": "C",
+      "price": 2.4,
+      "min_lb": 0.02,
+      "max_lb": 0.1,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        4.0
+      ],
+      "blurb": "Tail-Lights zip up the comet stream. Star-dust.",
+      "folk_name": "Tail-Light",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "stardust",
+        "worm"
+      ],
+      "zones": [
+        "inlet",
+        "flats"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "meteor_bass",
+      "name": "Meteor bass",
+      "tier": "C",
+      "price": 6.8,
+      "min_lb": 1.0,
+      "max_lb": 8.0,
+      "pref_time": "dawn",
+      "depth": [
+        2.0,
+        12.0
+      ],
+      "blurb": "Rock-Drop crashes into the meteor reefs at rising.",
+      "folk_name": "Rock-Drop",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "bass",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "stardust",
+        "minnow"
+      ],
+      "zones": [
+        "rocks"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.2,
+        "body_depth": 0.96,
+        "head_shape": "rounded",
+        "snout": 0.1,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "largemouth"
+      }
+    },
+    {
+      "id": "quasar_koi",
+      "name": "Quasar koi",
+      "tier": "U",
+      "price": 7.5,
+      "min_lb": 2.0,
+      "max_lb": 18.0,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        4.0
+      ],
+      "blurb": "Lantern Koi glow in the lily drifts. Dough or star-dust.",
+      "folk_name": "Lantern Koi",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "cosmic",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "dough",
+        "stardust"
+      ],
+      "zones": [
+        "lilies"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
+    },
+    {
+      "id": "pulsar_perch",
+      "name": "Pulsar perch",
+      "tier": "C",
+      "price": 4.8,
+      "min_lb": 0.2,
+      "max_lb": 1.8,
+      "pref_time": "night",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Blinkers blink in the deep phase. Count the blinks.",
+      "folk_name": "Blinker",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "cosmic",
+      "tags": [],
+      "shiny": "glow",
+      "baits": [
+        "stardust",
+        "worm"
+      ],
+      "zones": [
+        "lilies",
+        "open"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "bass",
+        "length_depth_ratio": 3.2,
+        "body_depth": 0.96,
+        "head_shape": "rounded",
+        "snout": 0.1,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "largemouth"
+      }
+    },
+    {
+      "id": "lunar_loach",
+      "name": "Lunar loach",
+      "tier": "U",
+      "price": 4.2,
+      "min_lb": 0.05,
+      "max_lb": 0.3,
+      "pref_time": "night",
+      "depth": [
+        0.3,
+        3.0
+      ],
+      "blurb": "Moon-Noodle wiggles through the light-reeds at night.",
+      "folk_name": "Moon-Noodle",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "albino",
+      "baits": [
+        "stardust"
+      ],
+      "zones": [
+        "flats",
+        "reeds"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "solar_sunfish",
+      "name": "Solar sunfish",
+      "tier": "C",
+      "price": 4.4,
+      "min_lb": 0.2,
+      "max_lb": 1.5,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        4.0
+      ],
+      "blurb": "Little Sun warms the lily drifts in the bright phase.",
+      "folk_name": "Little Sun",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "cosmic",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "stardust",
+        "worm"
+      ],
+      "zones": [
+        "lilies",
+        "landing"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.45,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "bluegill"
+      }
+    },
+    {
+      "id": "starling_shiner",
+      "name": "Starling shiner",
+      "tier": "C",
+      "price": 2.2,
+      "min_lb": 0.02,
+      "max_lb": 0.1,
+      "pref_time": "dusk",
+      "depth": [
+        0.3,
+        4.0
+      ],
+      "blurb": "Twinkle-Fry flock in the light-reeds at fading.",
+      "folk_name": "Twinkle-Fry",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "stardust"
+      ],
+      "zones": [
+        "reeds",
+        "flats"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "galaxy_gar",
+      "name": "Galaxy gar",
+      "tier": "U",
+      "price": 4.6,
+      "min_lb": 3.0,
+      "max_lb": 25.0,
+      "pref_time": "dusk",
+      "depth": [
+        1.0,
+        10.0
+      ],
+      "blurb": "Swirl-Snout spirals in the current at fading.",
+      "folk_name": "Swirl-Snout",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "hearty",
+      "tags": [
+        "current"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "shad",
+        "stardust"
+      ],
+      "zones": [
+        "cypress",
+        "current"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "gar",
+        "length_depth_ratio": 5.8,
+        "body_depth": 0.78,
+        "head_shape": "pointed",
+        "snout": 0.52,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "gar"
+      }
+    },
+    {
+      "id": "aurora_trout",
+      "name": "Aurora trout",
+      "tier": "U",
+      "price": 8.2,
+      "min_lb": 1.0,
+      "max_lb": 7.0,
+      "pref_time": "dawn",
+      "depth": [
+        2.0,
+        15.0
+      ],
+      "blurb": "Ribbon-Light shimmers in the comet stream at rising. Roe.",
+      "folk_name": "Ribbon-Light",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "trout",
+      "tags": [
+        "current"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "roe",
+        "stardust"
+      ],
+      "zones": [
+        "inlet",
+        "current"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "cosmic_carp",
+      "name": "Cosmic carp",
+      "tier": "C",
+      "price": 2.6,
+      "min_lb": 3.0,
+      "max_lb": 24.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Big Bubble blows bubbles shaped like planets.",
+      "folk_name": "Big Bubble",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "dough",
+        "stardust"
+      ],
+      "zones": [
+        "flats",
+        "lilies"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
+    },
+    {
+      "id": "void_eel",
+      "name": "Void eel",
+      "tier": "R",
+      "price": 7.6,
+      "min_lb": 2.0,
+      "max_lb": 15.0,
+      "pref_time": "night",
+      "depth": [
+        20.0,
+        60.0
+      ],
+      "blurb": "Long Shadow lives in the void well. Liver, deep phase.",
+      "folk_name": "Long Shadow",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "ink",
+      "baits": [
+        "liver",
+        "stardust"
+      ],
+      "zones": [
+        "deep"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "eel",
+        "length_depth_ratio": 8.0,
+        "body_depth": 0.6,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "black_buffalo"
+      }
+    },
+    {
+      "id": "orbit_bluegill",
+      "name": "Orbit bluegill",
+      "tier": "C",
+      "price": 3.6,
+      "min_lb": 0.1,
+      "max_lb": 1.0,
+      "pref_time": "day",
+      "depth": [
+        0.3,
+        4.0
+      ],
+      "blurb": "Ring-Gills circle the station dock.",
+      "folk_name": "Ring-Gill",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "panfish",
+      "tags": [],
+      "shiny": "rose",
+      "baits": [
+        "worm",
+        "stardust"
+      ],
+      "zones": [
+        "lilies",
+        "landing"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "gravity_drum",
+      "name": "Gravity drum",
+      "tier": "U",
+      "price": 3.4,
+      "min_lb": 2.0,
+      "max_lb": 16.0,
+      "pref_time": "day",
+      "depth": [
+        4.0,
+        20.0
+      ],
+      "blurb": "Thumpers thump in the deep. You feel it in the hull.",
+      "folk_name": "Thumper",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "glow",
+      "baits": [
+        "craw",
+        "stardust"
+      ],
+      "zones": [
+        "deep",
+        "open"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "photon_tetra",
+      "name": "Photon tetra",
+      "tier": "C",
+      "price": 2.8,
+      "min_lb": 0.01,
+      "max_lb": 0.03,
+      "pref_time": "night",
+      "depth": [
+        0.5,
+        5.0
+      ],
+      "blurb": "Sparks light up the reeds at night.",
+      "folk_name": "Spark",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "glow",
+      "baits": [
+        "stardust"
+      ],
+      "zones": [
+        "reeds",
+        "lilies"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "nova_pike",
+      "name": "Nova pike",
+      "tier": "R",
+      "price": 7.2,
+      "min_lb": 4.0,
+      "max_lb": 24.0,
+      "pref_time": "dusk",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Flare-Jaw flares in the crystal kelp at fading.",
+      "folk_name": "Flare-Jaw",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "minnow",
+        "stardust"
+      ],
+      "zones": [
+        "cypress"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "pike",
+        "length_depth_ratio": 5.0,
+        "body_depth": 0.8,
+        "head_shape": "pointed",
+        "snout": 0.25,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "chain_pickerel"
+      }
+    },
+    {
+      "id": "dwarf_star_darter",
+      "name": "Dwarf-star darter",
+      "tier": "U",
+      "price": 4.0,
+      "min_lb": 0.01,
+      "max_lb": 0.04,
+      "pref_time": "day",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "Speck is tiny, bright and lives on the meteor reefs.",
+      "folk_name": "Speck",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "stardust"
+      ],
+      "zones": [
+        "rocks"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "saturnfin_puffer",
+      "name": "Saturnfin puffer",
+      "tier": "U",
+      "price": 5.0,
+      "min_lb": 0.3,
+      "max_lb": 2.0,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Ring-Ball floats in the current with its fins like rings.",
+      "folk_name": "Ring-Ball",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [
+        "surface",
+        "current"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "dough",
+        "stardust"
+      ],
+      "zones": [
+        "open",
+        "current"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.45,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "bluegill"
+      }
+    },
+    {
+      "id": "celestial_catfish",
+      "name": "Celestial catfish",
+      "tier": "C",
+      "price": 5.2,
+      "min_lb": 2.0,
+      "max_lb": 30.0,
+      "pref_time": "night",
+      "depth": [
+        3.0,
+        20.0
+      ],
+      "blurb": "Star-Whiskers prowls the void well at night. Liver.",
+      "folk_name": "Star-Whiskers",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "catfish",
+      "tags": [],
+      "shiny": "starry",
+      "baits": [
+        "liver",
+        "stardust"
+      ],
+      "zones": [
+        "deep",
+        "cypress"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.3,
+        "body_depth": 0.98,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "plain",
+        "palette": "channel"
+      }
+    },
+    {
+      "id": "moonbeam_crappie",
+      "name": "Moonbeam crappie",
+      "tier": "C",
+      "price": 5.4,
+      "min_lb": 0.3,
+      "max_lb": 2.4,
+      "pref_time": "dawn",
+      "depth": [
+        1.0,
+        8.0
+      ],
+      "blurb": "Paper-Moon hides in the crystal kelp at rising.",
+      "folk_name": "Paper-Moon",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "panfish",
+      "tags": [],
+      "shiny": "glow",
+      "baits": [
+        "minnow",
+        "stardust"
+      ],
+      "zones": [
+        "cypress",
+        "lilies"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "twinkle_shad",
+      "name": "Twinkle shad",
+      "tier": "C",
+      "price": 1.8,
+      "min_lb": 0.1,
+      "max_lb": 1.2,
+      "pref_time": "day",
+      "depth": [
+        1.0,
+        10.0
+      ],
+      "blurb": "Glitter-Fry schools in the current. Star-dust.",
+      "folk_name": "Glitter-Fry",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [
+        "current"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "stardust"
+      ],
+      "zones": [
+        "open",
+        "current"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "eclipse_bowfin",
+      "name": "Eclipse bowfin",
+      "tier": "U",
+      "price": 3.8,
+      "min_lb": 1.0,
+      "max_lb": 10.0,
+      "pref_time": "night",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "Half-Moon lurks in the reeds at night.",
+      "folk_name": "Half-Moon",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "ink",
+      "baits": [
+        "shad",
+        "stardust"
+      ],
+      "zones": [
+        "reeds",
+        "cypress"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "stardust_bullhead",
+      "name": "Stardust bullhead",
+      "tier": "C",
+      "price": 3.4,
+      "min_lb": 0.3,
+      "max_lb": 3.0,
+      "pref_time": "night",
+      "depth": [
+        0.5,
+        6.0
+      ],
+      "blurb": "Sprinkle-Cat noses the shoals at night. Liver or worms.",
+      "folk_name": "Sprinkle-Cat",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "catfish",
+      "tags": [],
+      "shiny": "starry",
+      "baits": [
+        "liver",
+        "worm"
+      ],
+      "zones": [
+        "flats",
+        "inlet"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.3,
+        "body_depth": 0.98,
+        "head_shape": "flat",
+        "snout": 0.02,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "plain",
+        "palette": "channel"
+      }
+    },
+    {
+      "id": "asteroid_sucker",
+      "name": "Asteroid sucker",
+      "tier": "U",
+      "price": 2.4,
+      "min_lb": 1.0,
+      "max_lb": 8.0,
+      "pref_time": "day",
+      "depth": [
+        3.0,
+        20.0
+      ],
+      "blurb": "Pock-Lip grazes the meteor reefs.",
+      "folk_name": "Pock-Lip",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "albino",
+      "baits": [
+        "dough",
+        "stardust"
+      ],
+      "zones": [
+        "rocks",
+        "deep"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "sucker",
+        "length_depth_ratio": 2.7,
+        "body_depth": 1.08,
+        "head_shape": "rounded",
+        "snout": 0.04,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 2,
+        "scale_pattern": "mottled",
+        "palette": "carp"
+      }
+    },
+    {
+      "id": "halo_whitefish",
+      "name": "Halo whitefish",
+      "tier": "U",
+      "price": 5.8,
+      "min_lb": 1.0,
+      "max_lb": 6.0,
+      "pref_time": "dawn",
+      "depth": [
+        8.0,
+        30.0
+      ],
+      "blurb": "Ring-Light rises in the open at rising. Roe.",
+      "folk_name": "Ring-Light",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "fillet",
+      "tags": [],
+      "shiny": "glow",
+      "baits": [
+        "roe",
+        "stardust"
+      ],
+      "zones": [
+        "open",
+        "deep"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "constellation_char",
+      "name": "Constellation char",
+      "tier": "R",
+      "price": 9.4,
+      "min_lb": 1.0,
+      "max_lb": 10.0,
+      "pref_time": "dusk",
+      "depth": [
+        4.0,
+        25.0
+      ],
+      "blurb": "Dot-to-Dot follows the current at fading. Connect its spots.",
+      "folk_name": "Dot-to-Dot",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "trout",
+      "tags": [
+        "current"
+      ],
+      "shiny": "starry",
+      "baits": [
+        "roe",
+        "stardust"
+      ],
+      "zones": [
+        "current",
+        "deep"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "milky_way_buffalo",
+      "name": "Milky-way buffalo",
+      "tier": "U",
+      "price": 2.2,
+      "min_lb": 4.0,
+      "max_lb": 30.0,
+      "pref_time": "day",
+      "depth": [
+        3.0,
+        20.0
+      ],
+      "blurb": "Cream-Back drifts over the shoals.",
+      "folk_name": "Cream-Back",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "albino",
+      "baits": [
+        "dough",
+        "stardust"
+      ],
+      "zones": [
+        "open",
+        "flats"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "supernova_salmon",
+      "name": "Supernova salmon",
+      "tier": "R",
+      "price": 9.8,
+      "min_lb": 5.0,
+      "max_lb": 28.0,
+      "pref_time": "dawn",
+      "depth": [
+        6.0,
+        30.0
+      ],
+      "blurb": "Burst only bites for the patient, in the current at rising.",
+      "folk_name": "Burst",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "trout",
+      "tags": [
+        "current"
+      ],
+      "shiny": "golden",
+      "baits": [
+        "roe",
+        "stardust"
+      ],
+      "zones": [
+        "current",
+        "open"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.8,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.14,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "event_horizon_goby",
+      "name": "Event-horizon goby",
+      "tier": "R",
+      "price": 8.0,
+      "min_lb": 0.05,
+      "max_lb": 0.3,
+      "pref_time": "night",
+      "depth": [
+        30.0,
+        60.0
+      ],
+      "blurb": "The Edge-Sitter sits at the very bottom of the void well.",
+      "folk_name": "Edge-Sitter",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [
+        "shy"
+      ],
+      "shiny": "ink",
+      "baits": [
+        "stardust"
+      ],
+      "zones": [
+        "deep"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "sculpin",
+        "length_depth_ratio": 3.9,
+        "body_depth": 1.1,
+        "head_shape": "flat",
+        "snout": 0.05,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "mottled",
+        "palette": "warmouth"
+      }
+    },
+    {
+      "id": "zodiac_zander",
+      "name": "Zodiac zander",
+      "tier": "U",
+      "price": 6.4,
+      "min_lb": 1.0,
+      "max_lb": 12.0,
+      "pref_time": "dusk",
+      "depth": [
+        3.0,
+        15.0
+      ],
+      "blurb": "Twelve-Stripe has a stripe for every month. Reefs at fading.",
+      "folk_name": "Twelve-Stripe",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "fillet",
+      "tags": [],
+      "shiny": "golden",
+      "baits": [
+        "minnow",
+        "stardust"
+      ],
+      "zones": [
+        "rocks",
+        "open"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "plasma_pickerel",
+      "name": "Plasma pickerel",
+      "tier": "U",
+      "price": 5.6,
+      "min_lb": 0.5,
+      "max_lb": 5.0,
+      "pref_time": "dawn",
+      "depth": [
+        0.5,
+        5.0
+      ],
+      "blurb": "Zap-Jaw zaps in the reeds at rising. Minnows.",
+      "folk_name": "Zap-Jaw",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "hearty",
+      "tags": [],
+      "shiny": "glow",
+      "baits": [
+        "minnow",
+        "stardust"
+      ],
+      "zones": [
+        "reeds",
+        "lilies"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "ion_icefish",
+      "name": "Ion icefish",
+      "tier": "R",
+      "price": 8.6,
+      "min_lb": 0.1,
+      "max_lb": 0.8,
+      "pref_time": "night",
+      "depth": [
+        10.0,
+        40.0
+      ],
+      "blurb": "Clear-Cat is invisible except at night, deep in the current.",
+      "folk_name": "Clear-Cat",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [
+        "shy",
+        "current"
+      ],
+      "shiny": "glow",
+      "baits": [
+        "stardust"
+      ],
+      "zones": [
+        "deep",
+        "current"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "prism_ray",
+      "name": "Prism ray",
+      "tier": "R",
+      "price": 8.2,
+      "min_lb": 2.0,
+      "max_lb": 20.0,
+      "pref_time": "day",
+      "depth": [
+        2.0,
+        12.0
+      ],
+      "blurb": "Rainbow Kite glides over the shoals on bright days.",
+      "folk_name": "Rainbow Kite",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "cosmic",
+      "tags": [],
+      "shiny": "rose",
+      "baits": [
+        "craw",
+        "stardust"
+      ],
+      "zones": [
+        "flats"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
+    },
+    {
+      "id": "comet_tail_betta",
+      "name": "Comet-tail betta",
+      "tier": "U",
+      "price": 5.2,
+      "min_lb": 0.02,
+      "max_lb": 0.08,
+      "pref_time": "day",
+      "depth": [
+        0.0,
+        2.0
+      ],
+      "blurb": "Silk-Tail flutters at the surface of the lily drifts.",
+      "folk_name": "Silk-Tail",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [
+        "surface"
+      ],
+      "shiny": "rose",
+      "baits": [
+        "stardust"
+      ],
+      "zones": [
+        "lilies",
+        "reeds"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "sunfish",
+        "length_depth_ratio": 2.45,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "bars",
+        "palette": "bluegill"
+      }
+    },
+    {
+      "id": "purrsec_lanternfish",
+      "name": "Purrsec lanternfish",
+      "tier": "U",
+      "price": 6.0,
+      "min_lb": 0.02,
+      "max_lb": 0.1,
+      "pref_time": "night",
+      "depth": [
+        10.0,
+        40.0
+      ],
+      "blurb": "Purr-Lights purr. You can hear them if you're quiet.",
+      "folk_name": "Purr-Light",
+      "lakes": [
+        "nebula"
+      ],
+      "food": "none",
+      "tags": [],
+      "shiny": "glow",
+      "baits": [
+        "stardust"
+      ],
+      "zones": [
+        "open",
+        "deep"
+      ],
+      "weather_affinities": {
+        "aurora": 1.25
+      },
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.06,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "palette": "hybrid_striper"
+      }
     }
   ]
 }

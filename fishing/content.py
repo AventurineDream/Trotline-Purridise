@@ -654,7 +654,9 @@ class _ContentV2Validator:
         species = self.table(docs, species_file, "species", {
             "id", "name", "price", "min_lb", "max_lb", "pref_time", "depth", "blurb",
             "folk_name", "lakes", "food", "tags", "shiny"},
-            {"rate", "trophy", "tier", "look"})
+            {"rate", "trophy", "tier", "look", "baits", "zones", "weather_affinities"})
+        if species_file not in self.unavailable_files and len(species) != 144:
+            self.error(species_file, "species", "expected exactly 144 standard species")
         baits = self.table(docs, baits_file, "baits", {"id", "name", "price", "blurb", "matches"},
                            {"sold_at", "recipe"})
         boats = self.table(docs, boats_file, "boats", {
@@ -687,7 +689,7 @@ class _ContentV2Validator:
         lakes = self.table(docs, lakes_file, "lakes", {
             "id", "name", "landing", "region", "blurb", "species_count", "species_ids",
             "zone_ids", "zone_labels", "palette", "placeholder", "unlock_chapter",
-            "travel_caption", "lake_days"}, {"rate_multipliers"})
+            "travel_caption", "lake_days"}, {"rate_multipliers", "placeholder_depths"})
         self.require_saved_ids(lakes_file, "zones", zones)
         self.require_saved_ids(lakes_file, "lakes", lakes)
         if lakes_file not in self.unavailable_files and not {"briar", "cedar"}.issubset(lakes):
@@ -753,6 +755,38 @@ class _ContentV2Validator:
                 for index, tag in enumerate(tags):
                     self.enum(species_file, f"{where}.tags[{index}]", tag, _SPECIES_TAGS)
             self.enum(species_file, where + ".shiny", row.get("shiny"), _SHINY_PALETTES)
+            for key, refs in (("baits", baits if baits_file not in self.unavailable_files else None),
+                              ("zones", zone_ids if lakes_file not in self.unavailable_files else None)):
+                if key not in row:
+                    continue
+                ids = self.id_list(species_file, where + "." + key, row[key], refs)
+                if not ids:
+                    self.error(species_file, where + "." + key, "expected at least one preference")
+                for index, item_id in enumerate(ids):
+                    source = baits.get(item_id) if key == "baits" else zones.get(item_id)
+                    if source is not None:
+                        match = source.get("matches", {})
+                        fallback = baits_root.get("fallback_multiplier") if key == "baits" else lakes_root.get("zone_fallback_multiplier")
+                        value = match.get(sid, fallback) if isinstance(match, dict) and isinstance(sid, str) else None
+                        expected = 1.0 if index == 0 else .6 if key == "baits" else .7
+                        if value != expected:
+                            self.error(species_file, where + "." + key,
+                                       f"{item_id!r} must have match {expected} for {sid!r}")
+                    if key == "zones" and lake_refs is not None:
+                        for lid in declared_lakes:
+                            available = lakes.get(lid, {}).get("zone_ids", [])
+                            if isinstance(available, list) and item_id not in available:
+                                self.error(species_file, where + ".zones", f"{item_id!r} has no habitat on {lid!r}")
+            if "weather_affinities" in row:
+                weather = row["weather_affinities"]
+                if not isinstance(weather, dict):
+                    self.error(species_file, where + ".weather_affinities", "expected an object")
+                else:
+                    for condition, value in weather.items():
+                        self.enum(species_file, where + ".weather_affinities", condition,
+                                  {"clear", "fair", "overcast", "drizzle", "mist", "snow_mist", "fog", "aurora"})
+                        self.number(species_file, where + ".weather_affinities." + str(condition),
+                                    value, minimum=1, maximum=2)
             if "look" in row:
                 look = row["look"]
                 if not isinstance(look, dict):
@@ -855,6 +889,20 @@ class _ContentV2Validator:
                         minimum=0 if placeholder is True else 1)
             if type(count) is int and count != len(listed_ids):
                 self.error(lakes_file, where + ".species_count", f"declares {count}, but lists {len(listed_ids)} species")
+            if "placeholder_depths" in row:
+                depths = row["placeholder_depths"]
+                if not isinstance(depths, dict):
+                    self.error(lakes_file, where + ".placeholder_depths", "expected an object")
+                else:
+                    for zone, values in depths.items():
+                        zone_ids_for_lake = row.get("zone_ids")
+                        self.enum(lakes_file, where + ".placeholder_depths", zone,
+                                  zone_ids_for_lake if isinstance(zone_ids_for_lake, list) else [])
+                        if (not isinstance(values, list) or len(values) != 2
+                                or not all(type(value) in (int, float) and _is_finite(value) for value in values)
+                                or not .9 <= values[0] < values[1] <= 100):
+                            self.error(lakes_file, where + ".placeholder_depths." + str(zone),
+                                       "expected 0.9 <= minimum < maximum <= 100 metres")
             if "rate_multipliers" in row:
                 rates = self.multiplier_map(lakes_file, where + ".rate_multipliers",
                                             row.get("rate_multipliers"), species_refs)
@@ -1085,7 +1133,7 @@ class _ContentV2Validator:
             self.enum(filename, where + ".band", row.get("band"), {"dawn", "day", "dusk", "night", "any"})
             self.number(filename, where + ".multiplier", row.get("multiplier"), minimum=1, maximum=2)
             self.id_list(filename, where + ".foods", row.get("foods"), _SPECIES_FOODS)
-            # Future lake species and zones need not be playable yet.
+            # All five authored fish rosters are now available.
             for key in ("species", "zones"):
                 values = row.get(key)
                 if not isinstance(values, list) or any(not isinstance(v, str) or not v for v in values):
@@ -1093,11 +1141,11 @@ class _ContentV2Validator:
             self.enum(filename, where + ".weather_bias", row.get("weather_bias"), weather | {"", "fog_clear"})
             if type(row.get("fireflies")) is not bool:
                 self.error(filename, where + ".fireflies", "expected a boolean")
-            if row.get("lake") in ("briar", "cedar") and "species.json" not in self.unavailable_files:
+            if "species.json" not in self.unavailable_files:
                 for sid in row.get("species", []) if isinstance(row.get("species"), list) else []:
                     self.enum(filename, where + ".species", sid, species)
                 for zone in row.get("zones", []) if isinstance(row.get("zones"), list) else []:
-                    self.enum(filename, where + ".zones", zone, {"open", "rocks", "flats", "deep", "lilies", "cypress", "inlet"})
+                    self.enum(filename, where + ".zones", zone, set(_FALLBACK_FISHING_ZONE_ORDER))
             pair = (str(row.get("lake")), str(row.get("weekday")))
             if pair in seen:
                 self.error(filename, where, "duplicate lake/weekday")

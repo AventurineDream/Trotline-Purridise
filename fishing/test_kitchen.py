@@ -439,10 +439,12 @@ class KitchenChecks(unittest.TestCase):
 
     def test_no_active_buff_preserves_base_rates_bait_matches_and_seeded_catches(self):
         ordinary_baits = ('worm', 'liver', 'shad', 'minnow', 'craw')
-        matches = {bait: CONTENT_V2_RAW['baits.json']['baits'][i]['matches'] for i, bait in enumerate(ordinary_baits)}
+        legacy = {row['id'] for row in CONTENT_V2_RAW['species.json']['species'][:36]}
+        matches = {bait: {sid: rate for sid, rate in CONTENT_V2_RAW['baits.json']['baits'][i]['matches'].items()
+                          if sid in legacy} for i, bait in enumerate(ordinary_baits)}
         self.assertEqual(hashlib.sha256(json.dumps(matches, sort_keys=True).encode()).hexdigest(),
                          'a68bd13fb8a92a543aaf8fb807ecac5a755e806e33a0246a33c128703812f7cf')
-        rates = [species_rates(zone, bait, hour, weather, depth)
+        rates = [{sid: rate for sid, rate in species_rates(zone, bait, hour, weather, depth).items() if sid in legacy}
                  for zone in ('flats', 'deep', 'lilies') for bait in ordinary_baits
                  for hour in (6, 12, 18, 23) for weather in ('clear', 'mist', 'rain') for depth in (2, 10)]
         self.assertEqual(hashlib.sha256(json.dumps(rates, sort_keys=True).encode()).hexdigest(),

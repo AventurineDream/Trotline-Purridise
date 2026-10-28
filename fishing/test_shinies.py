@@ -364,9 +364,11 @@ class ShinyIntegrationChecks(unittest.TestCase):
         ui.book_entry_i = ENTRY_IDS.index(LEGENDARY_IDS[0])
         self.assertNotIn("tracker", book_controls(layout, state, ui))
         # A future save can contain Verified pages beyond this build's roster.
-        future = next(sid for sid in BOOK_SPECIES_IDS if sid not in SPECIES_BY_ID)
+        future = "future_verified_fish"
         state.journal[future] = {"count": 5}
-        self.assertIsNone(state.set_shiny_tracker(future))
+        from .book import SPECIES_RUMORS, Rumor
+        with patch.dict(SPECIES_RUMORS, {future: Rumor("A future page.", "A future cat")}):
+            self.assertIsNone(state.set_shiny_tracker(future))
         self.assertEqual(state.v2["book"]["tracked"], future)
 
     def test_sparkle_marker_renders_in_both_fonts_and_uses_the_bounded_cache(self):
