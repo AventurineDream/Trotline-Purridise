@@ -59,7 +59,10 @@ def _bird(out, x, y, z, yaw, species, t, phase):
 def faces(state, world, light=None):
     light = lighting_at(state.game_minutes+state.minute_acc, state) if light is None else light
     out = []
-    if world.generated:
+    if world.caldera:
+        from .caldera import thermal_faces
+        out.extend(thermal_faces(state, world))
+    elif world.generated:
         from .lakegen import smoke_faces
         out.extend(smoke_faces(state, world))
     t = float(state.anim)

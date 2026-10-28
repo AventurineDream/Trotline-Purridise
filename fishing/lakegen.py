@@ -21,13 +21,20 @@ class LakeFields:
 
     def shore(self, x, z):
         x, z = np.broadcast_arrays(np.asarray(x, np.float32), np.asarray(z, np.float32))
-        return (np.hypot(x, z) - self.radius(np.arctan2(z, x))).astype(np.float32)
+        result = np.hypot(x, z) - self.radius(np.arctan2(z, x))
+        for cx, cz, rx, rz, height in self.parameters.get('islands', ()):
+            # Positive on the island, negative in the surrounding water.
+            island = (1-np.hypot((x-cx)/rx,(z-cz)/rz))*min(rx,rz)
+            result = np.maximum(result,island)
+        return result.astype(np.float32)
 
     def depth(self, x, z):
         x, z = np.broadcast_arrays(np.asarray(x, np.float32), np.asarray(z, np.float32))
         sd = self.shore(x, z)
         distance = np.maximum(0, -sd)
         result = .5 + 15 * (1-np.exp(-distance/100))
+        if self.parameters['kind'] == 'caldera':
+            result = .9 + 61 * (1-np.exp(-distance/70))
         nearest = np.full(x.shape, np.inf, np.float32)
         for zone, cx, cz, radius in self.zones:
             distance_to_zone = np.hypot(x-cx, z-cz)
@@ -50,6 +57,15 @@ class LakeFields:
         height = .45 + inland*.018
         for cx, cz, peak, width in self.parameters['peaks']:
             height += peak * np.exp(-((x-cx)**2+(z-cz)**2)/(2*width**2)) * blend
+        if self.parameters['kind'] == 'caldera':
+            rim_height,rise = self.parameters['rim']
+            outer = np.maximum(0,np.hypot(x,z)-self.radius(np.arctan2(z,x)))
+            wall = np.clip(outer/rise,0,1)
+            height += rim_height*wall*wall*(3-2*wall)
+            for cx,cz,rx,rz,peak in self.parameters['islands']:
+                radial = np.hypot((x-cx)/rx,(z-cz)/rz)
+                cone = peak*np.power(np.clip(1-radial,0,1),.72)
+                height = np.where(radial<=1,np.maximum(.45,cone),height)
         # Small ridgeline facets, fixed in world coordinates and independent of RNG.
         height += (np.sin(x*.023+z*.016)*5 + np.sin(x*.009-z*.031)*3) * blend
         return np.where(sd >= 0, np.maximum(.45, height), 0).astype(np.float32)
@@ -62,6 +78,11 @@ class LakeFields:
         radius = self.radius(angles)
         coast = np.stack((np.cos(angles)*radius, np.sin(angles)*radius,
                           np.cos(angles), np.sin(angles)), axis=1).astype(np.float32)
+        for cx,cz,rx,rz,height in self.parameters.get('islands', ()):
+            ia = np.linspace(0,math.tau,96,endpoint=False)
+            island = np.stack((cx+np.cos(ia)*rx,cz+np.sin(ia)*rz,
+                               -np.cos(ia),-np.sin(ia)),axis=1).astype(np.float32)
+            coast = np.concatenate((coast,island))
         return self.shore(x, z), self.depth(x, z), coast
 
 

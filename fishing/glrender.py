@@ -69,11 +69,17 @@ class LakeRenderer(SoftwareRenderer):
             vertex_shader=common+(SHADERS/vert).read_text(),
             fragment_shader=common+(SHADERS/frag).read_text()))
 
-    def target(self, width, height):
+    def target(self, width, height, *, sample_depth=False):
         tex = self.own(self.ctx.texture((width,height),3))
         tex.filter = (moderngl.LINEAR,moderngl.LINEAR)
         tex.repeat_x = tex.repeat_y = False
-        depth = self.own(self.ctx.depth_renderbuffer((width,height)))
+        if sample_depth:
+            depth = self.own(self.ctx.depth_texture((width,height)))
+            depth.compare_func = ""
+            depth.filter = (moderngl.NEAREST,moderngl.NEAREST)
+            depth.repeat_x = depth.repeat_y = False
+        else:
+            depth = self.own(self.ctx.depth_renderbuffer((width,height)))
         fb = self.own(self.ctx.framebuffer([tex],depth))
         return tex,fb
 
@@ -96,7 +102,7 @@ class LakeRenderer(SoftwareRenderer):
                 color = self.own(ctx.renderbuffer((self.w,self.h),3,samples=self.samples))
                 depth = self.own(ctx.depth_renderbuffer((self.w,self.h),samples=self.samples))
                 self.draw_fb = self.own(ctx.framebuffer([color],depth))
-        self.reflect_tex,self.reflect_fb = self.target(max(80,self.w//2),max(45,self.h//2))
+        self.reflect_tex,self.reflect_fb = self.target(max(80,self.w//2),max(45,self.h//2),sample_depth=self.world.caldera)
         self.output_tex,self.output_fb = self.target(self.w,self.h)
         for name,grid in (("shore_tex",self.world.shore_grid),
                           ("depth_tex",getattr(self.world,"depth_grid",None))):
@@ -115,7 +121,7 @@ class LakeRenderer(SoftwareRenderer):
                           [x0,0,z0],[x1,0,z1],[x0,0,z1]],np.float32)
         water_buf = self.own(ctx.buffer(plane.tobytes()))
         self.water_vao = self.own(ctx.vertex_array(self.water_p,[(water_buf,"3f","in_pos")]))
-        self.layers,images = atlas(paint_rgb("buoy","orange"), alpine=self.world.generated)
+        self.layers,images = atlas(paint_rgb("buoy","orange"), alpine=self.world.generated, caldera=self.world.caldera)
         self.atlas = self.own(ctx.texture_array((ATLAS_W,ATLAS_H,len(images)),4,images.tobytes()))
         self.atlas.filter = (moderngl.LINEAR,moderngl.LINEAR)
         self.atlas.repeat_x = self.atlas.repeat_y = False
@@ -248,7 +254,7 @@ class LakeRenderer(SoftwareRenderer):
         from .sprites import PROP_ASPECTS, WATERLINE_KINDS
         rows = []
         for i,prop in enumerate(self.world.props):
-            tree = prop.kind in ("pine","oak","cypress","larch","spruce")
+            tree = prop.kind in ("pine","oak","cypress","larch","spruce","hemlock","whitebark","deadpine")
             kind = f"{prop.kind}{i%3}" if tree else prop.kind
             gy = 0 if prop.kind in WATERLINE_KINDS else float(self.world.sample_height(prop.x,prop.z))
             height = prop.h*(1.35 if tree else 1)
@@ -282,20 +288,22 @@ class LakeRenderer(SoftwareRenderer):
         up = cam.right*sr+cam.up*cp*cr-cam.forward*sp*cr
         forward = cam.up*sp+cam.forward*cp
         sl = self.world.slip
-        values = dict(
+        from .caldera import reflection_strength
+        island = (self.world.environment or {}).get("islands", [(0,0,1,1,0)])[0]
+        values = dict(still_reflection=reflection_strength(state, light),cinder_island=tuple(island[:4]),
             eye=tuple(cam.eye),view_right=tuple(right),view_up=tuple(up),view_forward=tuple(forward),
             tanx=cam.tanx,tany=cam.tany,anim=float(state.anim)%10000,viewport=viewport,
             sun=tuple(light["sun"]),sun_i=light["sun_i"],moon=tuple(light["moon"]),moon_i=light["moon_i"],
             night=light["night"],gold=light["gold"],horizon=tuple(light["horizon"]),zenith=tuple(light["zenith"]),
             cloud_cover=light["cloud_cover"],rain=light["rain"],mist=light.get("mist", 0.0),mirror=float(mirror),
-            lake_kind=3.0 if self.world.generated else (2.0 if self.world.placeholder else float(self.world.id=="cedar")),
+            lake_kind=4.0 if self.world.caldera else 3.0 if self.world.generated else (2.0 if self.world.placeholder else float(self.world.id=="cedar")),
             snow=light.get("snow", 0.0),snow_anim=0.0 if bool(state.v2.get("settings", {}).get("reduced_motion", False)) else float(state.anim)%10000,
             snow_line=(self.world.environment or {}).get("snow_line", 95),
             alpine_shallow=tuple((self.world.environment or {}).get("water_shallow", (.17,.49,.43))),
             alpine_deep=tuple((self.world.environment or {}).get("water_deep", (.015,.15,.23))),
             lake_bounds=self.world.bounds,
             lake_water=tuple(self.world.palette["water"]),
-            lake_grid=(self.world.nx,self.world.nz),lake_shore=3,lake_depth=4,
+            lake_grid=(self.world.nx,self.world.nz),lake_shore=3,lake_depth=4,reflection_depth=5,
             lily_centre=next((tuple(row[1:3]) for row in self.world.zones if row[0]=="lilies"),(-175,-115)),
             boat_pos=(state.x,state.z),boat_forward=(math.sin(state.yaw),math.cos(state.yaw)),
             speed=float(state.speed),spotlight=float(state.light),comfort_fog_radius=comfort.fog_radius(state),
@@ -419,6 +427,8 @@ class LakeRenderer(SoftwareRenderer):
         self._scene(state,cam,light,1,self.draw_fb,buoys,corks)
         self._uniforms(self.water_p,state,cam,light,1,self.draw_fb.size)
         self.reflect_tex.use(1)
+        if self.world.caldera:
+            self.reflect_fb.depth_attachment.use(5)
         segments = np.zeros((8,4),np.float32)
         heat = np.zeros(8,np.float32)
         for i,line in enumerate(state.lines[:8]):
