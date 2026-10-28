@@ -27,7 +27,8 @@ class ContentV2Checks(unittest.TestCase):
         self.assertEqual(len(content.baits), 17)
         self.assertEqual(len(content.pantry), 6)
         self.assertEqual(len(content.dishes), 10)
-        self.assertEqual(set(content.boats), {"jon", "rowboat", "sail", "pontoon"})
+        self.assertEqual(len(content.boats), 24)
+        self.assertLessEqual({"jon", "rowboat", "sail", "pontoon"}, set(content.boats))
         self.assertEqual(set(content.lakes), {"briar", "cedar", "flathead", "crater", "nebula"})
         self.assertEqual(len(SPECIES), 144)
         self.assertEqual(SPECIES_BY_ID["bluegill"].folk_name, "Sunny")
@@ -41,7 +42,7 @@ class ContentV2Checks(unittest.TestCase):
         self.assertEqual(CEDAR_FISH["smallmouth"], 0.0)
         self.assertEqual(LINE_TIERS["std"]["hooks"], 12)
         self.assertEqual(BOATS["pontoon"].traits, ("hammock",))
-        self.assertEqual({boat_id: boat.lines for boat_id, boat in BOATS.items()}, {
+        self.assertEqual({boat_id: BOATS[boat_id].lines for boat_id in ("jon", "rowboat", "sail", "pontoon")}, {
             "jon": 5, "rowboat": 5, "sail": 5, "pontoon": 6,
         })
         self.assertEqual(bait_mult("unlisted", "bluegill"), 0.05)

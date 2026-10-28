@@ -68,12 +68,17 @@ from .savepaths import (UnsupportedSaveVersionError, V2_REWARD_KINDS,
                         merge_v2_defaults)
 from . import comfort
 from . import bottools
+from . import fleet
 
 MASK = (1 << 64) - 1
 SAVE_VERSION = 2
 # Dense reed beds (`reeds` zones) slow every boat to a crawl. Lines still need
 # the Reed Anchor there; see State.try_set.
 REEDS_CRAWL_SPEED = 0.6  # m/s
+# Flathead snow-mist chop slows every hull except an ice_hull (02 §9).
+SNOW_MIST_CHOP = 0.8
+# The reed dugout may set lines in reeds without the Reed Anchor (03 §6).
+REED_LINE_BOATS = frozenset({"reed_dugout"})
 
 _SAVE_FIELDS = frozenset({
     "version", "lake_id", "boat_id", "owned_boats", "fuel_tanks",
@@ -606,7 +611,7 @@ class State:
     # --- capacity -------------------------------------------------------
 
     def well_cap(self) -> float:
-        return WELLS[self.well_tier] + self.boat.well_bonus
+        return self.boat.well_cap(self.well_tier)
 
     def well_load(self) -> float:
         return sum(c.weight for c in self.well)
@@ -618,13 +623,19 @@ class State:
         return sum(self.bait.values())
 
     def max_speed(self) -> float:
-        if self.boat_id=="sail":
+        power = self.boat.power
+        if power=="sail":
             base = 1.8  # small auxiliary; powered-boat upgrades stay available
         elif self.boat_id=="rowboat":
             base = (ROWBOAT_ELECTRIC_SPEED if self.rowboat_trolling_motor
                     and self.rowboat_battery_kwh > 0.0 else ROWBOAT_ROW_SPEED)
-        else:
+        elif power=="tiller":
             base = MOTORS[self.motor]["speed"] * self.boat.speed_factor
+        else:
+            base = self.boat.top_speed  # paddle, oars, console, inboard, starlight
+        if (self.lake_id=="flathead" and "ice_hull" not in self.boat.traits
+                and weather_at(self)=="snow_mist"):
+            base *= SNOW_MIST_CHOP
         return base * comfort.speed_factor(self.v2)
 
     @property
@@ -641,7 +652,7 @@ class State:
 
     def toggle_sail(self) -> str | None:
         if not self.boat.sail_speed:
-            return "The daysailer has the sail."
+            return "This boat has no sail."
         self.sail_raised = not self.sail_raised
         if self.sail_raised:
             self.anchored = False
@@ -658,9 +669,12 @@ class State:
         model = BOATS[boat_id]
         if self.slip_status(world)!="docked" or abs(self.speed)>=0.45:
             return "Idle at the landing to change boats."
-        if self.well_load()>WELLS[self.well_tier]+model.well_bonus:
+        if self.well_load()>model.well_cap(self.well_tier):
             return "Sell some fish before switching to the smaller livewell."
         if boat_id not in self.owned_boats:
+            locked = fleet.shop_error(self, world.id, boat_id)
+            if locked:
+                return locked
             if not self._spend(model.price):
                 return f"Need {dollars(model.price)}."
             self.owned_boats.append(boat_id)
@@ -896,6 +910,7 @@ class State:
             self.drift_lines(world, hours * 60.0)
         cold_layer = bottools.cold_layer_m(self.lake_id, hour, weather)
         winched = self.owns_tool("zero_g_winch")
+        silent_hull = "silent" in self.boat.traits
         for li, line in enumerate(self.lines):
             for i, hook in enumerate(line.hooks):
                 if hook.catch is not None:
@@ -917,7 +932,8 @@ class State:
                 zone = world.zone_at(x, z)
                 depth = float(world.depth(x, z))
                 bait = line.bait_for_hook(i)
-                bot_tool = bottools.ToolState(cold_layer, self.game_minutes < line.chime_until, winched)
+                bot_tool = bottools.ToolState(cold_layer, self.game_minutes < line.chime_until, winched,
+                                              silent_hull)
                 rates = species_rates(zone, bait, hour, weather, depth,self.lake_id,
                                       game_minutes=self.game_minutes, tool=bot_tool)
                 total = sum(rates.values())
@@ -1028,8 +1044,11 @@ class State:
                             self.toast("Battery empty. W/S still row the boat.")
                     else:
                         movement_propulsion = "oar"
+                elif not self.boat.fuelled:
+                    # Paddles and oars row; a starlight barge glides under its own power.
+                    movement_propulsion = "motor" if self.boat.power == "starlight" else "oar"
                 else:
-                    burn = self.boat.fuel_burn*(1.0 if self.boat_id=="sail" else 1+self.motor*0.75)
+                    burn = self.boat.fuel_burn*(1+self.motor*0.75 if self.boat.power=="tiller" else 1.0)
                     burn *= comfort.fuel_factor(self)
                     needed = burn*(0.12+0.88*abs(engine)**1.7)*dt/60.0
                     available = min(self.fuel,needed)
@@ -1488,7 +1507,7 @@ class State:
         zone = world.zone_at(mx, mz)
         if zone in ("landing", "shore"):
             return "The landing is a no-line zone."
-        if zone == "reeds" and not self.owns_tool("reed_anchor"):
+        if zone == "reeds" and not (self.owns_tool("reed_anchor") or self.boat_id in REED_LINE_BOATS):
             return "Reeds hold a line only with the Reed Anchor from Frog Bot."
         for bait, amount in needed.items():
             self.bait[bait] -= amount

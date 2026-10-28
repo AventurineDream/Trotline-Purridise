@@ -1,12 +1,22 @@
 """Small, detailed first-person daysailer and pontoon meshes."""
 
 import math
+from dataclasses import replace
 
 import numpy as np
 
 from .data import paint_rgb
 from .world import Face
 from .weather import wind_at
+
+HULL_GLOW = 0.55  # night-emission strength of a `glow` hull
+
+
+def glow_hull(state, faces):
+    """A `glow` boat is lit at night. Faces that set their own emission keep it."""
+    if "glow" not in state.boat.traits:
+        return faces
+    return [face if face.emissive is not None else replace(face, emissive=HULL_GLOW) for face in faces]
 
 
 def boat_faces(state):
@@ -54,7 +64,7 @@ def boat_faces(state):
             quad([a+n*r,b+n*r,b+m*r,a+m*r],color,n+m)
 
     model = state.boat
-    if state.boat_id=="rowboat":
+    if model.mesh_id=="rowboat":
         beam,bow,stern = model.half_beam,model.bow,model.stern
         # Blue molded shell, cream liner, shallow floor and a blunt transom.
         shell = (np.array([0.08,0.29,0.67],np.float32)
@@ -119,7 +129,7 @@ def boat_faces(state):
             tube((0.50,-0.31,0.43),(0.50,-0.27,0.88),0.018,electric,8)
             box((0.50,-0.24,0.89),(0.09,0.06,0.16),electric)
             box((0.04,-0.57,stern-0.11),(0.045,0.045,0.045),(0.21,0.72,0.58))
-    elif state.boat_id=="sail":
+    elif model.mesh_id=="sail":
         beam,bow,stern = model.half_beam,model.bow,model.stern
         rim = [(-beam,stern),(-beam,1.25),(-0.56,2.05),(0,bow),(0.56,2.05),(beam,1.25),(beam,stern)]
         quad([(-0.76,-1.00,stern),(0.76,-1.00,stern),(0.76,-1.00,1.12),(-0.76,-1.00,1.12)],deck,(0,1,0))
@@ -216,6 +226,6 @@ def boat_faces(state):
             tube((-1.06,1.15,z),(1.06,1.15,z),0.023,metal)
         box((0,-1.07,stern-.10),(0.48,0.60,0.32),motor)
     if state.light:
-        y = -0.36 if state.boat_id=="sail" else -0.16
+        y = -0.36 if state.boat.mesh_id=="sail" else -0.16
         box((0,y,model.bow-.15),(0.17,0.13,0.16),(0.16,0.19,0.19))
     return faces
