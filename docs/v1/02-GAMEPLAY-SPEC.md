@@ -419,7 +419,8 @@ chop), `glow` (lit hull at night).
 `Word-###`, where Word comes from the 12 prefixes in `03 §7` and ### is 011–999,
 zero-padded. It is generated **deterministically from the save's schedule seed**,
 so existing saves get a stable name on migration. It is shown on the title screen
-save slot and in the book's author line.
+save slot and in the book's author line. Names already assigned in compatible
+saves remain fixed; old placeholder suffixes below 011 are repaired once.
 
 ### 10.2 Shells and tools
 
@@ -431,7 +432,18 @@ save slot and in the book's author line.
 | Clockwork Copper Sub | Ch. 3 | **Thermocline Scanner** ($260) | Shows `d(t)` in the HUD and Bot's report on Flathead and Crater. The book shows each cold species' band relative to `d` |
 | Astral Starlight Bot | Ch. 5 | **Zero-G Winch** ($400) | Lines don't drift in currents; current species ×1.2; legendary hauls play the smooth "winch" variant |
 
-- Shells swap at any landing (free once earned). Tools work with any shell.
+- Shells swap in Landing → Bot (free once earned), while stopped. Swapping
+  keeps the active scout target, phase, notes and progress. Tool purchases need
+  the earned shell, independent of the shell currently worn; Sonar Grid also
+  needs the Depth Finder. Already owned tools cannot be charged twice.
+- The five procedural shell models sit on the bow and animate during scouting.
+  Wool and the chosen knot render on every shell after receipt; reduced motion
+  freezes decorative joints. Astral chrome and star freckles glow at night in
+  both rendering backends.
+- Collar state is saved as none → received → loose → retied → favorite. The
+  marker scene enables the square knot, bow or sailor’s hitch choice in chapter
+  4; the saved knot survives every shell change. Visibility never changes this
+  progression. Tools work with any shell.
 - **Paint and trims:** Tinker Thistle (traveler) sells cosmetic shell paints, $30
   each.
 - **Barks:** every factual bark is tied to a live condition, and each has an
@@ -676,8 +688,10 @@ visibility.
   finale nights).
 - **Music:** a gentle procedural or sequenced score, one motif per lake, played
   sparsely: dawn, dusk, chapter moments. Silence is a valid default.
-- Each Bot shell has a chime timbre (tin = triangle, duck = squeak, frog = wooden
-  "ribbit" click, sub = bubbly tick, astral = glass bell).
+- Each Bot shell has a synthesized chime timbre (tin = triangle, duck = squeak,
+  frog = wooden "ribbit" click, sub = bubbly tick, astral = glass bell), with a
+  matching caption. Launch, recall, reports and shell swaps use the equipped
+  shell’s voice through the existing SFX bus and caption setting.
 
 ---
 

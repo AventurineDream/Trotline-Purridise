@@ -1,0 +1,14 @@
+{
+  "frames": 140,
+  "resolution": [
+    1280,
+    720
+  ],
+  "text_size": 2,
+  "accessibility_font": true,
+  "p50_ms": 10.24,
+  "p95_ms": 11.12,
+  "peak_rss_mib": 175.5,
+  "text_cache_mb": 8.38,
+  "scope": "Warmed Bot shell/tool/collar menu composition; excludes lake rendering"
+}

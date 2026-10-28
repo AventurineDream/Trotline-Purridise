@@ -161,6 +161,9 @@ class Face:
     normal: np.ndarray  # (3,)
     color: np.ndarray  # (3,) 0-1
     space: str = "world"
+    # None preserves legacy material inference. Procedural actors set an
+    # explicit 0..1 night-emission strength, so yellow enamel is not a lamp.
+    emissive: float | None = None
 
 
 def _face(pts, normal, color) -> Face:
