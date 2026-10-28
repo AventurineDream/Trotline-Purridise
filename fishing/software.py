@@ -110,6 +110,9 @@ class SoftwareRenderer:
         self.bayer = tile
         self.sprites = bake(paint_rgb("buoy", "orange"))
         self._buoy_id = "orange"
+        if world.generated:
+            from .forest import tree
+            self.sprites.update({kind: tree(kind, 0) for kind in ("larch", "larchgold", "spruce")})
         self.last_ms = 0.0
         self.splashes: list[tuple[float, float, float]] = []
         px = np.array([p.x for p in world.props],np.float32)
@@ -122,7 +125,7 @@ class SoftwareRenderer:
     def _sync_buoy(self, state):
         bid = state.look_paint["buoy"]
         if bid != self._buoy_id:
-            self.sprites = bake(paint_rgb("buoy", bid))
+            self.sprites.update(bake(paint_rgb("buoy", bid)))
             self._buoy_id = bid
 
     def render(self, state, cam: Camera | None = None) -> np.ndarray:
@@ -156,7 +159,7 @@ class SoftwareRenderer:
         if np.any(close):
             self._shade_water(np.flatnonzero(close), hx, hz, t_plane, dirs, state, cam, light)
 
-        march = (dy < 0.12) & ~close & (t_plane > 0.35)
+        march = (dy < (0.55 if world.generated else 0.12)) & ~close & (t_plane > 0.35)
         self._march_and_shade(cam, dirs, march, state, light)
 
         self._sprites(cam, state, light)
@@ -168,6 +171,8 @@ class SoftwareRenderer:
         self._faces(cam, ambient_faces(state,world,light), light, boat=False, two_sided=True)
         if light["rain"] > 0.0:
             self._rain(state.anim, light["rain"])
+        if light.get("snow", 0) > 0:
+            self._snow(0 if bool(state.v2.get("settings", {}).get("reduced_motion", False)) else state.anim, light["snow"])
         if _legacy_birds_visible(light):
             self._birds(cam, state.anim)
         rgb = self._quantize(col)
@@ -234,6 +239,9 @@ class SoftwareRenderer:
             [2.0, 4.5, 8.0, 14.0, 24.0, 40.0, 70.0, 120.0, 220.0, 420.0, 780.0],
             dtype=np.float32,
         )
+        limit = 1900.0 if self.world.generated else 800.0
+        if self.world.generated:
+            ts = np.append(ts, np.array([1000, 1200, 1400, 1650, 1890], np.float32))
         lo = np.full(n, np.float32(0.4))
         hi = np.full(n, np.float32(1.0e6))
         px = cam.x + d[:, 0] * lo
@@ -261,7 +269,7 @@ class SoftwareRenderer:
         # Tighten the bracket, then take the secant. Six midpoint cuts on a
         # 6–16 m bracket left a slab of pixels on the near sample, so the
         # bank stood up as a wall and jumped to the next sample as you closed in.
-        alive = found & (hi < 800.0)
+        alive = found & (hi < limit)
         ai = np.flatnonzero(alive & ((hi - lo) > np.float32(0.20)))
         for _ in range(8):
             if ai.size == 0:
@@ -281,7 +289,7 @@ class SoftwareRenderer:
         alpha = np.clip(np.where(np.abs(denom) > np.float32(1.0e-4), gap_lo / denom, np.float32(0.5)), 0.0, 1.0)
         guess = np.where(span < np.float32(1.0e-3), lo, lo + span * alpha)
         best = np.where(alive, guess, np.float32(1.0e6))
-        hit = best < 800.0
+        hit = best < limit
         if not np.any(hit):
             return
         sel = idx[hit]
@@ -370,6 +378,11 @@ class SoftwareRenderer:
         body *= tint
         if world.placeholder:
             body = body * 0.25 + np.array(world.palette["water"], np.float32) * tint * 0.75
+        if world.generated:
+            blend = np.clip(depth / 20, 0, 1)[:, None]
+            shallow = np.array(world.environment["water_shallow"], np.float32)
+            deep = np.array(world.environment["water_deep"], np.float32)
+            body = shallow*(1-blend) + deep*blend
         # Bottom shows through the skinniest water.
         sand = np.array([0.55, 0.50, 0.32], np.float32)
         clear = np.clip(depth / 1.1, 0.0, 1.0)[:, None]
@@ -430,6 +443,8 @@ class SoftwareRenderer:
             ((ids == _LILY) & (hsh > 0.66))
             | ((depth < 1.65) & (sdv < -3.5) & (hsh > 0.84))
         )
+        if world.generated:
+            pad &= (ids == _LILY) & (np.abs(fx) < .075) & (np.abs(fz) < .38)
         rim = pad & (r2 > 0.055)
         green = np.array([0.22, 0.55, 0.16], np.float32)
         leaf = np.array([0.08, 0.30, 0.10], np.float32)
@@ -563,6 +578,15 @@ class SoftwareRenderer:
         colr = low * (1.0 - high) + rock * high
         sand_m = (sdv > -0.3) & (sdv < 7.0) & (h < 1.8)
         colr = np.where(sand_m[:, None], sand * (0.85 + 0.15 * nse[:, None]), colr)
+        if world.generated:
+            gravel = np.array([.49, .50, .46], np.float32)
+            meadow = np.array([.24, .34, .24], np.float32)
+            alpine_rock = np.array([.37, .42, .44], np.float32)
+            bank = gravel*(1-shore_t) + meadow*shore_t
+            rocky = np.clip((h-18)/65, 0, 1)[:, None]
+            colr = bank*(1-rocky) + alpine_rock*rocky
+            snow = np.clip((h-world.environment["snow_line"]+nse*24)/26, 0, 1)[:, None]
+            colr = colr*(1-snow) + np.array([.84,.89,.91], np.float32)*snow
         # Shade under the treeline so the bank is not one flat stripe.
         canopy = np.clip((sdv - 2.0) / 5.0, 0.0, 1.0) * np.clip((16.0 - sdv) / 8.0, 0.0, 1.0)
         colr = colr * (1.0 - 0.32 * canopy)[:, None]
@@ -588,6 +612,8 @@ class SoftwareRenderer:
         ambient = 0.22 + 0.70 * (1.0 - light["night"]) + light["moon_i"] * 0.4
         fog_c = light["horizon"]
         items = []
+        from .lakegen import larch_gold
+        gold = self.world.generated and larch_gold(state)
         pts = cam.world_to_cam(self.prop_positions)
         front = np.flatnonzero(pts[:,2]>0.3)
         sx_all,sy_all,zz_all = cam.cam_to_screen(pts[front])
@@ -595,8 +621,11 @@ class SoftwareRenderer:
             prop = self.world.props[i]
             if zz > 750 or sx < -80 or sx > self.w + 80:
                 continue
-            tree = prop.kind in ("pine", "oak", "cypress")
-            items.append((zz, prop.kind, prop.x, prop.z, prop.h, prop.shade, sx, sy, tree))
+            tree = prop.kind in ("pine", "oak", "cypress", "larch", "spruce")
+            kind = prop.kind
+            if kind == "larch":
+                kind = "larchgold" if gold else kind
+            items.append((zz, kind, prop.x, prop.z, prop.h, prop.shade, sx, sy, tree))
         sprite_name = "buoy_flag"
         for line in state.lines:
             kind = sprite_name if line.fish_on() else "buoy"
@@ -783,6 +812,15 @@ class SoftwareRenderer:
             (0, 1, 0), till,
         ))
         return faces
+
+    def _snow(self, anim: float, amount: float):
+        # A fixed foreground lattice: no particle history or scene depth changes.
+        for i in range(96):
+            x = int((i*73.37 + math.sin(i+anim*.18)*7) % self.w)
+            y = int((i*47.11 + anim*(5+i%7)) % self.h)
+            alpha = amount*(.30+.06*(i%4))
+            self.col[y:min(y+2,self.h), x:min(x+2,self.w)] *= 1-alpha
+            self.col[y:min(y+2,self.h), x:min(x+2,self.w)] += np.array([.85,.9,.94])*alpha
 
     def _rain(self, anim: float, amount: float):
         h, w, _ = self.col.shape

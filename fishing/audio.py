@@ -226,12 +226,13 @@ class Audio:
 
     def _schedule(self):
         hour = self._hour
+        alpine = getattr(self, "_lake_id", "briar") == "flathead"
         rain = self._rain
         edge = (5.3 <= hour <= 8.3) or (17.5 <= hour <= 20.9)
         day = 8.3 < hour < 17.5
         night = hour < 5.1 or hour > 20.6
         if self.time >= self._bird_at:
-            if edge and rain < 0.75:
+            if (edge or (alpine and day)) and rain < 0.75:
                 self._cue("loon")
                 self._bird_at = self.time + self._span(18.0, 16.0)
             elif day and rain < 0.9:
@@ -239,15 +240,16 @@ class Audio:
                 self._bird_at = self.time + self._span(24.0, 20.0)
             else:
                 self._bird_at = self.time + 6.0
-        if night and rain < 0.8 and self.time >= self._frog_at:
+        if not alpine and night and rain < 0.8 and self.time >= self._frog_at:
             self._cue("frog")
             self._frog_at = self.time + self._span(6.0, 7.0)
 
     def update(self, dt: float, throttle: float, speed: float, muted: bool,
                *, hour: float = 12.0, rain: float = 0.0, sailing: bool = False,
-               motorized: bool = True, rowing: bool = False, volumes=None):
+               motorized: bool = True, rowing: bool = False, volumes=None, lake_id="briar"):
         # hour, rain, and sailing stay keyword-only. The window smoke test
         # still calls this with the four positional arguments.
+        self._lake_id = lake_id
         if volumes is not None:
             self.set_volumes(volumes)
         if not self.ok:
@@ -312,10 +314,12 @@ class Audio:
         self.shots = alive
         wind, self._wind_at = self._slice(self._wind, self._wind_at, frames)
         gust = 0.028 + 0.12 * self._rain + (0.075 if self._sailing else 0.0) + 0.05 * drive
+        if getattr(self, "_lake_id", "briar") == "flathead":
+            gust += .018
         pan = 0.22 * math.sin(self.time * 0.31)
         ambience_left = ambience + wind * gust * (1.0 - pan)
         ambience_right = ambience + wind * gust * (1.0 + pan)
-        if self._hour < 5.1 or self._hour > 20.6:
+        if getattr(self, "_lake_id", "briar") != "flathead" and (self._hour < 5.1 or self._hour > 20.6):
             bugs, self._cricket_at = self._slice(self._crickets, self._cricket_at, frames)
             level = 0.055 * (1.0 - min(1.0, self._rain) * 0.65)
             ambience_left += bugs * level * 0.85

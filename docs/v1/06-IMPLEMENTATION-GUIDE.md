@@ -604,7 +604,7 @@ there is one source of truth. The old eight habitat indices stay in place;
 `reeds`, `springs` and `current` are appended. Briar gains the Reed Passage
 matches from `03 §1.2`; Cedar's survey, zones and geometry stay unchanged.
 
-Flathead, Crater and Nebula use bounded, driveable flat maps with their own
+Crater and Nebula use bounded, driveable flat maps with their own
 habitat labels and safe landing slips. Crater has springs and no inlet;
 Nebula has reeds and current. V1-24 populates their ordinary fish rosters and temporary soundings. Their NPC
 casts remain empty until the character-content tickets land. They allocate only the active
@@ -670,6 +670,31 @@ coverage of 144 fish, twelve quests and every Book tab.
 cards, new Book entries, roe stock, a placeholder sounding chart and a warmed
 full-frame benchmark. Add `--software` for the CPU path. See
 `docs/issue-52/README.md` for captures and measurements.
+
+
+## Implemented Flathead environment (V1-25)
+
+Flathead now uses `lakegen.LakeFields` with a closed polar outline, six habitat
+depth profiles and six authored ridges from `lakes.json.environment`. The shore,
+depth and terrain grids share the same bounds for physics, chart and GLSL
+textures. The active lake owns its grids; travel can release them. The older
+Briar/Cedar fields and Cedar's survey asset are unchanged.
+
+The generator bakes 673×545 float32 fields and a bounded larch/spruce forest.
+Larch Gold switches atlas layers in the existing instance buffer. Alpine sky,
+teal depth tint, snow caps, pondweed, flooded trunks and a stove-smoke chimney
+have native and simplified CPU paths. Snow flakes and smoke have fixed bounds
+and freeze under Reduced Motion. The audio lake hook selects loons and a gentle
+larch-wind bed; no new downloaded assets are required.
+
+`python -m fishing --shots PATH --alpine [--software]` captures the five required
+time/weather views, Larch Gold, the Outpost and a labelled habitat chart. It also
+records first-frame load, 60 warmed full frames, memory, fixed GPU resources,
+floating-point native probes and all 34 real-map catchability witnesses.
+See [issue 53](../issue-53/README.md) for evidence and the explicit Mesa versus
+hardware-GPU measurement distinction.
+
+
 ### V1-17 Bot identity and progression
 
 `bot.json` is validated with the other v2 content files and supplies twelve name

@@ -1504,7 +1504,7 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
                 renderer.poke_splashes(session.state)
             minutes = session.state.game_minutes
             audio.update(dt, session.state.throttle, session.state.speed, session.state.muted,
-                         hour=hour_of_day(minutes),
+                         hour=hour_of_day(minutes), lake_id=session.state.lake_id,
                          rain=float(weather_visuals(minutes, session.state)["rain"]),
                          sailing=session.state.sail_raised,
                          motorized=(session.state.boat_id!="rowboat"

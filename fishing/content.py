@@ -635,6 +635,96 @@ class _ContentV2Validator:
             self.number(filename, item_where, multiplier, minimum=0, maximum=maximum)
         return value
 
+    def environment(self, filename, where, value, lake):
+        """Bound allocations and reject malformed procedural map parameters."""
+        keys = {"kind", "seed", "bounds", "grid", "outline", "slip_angle", "snow_line",
+                "tree_count", "sky_zenith", "sky_horizon", "water_shallow", "water_deep",
+                "zones", "depths", "peaks", "ambience"}
+        if not isinstance(value, dict):
+            self.error(filename, where, "expected an environment object")
+            return
+        for key in sorted(keys - value.keys()):
+            self.error(filename, where, f"missing required field {key!r}")
+        for key in sorted(value.keys() - keys):
+            self.error(filename, where, f"unknown field {key!r}")
+        self.enum(filename, where + ".kind", value.get("kind"), {"alpine"})
+        if lake.get("placeholder") is not False:
+            self.error(filename, where, "a generated environment cannot be a placeholder")
+        self.number(filename, where + ".seed", value.get("seed"), integer=True, minimum=0, maximum=2**32-1)
+        self.number(filename, where + ".tree_count", value.get("tree_count"), integer=True, minimum=1, maximum=800)
+        self.number(filename, where + ".slip_angle", value.get("slip_angle"), minimum=0, maximum=math.tau)
+        self.number(filename, where + ".snow_line", value.get("snow_line"), minimum=20, maximum=500)
+
+        def vector(key, count, lo, hi, integer=False):
+            row = value.get(key)
+            if not isinstance(row, list) or len(row) != count:
+                self.error(filename, where + "." + key, f"expected {count} numbers")
+                return False
+            return all([self.number(filename, f"{where}.{key}[{i}]", n,
+                                    minimum=lo, maximum=hi, integer=integer) for i, n in enumerate(row)])
+
+        if vector("bounds", 4, -2400, 2400):
+            x0, z0, x1, z1 = value["bounds"]
+            if x1-x0 < 500 or z1-z0 < 500:
+                self.error(filename, where + ".bounds", "expected increasing bounds spanning at least 500 metres")
+        vector("grid", 2, 64, 1024, True)
+        for key in ("sky_zenith", "sky_horizon", "water_shallow", "water_deep"):
+            vector(key, 3, 0, 1)
+        outline = value.get("outline")
+        valid_outline = isinstance(outline, list) and 5 <= len(outline) <= 65
+        if valid_outline:
+            valid_outline = all(isinstance(row, list) and len(row) == 2
+                                and all(type(n) in (int, float) and _is_finite(n) for n in row)
+                                and 0 <= row[0] <= 360 and 100 <= row[1] <= 1500 for row in outline)
+        if (not valid_outline or outline[0][0] != 0 or outline[-1][0] != 360
+                or outline[0][1] != outline[-1][1]
+                or any(a[0] >= b[0] for a, b in zip(outline, outline[1:]))):
+            self.error(filename, where + ".outline", "expected ordered closed polar points from 0 to 360 degrees")
+        elif isinstance(value.get("bounds"), list) and len(value["bounds"]) == 4:
+            bounds = value["bounds"]
+            if all(type(n) in (int, float) and _is_finite(n) for n in bounds):
+                radius = max(row[1] for row in outline)
+                if not (bounds[0] < -radius and bounds[1] < -radius and bounds[2] > radius and bounds[3] > radius):
+                    self.error(filename, where + ".bounds", "must contain the complete polar shoreline")
+        zones = value.get("zones")
+        zone_ids = []
+        if not isinstance(zones, list) or not 1 <= len(zones) <= 9:
+            self.error(filename, where + ".zones", "expected 1 to 9 habitat circles")
+        else:
+            for i, row in enumerate(zones):
+                at = f"{where}.zones[{i}]"
+                if not isinstance(row, list) or len(row) != 4:
+                    self.error(filename, at, "expected zone ID, x, z, radius")
+                    continue
+                if self.enum(filename, at, row[0], lake.get("zone_ids") if isinstance(lake.get("zone_ids"), list) else []):
+                    if row[0] in zone_ids:
+                        self.error(filename, at, "duplicate habitat circle")
+                    zone_ids.append(row[0])
+                for j, n in enumerate(row[1:]):
+                    self.number(filename, at, n, minimum=1 if j == 2 else -1500, maximum=1500)
+        depths = value.get("depths")
+        if not isinstance(depths, dict) or set(depths) != set(zone_ids):
+            self.error(filename, where + ".depths", "expected a depth profile for every habitat circle")
+        if isinstance(depths, dict):
+            for zone, row in depths.items():
+                if (not isinstance(row, list) or len(row) != 2
+                        or not all(type(n) in (int, float) and _is_finite(n) for n in row)
+                        or not .9 <= row[0] < row[1] <= 100):
+                    self.error(filename, where + ".depths." + str(zone), "expected 0.9 <= minimum < maximum <= 100 metres")
+        peaks = value.get("peaks")
+        if not isinstance(peaks, list) or not 1 <= len(peaks) <= 12:
+            self.error(filename, where + ".peaks", "expected 1 to 12 bounded ridges")
+        else:
+            for i, row in enumerate(peaks):
+                if (not isinstance(row, list) or len(row) != 4
+                        or not all(type(n) in (int, float) and _is_finite(n) for n in row)
+                        or not all(-2400 <= n <= 2400 for n in row[:2])
+                        or not 20 <= row[2] <= 400 or not 50 <= row[3] <= 500):
+                    self.error(filename, f"{where}.peaks[{i}]", "expected x, z, height 20..400, width 50..500")
+        ambience = self.id_list(filename, where + ".ambience", value.get("ambience"), {"loon", "larch_wind"})
+        if set(ambience) != {"loon", "larch_wind"}:
+            self.error(filename, where + ".ambience", "alpine ambience requires loon and larch_wind hooks")
+
     def validate(self, docs):
         species_file, baits_file = "species.json", "baits.json"
         boats_file, lakes_file = "boats.json", "lakes.json"
@@ -689,7 +779,7 @@ class _ContentV2Validator:
         lakes = self.table(docs, lakes_file, "lakes", {
             "id", "name", "landing", "region", "blurb", "species_count", "species_ids",
             "zone_ids", "zone_labels", "palette", "placeholder", "unlock_chapter",
-            "travel_caption", "lake_days"}, {"rate_multipliers", "placeholder_depths"})
+            "travel_caption", "lake_days"}, {"rate_multipliers", "placeholder_depths", "environment"})
         self.require_saved_ids(lakes_file, "zones", zones)
         self.require_saved_ids(lakes_file, "lakes", lakes)
         if lakes_file not in self.unavailable_files and not {"briar", "cedar"}.issubset(lakes):
@@ -889,6 +979,8 @@ class _ContentV2Validator:
                         minimum=0 if placeholder is True else 1)
             if type(count) is int and count != len(listed_ids):
                 self.error(lakes_file, where + ".species_count", f"declares {count}, but lists {len(listed_ids)} species")
+            if "environment" in row:
+                self.environment(lakes_file, where + ".environment", row["environment"], row)
             if "placeholder_depths" in row:
                 depths = row["placeholder_depths"]
                 if not isinstance(depths, dict):

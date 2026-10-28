@@ -115,7 +115,7 @@ class LakeRenderer(SoftwareRenderer):
                           [x0,0,z0],[x1,0,z1],[x0,0,z1]],np.float32)
         water_buf = self.own(ctx.buffer(plane.tobytes()))
         self.water_vao = self.own(ctx.vertex_array(self.water_p,[(water_buf,"3f","in_pos")]))
-        self.layers,images = atlas(paint_rgb("buoy","orange"))
+        self.layers,images = atlas(paint_rgb("buoy","orange"), alpine=self.world.generated)
         self.atlas = self.own(ctx.texture_array((ATLAS_W,ATLAS_H,len(images)),4,images.tobytes()))
         self.atlas.filter = (moderngl.LINEAR,moderngl.LINEAR)
         self.atlas.repeat_x = self.atlas.repeat_y = False
@@ -156,7 +156,7 @@ class LakeRenderer(SoftwareRenderer):
         if self.world.placeholder:
             xs = np.arange(-600, 601, 10, dtype=np.float32)
             zs = np.arange(-500, 501, 10, dtype=np.float32)
-        if self.world.id=="cedar":
+        if self.world.id=="cedar" or self.world.generated:
             x0,z0,x1,z1 = self.world.bounds
             xs = np.arange(x0-300,x1+301,6,dtype=np.float32)
             zs = np.arange(z0-300,z1+301,6,dtype=np.float32)
@@ -248,7 +248,7 @@ class LakeRenderer(SoftwareRenderer):
         from .sprites import PROP_ASPECTS, WATERLINE_KINDS
         rows = []
         for i,prop in enumerate(self.world.props):
-            tree = prop.kind in ("pine","oak","cypress")
+            tree = prop.kind in ("pine","oak","cypress","larch","spruce")
             kind = f"{prop.kind}{i%3}" if tree else prop.kind
             gy = 0 if prop.kind in WATERLINE_KINDS else float(self.world.sample_height(prop.x,prop.z))
             height = prop.h*(1.35 if tree else 1)
@@ -288,7 +288,11 @@ class LakeRenderer(SoftwareRenderer):
             sun=tuple(light["sun"]),sun_i=light["sun_i"],moon=tuple(light["moon"]),moon_i=light["moon_i"],
             night=light["night"],gold=light["gold"],horizon=tuple(light["horizon"]),zenith=tuple(light["zenith"]),
             cloud_cover=light["cloud_cover"],rain=light["rain"],mist=light.get("mist", 0.0),mirror=float(mirror),
-            lake_kind=2.0 if self.world.placeholder else float(self.world.id=="cedar"),
+            lake_kind=3.0 if self.world.generated else (2.0 if self.world.placeholder else float(self.world.id=="cedar")),
+            snow=light.get("snow", 0.0),snow_anim=0.0 if bool(state.v2.get("settings", {}).get("reduced_motion", False)) else float(state.anim)%10000,
+            snow_line=(self.world.environment or {}).get("snow_line", 95),
+            alpine_shallow=tuple((self.world.environment or {}).get("water_shallow", (.17,.49,.43))),
+            alpine_deep=tuple((self.world.environment or {}).get("water_deep", (.015,.15,.23))),
             lake_bounds=self.world.bounds,
             lake_water=tuple(self.world.palette["water"]),
             lake_grid=(self.world.nx,self.world.nz),lake_shore=3,lake_depth=4,
@@ -400,6 +404,15 @@ class LakeRenderer(SoftwareRenderer):
         light = lighting_at(state.game_minutes + state.minute_acc, state)
         self.shore_tex.use(3)
         self.depth_tex.use(4)
+        if self.world.generated:
+            from .lakegen import larch_gold
+            gold = larch_gold(state)
+            if gold != getattr(self, "_larch_gold", None):
+                for i, prop in enumerate(self.world.props):
+                    if prop.kind == "larch":
+                        self.prop_data[i, 5] = self.layers[f"{'larchgold' if gold else 'larch'}{i%3}"]
+                self.prop_buf.write(self.prop_data.tobytes())
+                self._larch_gold = gold
         buoys = self._buoys(state)
         corks = self._corks(state)
         self._scene(state,cam,light,-1,self.reflect_fb,buoys,corks)

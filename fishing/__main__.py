@@ -48,6 +48,10 @@ def main(argv: list[str] | None = None) -> int:
     if "--shots" in argv:
         i = argv.index("--shots")
         dest = argv[i + 1] if i + 1 < len(argv) else str(ROOT / "shots")
+        if "--alpine" in argv:
+            from .alpineshots import shots as alpine_shots
+            alpine_shots(dest, software="--software" in argv)
+            return 0
         if "--species" in argv:
             from .speciesgallery import gallery
             gallery(dest, software="--software" in argv)
