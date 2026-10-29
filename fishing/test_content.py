@@ -25,7 +25,8 @@ class ContentChecks(unittest.TestCase):
 
     def test_complete_canonical_roster_and_rewards(self):
         c = load_content()
-        self.assertEqual(set(c.quests), set(QUEST_IDS))
+        # The V1.0 quests (content_v2, marked by `kind`) sit beside the twelve V3 ones.
+        self.assertEqual({qid for qid, q in c.quests.items() if 'kind' not in q}, set(QUEST_IDS))
         self.assertEqual(len(c.npcs), 12)
         self.assertEqual(sum(n['presence'] == 'permanent' for n in c.npcs.values()), 2)
         rotating = {n['id'] for n in c.npcs.values() if n['presence'] != 'permanent'}
@@ -93,7 +94,7 @@ class ContentChecks(unittest.TestCase):
 
     def test_authored_dialogue_has_every_branch_and_unique_choices(self):
         c = load_content()
-        self.assertEqual(len(c.dialogue), 108)
+        self.assertEqual(sum(node['quest_id'] in QUEST_IDS for node in c.dialogue.values()), 108)
         for qid in QUEST_IDS:
             for stage in ('greeting','offer','accept','decline','progress','ready','ready_wait','completion','return'):
                 node = c.dialogue[qid + ':dialogue:' + stage]

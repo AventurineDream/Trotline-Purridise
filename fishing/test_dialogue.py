@@ -11,6 +11,7 @@ from .game import Keys, Session
 from .sim import Catch, State
 from .npcs import active_npcs
 from .narrative import DAY_NPCS
+from .quests import chain as quest_chain
 from .world import World
 
 
@@ -253,7 +254,7 @@ class DialogueChecks(unittest.TestCase):
 
     def test_every_giver_and_saved_status_uses_authored_entry(self):
         content = self.session._npc_content
-        seen = set()
+        seen, met = set(), set()
         for lake in DAY_NPCS:
             world = self.world if lake == 'briar' else World(lake)
             state = State.new(world)
@@ -267,18 +268,32 @@ class DialogueChecks(unittest.TestCase):
                         state.x, state.z = npc.anchor.position
                         session = Session(world, self.path, state, False)
                         if npc.quest_id is None:
-                            # The rest of the cast has no dialogue graph yet: a hail is a wave.
+                            # A V1.0 cat (V1-32) greets and offers quest A; the rest of the cast waves.
                             session.ui.mode = 'play'
                             session.tick(Keys(pressed=['c']), 0)
-                            self.assertIsNone(session.conversation)
-                            self.assertIn(npc.name + ' waves', state.toasts[-1][0])
+                            chain = quest_chain(content, npc.id)
+                            if chain:
+                                self.assertEqual(session.conversation.quest_id, chain[0])
+                                session.tick(Keys(pressed=['esc']), 0)
+                            else:
+                                self.assertIsNone(session.conversation)
+                                self.assertIn(npc.name + ' waves', state.toasts[-1][0])
                             continue
                         for status in ('available', 'active', 'ready', 'completed'):
                             state.narrative.quests[npc.quest_id].status = status
+                            # A turn-in today: the return line answers it (a greeting from tomorrow).
+                            state.narrative.quests[npc.quest_id].completed_game_minute = state.game_minutes
                             session.ui.mode = 'play'
                             session.tick(Keys(pressed=['c']), 0)
-                            self.assertEqual(session.conversation.node_id,
-                                content.quests[npc.quest_id]['dialogue'][status])
+                            entry = content.quests[npc.quest_id]['dialogue'][status]
+                            conversation = session.conversation
+                            if npc.id not in met and 'first' in content.cats[npc.id]['greetings']:
+                                # Doc's `first` line (05 §4.2) opens the first meeting, then his entry.
+                                self.assertEqual(conversation.node_id, f'{npc.id}:greeting')
+                                self.assertEqual(conversation.node(content)['next'], entry)
+                            else:
+                                self.assertEqual(conversation.node_id, entry)
+                            met.add(npc.id)
                             session.tick(Keys(pressed=['esc']), 0)
         self.assertEqual(seen & set(content.npcs), set(content.npcs))
 
