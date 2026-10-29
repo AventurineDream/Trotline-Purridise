@@ -1390,7 +1390,8 @@ class _ContentV2Validator:
     def schedule_row(self, filename, where, cid, row, anchors, quest_ids, pools):
         """V1-30: each cat's schedule slot, its own anchor on its lake, and its quest ids."""
         role, lake, slot, anchor = row.get("role"), row.get("lake"), row.get("slot"), row.get("anchor")
-        expected = {"host": {"landing"}, "traveler": {"traveler"}, "water": {"day", "night"}}.get(role, set())
+        slots = {"host": {"landing"}, "traveler": {"traveler"}, "water": {"day", "night"}}
+        expected = slots.get(role, set()) if isinstance(role, str) else set()
         if self.enum(filename, where + ".slot", slot, expected) and role == "water" and isinstance(lake, str):
             pools[(lake, slot)] = pools.get((lake, slot), 0) + 1
         if role == "traveler":
@@ -1404,7 +1405,7 @@ class _ContentV2Validator:
             anchors[anchor] = cid
         quests = row.get("quests")
         if role == "host":
-            allowed = [{qid for qid in QUEST_IDS} | {f"host_{lake}"}]
+            allowed = [set(QUEST_IDS) | {f"host_{lake}"}]
         elif role == "water":
             allowed = [set(QUEST_IDS) | {f"wc_{cid}_a"}, {f"wc_{cid}_b"}]
         else:
