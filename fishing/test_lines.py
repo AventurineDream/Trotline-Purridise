@@ -185,8 +185,8 @@ class LineCapacityAndBaitChecks(unittest.TestCase):
             "type": "fish.enter_livewell", "species_id": "golden_shiner",
             "source_line_id": str(uuid4()), "lake_id": "briar",
             "source_zone_id": "briar:lilies", "bait_id": "worm",
-            "bait_sections": ["worm", "shad"], "catch_game_minute": 340,
-            "entry_game_minute": 350,
+            "bait_sections": ["worm", "shad"], "catch_game_minute": 1400,
+            "entry_game_minute": 1410,  # 05:30, inside Willow's 05:00-08:00 window
         }
         manager.handle_event(state, fish_event)
         self.assertEqual(fish_progress.status, "active")
