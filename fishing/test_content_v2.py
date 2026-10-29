@@ -311,6 +311,22 @@ class ContentV2Checks(unittest.TestCase):
         self.assertNotIn("unknown reference", message)
         self.assertEqual(len(message.splitlines()), 1)
 
+    def test_an_unreadable_file_quests_name_is_reported_once(self):
+        # The shipped quests (V1-32) name species, baits, zones, tools, legendaries, cats and rewards.
+        for unreadable in ("species.json", "baits.json", "lakes.json", "bot.json", "legendaries.json",
+                           "npcs.json", "ripples.json", "keepsakes.json", "quests.json"):
+            with self.subTest(file=unreadable), tempfile.TemporaryDirectory() as directory:
+                for filename, raw in CONTENT_V2_RAW.items():
+                    source = json.dumps(raw, indent=2)
+                    if filename == unreadable:
+                        source = source.replace('"schema_version"', '"schema_version": 2, "schema_version"', 1)
+                    (Path(directory) / filename).write_text(source, encoding="utf-8")
+                with self.assertRaises(ContentError) as caught:
+                    load_content_v2(directory)
+                lines = str(caught.exception).splitlines()
+                self.assertEqual(len(lines), 1, lines[:4])
+                self.assertTrue(lines[0].startswith(unreadable + ":root: duplicate JSON key"), lines[0])
+
     def test_lake_rate_map_limits_availability_to_the_declared_roster(self):
         with patch.dict(LAKE_RATE_MULTIPLIERS, {"partial": {"bluegill": 1.0}}):
             rates = species_rates("open", "worm", 12.0, "clear", 5.0, lake_id="partial")

@@ -65,11 +65,12 @@ fishing/assets/content_v2/
                      # schedule slot, anchor and quest ids (V1-30)
   quests.json        # 96 new quests (15 story + 3 host + 34 quest A + 44 quest B);
                      # 108 in total with the 12 in narrative_v1.json. V1-31 ships
-                     # the schema and engine with no rows; V1-32/33/34 author them
+                     # the schema and engine; V1-32 authors Briar and Cedar's 24,
+                     # V1-33 the other lakes and V1-34 the story
   dialogue/*.json    # one file per lake + story.json + bot.json + system.json
   book.json          # rumors, legendary stories, folk names
-  ripples.json       # 44
-  keepsakes.json     # 44
+  ripples.json       # Ripples 11–44 (V1-32 ships 11–17)
+  keepsakes.json     # 44, one per water-cat (V1-32 ships Briar and Cedar's 17)
 ```
 
 V1-01 seeds the existing 36 species only. In its initial Briar/Cedar dataset,
@@ -1285,11 +1286,14 @@ They are at least 45 m apart, so hail circles never overlap, and outside the 50 
 
   The story's chapter steps arrive in a later ticket and add their `talk_to` cats through `npcs.pinned`.
 - **Travelers.** Postmaster Pounce moors at one unlocked lake a day, 08:00–16:00. The lake is a seeded pick, in lake order, among the lakes `travel_unlocked` opens. Tinker Thistle moors at the player's lake every Saturday, 10:00–18:00.
-- **Sunday cookout (17:00–20:00).** A lake's host and all its encounters stand on the landing's two piers, alternating sides, within hail range of the slip. On Cedar this is the public landing, not Doc's marina, so the cookout can be joined where `at_landing` applies. Cookout chat lines are still those of `calendar.json`.
+- **Sunday cookout (17:00–20:00).** A lake's host and all its encounters stand on the landing's two piers, alternating sides, host first. On Cedar this is the public landing, not Doc's marina, so the cookout can be joined where `at_landing` applies. Cookout chat lines are still those of `calendar.json`.
+  - Every place is beside the docked stretch of the slip, from 2.6 m in, spaced to fit the slip. A boat docked alongside a cat hails that cat, which cookout chats and `attend_event` need.
+  - In the jon, every cat can be hailed while docked. A long hull can't reach the deepest places: the 9.75 m houseboat gets 7 m into most slips and 5 m into Cedar's. It still reaches the host, who stands first.
+  - Until V1-32 the first places were at the slip mouth, 0.5 m in. No docked boat was nearer to the host or the first guest than to someone else, so neither could be hailed while docked.
 
 The session rebuilds the cast whenever `schedule_key` changes: the day, the band, the cookout, the pins, a migrated V3 cat, or a traveler's window.
 
-**Hailing.** Hailing is unchanged: 20 m and below 3 knots. The 39 cats without a V3 dialogue graph answer a hail with a wave toast until their dialogue lands.
+**Hailing.** Hailing is unchanged: 20 m and below 3 knots. A cat with nothing to say answers a hail with a wave toast. Since V1-32 that is only the cats of the three later lakes, until V1-33 gives them dialogue.
 
 **Migrating V3 saves.** V3 saves stored one chosen day cat per lake (`day_npc_by_lake`) and the day it was chosen (`schedule_day_by_lake`).
 
@@ -1310,13 +1314,13 @@ The session rebuilds the cast whenever `schedule_key` changes: the day, the band
 
 ## Implemented quests v2 (V1-31)
 
-V1-31 is the quest system. `quests.json` ships with no rows: V1-32 and V1-33 author the side quests, and V1-34 the story steps. The tests author their own rows against the real roster, lakes and places.
+V1-31 is the quest system. It shipped `quests.json` with no rows: V1-32 (below) and V1-33 author the side quests, and V1-34 the story steps. Its tests author their own rows against the real roster, lakes and places.
 
 **Content (`content_v2/quests.json`).**
 
 - **Quest rows:** `id`, `kind` (`host`, `a`, `b` or `story`), `giver_id`, `lake_id`, `title`, `objective` (one step or a list of 1–4 steps), `journal` (the `obj:` text) and `reward`. Optional fields are `requires`, `cross_lake`, `on_accept` (items given once on acceptance) and `lines`.
-- **Ids follow the kind:** `host_<lake>`, `wc_<cat>_a`, `wc_<cat>_b` or `story_c<n>_s<m>`. A side quest's id must be one of its giver's roster quests. An id that collides with a V3 quest is rejected; V1-32 adds `extends` rows for recopied V3 lines.
-- **Cats rows:** each cat's `greetings`, keyed by state, and its three letter variants.
+- **Ids follow the kind:** `host_<lake>`, `wc_<cat>_a`, `wc_<cat>_b` or `story_c<n>_s<m>`. A side quest's id must be one of its giver's roster quests. An id that collides with a V3 quest is rejected. Recopied V3 lines are `extends` rows instead (V1-32, below).
+- **Cats rows:** each cat's `greetings`, keyed by state, and one to three letter variants.
 - **Lines** hold `offer` and `done`, plus optional `accept`, `decline`, `progress`, `ready`, `ready_wait` and `return`, and four choice labels. Each is up to three bubbles of at most 140 characters, using only `05 §0`'s placeholders. `load_content()` turns them into the V3 nine-stage graph; missing stages take `05 §6.0`'s generic fills.
 
 **Validator.**
@@ -1349,7 +1353,7 @@ The validator requires this set, and `test_quests_v2` checks every area holds le
 | Event | Emitted when | Steps it advances |
 | --- | --- | --- |
 | `catch.resolved` | A catch is kept or released, including a forced release at the hook. It carries the hook's position, bait, weight, hour and cold band. | `catch_species` |
-| `legendary.witnessed` | A legendary is witnessed (emitted by V1-36). | `catch_species` |
+| `legendary.witnessed` | A legendary is witnessed. The Whiskered Guardian's sighting emits it (V1-32); the other watches arrive with V1-36. | `catch_species` |
 | `book.stage_up` | A book entry reaches a new stage. | `book_stage` |
 | `cook_dish` | A dish is cooked. | `cook_dish` |
 | `catnap.complete` | A nap ends; it carries the zone. | `catnap` |
@@ -1365,7 +1369,7 @@ Existing events gain fields: `line.set` its midpoint and cold band, `bot.scout_c
 - **Lines** match `zone_id` or `area_id` (the midpoint at set time), `tier_id` or `min_tier`, `hook_count`, `bait_id` on every section, `set_window` and `in_cold_band`. `line_scout_check` needs the report before the check.
 - **`windows`** ask for one event in each window, for each target: two windows on one zone need two reports. A `visit_sequence` needs one ordered pass inside each window, and a leg counts for one window only.
 - **`wait_weather`** accumulates anchored minutes in the place while the weather holds; drifting pauses it without resetting. With `then_weather`, it completes when the weather turns while the player is still anchored there. A long advance such as a catnap reports each forecast span (`calendar.weather_spans`), so only the minutes actually spent in that weather count.
-- **`book_stage`** counts the book as it stands and completes on acceptance if already met.
+- **`book_stage`** counts the book as it stands and completes on acceptance if already met. So does a `catch_species` step that names only a legendary, when that legendary is already recorded (the Guardian once sighted).
 - **`talk_to`** with `distinct_days` needs hails on that many game days (06:00 to 06:00).
 - **`attend_event`** needs the host hailed during the cookout, docked at that lake's landing.
 - **Clock windows** are local clock minutes. Game minute 0 is 06:00, which `_window_contains` adds. Until V1-31 it compared elapsed minutes, so the V3 windows were checked six hours late: Willow's 05:00–08:00 window was read as 11:00–14:00.
@@ -1382,7 +1386,7 @@ Existing events gain fields: `line.set` its midpoint and cold band, `bot.scout_c
 - **At the giver or the host.** A ready side quest can be turned in to its giver, or at its lake's host. The host's hail opens a hand-in menu before her own conversation.
 - **The giver's acknowledgement.** After a host turn-in, the giver's next meeting opens on that quest's return line, even when quest B is now on offer. This uses the ledger's `turned_in_by` and `acknowledged` fields.
 - **Friendship** (Stranger, Acquaintance, Friend) is derived from quests A and B and never stored.
-- **Greetings** use the most specific state the cat has a line for, in this order: cookout, `after_chN`, `weather:<state>`, `first`, friendship, `day`. A list of greetings is a set of alternatives, one picked per game day.
+- **Greetings** use the most specific state the cat has a line for, in this order: `first`, cookout, `after_chN`, `weather:<state>`, friendship, `day`. A list of greetings is a set of alternatives, one picked per game day. V1-32 moved `first` to the top and set when a greeting is shown; see below.
 
 **Rewards.**
 
@@ -1407,3 +1411,72 @@ Existing events gain fields: `line.set` its midpoint and cold band, `bot.scout_c
 - **The validator** accepts every type and field, and rejects unlisted fields and bad rows without raising.
 - **The twelve V3 quests:** `narrative_v1.json`'s digest is fixed, and merging leaves its quests, dialogue and NPCs as they were.
 - **Turn-ins:** a host turn-in is acknowledged by the giver's return line at the next meeting, for a V3 quest and for a V1.0 quest.
+
+## Implemented Briar and Cedar content (V1-32)
+
+V1-32 transcribes `04 §4.1–4.2` and `05 §4.1–4.2, §6.1–6.2, §7, §9` into `content_v2`.
+
+**What ships.**
+
+- **`quests.json`: 24 quests, 11 on Briar and 13 on Cedar.**
+  - Quests A and B for the seven new cats: Marigold, Old Gus, Biscuit, Hank Mudpaw, Belle Pecan, Señora Luz and Kit.
+  - Quest B for the ten V3 cats, whose quest A is their V3 quest.
+  - Titles and objectives come from `04`; the lines and the `obj:` journal text from `05`.
+- **Cash.** Quest A pays $45 on Briar and $55 on Cedar. Quest B pays 1.5× that, rounded half up: $68 and $83.
+- **Other rewards.** Ripples 11–17 go to the seven new cats' quest A, in roster order. Each quest B pays `ks_<giver>`. Hank's quest A also gives the `pecan_smoked_shad` recipe (`04`: "gives `pecan_smoked_shad` after A"). Biscuit's quest A gives a dozen dough balls on accept. Old Gus's quest B needs the Flathead route.
+- **Greetings.**
+  - Each water-cat's `greet` is its `day` line, and `friend greet` its `friend` line.
+  - Grandmother Whiskers has `day` (two alternatives), `weather:drizzle`, `weather:mist`, `after_ch5` and `cookout`.
+  - Doc Barnaby has `first`, `day`, `weather:drizzle` and `after_ch2`.
+- **`ripples.json`** holds Ripples 11–17. **`keepsakes.json`** holds the 17 Briar and Cedar keepsakes, with `04`'s names.
+- **Letters.** `05 §9` has samples for three of these cats (Elder Moss, Hank Mudpaw and Señora Luz), one variant each. The other friends write no letter until their variants are authored.
+- **`extends`.** `q08_channel_run` recopies Maeve's greeting and quest A offer (`05 §6.2`).
+- **Rumors.** `05 §8.1` already matched `book.json`, so nothing changed there.
+
+**Transcription rules.**
+
+- Each quoted speech is a bubble.
+- A stage direction becomes text in parentheses. It joins the speech it introduces, or ends the node as its own bubble, as in Kit's quest A completion.
+- Markdown emphasis is dropped, as in Quill's quest B completion.
+- `weather:rain` is the game's `drizzle`, for Marigold's quest B and both hosts.
+- `05` gives Hank's quest B no `obj:` line. Its journal reads "Record the Channel Leviathan.", worded like Señora Luz's.
+- Some lines belong to other systems and are not greetings: the Clue lines (Willow, Quill and Hank), and the hosts' kitchen, pantry, clue, tow and nap lines.
+- Elder Moss's `greet` is his `day` line. While his V3 quest A is open, its own nodes speak, so the line first greets you before his quest B offer.
+
+**Schema.**
+
+- **`extends` rows** are `{id, extends, lines}`. Both ids name the same V3 quest. Each key in `lines` is one of the nine V3 stages and holds one text. Merging replaces only that node's text; the V3 quest and its graph are unchanged.
+- **Registries.** A reward's `ripple_id` must be in `ripples.json` (`ripple_11`–`ripple_44`, one bubble each). A reward's `keepsake_id` must be in `keepsakes.json` (`{id, name, npc_id}`, where the id is `ks_<npc_id>`).
+- **Greeting values** are a text, or a list of alternatives. Each alternative is a text or a list of bubbles.
+- **Letters** take one to three variants.
+- **Unreadable files.** Quest rows reference species, baits, lakes, pantry, dishes, Bot tools, legendaries, cats, Ripples and keepsakes. When one of those files can't be read, it is reported once, and the rows are not checked against it.
+
+**Greetings, as shown.**
+
+- **Precedence:** `first`, then cookout, `after_chN`, weather, friendship and `day`.
+- **A first meeting.** A `first` line opens it before anything else, V3 quests included. Doc's welcome comes before his `q02` greeting.
+- **Before an offer.** A greeting comes before a V1.0 offer. A cat with no line for its state goes straight to the offer; the V3 cats other than Elder Moss have no `day` line.
+- **After the last quest.** Once a cat's quests are all done, the last quest's return line answers that turn-in for the rest of the game day. From the next day, the greeting replaces it. So a host's greetings start the day after her V3 errand is turned in.
+- **Bubbles.** A greeting of several bubbles is laid out as chained nodes: `<cat>:greeting`, then `<cat>:greeting:2`, and so on.
+
+**Other changes.**
+
+- **Book.** The Ripple shelf shows a V1.0 Ripple as its quest's title and the Ripple's text, remembered with its giver. The keepsake shelf shows the keepsake's name and its giver.
+- **Guardian.** The Whiskered Guardian's sighting emits `legendary.witnessed`, which completes Quill's quest B. Accepting that quest after the sighting completes its step at once.
+- **Cookout places.** The layout fix is described in the V1-30 section above; without it, Biscuit's and Belle's quest B could not be completed.
+
+**Tests (`test_quests_briar_cedar`).**
+
+- **The script.** The test reads `05 §6.1–6.2`, `§4.1–4.2`, `§7` and `§9`, and `04`'s keepsake names, and applies the transcription rules above. It then compares every line, journal, greeting, Ripple, letter and keepsake name with the shipped content.
+- **Rewards.** Cash by lake, Ripples 11–17 in roster order, one keepsake per water-cat, Hank's recipe, Biscuit's gift and Gus's requirement.
+- **Graphs.** Every quest's dialogue graph, V3 included, is reachable from its entries and acyclic.
+- **Greeting states.** Each one can be true on its cat's lake; for example, the weather it names occurs there.
+- **The playthrough,** one per lake, in a real session with the shipped content:
+  - Each V1.0 quest is offered and declined, accepted, and hailed while under way.
+  - Its events complete it. It is put off at the ready node, turned in by hail, and acknowledged by its return line the same day.
+  - A friend's greeting follows on a later day.
+  - The V3 quests A are readied directly, because `test_narrative` covers their objectives, and turned in by hail.
+  - Every authored V1.0 node is shown. Rewards and letters are checked, and a reload pays nothing.
+- **Systems.** The Guardian sighting readies Quill's quest B. A first line and a greeting of several bubbles lead into the quest. The book shows V1.0 Ripples and keepsakes.
+- **`test_npcs`** checks that every cookout guest on every lake can be hailed from a docked boat.
+- **`test_content_v2`** checks that an unreadable file the quests reference is reported once.

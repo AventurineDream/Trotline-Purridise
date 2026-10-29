@@ -20,7 +20,7 @@ CONTENT_PATH = Path(__file__).with_name("assets") / "narrative_v1.json"
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
                     "pantry.json", "dishes.json", "calendar.json", "bot.json", "legendaries.json",
-                    "npcs.json", "quests.json")
+                    "npcs.json", "quests.json", "ripples.json", "keepsakes.json")
 BOOK_CONTENT_PATH = CONTENT_V2_PATH / "book.json"
 BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
 _GAMEPLAY_REFS_LOADED = False
@@ -98,6 +98,8 @@ class NarrativeContent:
     # V1-31: every roster cat (name, lake, role, quest chain, greetings, letters). `npcs`
     # stays the V3 cast; V1.0 quests join `quests` and `dialogue` with a `kind`.
     cats: dict[str, dict] = field(default_factory=dict)
+    ripples: dict[str, dict] = field(default_factory=dict)    # V1.0 Ripples by id (V1-32)
+    keepsakes: dict[str, dict] = field(default_factory=dict)  # keepsakes by id (V1-32)
 
     def name(self, npc_id: str) -> str:
         row = self.cats.get(npc_id) or self.npcs.get(npc_id) or {}
@@ -120,6 +122,9 @@ class GameplayContent:
     places: dict[str, dict] = field(default_factory=dict)      # "<lake>:<id>" area or waypoint (V1-31)
     quests: dict[str, dict] = field(default_factory=dict)      # quests.json rows (V1-31)
     quest_cats: dict[str, dict] = field(default_factory=dict)  # greetings and letters by cat (V1-31)
+    extends: dict[str, dict] = field(default_factory=dict)     # recopied V3 lines (V1-32)
+    ripples: dict[str, dict] = field(default_factory=dict)     # ripples.json (V1-32)
+    keepsakes: dict[str, dict] = field(default_factory=dict)   # keepsakes.json (V1-32)
 
 
 @dataclass(frozen=True)
@@ -528,6 +533,9 @@ WEATHER_STATES = {"clear", "fair", "overcast", "drizzle", "mist", "snow_mist", "
 BOOK_STAGE_ORDER = ("rumor", "identified", "bait_known", "verified", "mastered")
 QUEST_EVENTS = {"cookout"}
 QUEST_LINE_STAGES = ("offer", "accept", "decline", "progress", "ready", "ready_wait", "done", "return")
+# A V3 quest's nine nodes (docs/narrative/CONTENT.md), which an `extends` row may recopy (V1-32).
+V3_LINE_STAGES = ("greeting", "offer", "accept", "decline", "progress", "ready", "ready_wait", "completion",
+                  "return")
 QUEST_CHOICE_LABELS = ("accept_choice", "decline_choice", "turn_in_choice", "later_choice")
 LINE_PLACEHOLDERS = {"BotName", "Skipper", "lake", "fish", "depth_ft", "zone"}
 GREETING_STATES = ({"stranger", "acquaintance", "friend", "first", "day", "cookout"}
@@ -535,6 +543,8 @@ GREETING_STATES = ({"stranger", "acquaintance", "friend", "first", "day", "cooko
 UNLOCK_KINDS = {"travel", "chart", "area", "shop"}
 REWARD_FIELDS = {"cash", "ripple_id", "keepsake_id", "recipes", "dish_cards", "items", "shells", "unlocks"}
 _V2_RIPPLES = {f"ripple_{n}" for n in range(11, 45)}
+_QUEST_REFERENCE_FILES = {"species.json", "baits.json", "lakes.json", "pantry.json", "dishes.json", "bot.json",
+                          "legendaries.json", "npcs.json", "ripples.json", "keepsakes.json"}
 _BUBBLE_CHARS = 140
 # Mirrors data.PAINT, which cannot be imported while data.py is still validating.
 _BOAT_PAINT_IDS = {"hull": {"aluminum", "green", "olive", "carolina", "red", "black", "sand", "white"},
@@ -611,6 +621,8 @@ class _QuestRefs:
     shells: dict
     tools: dict
     roster: dict
+    ripples: dict = field(default_factory=dict)
+    keepsakes: dict = field(default_factory=dict)
 
 
 class _ContentV2Validator:
@@ -1421,11 +1433,12 @@ class _ContentV2Validator:
                    if isinstance(row.get("zone_ids"), list)},
             places=places, species=species, legendaries=legendaries, baits=baits, dishes=dishes,
             pantry=pantry, shells=shells, tools=tools, roster=roster)
-        quests, quest_cats = self.quests(docs, refs)
+        refs.ripples, refs.keepsakes = self.keepsakes_and_ripples(docs, roster)
+        quests, quest_cats, extends = self.quests(docs, refs)
         if self.errors:
             raise ContentError("\n".join(self.errors))
         return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes, legendaries, roster,
-                               places, quests, quest_cats)
+                               places, quests, quest_cats, extends, refs.ripples, refs.keepsakes)
 
     def roster(self, docs, lakes, boats):
         """The 52 cats (51 rows; Pip & Pebble share one): role, lake, boat and appearance."""
@@ -1576,20 +1589,55 @@ class _ContentV2Validator:
     def quests(self, docs, refs):
         """V1-31: quests.json rows (steps, requires, rewards, lines) and each cat's greetings and letters."""
         filename = "quests.json"
-        self.root(docs, filename, {"schema_version", "quests", "cats"})
+        self.root(docs, filename, {"schema_version", "quests", "cats", "extends"})
         rows = self.table(docs, filename, "quests", {"id", "kind", "giver_id", "lake_id", "title", "objective",
                                                      "journal", "reward"},
                           {"requires", "cross_lake", "on_accept", "lines"})
         cats = self.table(docs, filename, "cats", {"id", "greetings"}, {"letters"})
-        if filename in self.unavailable_files:
-            return rows, cats
+        extends = self.table(docs, filename, "extends", {"id", "extends", "lines"})
+        if filename in self.unavailable_files or self.unavailable_files & _QUEST_REFERENCE_FILES:
+            # An unreadable file is reported once; checking rows against its ids would cascade.
+            return rows, cats, extends
         given = {"ripples": {}, "keepsakes": {}}
         quest_ids = set(QUEST_IDS) | set(rows)
         for qid, row, where in self.rows(filename, "quests"):
             self.quest_row(filename, where, qid, row, refs, quest_ids, given)
         for cid, row, where in self.rows(filename, "cats"):
             self.quest_cat(filename, where, cid, row, refs)
-        return rows, cats
+        for qid, row, where in self.rows(filename, "extends"):
+            # A recopied V3 line replaces one node's text; the quest itself never changes (06 §2).
+            if not isinstance(qid, str) or qid not in QUEST_IDS or row.get("extends") != qid:
+                self.error(filename, where, "an extends row names a V3 quest in both id and extends")
+            lines = row.get("lines")
+            if not isinstance(lines, dict) or not lines:
+                self.error(filename, where + ".lines", "expected V3 stages to recopy")
+                continue
+            for stage, text in lines.items():
+                if self.enum(filename, where + ".lines", stage, V3_LINE_STAGES):
+                    self.bubbles(filename, f"{where}.lines.{stage}", text, most=1)
+                    if isinstance(text, list):
+                        self.error(filename, f"{where}.lines.{stage}", "a recopied V3 node holds one text")
+        return rows, cats, extends
+
+    def keepsakes_and_ripples(self, docs, roster):
+        """V1-32: ripples.json (Ripples 11-44) and keepsakes.json (ks_<cat>), which rewards name."""
+        ripples_file, keepsakes_file = "ripples.json", "keepsakes.json"
+        self.root(docs, ripples_file, {"schema_version", "ripples"})
+        self.root(docs, keepsakes_file, {"schema_version", "keepsakes"})
+        ripples = self.table(docs, ripples_file, "ripples", {"id", "text"})
+        keepsakes = self.table(docs, keepsakes_file, "keepsakes", {"id", "name", "npc_id"})
+        for rid, row, where in self.rows(ripples_file, "ripples"):
+            if isinstance(rid, str) and rid not in _V2_RIPPLES:
+                self.error(ripples_file, where + ".id", "expected ripple_11 to ripple_44")
+            self.bubbles(ripples_file, where + ".text", row.get("text"), most=1)
+        for kid, row, where in self.rows(keepsakes_file, "keepsakes"):
+            self.text(keepsakes_file, where + ".name", row.get("name"))
+            npc = row.get("npc_id")
+            if "npcs.json" in self.unavailable_files:
+                continue
+            if self.enum(keepsakes_file, where + ".npc_id", npc, roster) and kid != f"ks_{npc}":
+                self.error(keepsakes_file, where + ".id", f"expected 'ks_{npc}'")
+        return ripples, keepsakes
 
     def quest_row(self, filename, where, qid, row, refs, quest_ids, given):
         kind, giver, lake = row.get("kind"), row.get("giver_id"), row.get("lake_id")
@@ -1861,6 +1909,9 @@ class _ContentV2Validator:
                 continue
             elif kind == "b" and value != f"ks_{giver}":
                 self.error(filename, where + "." + key, f"expected 'ks_{giver}'")
+            registry = refs.ripples if pool == "ripples" else refs.keepsakes
+            if value not in registry:
+                self.error(filename, where + "." + key, f"{value!r} is not in {pool}.json")
             if value in given[pool]:
                 self.error(filename, where + "." + key, f"already given by {given[pool][value]!r}")
             else:
@@ -1939,15 +1990,22 @@ class _ContentV2Validator:
         if not isinstance(greetings, dict) or not greetings:
             self.error(filename, where + ".greetings", "expected an object of greeting states")
         else:
-            for state, text in greetings.items():
-                if self.enum(filename, f"{where}.greetings", state, GREETING_STATES):
-                    self.bubbles(filename, f"{where}.greetings.{state}", text)
+            for state, value in greetings.items():
+                if not self.enum(filename, f"{where}.greetings", state, GREETING_STATES):
+                    continue
+                # A greeting is one line or a list of alternatives; an alternative may be bubbles.
+                options = value if isinstance(value, list) else [value]
+                if not options:
+                    self.error(filename, f"{where}.greetings.{state}", "expected at least one greeting")
+                for i, option in enumerate(options):
+                    self.bubbles(filename, f"{where}.greetings.{state}" + (f"[{i}]" if isinstance(value, list)
+                                                                            else ""), option)
         if "letters" in row:
             letters = row["letters"]
             if cat.get("role") == "traveler":
                 self.error(filename, where + ".letters", "travelers carry letters; they don't write them")
-            elif not isinstance(letters, list) or len(letters) != 3:
-                self.error(filename, where + ".letters", "expected three letter variants (05 §9)")
+            elif not isinstance(letters, list) or not 1 <= len(letters) <= 3:
+                self.error(filename, where + ".letters", "expected one to three letter variants (05 §9)")
             else:
                 for i, letter in enumerate(letters):
                     self.bubbles(filename, f"{where}.letters[{i}]", letter, limit=280, most=1)
@@ -2384,12 +2442,18 @@ def merge_quests_v2(content: NarrativeContent, gameplay: GameplayContent) -> Nar
                      "quests": list(row["quests"]), "greetings": deepcopy(extra.get("greetings", {})),
                      "letters": list(extra.get("letters", []))}
     content.cats = cats
+    content.ripples = deepcopy(gameplay.ripples)
+    content.keepsakes = deepcopy(gameplay.keepsakes)
     for qid, row in gameplay.quests.items():
         quest = deepcopy(row)
         if "lines" in row:
             quest["dialogue"], nodes = _quest_nodes(qid, row)
             content.dialogue.update(nodes)
         content.quests[qid] = quest
+    for qid, row in gameplay.extends.items():
+        for stage, text in row["lines"].items():
+            node_id = f"{qid}:dialogue:{stage}"
+            content.dialogue[node_id] = {**content.dialogue[node_id], "text": text}
     return content
 
 
