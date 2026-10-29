@@ -124,6 +124,12 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
     text = Text()
     ui = UI(text,world)
     state = State.new(world,seed=24)
+    # The lake's cats are present, so actors and portraits count in time and memory.
+    from .content import load_content
+    from .npcs import active_npcs
+    npc_content = load_content()
+    state.npcs = active_npcs(state,world,npc_content)
+    actor_peak = 0
     state.lines = _stress_lines()
     state.light = state.finder = True
     state.well_tier = 2
@@ -150,6 +156,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                 renderer.close()
                 world = World(lake_id)
                 state.bind(world)
+                state.npcs = active_npcs(state,world,npc_content)
                 renderer = Renderer(world,1440,810,software=software)
                 ui = UI(text,world)
             t0 = time.perf_counter()
@@ -231,6 +238,10 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                 raise AssertionError("text cache exceeded its memory budget")
             if rss_bytes()>=MEMORY_LIMIT_BYTES:
                 raise AssertionError("game exceeded 3 GB of RAM")
+            actors = renderer.actor_memory()
+            actor_peak = max(actor_peak,actors["total_bytes_bound"])
+            if actors["resident_actors"]>actors["max_actors"] or actor_peak>actors["budget_bytes"]:
+                raise AssertionError(f"cat actors exceeded their budget: {actors}")
             if i>=10:
                 elapsed_ms = (time.perf_counter()-t0)*1000
                 frame_ms.append(elapsed_ms)
@@ -265,6 +276,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             "peak_rss_mb":round(rss_bytes()/1024**2,2),
             "ram_limit_bytes":MEMORY_LIMIT_BYTES,
             "text_cache_limit_bytes":text.cache_limit,
+            "cat_actor_memory":{**renderer.actor_memory(),"peak_total_bytes_bound":actor_peak},
             "memory_samples":samples,
             "coverage":{name:sorted(values) for name,values in coverage.items()},
             "coverage_complete":coverage_complete,
@@ -273,7 +285,8 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                       f"eight shop tabs, four help pages, {len(SPECIES)} fish and 12 quest journal entries",
                       "twelve dialogue givers and four saved quest statuses","changing fuel and battery gauges",
                       "clear, fair, night, drizzle and 12x midnight fades","five heavy lines and fifteen buoys",
-                      "all paint colors","changing look and steering","bounded text cache"],
+                      "all paint colors","changing look and steering","bounded text cache",
+                      "each lake's cats resident within 14 actors and 150 MiB"],
         }
         path = Path(dest)
         path.parent.mkdir(parents=True,exist_ok=True)
