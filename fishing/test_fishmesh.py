@@ -5,6 +5,7 @@ import unittest
 
 from .content import ContentError, load_content_v2, validate_content_v2
 from .data import CONTENT_V2_RAW
+from .fishart import _Body, barbel_segments, snout_polygon
 from .fishmesh import (
     CARD_CACHE_ENTRIES,
     CARD_SIZE,
@@ -32,7 +33,9 @@ class FishMeshChecks(unittest.TestCase):
         self.assertEqual(len(species), 144)
         self.assertTrue(all(isinstance(row.get("look"), dict) for row in species.values()))
         self.assertGreaterEqual(fish_look("channel")["barbels"], 4)
-        self.assertGreater(fish_look("alligator_gar")["snout"], 0.5)
+        # The longnose gar carries the longest snout; the alligator gar's is short and broad.
+        self.assertGreater(fish_look("gar")["snout"], 0.5)
+        self.assertLess(fish_look("alligator_gar")["snout"], fish_look("gar")["snout"])
         self.assertLess(fish_look("bluegill")["length_depth_ratio"], 3.0)
         self.assertIn("sunfish", fish_look("bluegill")["family"])
 
@@ -75,15 +78,21 @@ class FishMeshChecks(unittest.TestCase):
         self.assertFalse(card.flags.writeable)
 
     def test_signature_anatomy_survives_the_field_guide_card(self):
+        width, height = CARD_SIZE
         channel = fish_card("channel")
-        whisker_area = channel[105:151, 455:490]
-        dark_whisker_pixels = ((whisker_area[:, :, 0] < 90) &
-                               (whisker_area[:, :, 1] < 90) &
-                               (whisker_area[:, :, 2] < 90)).sum()
-        self.assertGreater(dark_whisker_pixels, 50)
+        segments = barbel_segments(fish_look("channel"), _Body(fish_look("channel")))
+        self.assertEqual(len(segments), 8)
+        dark_whisker_pixels = 0
+        for x0, y0, x1, y1 in segments:
+            for t in (0.55, 0.75, 0.95):
+                px, py = int((x0 + (x1 - x0) * t) * width), int((y0 + (y1 - y0) * t) * height)
+                dark_whisker_pixels += int((channel[py - 1:py + 2, px - 1:px + 2] < 90).all(axis=2).any())
+        self.assertGreater(dark_whisker_pixels, 18)
 
-        gar = fish_card("alligator_gar")
-        snout_tip = gar[120:137, 470:500]
+        gar = fish_card("gar")
+        tip = snout_polygon(_Body(fish_look("gar")), fish_look("gar"))[1]
+        snout_tip = gar[int(tip[1] * height) - 2:int(tip[1] * height) + 5,
+                        int(tip[0] * width) - 24:int(tip[0] * width) - 4]
         self.assertLess(int(snout_tip.mean()), 200)
 
     def test_gl_paint_pass_compiles_and_preserves_card_orientation_when_available(self):

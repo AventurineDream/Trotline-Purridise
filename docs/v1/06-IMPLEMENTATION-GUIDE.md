@@ -426,6 +426,8 @@ current lake needs.
 - **Legendaries** get bespoke parameter sets and a slow underwater idle animation
   for their scene.
 
+The painter and mesh are in `fishart.py`; see "Implemented fish looks (V1-28)".
+
 ### 6.4 Boats (24) — `boatmesh.py`
 
 The existing four handcrafted boats stay. Eight family generators produce the
@@ -1027,3 +1029,93 @@ crossbeam checks for all 24 footprints. `--shots` writes:
 - `boat-lineup.png`: a 6×4 studio grid of all 24 boats.
 - `boat-lineup.json`
 - `cockpit-<family>.png`: one first-person view per family. The Cosmic view is at night.
+
+## Implemented fish looks (V1-28)
+
+**One look format.** All 144 species and the 12 legendaries name their own
+`colors` (back, flank, belly) in their `look`. The legacy `palette` looks and
+their painter are gone, so the whole field guide shares one style. A look may
+also set:
+
+- `marks` and `mark_scale` for its pattern. The patterns are plain, spots,
+  speckled, haloed, stars, bars, saddles, stripes, chain, mottled, vermiculate
+  and blotched.
+- `band` (lateral stripe), `throat`, `parr`, `eye`, `fins` and `fin_edge`.
+- `ear` and `ear_edge`: the sunfish ear flap.
+- `dorsal_style` (normal, spiny, long, sail) and `pectoral` (normal, fan).
+- The tails forked, rounded, truncate, heterocercal, pointed, fluke and flowing.
+- `glow` (0–1), a halo in the band colour around cosmic and caldera fish.
+- `features`:
+  - Anatomy: kype, hump, scutes, gills, legs, whiskers.
+  - Field marks: long_ear, ocellus (tail eyespot), shoulder_spot.
+  - Cosmic: rings, lure, halo, comet, ribbon.
+
+There are 15 families. The ticket's sculpin, eel and cosmic presets join
+sturgeon, salamander, ray and whale. `FAMILY_PRESETS` keeps only eye size and fin
+height per family. Everything else is per fish.
+
+**Legendaries.** `legendaries.json` holds the 12 rows of `03 §3`, each with an
+`id`, `name`, `lake`, bespoke `look` and `idle`. The validator requires the same
+IDs and lakes as `calendar.json`'s legendary windows, and no ID may reuse a
+species ID. V1-36 adds the requirement fields to these rows.
+
+**Cards.** `fishart.paint_card` paints the 512×256 card:
+
+- The body comes from an asymmetric profile, `_Body`.
+- Fins, tails and legs are shared polygons, `fin_shapes`.
+- The pectoral lies translucently over the flank, and fins carry rays.
+- The paper, ink outline and frame match the earlier cards.
+
+The GL paint pass and the 48-entry card LRU are unchanged.
+
+**Haul mesh.** `fishart.haul_geometry` builds the haul mesh from the card's own
+outline rings, fin polygons, eye, barbels and features, at one scale. Every
+triangle takes its colour from the painted card where the side view sees it, so
+the haul sprite matches the card. The silhouette IoU is at least 0.92 for every
+fish.
+
+- A ray is a shallow dome facing the camera.
+- A puffer's ring passes behind the body and in front of it.
+- Meshes have 1,312–1,662 triangles, and the 64-entry LRU is unchanged.
+
+**Idle.** `idle_mesh(legendary_id, t, reduced_motion=False)` is the scene's
+underwater idle. A body wave runs from head to tail and grows toward the tail,
+with amplitude `sway` and frequency `rate`. The fish also bobs by `bob` at half
+the wave's rate, so the loop lasts 2 / `rate` seconds. Under Reduced Motion the
+fish holds its resting pose. V1-37 places it in the encounter scene.
+
+**Look-alike check.** `fishcheck.lookalike_report` compares every same-lake pair
+(legendaries included) at book thumbnail size, 128×64. A pair fails only when
+both of these hold:
+
+- **Silhouette:** IoU ≥ 0.90.
+- **Palette:** the overlap of soft CIE Lab histograms is ≥ 0.60. The histograms
+  are taken over the back, flank and belly thirds, banded column by column.
+
+Histograms keep fin colours, bands and markings that a mean colour would wash
+out. Shinies share six palettes by design and are not compared. The check found
+the duplicates that the earlier cards shared, such as bluegill and redear, the
+gars, the bullheads and channel and drum. Each pair was fixed with a
+true-to-life difference:
+
+- **Field marks:** ear flaps, the bowfin eyespot and shad shoulder spots.
+- **Breeding or regional colours:** red spawning kokanee, and the tiger trout's
+  vermiculation.
+- **Body depth:** for example, the stouter black crappie and chubs.
+
+No same-lake pair now comes within 0.015 IoU and 0.03 palette overlap of failing.
+`test_fishlooks` also shows that the check catches a duplicated look.
+
+**Shots.** `python -m fishing --shots PATH --fish [--software]` writes:
+
+- `cards-<lake>.png` and `cards-<lake>-shiny.png`
+- `cards-legendaries.png`
+- `haul-<lake>.png` and `haul-legendaries.png`
+- `legendary-idle.png`: six poses per loop in a three-quarter underwater view,
+  plus the Reduced Motion pose.
+- `lookalike.json`, and `lookalike-closest.png` with the three closest pairs
+  per lake.
+- `benchmark.json`
+
+The capture fails on any look-alike pair or if it passes 3 GB.
+

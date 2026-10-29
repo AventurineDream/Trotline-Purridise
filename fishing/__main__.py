@@ -61,6 +61,10 @@ def main(argv: list[str] | None = None) -> int:
             from .alpineshots import shots as alpine_shots
             alpine_shots(dest, software="--software" in argv)
             return 0
+        if "--fish" in argv:
+            from .fishshots import shots as fish_shots
+            fish_shots(dest, software="--software" in argv)
+            return 0
         if "--species" in argv:
             from .speciesgallery import gallery
             gallery(dest, software="--software" in argv)

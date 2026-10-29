@@ -1,0 +1,162 @@
+{
+  "backend": "native",
+  "species": 144,
+  "legendaries": 12,
+  "families": [
+    "bass",
+    "catfish",
+    "cosmic",
+    "eel",
+    "gar",
+    "minnow",
+    "pike",
+    "ray",
+    "salamander",
+    "sculpin",
+    "sturgeon",
+    "sucker",
+    "sunfish",
+    "trout",
+    "whale"
+  ],
+  "family_presets": [
+    "bass",
+    "catfish",
+    "cosmic",
+    "eel",
+    "gar",
+    "minnow",
+    "pike",
+    "ray",
+    "salamander",
+    "sculpin",
+    "sturgeon",
+    "sucker",
+    "sunfish",
+    "trout",
+    "whale"
+  ],
+  "card_variants": 348,
+  "card_median_ms": 40.909,
+  "haul_mesh_median_ms": 49.815,
+  "haul_triangles": {
+    "min": 1312,
+    "median": 1602,
+    "max": 1662
+  },
+  "idle_frame_median_ms": 81.912,
+  "idle": {
+    "old_lantern": {
+      "sway": 0.08,
+      "rate": 0.45,
+      "bob": 0.025,
+      "loop_s": 4.444,
+      "max_displacement": 0.0781,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "lily_queen": {
+      "sway": 0.1,
+      "rate": 0.55,
+      "bob": 0.02,
+      "loop_s": 3.636,
+      "max_displacement": 0.0976,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "spillway_monster": {
+      "sway": 0.07,
+      "rate": 0.35,
+      "bob": 0.03,
+      "loop_s": 5.714,
+      "max_displacement": 0.0683,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "channel_leviathan": {
+      "sway": 0.06,
+      "rate": 0.3,
+      "bob": 0.015,
+      "loop_s": 6.667,
+      "max_displacement": 0.0586,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "whiskered_guardian": {
+      "sway": 0.09,
+      "rate": 0.4,
+      "bob": 0.04,
+      "loop_s": 5.0,
+      "max_displacement": 0.0879,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "glacial_phantom": {
+      "sway": 0.12,
+      "rate": 0.6,
+      "bob": 0.02,
+      "loop_s": 3.333,
+      "max_displacement": 0.1172,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "old_silverhead": {
+      "sway": 0.07,
+      "rate": 0.32,
+      "bob": 0.02,
+      "loop_s": 6.25,
+      "max_displacement": 0.0683,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "huckleberrys_whopper": {
+      "sway": 0.14,
+      "rate": 0.5,
+      "bob": 0.02,
+      "loop_s": 4.0,
+      "max_displacement": 0.1367,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "obsidian_gar": {
+      "sway": 0.06,
+      "rate": 0.4,
+      "bob": 0.015,
+      "loop_s": 5.0,
+      "max_displacement": 0.0586,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "caldera_fire_lizard": {
+      "sway": 0.1,
+      "rate": 0.35,
+      "bob": 0.01,
+      "loop_s": 5.714,
+      "max_displacement": 0.0976,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "nebula_weaver": {
+      "sway": 0.18,
+      "rate": 0.65,
+      "bob": 0.03,
+      "loop_s": 3.077,
+      "max_displacement": 0.1757,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    },
+    "star_whale": {
+      "sway": 0.05,
+      "rate": 0.18,
+      "bob": 0.05,
+      "loop_s": 11.111,
+      "max_displacement": 0.05,
+      "loop_closes": true,
+      "reduced_motion_still": true
+    }
+  },
+  "lookalike_failures": 0,
+  "cpu_card_cache_bytes": 18874368,
+  "peak_rss_bytes": 285237248,
+  "memory_limit_bytes": 3000000000
+}
