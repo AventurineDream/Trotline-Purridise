@@ -85,6 +85,141 @@
       "id": "ks_kit",
       "name": "Ranger badge",
       "npc_id": "kit"
+    },
+    {
+      "id": "ks_torvald",
+      "name": "Brass depth weight",
+      "npc_id": "torvald"
+    },
+    {
+      "id": "ks_freya",
+      "name": "Freya's photo of you",
+      "npc_id": "freya"
+    },
+    {
+      "id": "ks_bramble",
+      "name": "Wool mitten",
+      "npc_id": "bramble"
+    },
+    {
+      "id": "ks_ingrid",
+      "name": "Wooden trout",
+      "npc_id": "ingrid"
+    },
+    {
+      "id": "ks_elk_ears_eli",
+      "name": "Owl feather",
+      "npc_id": "elk_ears_eli"
+    },
+    {
+      "id": "ks_bjorn",
+      "name": "Tall-tale tin cup",
+      "npc_id": "bjorn"
+    },
+    {
+      "id": "ks_willa_larch",
+      "name": "Needle basket",
+      "npc_id": "willa_larch"
+    },
+    {
+      "id": "ks_dakota",
+      "name": "Bandana pennant",
+      "npc_id": "dakota"
+    },
+    {
+      "id": "ks_mitzi",
+      "name": "Rock hammer",
+      "npc_id": "mitzi"
+    },
+    {
+      "id": "ks_nyx",
+      "name": "Bathhouse token",
+      "npc_id": "nyx"
+    },
+    {
+      "id": "ks_ignis",
+      "name": "Obsidian bead",
+      "npc_id": "ignis"
+    },
+    {
+      "id": "ks_ashby",
+      "name": "Cocoa mug",
+      "npc_id": "ashby"
+    },
+    {
+      "id": "ks_basalt_bea",
+      "name": "Pocket stone",
+      "npc_id": "basalt_bea"
+    },
+    {
+      "id": "ks_fumi",
+      "name": "Paper lantern",
+      "npc_id": "fumi"
+    },
+    {
+      "id": "ks_ember",
+      "name": "Lookout binoculars",
+      "npc_id": "ember"
+    },
+    {
+      "id": "ks_mist",
+      "name": "Poem scroll",
+      "npc_id": "mist"
+    },
+    {
+      "id": "ks_juno",
+      "name": "Star chart",
+      "npc_id": "juno"
+    },
+    {
+      "id": "ks_tamsin",
+      "name": "Clean-water pin",
+      "npc_id": "tamsin"
+    },
+    {
+      "id": "ks_orion_cat",
+      "name": "Star-knot",
+      "npc_id": "orion_cat"
+    },
+    {
+      "id": "ks_nebula_paws",
+      "name": "Glass chime",
+      "npc_id": "nebula_paws"
+    },
+    {
+      "id": "ks_comet",
+      "name": "Tail ribbon",
+      "npc_id": "comet"
+    },
+    {
+      "id": "ks_lyra",
+      "name": "Light-reed string",
+      "npc_id": "lyra"
+    },
+    {
+      "id": "ks_vega",
+      "name": "Friend-compass",
+      "npc_id": "vega"
+    },
+    {
+      "id": "ks_selene",
+      "name": "Moon-flower",
+      "npc_id": "selene"
+    },
+    {
+      "id": "ks_andi",
+      "name": "Frog drawing",
+      "npc_id": "andi"
+    },
+    {
+      "id": "ks_twinkle",
+      "name": "Shepherd's crook",
+      "npc_id": "twinkle"
+    },
+    {
+      "id": "ks_rigel",
+      "name": "Sail patch",
+      "npc_id": "rigel"
     }
   ]
 }
