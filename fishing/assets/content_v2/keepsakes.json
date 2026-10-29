@@ -1,0 +1,90 @@
+{
+  "schema_version": 2,
+  "keepsakes": [
+    {
+      "id": "ks_elder_moss",
+      "name": "Floating candle",
+      "npc_id": "elder_moss"
+    },
+    {
+      "id": "ks_pip_pebble",
+      "name": "Crayon map",
+      "npc_id": "pip_pebble"
+    },
+    {
+      "id": "ks_master_cinder",
+      "name": "Moon lantern",
+      "npc_id": "master_cinder"
+    },
+    {
+      "id": "ks_willow",
+      "name": "Misty watercolor",
+      "npc_id": "willow"
+    },
+    {
+      "id": "ks_silas",
+      "name": "Tiny birdhouse",
+      "npc_id": "silas"
+    },
+    {
+      "id": "ks_marigold",
+      "name": "Swim cap",
+      "npc_id": "marigold"
+    },
+    {
+      "id": "ks_old_gus",
+      "name": "Ferry bell",
+      "npc_id": "old_gus"
+    },
+    {
+      "id": "ks_biscuit",
+      "name": "Bread-loaf buoy",
+      "npc_id": "biscuit"
+    },
+    {
+      "id": "ks_captain_maeve",
+      "name": "Brass whistle",
+      "npc_id": "captain_maeve"
+    },
+    {
+      "id": "ks_sparky",
+      "name": "Spare gear",
+      "npc_id": "sparky"
+    },
+    {
+      "id": "ks_quill",
+      "name": "Ballad sheet",
+      "npc_id": "quill"
+    },
+    {
+      "id": "ks_dr_alder",
+      "name": "Field notebook",
+      "npc_id": "dr_alder"
+    },
+    {
+      "id": "ks_patch",
+      "name": "Lucky spoon",
+      "npc_id": "patch"
+    },
+    {
+      "id": "ks_hank_mudpaw",
+      "name": "Lineman's lantern",
+      "npc_id": "hank_mudpaw"
+    },
+    {
+      "id": "ks_belle_pecan",
+      "name": "Pecan-shell charm",
+      "npc_id": "belle_pecan"
+    },
+    {
+      "id": "ks_senora_luz",
+      "name": "Lamp glass",
+      "npc_id": "senora_luz"
+    },
+    {
+      "id": "ks_kit",
+      "name": "Ranger badge",
+      "npc_id": "kit"
+    }
+  ]
+}

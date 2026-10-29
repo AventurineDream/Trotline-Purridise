@@ -165,8 +165,11 @@ def next_letter(state, content) -> dict | None:
     return min(waiting, key=lambda row: (row['sent_day'], row['from']), default=None)
 
 
-def greeting(state, content, npc_id: str, *, first: bool = False, world=None) -> str | None:
-    """The most specific true greeting state the cat has a line for (05 §4)."""
+def greeting(state, content, npc_id: str, *, first: bool = False, world=None) -> str | list | None:
+    """The most specific true greeting state the cat has a line for (05 §4).
+
+    A first meeting is the most specific state. A state may list alternatives, one
+    chosen per game day, and an alternative may be several bubbles (a list)."""
     from . import calendar
     from .fleet import chapter_finished
     from .quests import friendship, game_day
@@ -174,13 +177,11 @@ def greeting(state, content, npc_id: str, *, first: bool = False, world=None) ->
     lines = cat['greetings'] if cat else {}
     if not lines:
         return None
-    states = []
+    states = ['first'] if first else []
     if calendar.cookout_active(state.game_minutes) and cat['lake_id'] == state.lake_id:
         states.append('cookout')
     states += [f"after_ch{n}" for n in range(5, 0, -1) if chapter_finished(state, n)]
     states.append(f"weather:{calendar.weather_at(state)}")
-    if first:
-        states.append('first')
     standing = friendship(state, content, npc_id)
     if standing:
         states.append(standing)
@@ -233,14 +234,26 @@ def _node(node_id, npc_id, text, *, quest_id=None, next_id=None, choices=None):
     return node
 
 
+def _greeting_nodes(nodes, npc_id, text, *, quest_id=None, next_id=None) -> str:
+    """Lay a greeting's bubbles out as chained nodes; returns the first node's id."""
+    bubbles = text if isinstance(text, list) else [text]
+    ids = [f'{npc_id}:greeting'] + [f'{npc_id}:greeting:{i}' for i in range(2, len(bubbles) + 1)]
+    for i, (node_id, bubble) in enumerate(zip(ids, bubbles)):
+        nodes[node_id] = _node(node_id, npc_id, bubble, quest_id=quest_id,
+                               next_id=ids[i + 1] if i + 1 < len(ids) else next_id)
+    return ids[0]
+
+
 def open_conversation(npc, state, content, *, first: bool = False, world=None):
     """What hailing this cat opens, or None when they only wave (V1-31).
 
     In order: Pounce's letter; a host's offer to take other cats' finished quests;
-    a giver acknowledging a turn-in their host took; then the cat's current quest,
-    preceded by a greeting when it is on offer.
+    a giver acknowledging a turn-in their host took; then the cat's current quest.
+    A greeting (05 §4) opens a first meeting before anything else and comes before a
+    V1.0 offer. Once the cat's quests are all done, the return line answers the last
+    turn-in for the rest of that game day, and the greeting takes over from the next.
     """
-    from .quests import current_quest, quest_status
+    from .quests import chain as quest_chain, current_quest, game_day, quest_status
     if npc.id == 'pounce':
         letter = next_letter(state, content)
         if letter is None:
@@ -267,25 +280,22 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
     if quest_id is None and npc.quest_id in content.quests:
         quest_id = npc.quest_id  # a V3 cat outside the roster, as in older tests
     entry = None
+    text = greeting(state, content, npc.id, first=first, world=world)
+    first_line = first and 'first' in content.cats.get(npc.id, {}).get('greetings', {})
     if quest_id is not None:
         quest = content.quests[quest_id]
         status = quest_status(state, quest_id)
         entry = quest['dialogue'][status]
-        if 'kind' in quest:
-            # Greet before an offer, and in place of the authored return line if there is none.
-            text = greeting(state, content, npc.id, first=first, world=world)
-            if text is not None and status == 'available':
-                nodes[f'{npc.id}:greeting'] = _node(f'{npc.id}:greeting', npc.id, text, quest_id=quest_id,
-                                                    next_id=entry)
-                entry = f'{npc.id}:greeting'
-            elif text is not None and status == 'completed' and 'return' not in quest.get('lines', {}):
-                nodes[f'{npc.id}:greeting'] = _node(f'{npc.id}:greeting', npc.id, text, quest_id=quest_id)
-                entry = f'{npc.id}:greeting'
-    else:
-        text = greeting(state, content, npc.id, first=first, world=world)
-        if text is not None:
-            nodes[f'{npc.id}:greeting'] = _node(f'{npc.id}:greeting', npc.id, text)
-            entry = f'{npc.id}:greeting'
+        progress = state.narrative.quests.get(quest_id)
+        finished = progress.completed_game_minute if progress is not None else None
+        done = (status == 'completed' and quest_chain(content, npc.id)[-1:] == [quest_id]
+                and (finished is None or game_day(finished) < game_day(state.game_minutes)))
+        if text is not None and (first_line or ('kind' in quest and status == 'available')):
+            entry = _greeting_nodes(nodes, npc.id, text, quest_id=quest_id, next_id=entry)
+        elif text is not None and done:
+            entry = _greeting_nodes(nodes, npc.id, text, quest_id=quest_id)
+    elif text is not None:
+        entry = _greeting_nodes(nodes, npc.id, text)
     ready = host_turn_ins(state, content, npc.id)
     if ready:
         choices = [{'id': f'{npc.id}:hand_in:{qid}', 'quest_id': qid, 'action': 'turn_in_at_host',

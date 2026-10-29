@@ -140,10 +140,10 @@ def collection_rows(state, content, shelf):
                 quest = content.quests[qid]
                 rows.append((quest["title"], "Ripple", f"Remembered with {content.npcs[quest['giver_id']]['name']}."))
         for row in state.v2.get("ripples_v2", []):
-            rows.append(_keepsake_row(row, "Ripple"))
+            rows.append(_v2_reward_row(content, row, "ripple_id", "Ripple"))
         return rows
     if shelf == 1:
-        return [_keepsake_row(row, "Keepsake") for row in state.v2.get("keepsakes", [])]
+        return [_v2_reward_row(content, row, "keepsake_id", "Keepsake") for row in state.v2.get("keepsakes", [])]
     rows = []
     for lid, page in state.v2.get("legendaries", {}).items():
         records = page.get("records", []) if isinstance(page, dict) else []
@@ -160,6 +160,21 @@ def collection_rows(state, content, shelf):
         rows.append(("✦ " + (sp.name if sp else sid.replace("_", " ").title()), "Shiny",
                      note + "A sparkling catch, remembered here. A replica can mount on a trophy rail."))
     return rows
+
+
+def _v2_reward_row(content, reward_id, key, kind):
+    """A V1.0 Ripple or keepsake, by its registry text and the cat who gave it (V1-32)."""
+    registry = getattr(content, "ripples" if kind == "Ripple" else "keepsakes", {})
+    entry = registry.get(reward_id) if isinstance(reward_id, str) else None
+    if entry is None:
+        return _keepsake_row(reward_id, kind)
+    quest = next((q for q in content.quests.values()
+                  if isinstance(q.get("reward"), dict) and q["reward"].get(key) == reward_id), None)
+    giver = content.name(quest["giver_id"]) if quest else None
+    if kind == "Ripple":
+        return (quest["title"] if quest else kind, kind,
+                f"“{entry['text']}”" + (f" Remembered with {giver}." if giver else ""))
+    return entry["name"], kind, f"From {giver}." if giver else "A memory kept from the water."
 
 
 def _keepsake_row(row, kind):

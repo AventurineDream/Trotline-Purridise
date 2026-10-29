@@ -75,6 +75,34 @@ class NPCChecks(unittest.TestCase):
                     for b in actors[i + 1:]:
                         self.assertGreater(math.dist(a.anchor.position, b.anchor.position), 40.0)
 
+    def test_every_cookout_guest_can_be_hailed_from_a_docked_boat(self):
+        # Cookout chats and attend_event need a hail while docked (`at_landing`). Under V1-30's
+        # layout the host and the first guest stood at the slip mouth, nearer no docked boat.
+        from .boat import BOATS
+        from .dialogue import nearby_npc
+        longest = max(BOATS, key=lambda boat_id: BOATS[boat_id].length)
+        for lake in LAKES:
+            world = self.worlds.get(lake) or World(lake)
+            state = State.new(world, seed=32)
+            state.game_minutes = 6 * 1440 + 11 * 60 + 30  # Sunday 17:30
+            state.npcs = active_npcs(state, world, self.content)
+            slip, host = world.slip, cast().hosts[lake]
+            for boat_id in ('jon', longest):
+                hailed = set()
+                for yaw in (math.atan2(-slip.ix, -slip.iz), math.atan2(slip.ix, slip.iz)):
+                    for a in range(5, int(slip.land_ext * 2) + 1):  # half-metre steps
+                        for s in range(-int(slip.half_w * 2), int(slip.half_w * 2) + 1):
+                            state.x, state.z = slip.world(a / 2, s / 2)
+                            if state.slip_status(world) == 'docked' and world.hull_clear(state.x, state.z, yaw,
+                                                                                         boat_id):
+                                hailed.add(nearby_npc(state).id)
+                with self.subTest(lake=lake, boat=boat_id):
+                    # Every cat from the jon; the host even from the longest hull, which can't go deep.
+                    self.assertEqual(len(state.npcs), len(present_ids(state, world, self.content)))
+                    if boat_id == 'jon':
+                        self.assertEqual(hailed, {npc.id for npc in state.npcs})
+                    self.assertIn(host, hailed)
+
     def test_quests_pin_their_cats_with_an_extra_slot(self):
         seed = self.state.narrative.schedule_seed
         day = next(d for d in range(7) if 'willow' not in day_encounters(seed, 'briar', d))

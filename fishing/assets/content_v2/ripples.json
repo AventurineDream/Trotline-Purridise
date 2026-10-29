@@ -1,0 +1,33 @@
+{
+  "schema_version": 2,
+  "ripples": [
+    {
+      "id": "ripple_11",
+      "text": "Water holds up those who stop fighting it."
+    },
+    {
+      "id": "ripple_12",
+      "text": "The birds know the hour without a clock."
+    },
+    {
+      "id": "ripple_13",
+      "text": "Small things, done warmly, feed many."
+    },
+    {
+      "id": "ripple_14",
+      "text": "A tired line still holds if it was tied well."
+    },
+    {
+      "id": "ripple_15",
+      "text": "Shade is a gift you never see being given."
+    },
+    {
+      "id": "ripple_16",
+      "text": "A light doesn't pull you in; it shows you the way."
+    },
+    {
+      "id": "ripple_17",
+      "text": "Ready is a kind of calm."
+    }
+  ]
+}

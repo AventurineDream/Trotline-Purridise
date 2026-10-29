@@ -1,9 +1,9 @@
 """V1-31 quests v2: objective types and fields, steps, requires, rewards, friendship, turn-ins, letters.
 
 Every objective type and field is driven by the events the game emits. Each counts
-only after acceptance and is rewarded exactly once. The shipped quests.json is still
-empty (V1-32 and V1-33 author the quests), so these checks author their own rows
-against the real roster, lakes and places.
+only after acceptance and is rewarded exactly once. These checks author their own rows
+against the real roster, lakes and places; the shipped Briar and Cedar quests (V1-32)
+are test_quests_briar_cedar's.
 """
 from copy import deepcopy
 import hashlib
@@ -45,9 +45,22 @@ def quest(qid, kind, giver, lake, objective, reward=None, **extra):
     return row
 
 
-def raw_with(rows, cats=()):
+def raw_with(rows, cats=(), extends=()):
+    """The shipped content_v2 with these quest rows, and registry rows for what they reward."""
     raw = deepcopy(CONTENT_V2_RAW)
-    raw["quests.json"] = {"schema_version": 2, "quests": list(rows), "cats": list(cats)}
+    raw["quests.json"] = {"schema_version": 2, "quests": list(rows), "cats": list(cats), "extends": list(extends)}
+    ripples = raw["ripples.json"]["ripples"]
+    keepsakes = raw["keepsakes.json"]["keepsakes"]
+    for row in rows:
+        reward = row.get("reward") if isinstance(row, dict) else None
+        if not isinstance(reward, dict):
+            continue
+        rid, kid = reward.get("ripple_id"), reward.get("keepsake_id")
+        if isinstance(rid, str) and rid not in {r["id"] for r in ripples}:
+            ripples.append({"id": rid, "text": "A ripple."})
+        if (isinstance(kid, str) and kid.startswith("ks_") and kid not in {k["id"] for k in keepsakes}
+                and kid[3:] in cast().names):
+            keepsakes.append({"id": kid, "name": "A keepsake", "npc_id": kid[3:]})
     return raw
 
 
@@ -114,7 +127,18 @@ class QuestData(Worlds):
         for qid in QUEST_IDS:
             self.assertEqual(merged.quests[qid], alone.quests[qid])
             self.assertNotIn("kind", merged.quests[qid])
-        self.assertEqual(merged.dialogue, alone.dialogue)
+        # Only an extends row's recopied lines (q08's greeting and offer, 05 §6.2) differ, in text only.
+        recopied = {f"{row['id']}:dialogue:{stage}" for row in CONTENT_V2_RAW["quests.json"]["extends"]
+                    for stage in row["lines"]}
+        self.assertEqual(recopied, {"q08_channel_run:dialogue:greeting", "q08_channel_run:dialogue:offer"})
+        for node_id, node in alone.dialogue.items():
+            if node_id in recopied:
+                self.assertNotEqual(merged.dialogue[node_id]["text"], node["text"])
+                self.assertEqual({**merged.dialogue[node_id], "text": node["text"]}, node)
+            else:
+                self.assertEqual(merged.dialogue[node_id], node)
+        self.assertEqual({nid for nid, node in merged.dialogue.items() if node["quest_id"] in QUEST_IDS},
+                         set(alone.dialogue))
         self.assertEqual(merged.npcs, alone.npcs)
         self.assertEqual(set(merged.cats), set(cast().names))
         self.assertEqual(merged.cats["willow"]["quests"], ["q06_unrepeatable_sunrise", "wc_willow_b"])
@@ -318,7 +342,8 @@ class QuestData(Worlds):
             ("unknown field 'season'", [quest("wc_marigold_a", "a", "marigold", "briar", catnap,
                                               requires={"season": "fall"})], []),
             ("unknown value/reference 'bedtime'", [], [{"id": "marigold", "greetings": {"bedtime": "Hi."}}]),
-            ("three letter variants", [], [{"id": "marigold", "greetings": {"day": "Hi."}, "letters": ["a"]}]),
+            ("one to three letter variants", [], [{"id": "marigold", "greetings": {"day": "Hi."},
+                                                    "letters": ["a", "b", "c", "d"]}]),
             ("they don't write them", [], [{"id": "pounce", "greetings": {"day": "Hi."}, "letters": ["a", "b", "c"]}]),
             ("expected story_c<chapter>_s<step>", [quest("story_9", "story", "pip_pebble", "briar", catnap)], []),
         ]
@@ -326,6 +351,31 @@ class QuestData(Worlds):
             with self.subTest(message=message):
                 found = errors(rows, cats)
                 self.assertTrue(any(message in line for line in found), found)
+        # Recopied V3 lines (V1-32) and the Ripple and keepsake registries.
+        for message, extends in (
+                ("names a V3 quest in both id and extends", [{"id": "wc_kit_a", "extends": "wc_kit_a",
+                                                               "lines": {"offer": "Hi."}}]),
+                ("names a V3 quest in both id and extends", [{"id": "q08_channel_run", "extends": "q09_quiet_channel",
+                                                               "lines": {"offer": "Hi."}}]),
+                ("unknown value/reference 'done'", [{"id": "q08_channel_run", "extends": "q08_channel_run",
+                                                     "lines": {"done": "Hi."}}]),
+                ("holds one text", [{"id": "q08_channel_run", "extends": "q08_channel_run",
+                                     "lines": {"offer": ["Hi.", "There."]}}])):
+            with self.subTest(message=message):
+                try:
+                    validate_content_v2(raw_with([], extends=extends))
+                    found = []
+                except ContentError as exc:
+                    found = str(exc).splitlines()
+                self.assertTrue(any(message in line for line in found), found)
+        raw = raw_with([quest("wc_marigold_a", "a", "marigold", "briar", {"type": "catnap"})])
+        raw["ripples.json"]["ripples"] = [r for r in raw["ripples.json"]["ripples"] if r["id"] != "ripple_11"]
+        raw["keepsakes.json"]["keepsakes"].append({"id": "ks_willow", "name": "Misty watercolor", "npc_id": "kit"})
+        raw["ripples.json"]["ripples"].append({"id": "ripple_10", "text": "Old."})
+        with self.assertRaises(ContentError) as caught:
+            validate_content_v2(raw)
+        for message in ("'ripple_11' is not in ripples.json", "expected 'ks_kit'", "expected ripple_11 to ripple_44"):
+            self.assertIn(message, str(caught.exception))
         # Ill-typed values are reported, never raised.
         weird = quest("wc_marigold_a", "a", "marigold", "briar", {"type": ["catnap"]}, reward=[1])
         weird["kind"], weird["lake_id"], weird["requires"] = {"a": 1}, ["briar"], {"quest": ["x"]}
@@ -925,10 +975,10 @@ class QuestFlow(Worlds):
             "day": "Lovely day.", "after_ch1": "The book has a new page!", "cookout": "Pie!",
             **{f"weather:{w}": f"So {w}!" for w in ("fog", "drizzle")}}}]
         h = Harness(self, rows, cats)
-        from .calendar import weather_at
-        weather = weather_at(h.state)
-        expected = f"So {weather}!" if weather in ("fog", "drizzle") else "Oh! A new face!"
-        self.assertEqual(greeting(h.state, h.content, "marigold", first=True), expected)
+        # A first meeting is the most specific state of all, even in weather the cat has a line for.
+        with patch("fishing.calendar.weather_at", return_value="drizzle"):
+            self.assertEqual(greeting(h.state, h.content, "marigold", first=True), "Oh! A new face!")
+            self.assertEqual(greeting(h.state, h.content, "marigold"), "So drizzle!")
         with patch("fishing.calendar.weather_at", return_value="clear"):
             self.assertEqual(greeting(h.state, h.content, "marigold", first=True), "Oh! A new face!")
             self.assertEqual(greeting(h.state, h.content, "marigold"), "Hello, stranger!")

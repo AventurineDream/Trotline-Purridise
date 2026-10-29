@@ -1,5 +1,734 @@
 {
   "schema_version": 2,
-  "quests": [],
-  "cats": []
+  "quests": [
+    {
+      "id": "wc_elder_moss_b",
+      "kind": "b",
+      "giver_id": "elder_moss",
+      "lake_id": "briar",
+      "title": "The Second Stillness",
+      "objective": {
+        "type": "catnap",
+        "zone_id": "briar:cypress"
+      },
+      "journal": "Catnap in Cypress shore.",
+      "reward": {
+        "cash": 68,
+        "keepsake_id": "ks_elder_moss"
+      },
+      "lines": {
+        "offer": "Last time we sat still together. This time, sleep. A nap in the cypress shade. I'll keep watch. Badly, probably.",
+        "done": "You slept, and the roots grew a little. Neither of you tried."
+      }
+    },
+    {
+      "id": "wc_pip_pebble_b",
+      "kind": "b",
+      "giver_id": "pip_pebble",
+      "lake_id": "briar",
+      "title": "Map Party",
+      "objective": {
+        "type": "book_stage",
+        "lake_id": "briar",
+        "stage": "identified",
+        "count": 10
+      },
+      "journal": "Identify 10 Little Briar species in the book.",
+      "reward": {
+        "cash": 68,
+        "keepsake_id": "ks_pip_pebble"
+      },
+      "lines": {
+        "offer": "We want our map to have fish on it! Real ones! Can your book show ten kinds from Little Briar?",
+        "done": "I drew a frog in the corner. It's a friendly frog."
+      }
+    },
+    {
+      "id": "wc_master_cinder_b",
+      "kind": "b",
+      "giver_id": "master_cinder",
+      "lake_id": "briar",
+      "title": "Lantern Watch",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "old_lantern"
+      },
+      "journal": "Record Old Lantern.",
+      "reward": {
+        "cash": 68,
+        "keepsake_id": "ks_master_cinder"
+      },
+      "lines": {
+        "offer": "When I was small, I saw a fish under the landing glowing like a lamp. Old Lantern. Nobody believes me but Grandmother. Find him?",
+        "done": "Gold. Just as gold as I remembered. Thank you for not laughing."
+      }
+    },
+    {
+      "id": "wc_willow_b",
+      "kind": "b",
+      "giver_id": "willow",
+      "lake_id": "briar",
+      "title": "Paint the Queen",
+      "objective": {
+        "type": "wait_weather",
+        "weather": "mist",
+        "zone_id": "briar:lilies",
+        "minutes": 30
+      },
+      "journal": "Anchor in Lily cove for 30 game minutes while it's misty.",
+      "reward": {
+        "cash": 68,
+        "keepsake_id": "ks_willow"
+      },
+      "lines": {
+        "offer": "Wait with me in the lily cove in the mist? I want to paint the moment before she rises.",
+        "done": "No queen today, and I painted the mist anyway. It's the best one I've done."
+      }
+    },
+    {
+      "id": "wc_silas_b",
+      "kind": "b",
+      "giver_id": "silas",
+      "lake_id": "briar",
+      "title": "Birdhouse Row",
+      "objective": {
+        "type": "visit_zones",
+        "zone_ids": [
+          "briar:cypress",
+          "briar:rocks",
+          "briar:inlet"
+        ]
+      },
+      "journal": "Visit Cypress shore, South rocks and Creek inlet.",
+      "reward": {
+        "cash": 68,
+        "keepsake_id": "ks_silas"
+      },
+      "lines": {
+        "offer": "Three birdhouses, three snags, and I've built them all. I just can't stay awake long enough to deliver them. Would you?",
+        "done": "Wrens moved in already. Fastest tenants I've ever had."
+      }
+    },
+    {
+      "id": "wc_marigold_a",
+      "kind": "a",
+      "giver_id": "marigold",
+      "lake_id": "briar",
+      "title": "Swim Buddy",
+      "objective": {
+        "type": "travel_distance",
+        "zone_id": "briar:open",
+        "distance_m": 200
+      },
+      "journal": "Travel 200 m in Open water.",
+      "reward": {
+        "cash": 45,
+        "ripple_id": "ripple_11"
+      },
+      "lines": {
+        "offer": "Paddle alongside me across the open water? Everyone else just stares.",
+        "done": "See? Perfectly normal. Here, a little thing I think about while floating."
+      }
+    },
+    {
+      "id": "wc_marigold_b",
+      "kind": "b",
+      "giver_id": "marigold",
+      "lake_id": "briar",
+      "title": "Rainy-Day Ears",
+      "objective": {
+        "type": "wait_weather",
+        "weather": "drizzle",
+        "lake_id": "briar",
+        "minutes": 30
+      },
+      "journal": "Anchor anywhere on Little Briar for 30 game minutes while it rains.",
+      "reward": {
+        "cash": 68,
+        "keepsake_id": "ks_marigold"
+      },
+      "lines": {
+        "offer": "Confession: I hate rain on my ears. Could I shelter under your boat next time it rains?",
+        "done": "Dry ears! You're a hero. Have my old swim cap. It's lucky."
+      }
+    },
+    {
+      "id": "wc_old_gus_a",
+      "kind": "a",
+      "giver_id": "old_gus",
+      "lake_id": "briar",
+      "title": "Heron Clock",
+      "objective": {
+        "type": "scout_report",
+        "zone_id": "briar:rocks"
+      },
+      "journal": "Bot scouts South rocks.",
+      "reward": {
+        "cash": 45,
+        "ripple_id": "ripple_12"
+      },
+      "lines": {
+        "offer": "The herons tell the hour by the rocks. Have your Bot look at the south rocks and tell me what he sees.",
+        "done": "Herons stand there when the shade's just so. That's three o'clock. Told you."
+      }
+    },
+    {
+      "id": "wc_old_gus_b",
+      "kind": "b",
+      "giver_id": "old_gus",
+      "lake_id": "briar",
+      "title": "A Loon for Gus",
+      "objective": [
+        {
+          "type": "visit_zones",
+          "zone_ids": [
+            "flathead:open"
+          ]
+        },
+        {
+          "type": "talk_to",
+          "npc_id": "old_gus"
+        }
+      ],
+      "journal": "Visit Big open water on Flathead, then tell Gus.",
+      "reward": {
+        "cash": 68,
+        "keepsake_id": "ks_old_gus"
+      },
+      "requires": {
+        "travel_unlocked": "flathead"
+      },
+      "cross_lake": [
+        "flathead"
+      ],
+      "lines": {
+        "offer": "I heard there are loons up north. Haven't heard a loon since I was young. If you ever go, listen for me?",
+        "done": "You heard one? (quiet) Thank you. Take the bell; I don't ring it anymore."
+      }
+    },
+    {
+      "id": "wc_biscuit_a",
+      "kind": "a",
+      "giver_id": "biscuit",
+      "lake_id": "briar",
+      "title": "Taste Test",
+      "objective": {
+        "type": "catch_species",
+        "any": true,
+        "bait_id": "dough"
+      },
+      "journal": "Catch any fish on dough balls.",
+      "reward": {
+        "cash": 45,
+        "ripple_id": "ripple_13"
+      },
+      "on_accept": {
+        "items": {
+          "dough": 12
+        }
+      },
+      "lines": {
+        "offer": "New recipe. Will fish eat it? Take a dozen, put it on a line, tell me honestly.",
+        "done": "They ATE it?! I'm putting it in the shop."
+      }
+    },
+    {
+      "id": "wc_biscuit_b",
+      "kind": "b",
+      "giver_id": "biscuit",
+      "lake_id": "briar",
+      "title": "Cookout Bread",
+      "objective": {
+        "type": "attend_event",
+        "lake_id": "briar",
+        "event": "cookout"
+      },
+      "journal": "Attend the Sunday cookout at Briar Landing.",
+      "reward": {
+        "cash": 68,
+        "keepsake_id": "ks_biscuit"
+      },
+      "lines": {
+        "offer": "Sunday cookout, I'm bringing bread. Come eat some so I'm not the only one.",
+        "done": "You came! Here, a loaf-shaped buoy. It floats better than my real bread."
+      }
+    },
+    {
+      "id": "wc_captain_maeve_b",
+      "kind": "b",
+      "giver_id": "captain_maeve",
+      "lake_id": "cedar",
+      "title": "Practice Buoys",
+      "objective": {
+        "type": "visit_sequence",
+        "waypoint_ids": [
+          "cedar:practice_buoy_1",
+          "cedar:practice_buoy_2",
+          "cedar:practice_buoy_3",
+          "cedar:practice_buoy_4"
+        ]
+      },
+      "journal": "Pass the 4 practice buoys in order in Clear Creek coves.",
+      "reward": {
+        "cash": 83,
+        "keepsake_id": "ks_captain_maeve"
+      },
+      "lines": {
+        "offer": "My practice buoys are in the sheltered cove. Follow them at your own pace, round and back.",
+        "done": "Lovely line! You've got whisker-sense for open water. Have my whistle."
+      }
+    },
+    {
+      "id": "wc_sparky_b",
+      "kind": "b",
+      "giver_id": "sparky",
+      "lake_id": "cedar",
+      "title": "Squeak Test",
+      "objective": {
+        "type": "tool_use",
+        "tool_id": "wave_chime",
+        "lake_id": "cedar"
+      },
+      "journal": "Use the Wave Chime on Cedar Creek.",
+      "reward": {
+        "cash": 83,
+        "keepsake_id": "ks_sparky"
+      },
+      "lines": {
+        "offer": "Is the duck squeaking right? Ring the chime somewhere on Cedar and tell me if the fish complain!",
+        "done": [
+          "HA! A fish came up! HA!",
+          "(much quieter) Sorry. Have a gear."
+        ]
+      }
+    },
+    {
+      "id": "wc_quill_b",
+      "kind": "b",
+      "giver_id": "quill",
+      "lake_id": "cedar",
+      "title": "The Last Verse",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "whiskered_guardian"
+      },
+      "journal": "Witness the Whiskered Guardian.",
+      "reward": {
+        "cash": 83,
+        "keepsake_id": "ks_quill"
+      },
+      "lines": {
+        "offer": "If you ever see the Guardian, tell me how it looked. Then I'll have my last verse.",
+        "done": "Its whiskers wrote the twilight on the water. There. Finished. Keep this copy."
+      }
+    },
+    {
+      "id": "wc_dr_alder_b",
+      "kind": "b",
+      "giver_id": "dr_alder",
+      "lake_id": "cedar",
+      "title": "Cedar Census",
+      "objective": {
+        "type": "book_stage",
+        "lake_id": "cedar",
+        "stage": "identified",
+        "count": 20
+      },
+      "journal": "Identify 20 Cedar Creek species in the book.",
+      "reward": {
+        "cash": 83,
+        "keepsake_id": "ks_dr_alder"
+      },
+      "lines": {
+        "offer": "I'm compiling a census of Cedar. Help me reach twenty species? I'll name the next one after you. Kidding. After my aunt Beatrix.",
+        "done": "Twenty! Take my old notebook, every page has a fish and an aunt."
+      }
+    },
+    {
+      "id": "wc_patch_b",
+      "kind": "b",
+      "giver_id": "patch",
+      "lake_id": "cedar",
+      "title": "Treasure Tour",
+      "objective": [
+        {
+          "type": "visit_zones",
+          "zone_ids": [
+            "cedar:cypress",
+            "cedar:rocks",
+            "cedar:inlet"
+          ]
+        },
+        {
+          "type": "talk_to",
+          "npc_id": "patch"
+        }
+      ],
+      "journal": "Visit Flooded shoreline, Dam riprap and Creek channels, then talk to Patch.",
+      "reward": {
+        "cash": 83,
+        "keepsake_id": "ks_patch"
+      },
+      "lines": {
+        "offer": "Treasure hunt! Flooded shoreline, dam riprap, creek channels. Then come back and I'll tell you what I found.",
+        "done": "Found it! My lucky spoon! …You keep it. You were luckier for me than it ever was."
+      }
+    },
+    {
+      "id": "wc_hank_mudpaw_a",
+      "kind": "a",
+      "giver_id": "hank_mudpaw",
+      "lake_id": "cedar",
+      "title": "Night Line",
+      "objective": {
+        "type": "line_check",
+        "min_tier": "prem",
+        "bait_id": "liver",
+        "zone_id": "cedar:inlet",
+        "active_soak_game_minutes": 60
+      },
+      "journal": "Premium or heavy line · Chicken liver · Creek channels · 60 active minutes, then check it.",
+      "reward": {
+        "cash": 55,
+        "ripple_id": "ripple_14",
+        "recipes": [
+          "pecan_smoked_shad"
+        ]
+      },
+      "lines": {
+        "offer": "Set a good line in the creek channels with liver and leave it an hour. Let's see if you've got the patience. I don't, these days.",
+        "done": [
+          "Not bad. Not bad at all.",
+          "(he sniffs) It's the wind."
+        ]
+      }
+    },
+    {
+      "id": "wc_hank_mudpaw_b",
+      "kind": "b",
+      "giver_id": "hank_mudpaw",
+      "lake_id": "cedar",
+      "title": "Believe Me",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "channel_leviathan"
+      },
+      "journal": "Record the Channel Leviathan.",
+      "reward": {
+        "cash": 83,
+        "keepsake_id": "ks_hank_mudpaw"
+      },
+      "lines": {
+        "offer": "Catch the Leviathan. Then nobody can tell me I dreamed it.",
+        "done": "(long pause) I'm not crying. Take my lantern. I won't need proof anymore."
+      }
+    },
+    {
+      "id": "wc_belle_pecan_a",
+      "kind": "a",
+      "giver_id": "belle_pecan",
+      "lake_id": "cedar",
+      "title": "Under the Pecans",
+      "objective": {
+        "type": "catch_species",
+        "any": true,
+        "count": 3,
+        "zone_id": "cedar:cypress"
+      },
+      "journal": "Catch 3 fish in Flooded shoreline.",
+      "reward": {
+        "cash": 55,
+        "ripple_id": "ripple_15"
+      },
+      "lines": {
+        "offer": "My pecan trees shade the flooded shoreline. Catch three fish under them so I know they're useful.",
+        "done": "Shade AND fish. Good trees."
+      }
+    },
+    {
+      "id": "wc_belle_pecan_b",
+      "kind": "b",
+      "giver_id": "belle_pecan",
+      "lake_id": "cedar",
+      "title": "Pie for Everyone",
+      "objective": {
+        "type": "attend_event",
+        "lake_id": "cedar",
+        "event": "cookout"
+      },
+      "journal": "Attend the Sunday cookout at Cedar Landing.",
+      "reward": {
+        "cash": 83,
+        "keepsake_id": "ks_belle_pecan"
+      },
+      "lines": {
+        "offer": "Sunday I'm bringing pie to the cookout. You'll come? You won't ask for the recipe?",
+        "done": "You didn't ask! You're my favorite. Here's a charm, not the recipe."
+      }
+    },
+    {
+      "id": "wc_senora_luz_a",
+      "kind": "a",
+      "giver_id": "senora_luz",
+      "lake_id": "cedar",
+      "title": "Lamps on the Pool",
+      "objective": {
+        "type": "visit_sequence",
+        "waypoint_ids": [
+          "cedar:lamp_buoy_1",
+          "cedar:lamp_buoy_2",
+          "cedar:lamp_buoy_3"
+        ],
+        "windows": [
+          [
+            1140,
+            240
+          ]
+        ]
+      },
+      "journal": "After 7 pm, pass the 3 lamp buoys around the Marked Pool in order.",
+      "reward": {
+        "cash": 55,
+        "ripple_id": "ripple_16"
+      },
+      "lines": {
+        "offer": "Ride with me around the three lamp buoys tonight. I like company while I check them.",
+        "done": "All three bright. The pool is happy."
+      }
+    },
+    {
+      "id": "wc_senora_luz_b",
+      "kind": "b",
+      "giver_id": "senora_luz",
+      "lake_id": "cedar",
+      "title": "Lullaby",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "spillway_monster"
+      },
+      "journal": "Record the Spillway Monster.",
+      "reward": {
+        "cash": 83,
+        "keepsake_id": "ks_senora_luz"
+      },
+      "lines": {
+        "offer": "I sing to the big blue every night. I would love to see who I've been singing to.",
+        "done": "(humming) There you are, big one. Thank you, Skipper. Keep the old lamp glass."
+      }
+    },
+    {
+      "id": "wc_kit_a",
+      "kind": "a",
+      "giver_id": "kit",
+      "lake_id": "cedar",
+      "title": "Ranger Check",
+      "objective": {
+        "type": "visit_zones",
+        "zone_ids": [
+          "cedar:flats",
+          "cedar:lilies",
+          "cedar:landing"
+        ]
+      },
+      "journal": "Visit Upper lake flats, Clear Creek coves and Caney Creek landing.",
+      "reward": {
+        "cash": 55,
+        "ripple_id": "ripple_17"
+      },
+      "lines": {
+        "offer": "Ranger check: visit the flats, the coves and the landing, and say 'all clear' at each! I'm practicing!",
+        "done": [
+          "All clear, all clear, all clear! You're a natural.",
+          "(she tips her paddleboat in the shallows, laughing)"
+        ]
+      }
+    },
+    {
+      "id": "wc_kit_b",
+      "kind": "b",
+      "giver_id": "kit",
+      "lake_id": "cedar",
+      "title": "Badge Day",
+      "objective": [
+        {
+          "type": "line_check",
+          "min_tier": "std",
+          "bait_id": "worm",
+          "zone_id": "cedar:flats",
+          "active_soak_game_minutes": 60
+        },
+        {
+          "type": "talk_to",
+          "npc_id": "kit"
+        }
+      ],
+      "journal": "Standard or better line · Nightcrawlers · Upper lake flats · 60 active minutes, then talk to Kit.",
+      "reward": {
+        "cash": 83,
+        "keepsake_id": "ks_kit"
+      },
+      "lines": {
+        "offer": "Last badge! I have to teach someone a whole fishing line. Set one on the flats with worms and let it soak an hour, then show me!",
+        "done": "I'M A RANGER! You get my practice badge. You earned it too."
+      }
+    }
+  ],
+  "cats": [
+    {
+      "id": "grandmother_whiskers",
+      "greetings": {
+        "day": [
+          "Welcome back, dear. The kettle's on and the coves are quiet.",
+          "Ah, {BotName}. Your collar's crooked. There. Better."
+        ],
+        "weather:drizzle": "A good soaking for the lines. Come under the porch roof.",
+        "weather:mist": "Mist on the lilies. That's when the shy ones come out.",
+        "after_ch5": "There's my author. What did the lake tell you today?",
+        "cookout": "Everyone's here! Sit, sit. Bring a fish if you like. Bring yourself regardless."
+      }
+    },
+    {
+      "id": "doc_barnaby",
+      "greetings": {
+        "first": "Ahoy, Skipper! Welcome to Doc's Lonely Star Marina! What can I get your rig?",
+        "day": "Wind's off the main channel today. Read it with your whiskers, then check my gauges.",
+        "weather:drizzle": "Rain's good for catfish and bad for my knees!",
+        "after_ch2": "Marked Pool's busy. Folks say a Skipper found it. Wonder who."
+      }
+    },
+    {
+      "id": "elder_moss",
+      "greetings": {
+        "day": "Peace upon your bow, Skipper. The water reflects the clouds without holding them.",
+        "friend": "Ah, my napping colleague. The dragonflies asked after you."
+      },
+      "letters": [
+        "Dear Skipper, the dragonflies are back. My tail says hello. — Moss"
+      ]
+    },
+    {
+      "id": "pip_pebble",
+      "greetings": {
+        "friend": "Skipper! Life jacket? Yes! Good! Hi, {BotName}! Hi, frog-Bot!"
+      }
+    },
+    {
+      "id": "master_cinder",
+      "greetings": {
+        "friend": "The moon's good tonight, Skipper. I'm not scared of the landing anymore. Mostly."
+      }
+    },
+    {
+      "id": "willow",
+      "greetings": {
+        "friend": "Look, another heron. I'm going to paint it. Don't judge me."
+      }
+    },
+    {
+      "id": "silas",
+      "greetings": {
+        "friend": "(yawning) Oh, Skipper. I was just resting my eyes. For an hour."
+      }
+    },
+    {
+      "id": "marigold",
+      "greetings": {
+        "day": "Hello! Don't mind me, I'm swimming. Cats can swim, you know. Some of us adore it.",
+        "friend": "Water's lovely today! Come in! No? Fine, I'll swim by your boat."
+      }
+    },
+    {
+      "id": "old_gus",
+      "greetings": {
+        "day": [
+          [
+            "Afternoon. Ferried cats across this lake forty years. Never once lost.",
+            "(a heron croaks) …that's the heron agreeing."
+          ]
+        ],
+        "friend": "There's my loon-listener."
+      }
+    },
+    {
+      "id": "biscuit",
+      "greetings": {
+        "day": "Fresh dough balls! Don't drop crumbs. Please don't drop crumbs.",
+        "friend": "Skipper! Crumb check. …Clean. Wonderful."
+      }
+    },
+    {
+      "id": "captain_maeve",
+      "greetings": {
+        "friend": "There's my best student. Slow and pretty, Skipper."
+      }
+    },
+    {
+      "id": "sparky",
+      "greetings": {
+        "friend": "Skipper! I built a silent winch! It's… mostly silent!"
+      }
+    },
+    {
+      "id": "quill",
+      "greetings": {
+        "friend": "Skipper, I've been very quiet all morning. Three whole minutes."
+      }
+    },
+    {
+      "id": "dr_alder",
+      "greetings": {
+        "friend": "Hello, colleague. Aunt Beatrix says hello. She's a drum."
+      }
+    },
+    {
+      "id": "patch",
+      "greetings": {
+        "friend": "Skipper! Found three lures and a sock today. Want the sock?"
+      }
+    },
+    {
+      "id": "hank_mudpaw",
+      "greetings": {
+        "day": "Hmph. Evening.",
+        "friend": "Evening, Skipper. Look at that sunset. (sniff) Wind again."
+      },
+      "letters": [
+        "Skipper. Saw a good sunset. Thought of you. Wind's fine. — H."
+      ]
+    },
+    {
+      "id": "belle_pecan",
+      "greetings": {
+        "day": "Hi, sugar! Want a pecan? I have nine hundred.",
+        "friend": "Sugar! Pecan? Still nine hundred."
+      }
+    },
+    {
+      "id": "senora_luz",
+      "greetings": {
+        "day": "Good evening. The pool is calm and the edges are lit. Fish here safely.",
+        "friend": "Skipper. The pool says hello. In a very deep voice."
+      },
+      "letters": [
+        "The big one sang back last night. Truly. — Luz"
+      ]
+    },
+    {
+      "id": "kit",
+      "greetings": {
+        "day": "Junior Ranger Kit! Life jacket check! …Pass!",
+        "friend": "Ranger Kit reporting! Life jacket? Good! Me? …Also good! Probably!"
+      }
+    }
+  ],
+  "extends": [
+    {
+      "id": "q08_channel_run",
+      "extends": "q08_channel_run",
+      "lines": {
+        "greeting": "Ahoy, Skipper! Forty years on riverboats, and you know what I learned? Slow turns win.",
+        "offer": "Take a long, easy run across the open water with me. Your own pace. I want to see how you hold a line."
+      }
+    }
+  ]
 }
