@@ -612,6 +612,14 @@ def perch(model) -> tuple[float, float, float]:
     return 0.0, max(hull.deck_y(), g - 0.12) + 0.02, z
 
 
+def seat(model) -> tuple[float, float, float]:
+    """Where an NPC cat sits on a generated boat, in its eye frame: the cockpit floor aft of centre."""
+    hull = _Hull(model, SPECS[model.id])
+    z = model.stern + model.length * 0.38
+    _w, g = hull.at(z)
+    return 0.0, max(hull.deck_y(), g - 0.12) + 0.02, z
+
+
 def npc_faces(boat_id: str, x: float, z: float, yaw: float, look_paint=None) -> list[Face]:
     """A generated boat moved into the world at (x, z), bow along yaw, for NPC boats."""
     model = BOATS[boat_id]

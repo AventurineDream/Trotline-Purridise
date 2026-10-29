@@ -561,6 +561,8 @@ class State:
     splash_x: float = 0.0
     splash_z: float = 0.0
     splash_anim: float = -100.0
+    # The Skipper's paws pull the line while the haul screen is up. Not saved.
+    hauling: bool = field(default=False, repr=False, compare=False)
     # Brief visual only; guardian_seen is the persisted encounter latch.
     guardian_sighting_pending: bool = field(default=False, repr=False, compare=False)
     guardian_sighting_started_at: float | None = field(default=None, repr=False, compare=False)

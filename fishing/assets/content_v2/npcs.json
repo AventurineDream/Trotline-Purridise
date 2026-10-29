@@ -1,0 +1,2832 @@
+{
+  "schema_version": 2,
+  "npcs": [
+    {
+      "id": "grandmother_whiskers",
+      "name": "Grandmother Whiskers",
+      "lake": "briar",
+      "role": "host",
+      "boat": null,
+      "appearance": {
+        "breed": "Calico",
+        "size": 0.95,
+        "build": 1.1,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "rounded",
+        "tail": "long",
+        "pattern": "calico",
+        "colors": {
+          "base": [
+            0.95,
+            0.94,
+            0.91
+          ],
+          "secondary": [
+            0.88,
+            0.54,
+            0.22
+          ],
+          "accent": [
+            0.14,
+            0.12,
+            0.1
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "shawl",
+            "color": [
+              0.62,
+              0.52,
+              0.7
+            ]
+          },
+          {
+            "kind": "spectacles",
+            "color": [
+              0.76,
+              0.72,
+              0.6
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "mug"
+      }
+    },
+    {
+      "id": "doc_barnaby",
+      "name": "Doc Barnaby",
+      "lake": "cedar",
+      "role": "host",
+      "boat": null,
+      "appearance": {
+        "breed": "Orange tabby",
+        "size": 1.05,
+        "build": 1.15,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "tabby",
+        "colors": {
+          "base": [
+            0.88,
+            0.55,
+            0.24
+          ],
+          "secondary": [
+            0.6,
+            0.32,
+            0.12
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.86,
+          0.7,
+          0.24
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "oilskin",
+            "color": [
+              0.95,
+              0.8,
+              0.18
+            ]
+          },
+          {
+            "kind": "cap",
+            "color": [
+              0.36,
+              0.38,
+              0.4
+            ]
+          }
+        ],
+        "pose": "helm",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "captain_huckleberry",
+      "name": "Captain Huckleberry",
+      "lake": "flathead",
+      "role": "host",
+      "boat": null,
+      "appearance": {
+        "breed": "Norwegian Forest Cat",
+        "size": 1.2,
+        "build": 1.3,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "tufted",
+        "tail": "plume",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.95,
+            0.94,
+            0.91
+          ],
+          "secondary": [
+            0.522,
+            0.517,
+            0.501
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.86,
+          0.66,
+          0.22
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "parka",
+            "color": [
+              0.7,
+              0.2,
+              0.18
+            ]
+          }
+        ],
+        "pose": "helm",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "sora",
+      "name": "Sora the Obsidian",
+      "lake": "crater",
+      "role": "host",
+      "boat": null,
+      "appearance": {
+        "breed": "Bombay",
+        "size": 0.95,
+        "build": 0.85,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.08,
+            0.08,
+            0.09
+          ],
+          "secondary": [
+            0.044,
+            0.044,
+            0.05
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.88,
+          0.56,
+          0.16
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "vest",
+            "color": [
+              0.2,
+              0.18,
+              0.5
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book"
+      }
+    },
+    {
+      "id": "astra_9",
+      "name": "Professor Astra-9",
+      "lake": "nebula",
+      "role": "host",
+      "boat": null,
+      "appearance": {
+        "breed": "Sphynx",
+        "size": 0.9,
+        "build": 0.8,
+        "legs": 1.0,
+        "coat": "hairless",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "spotted",
+        "colors": {
+          "base": [
+            0.88,
+            0.72,
+            0.7
+          ],
+          "secondary": [
+            0.62,
+            0.36,
+            0.95
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.55,
+          0.8,
+          0.95
+        ],
+        "whiskers": 0.5,
+        "attire": [
+          {
+            "kind": "goggles",
+            "color": [
+              0.8,
+              0.62,
+              0.28
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "tablet",
+        "glow": 0.8
+      }
+    },
+    {
+      "id": "pounce",
+      "name": "Postmaster Pounce",
+      "lake": null,
+      "role": "traveler",
+      "boat": "river_runner",
+      "appearance": {
+        "breed": "Ragamuffin",
+        "size": 1.1,
+        "build": 1.2,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "rounded",
+        "tail": "plume",
+        "pattern": "bicolor",
+        "colors": {
+          "base": [
+            0.62,
+            0.48,
+            0.34
+          ],
+          "secondary": [
+            0.341,
+            0.264,
+            0.187
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "cap",
+            "color": [
+              0.22,
+              0.36,
+              0.7
+            ]
+          }
+        ],
+        "pose": "helm",
+        "prop": "none"
+      },
+      "boat_paint": {
+        "hull": "white"
+      }
+    },
+    {
+      "id": "thistle",
+      "name": "Tinker Thistle",
+      "lake": null,
+      "role": "traveler",
+      "boat": "tug_skiff",
+      "appearance": {
+        "breed": "Tortoiseshell",
+        "size": 0.95,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "tortoiseshell",
+        "colors": {
+          "base": [
+            0.08,
+            0.08,
+            0.09
+          ],
+          "secondary": [
+            0.88,
+            0.54,
+            0.22
+          ],
+          "accent": [
+            0.4,
+            0.25,
+            0.14
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "bandana",
+            "color": [
+              0.3,
+              0.55,
+              0.32
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "whittle"
+      },
+      "boat_paint": {
+        "hull": "olive"
+      }
+    },
+    {
+      "id": "elder_moss",
+      "name": "Elder Moss",
+      "lake": "briar",
+      "role": "water",
+      "boat": "log_raft",
+      "appearance": {
+        "breed": "Maine Coon",
+        "size": 1.25,
+        "build": 1.3,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "tufted",
+        "tail": "plume",
+        "pattern": "tabby",
+        "colors": {
+          "base": [
+            0.48,
+            0.36,
+            0.24
+          ],
+          "secondary": [
+            0.22,
+            0.16,
+            0.1
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "scarf",
+            "color": [
+              0.36,
+              0.48,
+              0.28
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      }
+    },
+    {
+      "id": "pip_pebble",
+      "name": "Pip & Pebble",
+      "lake": "briar",
+      "role": "water",
+      "boat": "dory",
+      "appearance": {
+        "breed": "Tuxedo kitten",
+        "size": 0.65,
+        "build": 0.9,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "tuxedo",
+        "colors": {
+          "base": [
+            0.08,
+            0.08,
+            0.09
+          ],
+          "secondary": [
+            0.044,
+            0.044,
+            0.05
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.5,
+          0.74,
+          0.32
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "life_jacket",
+            "color": [
+              0.95,
+              0.48,
+              0.15
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book",
+        "twin": {
+          "breed": "Tuxedo kitten",
+          "size": 0.6,
+          "build": 0.9,
+          "legs": 1.0,
+          "coat": "short",
+          "ears": "pointed",
+          "tail": "long",
+          "pattern": "tuxedo",
+          "colors": {
+            "base": [
+              0.08,
+              0.08,
+              0.09
+            ],
+            "secondary": [
+              0.044,
+              0.044,
+              0.05
+            ],
+            "accent": [
+              0.95,
+              0.94,
+              0.91
+            ]
+          },
+          "eyes": [
+            0.8,
+            0.72,
+            0.3
+          ],
+          "whiskers": 1.0,
+          "attire": [
+            {
+              "kind": "life_jacket",
+              "color": [
+                0.96,
+                0.82,
+                0.2
+              ]
+            }
+          ],
+          "pose": "wave",
+          "prop": "none"
+        }
+      }
+    },
+    {
+      "id": "master_cinder",
+      "name": "Master Cinder",
+      "lake": "briar",
+      "role": "water",
+      "boat": "flat_skiff",
+      "appearance": {
+        "breed": "Black cat",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.08,
+            0.08,
+            0.09
+          ],
+          "secondary": [
+            0.044,
+            0.044,
+            0.05
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.78,
+          0.86,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "scarf",
+            "color": [
+              0.46,
+              0.1,
+              0.12
+            ]
+          },
+          {
+            "kind": "lantern",
+            "color": [
+              0.98,
+              0.78,
+              0.36
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      },
+      "boat_paint": {
+        "hull": "black"
+      }
+    },
+    {
+      "id": "willow",
+      "name": "Willow",
+      "lake": "briar",
+      "role": "water",
+      "boat": "birch_skiff",
+      "appearance": {
+        "breed": "Siamese",
+        "size": 0.9,
+        "build": 0.8,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "point",
+        "colors": {
+          "base": [
+            0.93,
+            0.88,
+            0.78
+          ],
+          "secondary": [
+            0.3,
+            0.22,
+            0.17
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.35,
+          0.6,
+          0.95
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "bandana",
+            "color": [
+              0.62,
+              0.52,
+              0.8
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "brush"
+      }
+    },
+    {
+      "id": "silas",
+      "name": "Silas",
+      "lake": "briar",
+      "role": "water",
+      "boat": "flat_skiff",
+      "appearance": {
+        "breed": "Grey tabby",
+        "size": 1.0,
+        "build": 1.05,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "mackerel",
+        "colors": {
+          "base": [
+            0.58,
+            0.58,
+            0.56
+          ],
+          "secondary": [
+            0.28,
+            0.28,
+            0.28
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "vest",
+            "color": [
+              0.45,
+              0.32,
+              0.2
+            ]
+          }
+        ],
+        "pose": "nap_curl",
+        "prop": "none"
+      },
+      "boat_paint": {
+        "hull": "green"
+      }
+    },
+    {
+      "id": "marigold",
+      "name": "Marigold",
+      "lake": "briar",
+      "role": "water",
+      "boat": "log_raft",
+      "appearance": {
+        "breed": "Turkish Van",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "rounded",
+        "tail": "plume",
+        "pattern": "point",
+        "colors": {
+          "base": [
+            0.95,
+            0.94,
+            0.91
+          ],
+          "secondary": [
+            0.78,
+            0.42,
+            0.18
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.88,
+          0.7,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [],
+        "pose": "wave",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "old_gus",
+      "name": "Old Gus",
+      "lake": "briar",
+      "role": "water",
+      "boat": "flat_skiff",
+      "appearance": {
+        "breed": "Manx",
+        "size": 1.05,
+        "build": 1.2,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "rounded",
+        "tail": "none",
+        "pattern": "tabby",
+        "colors": {
+          "base": [
+            0.56,
+            0.5,
+            0.42
+          ],
+          "secondary": [
+            0.3,
+            0.26,
+            0.2
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "cap",
+            "color": [
+              0.18,
+              0.22,
+              0.36
+            ]
+          }
+        ],
+        "pose": "helm",
+        "prop": "none"
+      },
+      "boat_paint": {
+        "hull": "sand"
+      }
+    },
+    {
+      "id": "biscuit",
+      "name": "Biscuit",
+      "lake": "briar",
+      "role": "water",
+      "boat": "marsh_runner",
+      "appearance": {
+        "breed": "British Shorthair",
+        "size": 1.05,
+        "build": 1.35,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "rounded",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.52,
+            0.55,
+            0.6
+          ],
+          "secondary": [
+            0.286,
+            0.303,
+            0.33
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.86,
+          0.56,
+          0.2
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "scarf",
+            "color": [
+              0.94,
+              0.88,
+              0.7
+            ]
+          }
+        ],
+        "pose": "wave",
+        "prop": "none"
+      },
+      "boat_paint": {
+        "hull": "white"
+      }
+    },
+    {
+      "id": "captain_maeve",
+      "name": "Captain Maeve",
+      "lake": "cedar",
+      "role": "water",
+      "boat": "mahogany_runabout",
+      "appearance": {
+        "breed": "Calico",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "calico",
+        "colors": {
+          "base": [
+            0.95,
+            0.94,
+            0.91
+          ],
+          "secondary": [
+            0.88,
+            0.54,
+            0.22
+          ],
+          "accent": [
+            0.14,
+            0.12,
+            0.1
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "cap",
+            "color": [
+              0.94,
+              0.94,
+              0.92
+            ]
+          }
+        ],
+        "pose": "helm",
+        "prop": "none"
+      },
+      "boat_paint": {
+        "hull": "red"
+      }
+    },
+    {
+      "id": "sparky",
+      "name": "Sparky",
+      "lake": "cedar",
+      "role": "water",
+      "boat": "deepv_skiff",
+      "appearance": {
+        "breed": "Orange tabby",
+        "size": 0.95,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "mackerel",
+        "colors": {
+          "base": [
+            0.92,
+            0.58,
+            0.22
+          ],
+          "secondary": [
+            0.66,
+            0.34,
+            0.1
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "goggles",
+            "color": [
+              0.4,
+              0.42,
+              0.44
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "whittle"
+      }
+    },
+    {
+      "id": "quill",
+      "name": "Quill",
+      "lake": "cedar",
+      "role": "water",
+      "boat": "small_sloop",
+      "appearance": {
+        "breed": "Persian",
+        "size": 1.0,
+        "build": 1.25,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "rounded",
+        "tail": "plume",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.95,
+            0.9,
+            0.8
+          ],
+          "secondary": [
+            0.522,
+            0.495,
+            0.44
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.88,
+          0.56,
+          0.2
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "scarf",
+            "color": [
+              0.4,
+              0.24,
+              0.5
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book"
+      }
+    },
+    {
+      "id": "dr_alder",
+      "name": "Dr. Alder",
+      "lake": "cedar",
+      "role": "water",
+      "boat": "coastal_craft",
+      "appearance": {
+        "breed": "Chartreux",
+        "size": 1.05,
+        "build": 1.2,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.5,
+            0.55,
+            0.62
+          ],
+          "secondary": [
+            0.275,
+            0.303,
+            0.341
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.92,
+          0.58,
+          0.18
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "spectacles",
+            "color": [
+              0.3,
+              0.3,
+              0.32
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book"
+      }
+    },
+    {
+      "id": "patch",
+      "name": "Patch",
+      "lake": "cedar",
+      "role": "water",
+      "boat": "flat_skiff",
+      "appearance": {
+        "breed": "Alley cat",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "bicolor",
+        "colors": {
+          "base": [
+            0.55,
+            0.45,
+            0.32
+          ],
+          "secondary": [
+            0.303,
+            0.248,
+            0.176
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "bandana",
+            "color": [
+              0.8,
+              0.2,
+              0.18
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod",
+        "one_ear": true
+      },
+      "boat_paint": {
+        "hull": "carolina"
+      }
+    },
+    {
+      "id": "hank_mudpaw",
+      "name": "Hank Mudpaw",
+      "lake": "cedar",
+      "role": "water",
+      "boat": "duck_jon",
+      "appearance": {
+        "breed": "American Shorthair",
+        "size": 1.1,
+        "build": 1.2,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "tabby",
+        "colors": {
+          "base": [
+            0.72,
+            0.72,
+            0.7
+          ],
+          "secondary": [
+            0.18,
+            0.18,
+            0.18
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "cap",
+            "color": [
+              0.55,
+              0.3,
+              0.18
+            ]
+          },
+          {
+            "kind": "lantern",
+            "color": [
+              0.98,
+              0.78,
+              0.36
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      }
+    },
+    {
+      "id": "belle_pecan",
+      "name": "Belle Pecan",
+      "lake": "cedar",
+      "role": "water",
+      "boat": "birch_skiff",
+      "appearance": {
+        "breed": "Selkirk Rex",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "rex",
+        "ears": "rounded",
+        "tail": "long",
+        "pattern": "bicolor",
+        "colors": {
+          "base": [
+            0.86,
+            0.72,
+            0.52
+          ],
+          "secondary": [
+            0.473,
+            0.396,
+            0.286
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "bandana",
+            "color": [
+              0.92,
+              0.56,
+              0.62
+            ]
+          }
+        ],
+        "pose": "wave",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "senora_luz",
+      "name": "Señora Luz",
+      "lake": "cedar",
+      "role": "water",
+      "boat": "flat_skiff",
+      "appearance": {
+        "breed": "Egyptian Mau",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "spotted",
+        "colors": {
+          "base": [
+            0.78,
+            0.76,
+            0.7
+          ],
+          "secondary": [
+            0.24,
+            0.23,
+            0.21
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.8,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "shawl",
+            "color": [
+              0.75,
+              0.28,
+              0.3
+            ]
+          },
+          {
+            "kind": "lantern",
+            "color": [
+              0.98,
+              0.78,
+              0.36
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      },
+      "boat_paint": {
+        "hull": "white"
+      }
+    },
+    {
+      "id": "kit",
+      "name": "Kit",
+      "lake": "cedar",
+      "role": "water",
+      "boat": "reed_dugout",
+      "appearance": {
+        "breed": "Abyssinian kitten",
+        "size": 0.7,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.72,
+            0.44,
+            0.22
+          ],
+          "secondary": [
+            0.396,
+            0.242,
+            0.121
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "life_jacket",
+            "color": [
+              0.95,
+              0.48,
+              0.15
+            ]
+          },
+          {
+            "kind": "cap",
+            "color": [
+              0.3,
+              0.44,
+              0.26
+            ]
+          }
+        ],
+        "pose": "wave",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "torvald",
+      "name": "Torvald",
+      "lake": "flathead",
+      "role": "water",
+      "boat": "fiberglass_cruiser",
+      "appearance": {
+        "breed": "Russian Blue",
+        "size": 1.1,
+        "build": 1.1,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.48,
+            0.53,
+            0.6
+          ],
+          "secondary": [
+            0.264,
+            0.292,
+            0.33
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.4,
+          0.8,
+          0.42
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "sweater",
+            "color": [
+              0.18,
+              0.22,
+              0.4
+            ]
+          },
+          {
+            "kind": "lantern",
+            "color": [
+              0.98,
+              0.78,
+              0.36
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      }
+    },
+    {
+      "id": "freya",
+      "name": "Freya",
+      "lake": "flathead",
+      "role": "water",
+      "boat": "small_sloop",
+      "appearance": {
+        "breed": "Birman",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "pointed",
+        "tail": "plume",
+        "pattern": "point",
+        "colors": {
+          "base": [
+            0.93,
+            0.88,
+            0.78
+          ],
+          "secondary": [
+            0.36,
+            0.26,
+            0.2
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.35,
+          0.6,
+          0.95
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "parka",
+            "color": [
+              0.56,
+              0.72,
+              0.86
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book"
+      }
+    },
+    {
+      "id": "bramble",
+      "name": "Bramble",
+      "lake": "flathead",
+      "role": "water",
+      "boat": "reed_dugout",
+      "appearance": {
+        "breed": "Scottish Fold",
+        "size": 1.0,
+        "build": 1.15,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "folded",
+        "tail": "long",
+        "pattern": "tabby",
+        "colors": {
+          "base": [
+            0.85,
+            0.7,
+            0.45
+          ],
+          "secondary": [
+            0.6,
+            0.44,
+            0.22
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.86,
+          0.64,
+          0.22
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "sweater",
+            "color": [
+              0.3,
+              0.5,
+              0.3
+            ]
+          },
+          {
+            "kind": "scarf",
+            "color": [
+              0.8,
+              0.3,
+              0.22
+            ]
+          }
+        ],
+        "pose": "nap_curl",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "ingrid",
+      "name": "Ingrid",
+      "lake": "flathead",
+      "role": "water",
+      "boat": "party_barge",
+      "appearance": {
+        "breed": "Siberian",
+        "size": 1.1,
+        "build": 1.2,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "tufted",
+        "tail": "plume",
+        "pattern": "tabby",
+        "colors": {
+          "base": [
+            0.7,
+            0.55,
+            0.35
+          ],
+          "secondary": [
+            0.36,
+            0.26,
+            0.15
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "sweater",
+            "color": [
+              0.7,
+              0.16,
+              0.16
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "whittle"
+      }
+    },
+    {
+      "id": "elk_ears_eli",
+      "name": "Elk-Ears Eli",
+      "lake": "flathead",
+      "role": "water",
+      "boat": "birch_skiff",
+      "appearance": {
+        "breed": "Lynx-point",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "tufted",
+        "tail": "long",
+        "pattern": "point",
+        "colors": {
+          "base": [
+            0.93,
+            0.88,
+            0.78
+          ],
+          "secondary": [
+            0.46,
+            0.34,
+            0.22
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.35,
+          0.6,
+          0.95
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "vest",
+            "color": [
+              0.3,
+              0.4,
+              0.24
+            ]
+          },
+          {
+            "kind": "lantern",
+            "color": [
+              0.98,
+              0.78,
+              0.36
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      }
+    },
+    {
+      "id": "bjorn",
+      "name": "Bjorn",
+      "lake": "flathead",
+      "role": "water",
+      "boat": "dory",
+      "appearance": {
+        "breed": "Pixie-bob",
+        "size": 1.1,
+        "build": 1.2,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "tufted",
+        "tail": "bob",
+        "pattern": "spotted",
+        "colors": {
+          "base": [
+            0.62,
+            0.5,
+            0.36
+          ],
+          "secondary": [
+            0.3,
+            0.22,
+            0.14
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "sweater",
+            "color": [
+              0.24,
+              0.4,
+              0.66
+            ]
+          }
+        ],
+        "pose": "wave",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "willa_larch",
+      "name": "Willa Larch",
+      "lake": "flathead",
+      "role": "water",
+      "boat": "log_raft",
+      "appearance": {
+        "breed": "Somali",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "pointed",
+        "tail": "plume",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.74,
+            0.44,
+            0.24
+          ],
+          "secondary": [
+            0.407,
+            0.242,
+            0.132
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "scarf",
+            "color": [
+              0.9,
+              0.7,
+              0.24
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book"
+      }
+    },
+    {
+      "id": "dakota",
+      "name": "Dakota",
+      "lake": "flathead",
+      "role": "water",
+      "boat": "birch_skiff",
+      "appearance": {
+        "breed": "Ocicat",
+        "size": 1.0,
+        "build": 1.1,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "spotted",
+        "colors": {
+          "base": [
+            0.8,
+            0.64,
+            0.4
+          ],
+          "secondary": [
+            0.3,
+            0.2,
+            0.12
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "bandana",
+            "color": [
+              0.78,
+              0.18,
+              0.16
+            ]
+          }
+        ],
+        "pose": "helm",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "mitzi",
+      "name": "Mitzi",
+      "lake": "flathead",
+      "role": "water",
+      "boat": "coastal_craft",
+      "appearance": {
+        "breed": "Devon Rex",
+        "size": 0.9,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "rex",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "bicolor",
+        "colors": {
+          "base": [
+            0.58,
+            0.58,
+            0.6
+          ],
+          "secondary": [
+            0.319,
+            0.319,
+            0.33
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "sweater",
+            "color": [
+              0.2,
+              0.56,
+              0.56
+            ]
+          },
+          {
+            "kind": "goggles",
+            "color": [
+              0.4,
+              0.42,
+              0.44
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book"
+      }
+    },
+    {
+      "id": "nyx",
+      "name": "Nyx",
+      "lake": "crater",
+      "role": "water",
+      "boat": "tug_skiff",
+      "appearance": {
+        "breed": "Korat",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.56,
+            0.6,
+            0.66
+          ],
+          "secondary": [
+            0.308,
+            0.33,
+            0.363
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.4,
+          0.8,
+          0.42
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "vest",
+            "color": [
+              0.48,
+              0.14,
+              0.24
+            ]
+          },
+          {
+            "kind": "lantern",
+            "color": [
+              0.98,
+              0.78,
+              0.36
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      }
+    },
+    {
+      "id": "ignis",
+      "name": "Ignis",
+      "lake": "crater",
+      "role": "water",
+      "boat": "deepv_skiff",
+      "appearance": {
+        "breed": "Bengal",
+        "size": 1.0,
+        "build": 0.9,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "spotted",
+        "colors": {
+          "base": [
+            0.86,
+            0.58,
+            0.26
+          ],
+          "secondary": [
+            0.2,
+            0.13,
+            0.08
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "goggles",
+            "color": [
+              0.3,
+              0.32,
+              0.36
+            ]
+          }
+        ],
+        "pose": "wave",
+        "prop": "none"
+      },
+      "boat_paint": {
+        "hull": "black"
+      }
+    },
+    {
+      "id": "ashby",
+      "name": "Ashby",
+      "lake": "crater",
+      "role": "water",
+      "boat": "houseboat",
+      "appearance": {
+        "breed": "Havana Brown",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.36,
+            0.22,
+            0.14
+          ],
+          "secondary": [
+            0.198,
+            0.121,
+            0.077
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.4,
+          0.78,
+          0.36
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "scarf",
+            "color": [
+              0.94,
+              0.9,
+              0.8
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "mug"
+      }
+    },
+    {
+      "id": "basalt_bea",
+      "name": "Basalt Bea",
+      "lake": "crater",
+      "role": "water",
+      "boat": "dory",
+      "appearance": {
+        "breed": "LaPerm",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "rex",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "tortoiseshell",
+        "colors": {
+          "base": [
+            0.08,
+            0.08,
+            0.09
+          ],
+          "secondary": [
+            0.88,
+            0.54,
+            0.22
+          ],
+          "accent": [
+            0.4,
+            0.25,
+            0.14
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "bandana",
+            "color": [
+              0.86,
+              0.48,
+              0.18
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      },
+      "boat_paint": {
+        "hull": "black"
+      }
+    },
+    {
+      "id": "fumi",
+      "name": "Fumi",
+      "lake": "crater",
+      "role": "water",
+      "boat": "flat_skiff",
+      "appearance": {
+        "breed": "Japanese Bobtail",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "bob",
+        "pattern": "calico",
+        "colors": {
+          "base": [
+            0.95,
+            0.94,
+            0.91
+          ],
+          "secondary": [
+            0.88,
+            0.54,
+            0.22
+          ],
+          "accent": [
+            0.14,
+            0.12,
+            0.1
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "bandana",
+            "color": [
+              0.84,
+              0.18,
+              0.22
+            ]
+          },
+          {
+            "kind": "lantern",
+            "color": [
+              0.98,
+              0.78,
+              0.36
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      },
+      "boat_paint": {
+        "hull": "red"
+      }
+    },
+    {
+      "id": "ember",
+      "name": "Ember",
+      "lake": "crater",
+      "role": "water",
+      "boat": "river_runner",
+      "appearance": {
+        "breed": "Somali kitten",
+        "size": 0.7,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "pointed",
+        "tail": "plume",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.8,
+            0.42,
+            0.18
+          ],
+          "secondary": [
+            0.44,
+            0.231,
+            0.099
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "cap",
+            "color": [
+              0.8,
+              0.2,
+              0.16
+            ]
+          }
+        ],
+        "pose": "wave",
+        "prop": "none"
+      },
+      "boat_paint": {
+        "hull": "red"
+      }
+    },
+    {
+      "id": "mist",
+      "name": "Mist",
+      "lake": "crater",
+      "role": "water",
+      "boat": "reed_dugout",
+      "appearance": {
+        "breed": "Turkish Angora",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "pointed",
+        "tail": "plume",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.96,
+            0.96,
+            0.95
+          ],
+          "secondary": [
+            0.528,
+            0.528,
+            0.522
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.4,
+          0.66,
+          0.95
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "scarf",
+            "color": [
+              0.6,
+              0.62,
+              0.66
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book"
+      }
+    },
+    {
+      "id": "juno",
+      "name": "Juno",
+      "lake": "crater",
+      "role": "water",
+      "boat": "party_barge",
+      "appearance": {
+        "breed": "Burmese",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.4,
+            0.28,
+            0.18
+          ],
+          "secondary": [
+            0.22,
+            0.154,
+            0.099
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.92,
+          0.74,
+          0.22
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "vest",
+            "color": [
+              0.16,
+              0.2,
+              0.42
+            ]
+          },
+          {
+            "kind": "spectacles",
+            "color": [
+              0.76,
+              0.66,
+              0.4
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book"
+      }
+    },
+    {
+      "id": "tamsin",
+      "name": "Tamsin",
+      "lake": "crater",
+      "role": "water",
+      "boat": "birch_skiff",
+      "appearance": {
+        "breed": "Snowshoe",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "point",
+        "colors": {
+          "base": [
+            0.93,
+            0.88,
+            0.78
+          ],
+          "secondary": [
+            0.3,
+            0.24,
+            0.2
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.35,
+          0.6,
+          0.95
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "vest",
+            "color": [
+              0.3,
+              0.4,
+              0.24
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      }
+    },
+    {
+      "id": "orion_cat",
+      "name": "Orion-Cat",
+      "lake": "nebula",
+      "role": "water",
+      "boat": "steam_barge",
+      "appearance": {
+        "breed": "Persian",
+        "size": 1.0,
+        "build": 1.2,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "rounded",
+        "tail": "plume",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.7,
+            0.72,
+            0.78
+          ],
+          "secondary": [
+            0.385,
+            0.396,
+            0.429
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.88,
+          0.62,
+          0.2
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "goggles",
+            "color": [
+              0.82,
+              0.64,
+              0.28
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "whittle"
+      }
+    },
+    {
+      "id": "nebula_paws",
+      "name": "Nebula-Paws",
+      "lake": "nebula",
+      "role": "water",
+      "boat": "nebula_cruiser",
+      "appearance": {
+        "breed": "Ragdoll",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "pointed",
+        "tail": "plume",
+        "pattern": "point",
+        "colors": {
+          "base": [
+            0.93,
+            0.88,
+            0.78
+          ],
+          "secondary": [
+            0.36,
+            0.34,
+            0.82
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.35,
+          0.6,
+          0.98
+        ],
+        "whiskers": 1.0,
+        "attire": [],
+        "pose": "wave",
+        "prop": "none",
+        "glow": 0.7
+      }
+    },
+    {
+      "id": "comet",
+      "name": "Comet",
+      "lake": "nebula",
+      "role": "water",
+      "boat": "nebula_cruiser",
+      "appearance": {
+        "breed": "Bengal kitten",
+        "size": 0.7,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "spotted",
+        "colors": {
+          "base": [
+            0.86,
+            0.58,
+            0.26
+          ],
+          "secondary": [
+            0.2,
+            0.13,
+            0.08
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "goggles",
+            "color": [
+              0.4,
+              0.8,
+              0.95
+            ]
+          }
+        ],
+        "pose": "helm",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "lyra",
+      "name": "Lyra",
+      "lake": "nebula",
+      "role": "water",
+      "boat": "steam_barge",
+      "appearance": {
+        "breed": "Cymric",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "rounded",
+        "tail": "none",
+        "pattern": "bicolor",
+        "colors": {
+          "base": [
+            0.56,
+            0.56,
+            0.6
+          ],
+          "secondary": [
+            0.308,
+            0.308,
+            0.33
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "scarf",
+            "color": [
+              0.82,
+              0.7,
+              0.96
+            ]
+          }
+        ],
+        "pose": "craft",
+        "prop": "book"
+      }
+    },
+    {
+      "id": "vega",
+      "name": "Vega",
+      "lake": "nebula",
+      "role": "water",
+      "boat": "nebula_cruiser",
+      "appearance": {
+        "breed": "Toyger",
+        "size": 1.0,
+        "build": 1.1,
+        "legs": 1.0,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "mackerel",
+        "colors": {
+          "base": [
+            0.9,
+            0.56,
+            0.2
+          ],
+          "secondary": [
+            0.16,
+            0.1,
+            0.06
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "cap",
+            "color": [
+              0.2,
+              0.24,
+              0.5
+            ]
+          }
+        ],
+        "pose": "helm",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "selene",
+      "name": "Selene",
+      "lake": "nebula",
+      "role": "water",
+      "boat": "log_raft",
+      "appearance": {
+        "breed": "Nebelung",
+        "size": 1.0,
+        "build": 1.0,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "pointed",
+        "tail": "plume",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.55,
+            0.6,
+            0.68
+          ],
+          "secondary": [
+            0.303,
+            0.33,
+            0.374
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.4,
+          0.8,
+          0.42
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "shawl",
+            "color": [
+              0.82,
+              0.84,
+              0.9
+            ]
+          }
+        ],
+        "pose": "nap_curl",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "andi",
+      "name": "Andi",
+      "lake": "nebula",
+      "role": "water",
+      "boat": "nebula_cruiser",
+      "appearance": {
+        "breed": "Oriental Longhair kitten",
+        "size": 0.7,
+        "build": 0.8,
+        "legs": 1.0,
+        "coat": "long",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "solid",
+        "colors": {
+          "base": [
+            0.72,
+            0.66,
+            0.72
+          ],
+          "secondary": [
+            0.396,
+            0.363,
+            0.396
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.4,
+          0.8,
+          0.42
+        ],
+        "whiskers": 1.0,
+        "attire": [],
+        "pose": "wave",
+        "prop": "none"
+      }
+    },
+    {
+      "id": "twinkle",
+      "name": "Twinkle",
+      "lake": "nebula",
+      "role": "water",
+      "boat": "flat_skiff",
+      "appearance": {
+        "breed": "Munchkin",
+        "size": 0.8,
+        "build": 1.0,
+        "legs": 0.6,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "bicolor",
+        "colors": {
+          "base": [
+            0.8,
+            0.62,
+            0.4
+          ],
+          "secondary": [
+            0.44,
+            0.341,
+            0.22
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "bandana",
+            "color": [
+              0.4,
+              0.7,
+              0.95
+            ]
+          },
+          {
+            "kind": "lantern",
+            "color": [
+              0.7,
+              0.95,
+              0.98
+            ]
+          }
+        ],
+        "pose": "sit_fish",
+        "prop": "rod"
+      },
+      "boat_paint": {
+        "hull": "white"
+      }
+    },
+    {
+      "id": "rigel",
+      "name": "Rigel",
+      "lake": "nebula",
+      "role": "water",
+      "boat": "small_sloop",
+      "appearance": {
+        "breed": "Savannah",
+        "size": 1.15,
+        "build": 0.85,
+        "legs": 1.15,
+        "coat": "short",
+        "ears": "pointed",
+        "tail": "long",
+        "pattern": "spotted",
+        "colors": {
+          "base": [
+            0.84,
+            0.7,
+            0.42
+          ],
+          "secondary": [
+            0.2,
+            0.14,
+            0.08
+          ],
+          "accent": [
+            0.95,
+            0.94,
+            0.91
+          ]
+        },
+        "eyes": [
+          0.62,
+          0.78,
+          0.3
+        ],
+        "whiskers": 1.0,
+        "attire": [
+          {
+            "kind": "goggles",
+            "color": [
+              0.82,
+              0.64,
+              0.28
+            ]
+          }
+        ],
+        "pose": "helm",
+        "prop": "none"
+      }
+    }
+  ]
+}

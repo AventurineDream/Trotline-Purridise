@@ -151,6 +151,7 @@ class Session:
         self._refresh_npcs()
         previous_page = (self.ui.mode, self.ui.journal_page, self.ui.book_entry_i)
         self._keys(keys, dt)
+        self.state.hauling = self.ui.mode == "haul"
         current_page = (self.ui.mode, self.ui.journal_page, self.ui.book_entry_i)
         if (current_page != previous_page or keys.pressed
                 or getattr(keys, "mouse_click", None) is not None
