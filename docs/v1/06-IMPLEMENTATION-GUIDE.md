@@ -1510,9 +1510,10 @@ V1-33 does for the three later lakes what V1-32 did for Briar and Cedar. It tran
 **Stories.** A cats row may have a `story`: 2–5 parts, each a line of bubbles.
 
 - **Telling.** The first hail of a game day tells the next part, after the greeting and before the quest's own node.
-- **Saving.** Progress is saved as `v2.npcs.stories.<cat> = {heard, day}`. The story ends after its last part.
+- **Saving.** A part counts as heard only once its node is shown, so closing the conversation on the greeting keeps the part for the next hail. Progress is saved as `v2.npcs.stories.<cat> = {heard, day}`, and the story ends after its last part.
 - **Use.** Captain Huckleberry tells the Whopper in three parts (`05 §4.3`). `dialogue.story_heard` is what Huckleberry's Whopper's gate, heard on 3 different days, will read in V1-36.
 - **Quests are counted separately.** His errand and Bjorn's quest A count their own hails (`talk_to`, `distinct_days: 3`). The story is told once, whichever comes first.
+- **The acceptance day counts.** A quest taken from the very cat its `distinct_days` step needs counts that day's hail (`quests.count_todays_hail`). The hail came before the acceptance, so the step would otherwise miss it. Huckleberry's errand is therefore ready on the day his story ends. Bjorn's quest, taken from Bjorn, counts only hails to Huckleberry.
 
 **Still waiting on other tickets.**
 
