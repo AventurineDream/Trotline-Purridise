@@ -11,7 +11,8 @@ SPOIL_HOURS = 13.0
 DOZEN = 12
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 _CONTENT_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
-                  "pantry.json", "dishes.json", "calendar.json", "bot.json", "legendaries.json")
+                  "pantry.json", "dishes.json", "calendar.json", "bot.json", "legendaries.json",
+                  "npcs.json")
 
 
 def _unique_json_keys(pairs):

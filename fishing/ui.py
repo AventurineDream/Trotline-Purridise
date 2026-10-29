@@ -698,7 +698,12 @@ class UI:
         cw, ch = self.cell(size)
         margin = 16
         width = min(w - 24, 1000)
-        cols = max(8, (width - margin*2) // cw)
+        # The speaker's portrait sits at the left when the frame has room (V1-29).
+        from .catart import portrait_at
+        side = min(176, max(96, h // 4))
+        portrait = portrait_at(chat.npc_id, side) if w >= 640 else None
+        inset = side + margin if portrait is not None else 0
+        cols = max(8, (width - margin*2 - inset) // cw)
         from .botidentity import format_text
         lines = textwrap.wrap(format_text(node['text'], state), cols)
         choices = node.get('choices', [])
@@ -719,12 +724,16 @@ class UI:
                                   "A continue    B leave    RB continue")
         footer = textwrap.wrap(foot, cols)
         height = (len(rows) + len(footer) + 2) * (ch + 3) + margin*2
+        if portrait is not None:
+            height = max(height, side + margin*2)
         x, y = (w-width)//2, h-height-12
         self._panel(frame, x, y, width, height, 0.96)
-        self._text(frame, name, x+margin, y+margin, size, GOLD, False)
+        if portrait is not None:
+            self._blit_rgb(frame, portrait, x+margin, y+margin)
+        self._text(frame, name, x+margin+inset, y+margin, size, GOLD, False)
         top = y+margin+(ch+3)*2
         for i, (line, color) in enumerate(zip(rows+footer, colors+[DIM]*len(footer))):
-            self._text(frame, line, x+margin, top+i*(ch+3), size, color, False)
+            self._text(frame, line, x+margin+inset, top+i*(ch+3), size, color, False)
 
     @staticmethod
     def _haul_sway(ui: UIState, reduced_motion: bool) -> float:
@@ -1378,12 +1387,20 @@ class UI:
             self._text(frame, label, tx, ty, size, color)
 
     def _plot_npcs(self, frame, state, x, y, mw, mh, labels=False):
+        from .actors import roster
         color = (128, 206, 240)
+        cats = roster()
         for npc in state.npcs:
             if npc.anchor.lake_id != self.world.id:
                 continue
             u, v = self.world.map_pixel(npc.anchor.x, npc.anchor.z, mw, mh)
-            self._dot(frame, x + u, y + v, 3 if labels else 2, color)
+            # Each pin wears its cat's coat, ringed so pale coats read on the chart (V1-29).
+            radius = 3 if labels else 2
+            row = cats.get(npc.id)
+            pin = (tuple(int(c * 255 + 0.5) for c in row["appearance"]["colors"]["base"])
+                   if row is not None else color)
+            self._dot(frame, x + u, y + v, radius + 1, (28, 34, 38))
+            self._dot(frame, x + u, y + v, radius, pin)
             if labels:
                 size = self._size(frame, "small")
                 label = self._trim(npc.name, size, mw)

@@ -61,7 +61,8 @@ fishing/assets/content_v2/
   boats.json         # 24 boats + traits (03 §6)
   bot.json           # prefixes, shells, tools (03 §7)
   lakes.json         # 5 lakes: labels, zones, Lake Days, weather sets, palettes
-  npcs.json          # 52 cats: appearance params, boat, slot, anchor, quests
+  npcs.json          # 52 cats in 51 rows: role, lake, boat, appearance (V1-29);
+                     # V1-30 adds slot, anchor and quests
   quests.json        # 96 new quests (15 story + 3 host + 34 quest A + 44 quest B);
                      # 108 in total with the 12 in narrative_v1.json
   dialogue/*.json    # one file per lake + story.json + bot.json + system.json
@@ -1119,3 +1120,136 @@ No same-lake pair now comes within 0.015 IoU and 0.03 palette overlap of failing
 
 The capture fails on any look-alike pair or if it passes 3 GB.
 
+
+## Implemented cats (V1-29)
+
+**Roster.** `npcs.json` holds 51 rows for the 52 cats: Pip & Pebble share one
+row and one actor, Pebble as its `twin`. Each row has an `id`, `name`, `lake`
+(null for the two travelers), `role` (host, traveler or water), `boat` (a
+generated family boat; null for hosts), optional `boat_paint`, and an
+`appearance`:
+
+- **Shape:** `breed`, `size` (0.5–1.4), `build` (0.7–1.4), `legs` (0.5–1.3),
+  `coat` (short, long, rex, hairless), `ears` (pointed, folded, tufted,
+  rounded) and `tail` (long, bob, none, plume).
+- **Coat:** `pattern`, one of the nine below, and `colors` (base, secondary,
+  accent).
+- **Face:** `eyes` and `whiskers` (0.3–1.6).
+- **Attire:** up to four items from the kit: oilskin, parka, sweater, vest,
+  life jacket, shawl, scarf, bandana, cap, spectacles, goggles and lantern.
+- **Pose and prop:** sit_fish holds a rod; craft holds a book, brush and easel,
+  whittling, a mug or a tablet; nap_curl, wave and helm hold nothing.
+- Optional `glow` (0–1, glowing markings), `one_ear` and `twin`.
+
+The validator requires 5 hosts (one per lake, on no boat), 2 travelers, 44
+water cats and 52 cats in all, with every V3 day cat on its lake. It also
+checks ranges, enums, attire count and uniqueness, the prop for each pose, and
+that boat paint uses the shop's paint IDs. Each error names its row; an
+unhashable value is reported, never raised. V1-30 adds slots, anchors and
+quests to these rows.
+
+**Rig.** `catmesh.cat_mesh(npc_id, lod)` builds one actor in NumPy:
+
+- Deformed ellipsoids and swept tubes for the head, muzzle, ears, torso, arms,
+  legs and a Bézier tail, plus eyes with pupils and whiskers.
+- The attire kit and props are built on the same frame.
+- Every pose shares one triangle list. The mesh carries the idle pose and the
+  wave pose, the neutral coat frame for the pattern, and per-vertex part, rig
+  channel, attire tag and distance along the part.
+
+LOD0 has 2,052–2,672 triangles (median 2,320) and LOD1 642–874 (median 750);
+Pip & Pebble have 4,464 and 1,404. LOD1 is a little over the guide's 600
+because attire keeps its silhouette. The mesh LRU holds 32 entries (both LODs of
+14 actors and a few spare), and cached arrays are read-only.
+
+**Coat patterns.** `shaders/cat.frag` evaluates solid, tabby, mackerel, calico,
+tortoiseshell, tuxedo, point, spotted and bicolor per fragment. It uses
+object-space value noise and masks over the neutral pose, scaled by the cat's
+size, with no per-cat textures. `catmesh.coat_weights` is the NumPy reference.
+`test_cats` renders both over every pattern's fur and requires agreement on at
+least 97% of samples. The software renderer paints per vertex from the same
+function.
+
+**Motion.** `shaders/cat.vert` and `actors.animate` are twins, and `test_cats`
+checks them against each other by transform feedback. Each frame:
+
+- The torso breathes and the tail sways.
+- The ears flick about every seven seconds.
+- Within 40 m the head turns toward the player, clamped to ±1.1 rad.
+- Between 40 m and 30 m the idle pose blends into a wave, and the waving forearm
+  swings about the elbow.
+
+Under Reduced Motion the cats hold still. `actors.pose_state` computes the
+parameters, and `actors.shader_uniforms` hands them to the shader.
+
+**Actors.** `actors.place` puts each present NPC in the world:
+
+- A host stands on the nearest camp or marina pier within 12 m of its anchor.
+  Without one, it stands on a small plank float at the anchor.
+- A water cat sits at its family boat's seat, from `boatfamilies.seat`. The boat
+  comes from `npc_faces`, and its heading is a hash of the anchor ID, so boats
+  lie the same way each day.
+
+`ActorCache` keeps at most 14 actors, least recently seen out first.
+
+Hailing still measures from the anchor: within 20 m and below 3 knots,
+unchanged.
+
+**GL renderer.** `glrender` gives the 14 actor slots fixed GPU reserves: both
+LODs in one indexed buffer, the boat, and an impostor layer in the foliage
+atlas. LOD0 draws within 40 m and LOD1 within 120 m. Beyond that a cylindrical
+billboard is cropped to the cat's silhouette, feet on its base. No GPU object
+is created after build. Boats draw at every range, and cats also draw into the
+reflection pass.
+
+**Software renderer.** Cats are Gouraud-lit meshes, LOD0 within 12 m and LOD1
+to 120 m. They are rasterised with `raster.cover`, a vectorised many-triangle
+rasteriser that also draws portraits, impostors and the Skipper's paws. Boats
+are faces within the existing 170 m cull. A near cat adds about 2–17 ms to a
+software frame, mostly for its boat's faces.
+
+**Portraits.** `catart.portrait(npc_id)` renders a 256×256 three-quarter view
+with a warm rim light, ink outline, paper ground and frame. It is rendered on
+first need and kept in a 24-entry LRU, which is more than a lake's cats, hosts
+and travelers. Twins share the frame. The dialogue panel shows the portrait at
+the left, 96–176 px, whenever the frame is at least 640 px wide, and wraps the
+text beside it. Chart pins wear each cat's base coat colour, ringed in ink.
+
+**The Skipper.** `skipper.py` draws two dusk-brown tabby paws with cream mitts
+in the cockpit frame:
+
+- **Tiller boats:** on the tiller. Where a boat's tiller sits behind the eye,
+  the paw holds a tiller extension instead.
+- **Rowed boats:** on the oar looms.
+- **Paddle craft:** on the paddle shaft.
+- **The haul:** both paws work the line hand over hand. The session sets the
+  transient `state.hauling` while the haul screen is up; it is never saved.
+- **Wheel boats:** no paws outside the haul.
+
+On calm water (no rain, little mist), at idle and not hauling, the GL reflection
+pass alone draws a dark silhouette of the Skipper's head. It is placed so its
+mirror image, ears pointing down, lies on the water past the bow. The software
+renderer stamps the same mirrored shape onto its water pixels.
+
+**Memory.** `actors.memory_report` adds up the resident meshes and boats, the
+mesh-cache bound, the portrait caches, the GPU slot reserves and software paint
+caches, against the 150 MiB budget. The worst case measured with 14 resident
+actors was about 17 MB on the CPU and 11 MB of GPU reserves. The `--benchmark`
+run now places each lake's cats, and fails if more than 14 are resident or the
+bound passes 150 MiB. It reports the result as `cat_actor_memory`.
+
+**Shots.** `python -m fishing --shots PATH --cats [--software]` writes:
+
+- `cats-lineup.png`: all 52 cats, each figure above its portrait.
+- `cats-portraits.png`, `cats-poses.png` (with the wave blend),
+  `cats-patterns.png` and `cats-lod.png` (LOD0, LOD1 and impostor).
+- `world-<lake>-<npc>-{approach,hail,close}-<backend>.png` and `cats-world.png`
+  for the resident cats on Briar and Cedar.
+- `skipper.png` and `reflection-{idle,moving}-<backend>.png`.
+- `dialogue-portrait-<lake>.png` and `chart-pins-<lake>.png`.
+- `benchmark.json`: triangle counts, mesh and portrait timings, the world
+  placements, a 20-cat cache run that must stay within 14 actors and 150 MiB,
+  the hailing cases, and the wave and Reduced Motion checks.
+
+The capture fails if the lineup is not 52 cats, if Reduced Motion moves a cat,
+if hailing changes, or if it passes 3 GB.

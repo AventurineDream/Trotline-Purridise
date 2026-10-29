@@ -25,6 +25,10 @@ from .world import Face
 from .boat import HULL_INNER_BEAM, HULL_HALF_BEAM, HULL_BOW
 
 SHADERS = Path(__file__).with_name("shaders")
+# Per-slot GPU reserves: the largest actor (Pip & Pebble, both LODs) fits with room.
+CAT_VBO_BYTES = 420_000
+CAT_IBO_BYTES = 90_000
+CAT_BOAT_BYTES = 120_000
 
 
 class LakeRenderer(SoftwareRenderer):
@@ -38,6 +42,10 @@ class LakeRenderer(SoftwareRenderer):
         self._boat_key = None
         self._boat_local = None
         self._fish_card_painter = None
+        from .actors import ActorCache
+        self.actor_cache = ActorCache(world)
+        self._actor_draws = []
+        self._impostors = 0
         try:
             # EGL is available on Linux with both real GPUs and Mesa software GL.
             if self.ctx is None:
@@ -90,6 +98,7 @@ class LakeRenderer(SoftwareRenderer):
         self.tree_p = self.program("foliage.vert","foliage.frag")
         self.water_p = self.program("water.vert","water.frag")
         self.post_p = self.program("sky.vert","post.frag")
+        self.cat_p = self.program("cat.vert","cat.frag")
         quad = self.own(ctx.buffer(np.array([[-1,-1],[3,-1],[-1,3]],np.float32).tobytes()))
         self.sky_vao = self.own(ctx.vertex_array(self.sky_p,[(quad,"2f","in_xy")]))
         self.post_vao = self.own(ctx.vertex_array(self.post_p,[(quad,"2f","in_xy")]))
@@ -124,6 +133,10 @@ class LakeRenderer(SoftwareRenderer):
         self.water_vao = self.own(ctx.vertex_array(self.water_p,[(water_buf,"3f","in_pos")]))
         self.layers,images = atlas(paint_rgb("buoy","orange"), alpine=self.world.generated,
                                    caldera=self.world.caldera, nebula=self.world.nebula)
+        # Spare layers for the distant cats' impostors, written as actors arrive.
+        from .actors import MAX_ACTORS
+        self.actor_layer0 = len(images)
+        images = np.concatenate([images, np.zeros((MAX_ACTORS,*images.shape[1:]),images.dtype)])
         self._nebula_arrays = self._nebula_uniforms()
         self.atlas = self.own(ctx.texture_array((ATLAS_W,ATLAS_H,len(images)),4,images.tobytes()))
         self.atlas.filter = (moderngl.LINEAR,moderngl.LINEAR)
@@ -139,9 +152,128 @@ class LakeRenderer(SoftwareRenderer):
         # One cork per hook, built once. Eight heavy lines is 192.
         self.cork_buf = self.own(ctx.buffer(reserve=7*4*192,dynamic=True))
         self.cork_vao = self.tree_vao(self.cork_buf)
+        self._build_actor_slots()
         self.tree_p["atlas"] = 0
         self.water_p["reflection"] = 1
         self.post_p["scene"] = 2
+
+    def _build_actor_slots(self):
+        """Fixed GPU slots for resident cats: both LODs, the boat, and one impostor layer each."""
+        from .actors import MAX_ACTORS
+        ctx = self.ctx
+        self.actor_slots = []
+        from .catmesh import VERTEX_ATTRIBUTES, VERTEX_FORMAT
+        fmt, names = VERTEX_FORMAT, VERTEX_ATTRIBUTES
+        for index in range(MAX_ACTORS):
+            vbo = self.own(ctx.buffer(reserve=CAT_VBO_BYTES,dynamic=True))
+            ibo = self.own(ctx.buffer(reserve=CAT_IBO_BYTES,dynamic=True))
+            vao = self.own(ctx.vertex_array(self.cat_p,[(vbo,fmt,*names)],ibo,index_element_size=4))
+            boat_vbo = self.own(ctx.buffer(reserve=CAT_BOAT_BYTES,dynamic=True))
+            boat_vao = self.mesh_vao(boat_vbo)
+            self.actor_slots.append({"vbo":vbo,"ibo":ibo,"vao":vao,"boat_vbo":boat_vbo,"boat_vao":boat_vao,
+                                     "actor":None,"npc_id":None,
+                                     "layer":self.actor_layer0+index})
+        self.impostor_buf = self.own(ctx.buffer(reserve=7*4*MAX_ACTORS,dynamic=True))
+        self.impostor_vao = self.tree_vao(self.impostor_buf)
+
+    def actor_memory(self) -> dict:
+        """The cat budget with this renderer's fixed slot reserves and impostor layers."""
+        from .actors import MAX_ACTORS, memory_report
+        gpu = (MAX_ACTORS*(CAT_VBO_BYTES+CAT_IBO_BYTES+CAT_BOAT_BYTES+ATLAS_W*ATLAS_H*4)
+               + self.impostor_buf.size)
+        return memory_report(self.actor_cache,gpu_bytes=gpu)
+
+    def _upload_actor(self, slot, actor):
+        """Both LODs of one cat, its boat, and its impostor into a slot (once per arrival)."""
+        from .catmesh import LOD0, LOD1, vertex_block
+        from .catart import impostor
+        from .forest import _bleed_edges
+        blocks, tris, ranges, offset, first = [], [], {}, 0, 0
+        for lod in (LOD0, LOD1):
+            mesh = actor.mesh(lod)
+            blocks.append(vertex_block(mesh))
+            cat_ranges = []
+            for look, lo, hi in mesh.cats:
+                owned = np.flatnonzero((mesh.triangles[:,0] >= lo) & (mesh.triangles[:,0] < hi))
+                cat_ranges.append((look, first+int(owned.min())*3, int(len(owned))*3))
+            ranges[lod] = cat_ranges
+            tris.append(mesh.triangles+offset)
+            offset += len(blocks[-1])
+            first += len(mesh.triangles)*3
+        vertices = np.concatenate(blocks).astype(np.float32)
+        indices = np.concatenate(tris).astype(np.uint32)
+        if vertices.nbytes > CAT_VBO_BYTES or indices.nbytes > CAT_IBO_BYTES:
+            raise RuntimeError(f"cat {actor.npc_id} exceeds its GPU slot")
+        slot["vbo"].write(vertices.tobytes())
+        slot["ibo"].write(indices.tobytes())
+        boat = self._pack_faces(actor.boat_faces) if actor.boat_faces else np.zeros((0,10),np.float32)
+        if boat.nbytes > CAT_BOAT_BYTES:
+            raise RuntimeError(f"boat for {actor.npc_id} exceeds its GPU slot")
+        if len(boat):
+            slot["boat_vbo"].write(boat.tobytes())
+        slot.update(actor=actor, npc_id=actor.npc_id, ranges=ranges, boat_vertices=len(boat))
+        # The impostor fills its atlas layer, feet on the bottom edge.
+        sprite,width_m,height_m,base_m = impostor(actor.npc_id)
+        ys = np.minimum(np.arange(ATLAS_H)*sprite.shape[0]//ATLAS_H,sprite.shape[0]-1)
+        xs = np.minimum(np.arange(ATLAS_W)*sprite.shape[1]//ATLAS_W,sprite.shape[1]-1)
+        layer = _bleed_edges(sprite[ys[:,None],xs[None,:]])[::-1].copy()
+        self.atlas.write(layer.tobytes(),viewport=(0,0,slot["layer"],ATLAS_W,ATLAS_H,1))
+        slot["impostor"] = (width_m,height_m,base_m)
+
+    def _prepare_actors(self, state, cam):
+        """Pick each present cat's slot, LOD and animation for this frame."""
+        from .actors import lod_for, pose_state, roster
+        actors = self.actor_cache.sync(getattr(state,"npcs",()) or (), roster())
+        reduced = bool(state.v2.get("settings",{}).get("reduced_motion",False)) if isinstance(state.v2,dict) else False
+        draws, impostors = [], []
+        # Slots follow the placed actor, not the cat: a cat moved to a new anchor
+        # (a cookout on the landing) is re-placed, and its slot is uploaded afresh.
+        live = {id(actor) for actor in actors}
+        for slot in self.actor_slots:
+            if id(slot["actor"]) not in live:
+                slot["actor"] = slot["npc_id"] = None
+        for actor in actors:
+            slot = next((s for s in self.actor_slots if s["actor"] is actor),None)
+            if slot is None:
+                slot = next(s for s in self.actor_slots if s["actor"] is None)
+                self._upload_actor(slot,actor)
+            distance = math.hypot(actor.x-cam.eye[0],actor.z-cam.eye[2])
+            lod = lod_for(distance)
+            if lod is None:
+                width_m,height_m,base_m = slot["impostor"]
+                impostors.append((actor.x,actor.y+base_m,actor.z,width_m,height_m,slot["layer"],1.0))
+            draws.append((actor,slot,lod,pose_state(actor,state.x,state.z,state.anim,reduced)))
+        self._actor_draws = draws
+        if impostors:
+            self.impostor_buf.write(np.asarray(impostors,np.float32).tobytes())
+        self._impostors = len(impostors)
+
+    def _draw_actors(self, state, cam, light, mirror, fb):
+        if not self._actor_draws:
+            return
+        from .actors import shader_uniforms
+        from .catmesh import PATTERNS
+        self._uniforms(self.mesh_p,state,cam,light,mirror,fb.size)
+        for _actor,slot,_lod,_p in self._actor_draws:
+            if slot["boat_vertices"]:
+                slot["boat_vao"].render(vertices=slot["boat_vertices"])
+        self._uniforms(self.cat_p,state,cam,light,mirror,fb.size)
+        program = self.cat_p
+        for actor,slot,lod,params in self._actor_draws:
+            if lod is None:
+                continue
+            for key,value in shader_uniforms(actor,actor.mesh(lod),params).items():
+                if key in program:
+                    program[key].value = value
+            for cat_look,first,count in slot["ranges"][lod]:
+                colors = cat_look["colors"]
+                coat = dict(pattern=PATTERNS.index(cat_look["pattern"]),coat_base=tuple(colors["base"]),
+                            coat_secondary=tuple(colors["secondary"]),coat_accent=tuple(colors["accent"]),
+                            coat_scale=float(cat_look["size"]),coat_glow=float(cat_look.get("glow",0.0)))
+                for key,value in coat.items():
+                    if key in program:
+                        program[key].value = value
+                slot["vao"].render(moderngl.TRIANGLES,vertices=count,first=first)
 
     def _nebula_uniforms(self):
         """Fixed lane circles and drift ellipses, packed once for the shaders."""
@@ -411,6 +543,39 @@ class LakeRenderer(SoftwareRenderer):
             self.buoy_vao.render(instances=buoys)
         if corks:
             self.cork_vao.render(instances=corks)
+        if self._impostors:
+            self.impostor_vao.render(instances=self._impostors)
+        self._draw_actors(state,cam,light,mirror,fb)
+        if mirror<0:
+            self._draw_skipper_reflection(state,cam,light,mirror,fb)
+
+    def _paw_vertices(self, state, cam):
+        """The Skipper's paws in the eye frame, as cockpit triangles (V1-29)."""
+        from .skipper import paw_mesh
+        reduced = bool(state.v2.get("settings",{}).get("reduced_motion",False))
+        pos,nrm,rgb,tris = paw_mesh(state,reduced)
+        flat = tris.reshape(-1)
+        out = np.empty((len(flat),10),np.float32)
+        basis = np.stack([cam.right,cam.up,cam.forward],axis=1)
+        out[:,:3] = pos[flat]@basis.T+cam.eye
+        out[:,3:6] = nrm[flat]@basis.T
+        out[:,6:9] = rgb[flat]
+        out[:,9] = 6.0  # cockpit space, plain finish
+        return out
+
+    def _draw_skipper_reflection(self, state, cam, light, mirror, fb):
+        """The Skipper's head, drawn into the reflection pass only, on calm water at idle."""
+        from .skipper import head_silhouette, shows_reflection
+        if not shows_reflection(state,light):
+            return
+        pos,nrm,rgb,tris = head_silhouette(state)
+        flat = tris.reshape(-1)
+        head = np.empty((len(flat),10),np.float32)
+        head[:,:3],head[:,3:6],head[:,6:9],head[:,9] = pos[flat],nrm[flat],rgb[flat],2.0
+        # The cockpit buffer is free until the main pass writes this frame's boat.
+        self.boat_buf.write(head.tobytes())
+        self._uniforms(self.mesh_p,state,cam,light,mirror,fb.size)
+        self.boat_vao.render(vertices=len(head))
 
     def render(self,state,cam:Camera|None=None):
         # Bind our context explicitly even when another library has presented
@@ -450,6 +615,7 @@ class LakeRenderer(SoftwareRenderer):
                 self._larch_gold = gold
         buoys = self._buoys(state)
         corks = self._corks(state)
+        self._prepare_actors(state,cam)
         self._scene(state,cam,light,-1,self.reflect_fb,buoys,corks)
         self._scene(state,cam,light,1,self.draw_fb,buoys,corks)
         self._uniforms(self.water_p,state,cam,light,1,self.draw_fb.size)
@@ -484,6 +650,9 @@ class LakeRenderer(SoftwareRenderer):
         extra = self._pack_faces(bot_faces(state))
         if len(extra):
             boat = np.concatenate([boat, extra])
+        paws = self._paw_vertices(state,cam)
+        if len(paws):
+            boat = np.concatenate([boat, paws])
         self.boat_buf.write(boat.tobytes())
         self._uniforms(self.mesh_p,state,cam,light,1,self.scene_fb.size)
         self.boat_vao.render(vertices=len(boat))
