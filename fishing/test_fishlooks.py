@@ -91,6 +91,9 @@ class LookData(unittest.TestCase):
         broken["species.json"]["species"][0]["look"]["features"] = ["wings"]
         cases.append((broken, "species[0](bluegill).look.features", "unique known features"))
         broken = deepcopy(CONTENT_V2_RAW)
+        broken["species.json"]["species"][2]["look"]["features"] = [{"kype": 1}]
+        cases.append((broken, "species[2](crappie).look.features", "unique known features"))
+        broken = deepcopy(CONTENT_V2_RAW)
         broken["species.json"]["species"][0]["look"]["sparkle"] = True
         cases.append((broken, "species[0](bluegill).look", "unknown field 'sparkle'"))
         for raw, where, message in cases:
