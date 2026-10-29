@@ -34,7 +34,7 @@ NumPy + ModernGL (OpenGL 3.3) with SDL2/SDL2_ttf and a CPU fallback renderer.
 | Game loop, input, menus | `game.py`, `platform.py`, `ui.py` | Pause-world rule, new keys, gamepad, haul view, book UI, kitchen tab |
 | Simulation | `sim.py` (`State`, lines, catches, journal, tow) | Split bait, line capacity, catch-resolution order, shiny roll, legendary hook, buffs, Old Salt counters |
 | Species and gear data | `data.py` | Loads species, baits, boats and dishes from `content_v2`; keeps the `SPECIES` / `SPECIES_BY_ID` / `BAIT_MATCH` / `ZONE_MATCH` API |
-| Lakes and world | `lakes.py`, `world.py`, `forest.py`, `shoreline.py`, `marina.py`, `anchors.py` | Three new procedural lakes, new zone archetypes, per-lake labels, thermocline, currents, reeds |
+| Lakes and world | `lakes.py`, `world.py`, `lakegen.py`, `caldera.py`, `nebula.py`, `starlight.py`, `forest.py`, `shoreline.py`, `marina.py`, `anchors.py` | Three new procedural lakes, new zone archetypes, per-lake labels, thermocline, currents, reeds |
 | Weather and ambience | `weather.py`, `ambient.py`, `life.py`, `audio.py` | New weather states, weather-window scheduler, per-lake ambience, shell chimes |
 | Boats | `boat.py`, `boatmesh.py`, `boatfamilies.py`, `fleet.py`, `boatchecks.py`, `boatshots.py` | 24 boats from 8 parametric families, traits |
 | Bot | `bot.py` | Name generator, shells, tools, factual/fallback barks |
@@ -378,7 +378,7 @@ current lake needs.
   Gold week) and spruce, snow-capped ridges. Crater: hemlock and whitebark pine on
   ash-grey rim walls, with an indigo absorption that's very clear. Nebula: no
   trees; floating crystal kelp, light-reeds, a nebula skybox, aurora curtains, and
-  star reflections on water.
+  star reflections on water (implemented in V1-27; see below).
 - **Weather visuals:** snow mist (falling flakes + low fog), caldera fog (dense
   layered fog that lifts from the rim down), aurora (animated curtains + water
   glow). All three are shader parameters on the existing weather blend.
@@ -725,6 +725,101 @@ into a hull-checked launch approach. It preserves deployment IDs, hook/catch and
 future fields and updates any matching Bot target. Wet ropes are unchanged; a
 save/reload cannot repeatedly relocate a recovered deployment. This keeps the
 existing pull-all-lines travel rule from trapping an older save.
+
+
+## Implemented Nebula environment (V1-27)
+
+The Lagoon is no longer a placeholder. It uses `LakeFields` with kind `nebula`.
+
+**Fields.**
+- The polar shore is irregular, with the Comet stream inlet notched into the
+  west bank.
+- Seven floating lily drifts are islands in the shore field, so hulls collide
+  with them.
+- Seven habitat circles and two current lanes sit over a void bed. The bed's
+  depth is 0.9 + 36 × (1 − e^(−d/90)) m at d metres from a bank, and it falls
+  to 62 m in the Void well.
+- The 567×567 float32 grids feed collision, depth, the chart and both renderers.
+
+**Current lanes.** Each lane is a polyline traced from `bottools.flow_at`, so it
+follows the field that drifts lines. Every lane point becomes a 46 m `current`
+circle. Zone lookup, depth profiles, the chart and the drift rule all reuse the
+ordinary zone table. The validator checks that:
+- lanes are continuous, stay inside the bounds and fit the water shader's
+  48-point array;
+- each drift's radii are 8–40 m;
+- all four band palettes and `water_mid` are present;
+- no other lake carries Nebula keys.
+
+**Scenery.** No trees or shore grass grow here.
+
+| Prop | Count | Where | Collision |
+| --- | --- | --- | --- |
+| Crystal spires | 110 | stardust dunes | none (on land) |
+| Star-lilies | on every drift | drift islands | none (on land) |
+| Crystal kelp | 36, in six clusters | kelp forest | solid, radius 0.12 × height |
+| Meteor boulders | 18, in three reefs | meteor reefs | solid, radius 0.45 × height |
+| Light-reeds | 70 | reed bed | none; Briar's reed rules apply |
+
+These props light themselves: `Prop.shade` holds 2 plus the emission, which
+both `foliage.frag` and the CPU sprites read.
+
+**Cosmic Drift Station.** The station restyles the shared landing geometry and
+keeps every footprint. Timber becomes silver-lilac panels, and lamps become
+emissive star-lanterns. It adds an observatory dome with a telescope and a
+beacon mast on the dry pad.
+
+**Sky.** `weather.lighting_at` eases between the band palettes Rising, Bright,
+Fading and Deep, and `starlight` never drops to zero. The HUD shows the band
+name beside the weather. Overcast turns to a lilac stardust haze. The GL sky
+adds:
+- drifting gas;
+- a galaxy band;
+- twinkling stars;
+- aurora curtains, because aurora is now a visual weather property that
+  crossfades like the others;
+- Meteor Shower streaks from one radiant on Wednesday nights.
+
+`nebula.py` holds the matching CPU versions.
+
+**Water.**
+- Teal shallows deepen to violet water and a starry void bed.
+- The surface is glassy, and open-sky reflections sample the full-resolution
+  sky. This uses the reflection depth texture, as at Crater.
+- Banks and drifts have bioluminescent rims, and the zero-G pads glow.
+- Stardust shoals glint, and aurora nights tint the surface.
+- Current lanes glow teal and carry one dash per 6 m cell. Each dash points
+  and moves along `flow_at`: `nebula.dashes` draws it on the CPU and
+  `current_dashes` in GLSL.
+
+**Life and sound.** Star motes replace birds, dragonflies and fireflies. Star
+twinkles and a low hum replace loons, gulls, frogs and crickets.
+
+**Starlight travel.** `starlight.py` serves any route to or from the Lagoon:
+- The run loop plays the tip into the reflection from the last frame shown.
+- The new lake loads under the full starfield.
+- The boat then rights itself on the new water.
+- The session does not tick meanwhile, and closing the window still quits.
+- Reduced Motion plays a still crossfade instead.
+
+Crater's chapter-four reading can reuse `starlight.frame`. Loading a save from
+the flat placeholder map moves any rope buried by a new drift, using Crater's
+recovery.
+
+`python -m fishing --shots PATH --nebula [--software]` records:
+- the four bands, the aurora and the Meteor Shower;
+- every habitat, the station and the chart;
+- a flow-field figure and the transition strip from Crater;
+- first-frame load, 60 warmed frames, RSS, fixed GPU resources and float probes;
+- all 34 catchability witnesses;
+- the measured angle between the rendered streaks and `flow_at`.
+
+See [issue 55](../issue-55/README.md).
+
+Briar, Cedar, Flathead and Crater are unchanged. Their fields, props, faces and
+charts are byte-identical, and their native and CPU frames pixel-identical, to
+the previous release. No lake ships as a placeholder now. `World` keeps the flat
+placeholder path for a future lake, and a patched test still covers it.
 
 
 ### V1-17 Bot identity and progression

@@ -1,0 +1,584 @@
+[
+  {
+    "species": "asteroid_sucker",
+    "lake": "nebula",
+    "zone": "rocks",
+    "x": -170.0,
+    "z": -410.0,
+    "depth_m": 13.023207664489746,
+    "bait": "dough",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "aurora_trout",
+    "lake": "nebula",
+    "zone": "inlet",
+    "x": -578.0,
+    "z": 94.0,
+    "depth_m": 5.756439685821533,
+    "bait": "roe",
+    "hour": 6,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "flathead",
+      "crater"
+    ]
+  },
+  {
+    "species": "celestial_catfish",
+    "lake": "nebula",
+    "zone": "deep",
+    "x": 130.0,
+    "z": -170.0,
+    "depth_m": 17.814027786254883,
+    "bait": "liver",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "comet_minnow",
+    "lake": "nebula",
+    "zone": "inlet",
+    "x": -594.0,
+    "z": 94.0,
+    "depth_m": 1.6651546955108643,
+    "bait": "stardust",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "comet_tail_betta",
+    "lake": "nebula",
+    "zone": "lilies",
+    "x": 354.0,
+    "z": -246.0,
+    "depth_m": 0.9661164283752441,
+    "bait": "stardust",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "constellation_char",
+    "lake": "nebula",
+    "zone": "current",
+    "x": 98.0,
+    "z": -518.0,
+    "depth_m": 5.1706976890563965,
+    "bait": "roe",
+    "hour": 18,
+    "weather": "aurora",
+    "rate": 0.00625,
+    "default_rate": 0.005,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "flathead",
+      "crater"
+    ]
+  },
+  {
+    "species": "cosmic_carp",
+    "lake": "nebula",
+    "zone": "flats",
+    "x": -270.0,
+    "z": 222.0,
+    "depth_m": 2.2603070735931396,
+    "bait": "dough",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "dwarf_star_darter",
+    "lake": "nebula",
+    "zone": "rocks",
+    "x": -198.0,
+    "z": -406.0,
+    "depth_m": 4.8203535079956055,
+    "bait": "stardust",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "eclipse_bowfin",
+    "lake": "nebula",
+    "zone": "reeds",
+    "x": -446.0,
+    "z": -146.0,
+    "depth_m": 1.0478826761245728,
+    "bait": "shad",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "event_horizon_goby",
+    "lake": "nebula",
+    "zone": "deep",
+    "x": 106.0,
+    "z": -102.0,
+    "depth_m": 30.01103401184082,
+    "bait": "stardust",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.00625,
+    "default_rate": 0.005,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "galaxy_gar",
+    "lake": "nebula",
+    "zone": "cypress",
+    "x": 398.0,
+    "z": 94.0,
+    "depth_m": 1.186501145362854,
+    "bait": "shad",
+    "hour": 18,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "gravity_drum",
+    "lake": "nebula",
+    "zone": "deep",
+    "x": 130.0,
+    "z": -170.0,
+    "depth_m": 17.814027786254883,
+    "bait": "craw",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "halo_whitefish",
+    "lake": "nebula",
+    "zone": "open",
+    "x": 118.0,
+    "z": -522.0,
+    "depth_m": 8.024545669555664,
+    "bait": "roe",
+    "hour": 6,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "flathead",
+      "crater"
+    ]
+  },
+  {
+    "species": "ion_icefish",
+    "lake": "nebula",
+    "zone": "deep",
+    "x": 130.0,
+    "z": -170.0,
+    "depth_m": 17.814027786254883,
+    "bait": "stardust",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.00625,
+    "default_rate": 0.005,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "lunar_loach",
+    "lake": "nebula",
+    "zone": "flats",
+    "x": -270.0,
+    "z": 222.0,
+    "depth_m": 2.2603070735931396,
+    "bait": "stardust",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "meteor_bass",
+    "lake": "nebula",
+    "zone": "rocks",
+    "x": -198.0,
+    "z": -406.0,
+    "depth_m": 4.8203535079956055,
+    "bait": "stardust",
+    "hour": 6,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "milky_way_buffalo",
+    "lake": "nebula",
+    "zone": "open",
+    "x": 138.0,
+    "z": -534.0,
+    "depth_m": 4.069461822509766,
+    "bait": "dough",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "moonbeam_crappie",
+    "lake": "nebula",
+    "zone": "cypress",
+    "x": 398.0,
+    "z": 94.0,
+    "depth_m": 1.186501145362854,
+    "bait": "minnow",
+    "hour": 6,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "nova_pike",
+    "lake": "nebula",
+    "zone": "cypress",
+    "x": 398.0,
+    "z": 94.0,
+    "depth_m": 1.186501145362854,
+    "bait": "minnow",
+    "hour": 18,
+    "weather": "aurora",
+    "rate": 0.00625,
+    "default_rate": 0.005,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "orbit_bluegill",
+    "lake": "nebula",
+    "zone": "lilies",
+    "x": 354.0,
+    "z": -246.0,
+    "depth_m": 0.9661164283752441,
+    "bait": "worm",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "photon_tetra",
+    "lake": "nebula",
+    "zone": "reeds",
+    "x": -446.0,
+    "z": -146.0,
+    "depth_m": 1.0478826761245728,
+    "bait": "stardust",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "plasma_pickerel",
+    "lake": "nebula",
+    "zone": "reeds",
+    "x": -446.0,
+    "z": -146.0,
+    "depth_m": 1.0478826761245728,
+    "bait": "minnow",
+    "hour": 6,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "prism_ray",
+    "lake": "nebula",
+    "zone": "flats",
+    "x": -270.0,
+    "z": 222.0,
+    "depth_m": 2.2603070735931396,
+    "bait": "craw",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.00625,
+    "default_rate": 0.005,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "pulsar_perch",
+    "lake": "nebula",
+    "zone": "lilies",
+    "x": 350.0,
+    "z": -246.0,
+    "depth_m": 7.791874885559082,
+    "bait": "stardust",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "purrsec_lanternfish",
+    "lake": "nebula",
+    "zone": "open",
+    "x": 126.0,
+    "z": -514.0,
+    "depth_m": 10.715800285339355,
+    "bait": "stardust",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "quasar_koi",
+    "lake": "nebula",
+    "zone": "lilies",
+    "x": 354.0,
+    "z": -246.0,
+    "depth_m": 0.9661164283752441,
+    "bait": "dough",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "saturnfin_puffer",
+    "lake": "nebula",
+    "zone": "open",
+    "x": 138.0,
+    "z": -534.0,
+    "depth_m": 4.069461822509766,
+    "bait": "dough",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "solar_sunfish",
+    "lake": "nebula",
+    "zone": "lilies",
+    "x": 354.0,
+    "z": -246.0,
+    "depth_m": 0.9661164283752441,
+    "bait": "stardust",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "stardust_bullhead",
+    "lake": "nebula",
+    "zone": "flats",
+    "x": -270.0,
+    "z": 222.0,
+    "depth_m": 2.2603070735931396,
+    "bait": "liver",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "starling_shiner",
+    "lake": "nebula",
+    "zone": "reeds",
+    "x": -446.0,
+    "z": -146.0,
+    "depth_m": 1.0478826761245728,
+    "bait": "stardust",
+    "hour": 18,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "supernova_salmon",
+    "lake": "nebula",
+    "zone": "current",
+    "x": 90.0,
+    "z": -510.0,
+    "depth_m": 6.862639427185059,
+    "bait": "roe",
+    "hour": 6,
+    "weather": "aurora",
+    "rate": 0.00625,
+    "default_rate": 0.005,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "flathead",
+      "crater"
+    ]
+  },
+  {
+    "species": "twinkle_shad",
+    "lake": "nebula",
+    "zone": "open",
+    "x": 138.0,
+    "z": -534.0,
+    "depth_m": 4.069461822509766,
+    "bait": "stardust",
+    "hour": 12,
+    "weather": "aurora",
+    "rate": 0.0375,
+    "default_rate": 0.03,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "nebula"
+    ]
+  },
+  {
+    "species": "void_eel",
+    "lake": "nebula",
+    "zone": "deep",
+    "x": 106.0,
+    "z": -126.0,
+    "depth_m": 20.293930053710938,
+    "bait": "liver",
+    "hour": 23,
+    "weather": "aurora",
+    "rate": 0.00625,
+    "default_rate": 0.005,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  },
+  {
+    "species": "zodiac_zander",
+    "lake": "nebula",
+    "zone": "rocks",
+    "x": -170.0,
+    "z": -410.0,
+    "depth_m": 13.023207664489746,
+    "bait": "minnow",
+    "hour": 18,
+    "weather": "aurora",
+    "rate": 0.015,
+    "default_rate": 0.012,
+    "ratio": 1.25,
+    "bait_sold_at": [
+      "all"
+    ]
+  }
+]

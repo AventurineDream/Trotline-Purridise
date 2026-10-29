@@ -158,8 +158,9 @@ def buoy(rgb: tuple[int, int, int], flagged: bool) -> np.ndarray:
 PROP_ASPECTS = {
     "cattail": 2/3, "grass": 1.5, "flowers": 1.2, "shrub": 7/6,
     "driftwood": 7/3, "shore_stone": 2.4, "heron": 3/7, "duck": 5/3,
+    "spire": 40/112, "starlily": 4/3, "kelp": 28/96, "meteor": 1.3, "lightreed": 1/2,
 }
-WATERLINE_KINDS = frozenset(("reed", "knee", "cattail", "heron", "duck"))
+WATERLINE_KINDS = frozenset(("reed", "knee", "cattail", "heron", "duck", "kelp", "meteor", "lightreed"))
 
 
 def _stroke(img, a, b, width, color):
@@ -298,6 +299,79 @@ def duck() -> np.ndarray:
     _ellipse(img,63,15,1,1,(25,31,26,255))
     _stroke(img,(19,42),(58,42),0.6,(149,162,146,210))
     return img
+
+def spire() -> np.ndarray:
+    """A cluster of three crystal shards on a stardust bank."""
+    img = _img(40, 112)
+    for apex, left, right, base, color, facet in (
+            ((20, 2), 10, 30, 108, (104, 84, 176, 255), (156, 132, 222, 255)),
+            ((9, 34), 1, 18, 108, (56, 132, 160, 255), (104, 190, 212, 255)),
+            ((31, 46), 23, 39, 108, (138, 72, 168, 255), (192, 128, 218, 255))):
+        _tri(img, apex[0], apex[1], left, base, right, base, color)
+        # The lit facet runs from the tip down the left of each shard.
+        _tri(img, apex[0], apex[1], left, base, (left+right)//2, base, facet)
+        img[apex[1]+6:base-4, apex[0]:apex[0]+1] = (214, 222, 255, 255)
+    return img
+
+
+def starlily() -> np.ndarray:
+    """Floating pads around one star-shaped bloom."""
+    img = _img(32, 24)
+    _ellipse(img, 10, 17, 9, 5, (40, 120, 120, 255))
+    _ellipse(img, 22, 18, 8, 4, (54, 136, 130, 255))
+    _ellipse(img, 16, 15, 7, 4, (66, 150, 140, 255))
+    for k in range(5):
+        a = k * 2 * np.pi / 5 - np.pi / 2
+        _tri(img, 16, 10, 16 + np.cos(a) * 7, 10 + np.sin(a) * 6,
+             16 + np.cos(a + 0.6) * 3, 10 + np.sin(a + 0.6) * 3, (250, 200, 240, 255))
+    _ellipse(img, 16, 10, 2, 2, (255, 245, 210, 255))
+    return img
+
+
+def kelp() -> np.ndarray:
+    """Three wavering crystal fronds standing out of the water."""
+    img = _img(28, 96)
+    for x, phase, color, edge in ((8, 0.0, (70, 160, 190, 255), (180, 240, 250, 255)),
+                                  (15, 1.7, (120, 110, 200, 255), (210, 190, 250, 255)),
+                                  (21, 3.1, (80, 180, 170, 255), (190, 250, 230, 255))):
+        for y in range(6, 94):
+            sway = int(round(np.sin(y * 0.11 + phase) * 2.5))
+            width = 1 + int(2.2 * np.sin(np.pi * (y - 6) / 88))
+            xs = slice(max(0, x + sway - width), min(28, x + sway + width + 1))
+            img[y, xs] = color
+            img[y, min(27, x + sway + width)] = edge
+    return img
+
+
+def meteor() -> np.ndarray:
+    """A dark meteorite boulder with glowing ember seams."""
+    img = _img(40, 28)
+    # Widest at the waterline (the bottom edge), with a jagged broken crown.
+    _ellipse(img, 20, 27, 19, 15, (58, 50, 66, 255))
+    _tri(img, 13, 6, 4, 22, 22, 22, (70, 61, 80, 255))
+    _tri(img, 27, 9, 18, 22, 36, 22, (48, 42, 56, 255))
+    _ellipse(img, 14, 18, 6, 5, (90, 80, 100, 255))
+    for (ax, ay), (bx, by) in (((8, 21), (19, 16)), ((19, 16), (30, 22)), ((15, 9), (19, 16))):
+        _stroke(img, (ax, ay), (bx, by), 0.9, (255, 150, 80, 255))
+    return img
+
+
+def lightreed() -> np.ndarray:
+    """Luminous reeds whose tips hold a little starlight."""
+    img = _img(24, 48)
+    for x, lean in ((5, 0), (10, 1), (15, -1), (19, 1)):
+        for y in range(14, 46):
+            xx = x + lean * (y // 16)
+            if 0 <= xx < 24:
+                img[y, xx] = (80, 200, 190, 255)
+        img[9:15, x - 1:x + 2] = (235, 250, 200, 255)
+    return img
+
+
+def nebula_sprites() -> dict[str, np.ndarray]:
+    return {"spire": spire(), "starlily": starlily(), "kelp": kelp(),
+            "meteor": meteor(), "lightreed": lightreed()}
+
 
 def bake(buoy_rgb: tuple[int, int, int]) -> dict[str, np.ndarray]:
     r, g, b = [int(c * 255) for c in buoy_rgb]

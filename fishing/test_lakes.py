@@ -24,6 +24,20 @@ from .ui import shop_rows
 from .world import World, zone_label
 
 
+def flat_placeholder(lake="nebula"):
+    """Every lake now has real water; keep the flat placeholder path covered.
+
+    A future lake can still ship as a placeholder before its environment lands.
+    This patches a copy of one lake back to the shared flat map for a test.
+    """
+    row = {key: value for key, value in LAKES[lake].items() if key != "environment"}
+    row.update(placeholder=True, placeholder_depths={
+        "landing": [0.9, 4.0], "inlet": [0.9, 15.0], "flats": [0.9, 20.0], "lilies": [0.9, 8.0],
+        "cypress": [0.9, 20.0], "rocks": [0.9, 20.0], "deep": [3.0, 60.0], "open": [1.0, 40.0],
+        "reeds": [0.9, 6.0], "current": [1.0, 40.0]})
+    return patch.dict(LAKES, {lake: row})
+
+
 class LakeFrameworkChecks(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -90,8 +104,10 @@ class LakeFrameworkChecks(unittest.TestCase):
             self.assertEqual(self.state.to_json(), before)
 
     def test_flat_maps_have_only_their_authored_habitats_and_safe_hulls(self):
+        self.assertFalse(any(row["placeholder"] for row in LAKES.values()))
         for lake in ("nebula",):
-            world = World(lake)
+            with flat_placeholder(lake):
+                world = World(lake)
             self.assertTrue(world.placeholder)
             self.assertEqual(world.height.shape, (129, 169))
             self.assertEqual(world.props, [])
@@ -211,7 +227,8 @@ class LakeFrameworkChecks(unittest.TestCase):
         from .glrender import LakeRenderer
         try:
             for lake in ("nebula",):
-                world = World(lake)
+                with flat_placeholder(lake):
+                    world = World(lake)
                 with ctx:
                     renderer = LakeRenderer(world, 160, 90, context=ctx)
                 try:

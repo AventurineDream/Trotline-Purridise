@@ -1076,6 +1076,11 @@ class UI:
         self._text(frame,self.world.name.upper(),m+16,m+int(11*unit),small,GOLD,False,"sans")
         self._text(frame,clock,m+16,m+int(31*unit),max(22,int(30*unit)),INK,False,"serif")
         meta = weather
+        if self.world.id == "nebula":
+            # The Lagoon names its bands Rising, Bright, Fading and Deep (03 §1.6).
+            from .data import hour_of_day
+            from .nebula import band_label
+            meta = band_label(hour_of_day(state.game_minutes)).upper() + "  /  " + weather
         if state.time_scale!=1:
             meta += f"  /  {state.time_scale}x" + ("" if state.fast_ok() else " held")
         self._text(frame,meta,m+16,m+int(71*unit),small,DIM,False,"sans")
@@ -1320,7 +1325,12 @@ class UI:
     def _plot_habitats(self, frame, x, y, mw, mh):
         size = self._size(frame, "small")
         occupied = []
+        # A Nebula current lane is a chain of circles; name it once, mid-lane.
+        chains = {}
         for zone, cx, cz, _radius in self.world.zones:
+            chains.setdefault(zone, []).append((cx, cz))
+        labels = [(zone, *points[len(points)//2], None) for zone, points in chains.items()]
+        for zone, cx, cz, _radius in labels:
             # Preserve the established charts apart from Briar's new passage.
             if not self.world.placeholder and not self.world.generated and zone != "reeds":
                 continue
