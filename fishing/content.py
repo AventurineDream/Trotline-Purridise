@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+from functools import lru_cache
 import json
 import math
 from pathlib import Path
@@ -2314,7 +2315,14 @@ def load_content(path: str | Path = CONTENT_PATH, *, gameplay: GameplayContent |
     except (OSError, ValueError) as exc:
         raise ContentError(f"{path}: {exc}") from exc
     content = validate_content(raw, source=path)
-    return merge_quests_v2(content, gameplay if gameplay is not None else load_content_v2())
+    return merge_quests_v2(content, gameplay if gameplay is not None else _shipped_gameplay())
+
+
+@lru_cache(maxsize=1)
+def _shipped_gameplay() -> GameplayContent:
+    """The shipped v2 content, validated once. The merge copies what it keeps, so the
+    narrative bundle each load_content() returns stays fresh."""
+    return load_content_v2()
 
 
 # 05 §6.0's generic fills, used when an entry omits a node. The script has no generic
