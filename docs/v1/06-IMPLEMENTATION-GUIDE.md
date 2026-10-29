@@ -36,7 +36,7 @@ NumPy + ModernGL (OpenGL 3.3) with SDL2/SDL2_ttf and a CPU fallback renderer.
 | Species and gear data | `data.py` | Loads species, baits, boats and dishes from `content_v2`; keeps the `SPECIES` / `SPECIES_BY_ID` / `BAIT_MATCH` / `ZONE_MATCH` API |
 | Lakes and world | `lakes.py`, `world.py`, `forest.py`, `shoreline.py`, `marina.py`, `anchors.py` | Three new procedural lakes, new zone archetypes, per-lake labels, thermocline, currents, reeds |
 | Weather and ambience | `weather.py`, `ambient.py`, `life.py`, `audio.py` | New weather states, weather-window scheduler, per-lake ambience, shell chimes |
-| Boats | `boat.py`, `boatmesh.py`, `boatchecks.py` | 24 boats from 8 parametric families, traits |
+| Boats | `boat.py`, `boatmesh.py`, `boatfamilies.py`, `fleet.py`, `boatchecks.py`, `boatshots.py` | 24 boats from 8 parametric families, traits |
 | Bot | `bot.py` | Name generator, shells, tools, factual/fallback barks |
 | Narrative | `narrative.py`, `content.py`, `quests.py`, `dialogue.py`, `npcs.py`, `guardian.py` | Content v2 loader and validator, new objective types, 52-cat schedule, friendships, story chapters, letters, legendaries |
 | Rendering | `glrender.py`, `render.py`, `software.py`, `shaders/*`, `sprites.py`, `raster.py` | Cat actors, fish models and cards, new lake palettes and skies, book UI art |
@@ -431,7 +431,8 @@ current lake needs.
 The existing four handcrafted boats stay. Eight family generators produce the
 remaining 20 from parameters (length, beam, sheer, transom, deck layout,
 accessories). Every boat needs a collision footprint and draft (existing rule).
-Cat NPC boats reuse the same generators.
+Cat NPC boats reuse the same generators. The generators are in
+`boatfamilies.py`; see "Implemented parametric boat families (V1-22)".
 
 ### 6.5 UI as a book
 
@@ -839,7 +840,7 @@ that would leave the water or bring the line within 16 m of another is skipped.
 ## Implemented fleet data and shop tiers (V1-21)
 
 `boats.json` holds all 24 boats from `03 §6`. Each row now carries `tier`,
-`family`, `power`, `blurb`, and optionally `top_speed`, `hull` and `sold_at`. The
+`family`, `power`, `blurb`, and optionally `top_speed` and `sold_at`. The
 validator checks the new fields, allows a well bonus down to −40 lb for tier-1
 wells under the 40 lb base, and holds every `shallow` boat to a draft of at most
 0.32 m. The four older boats keep every physics and geometry number. Only their
@@ -853,12 +854,8 @@ motor upgrades. Paddles, oars and starlight burn no fuel, and the HUD shows
 Small Sloop's sail is 1.2× the daysailer's. The rowboat's oars and electric motor
 are unchanged.
 
-**Hulls.** Until V1-22 builds parametric families, each new boat borrows the
-mesh, collision footprint, eye height and Bot perch of an existing hull (`hull`):
-Pioneer and Rowed boats use the rowboat, the sloop uses the daysailer, pontoons
-and two Cosmic barges use the pontoon, and the rest use the jon. Shallow boats
-lower only the draft. Every boat therefore passes the existing collision, anchor
-and catchability checks.
+**Hulls.** V1-21 shipped the new boats on borrowed hulls. V1-22 replaced them
+with their own footprints and generated meshes (below).
 
 **Traits.** `shallow` boats reach water down to 0.4 m. `silent` hulls give `shy`
 species ×1.15. `galley`, `hammock`, `trophy_rail` and `wind_steady` keep their
@@ -875,3 +872,63 @@ four stay buyable from the start, and owned boats always switch. The Boats tab
 lists the older four first, then new boats by tier and price, with the lock
 reason. Livewell upgrades apply to tiers 2–7 only. The benchmark visits all 48
 lake/boat pairs within 1200 frames.
+
+## Implemented parametric boat families (V1-22)
+
+**Footprints.** Each of the 20 new boats has its own collision footprint, draft
+and eye height. Its length is the table's feet × 0.3048 (within 2 cm), and its
+beam, draft and eye height follow its family. No draft is deeper than the
+daysailer's 0.72 m, so the catchability witnesses do not change. Every hull
+passes landing parking, the Cedar landing barriers and every anchor approach.
+Trinidad Cove needed its own approach, 5 m off with the bow toward the cove: an
+approach on the anchor point itself blocked the five longest hulls.
+
+**Meshes.** `boatfamilies.py` builds the new boats from one `HullSpec` per boat
+and one generator per family:
+
+- Pioneer: the log raft, birch skiff and reed dugout.
+- Rowed
+- Jon
+- Utility
+- Runabout
+- Sail & Trawler
+- Pontoon
+- Cosmic
+
+A `HullSpec` sets sheer, bow rise, bow and stern width, and colours. Monohulls
+share one shell, with a chine, keel, gunwale and foredeck. Pontoons share one
+deck on two tubes.
+
+Benches, oars, paddles, motors, consoles, windshields, canopies, cabins, masts,
+lamps, a trophy rail and starlight panels are placed for the cockpit view. Helms
+and cabins sit fore or aft of the eye, so the bow and Bot stay in view.
+
+`boatmesh` hands every generated boat to `family_faces`. The four older boats
+keep their hand-built meshes unchanged.
+
+Paint reaches hull, deck and motor. Unpainted aluminium keeps each boat's own
+material. Cosmic fittings emit at full strength, and glow hulls keep the 0.55
+night emission from V1-21. Each mesh has 69–237 faces, which fits the GL boat
+buffer alongside the largest Bot. Bot perches on each generated foredeck
+(`perch`). `npc_faces(boat_id, x, z, yaw)` places the same meshes in the world
+for cat NPC boats.
+
+**Handling.** Acceleration stays per boat. Easing off now sheds speed at a rate
+set by the boat's power (`COAST_RATE`, per second):
+
+| Power | Coast rate | Feel |
+| --- | --- | --- |
+| Paddle | 1.1 | stops short |
+| Console | 0.75 | |
+| Tiller, oars, sail | 0.65 | as before |
+| Inboard | 0.5 | carries way |
+| Starlight | 0.22 | glides |
+
+The older four boats handle exactly as before.
+
+**Checks and shots.** `boat_checks` runs the bank, thin-post, pier-rotation and
+crossbeam checks for all 24 footprints. `--shots` writes:
+
+- `boat-lineup.png`: a 6×4 studio grid of all 24 boats.
+- `boat-lineup.json`
+- `cockpit-<family>.png`: one first-person view per family. The Cosmic view is at night.

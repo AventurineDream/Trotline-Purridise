@@ -456,8 +456,6 @@ _BOAT_FAMILIES = {"pioneer", "rowed", "jon", "utility", "runabout", "sail_trawle
 _BOAT_POWERS = {"paddle", "oars", "tiller", "console", "inboard", "sail", "starlight"}
 # Powers whose speed is the table's top speed rather than motor upgrades or sail.
 _FIXED_SPEED_POWERS = {"paddle", "oars", "console", "inboard", "starlight"}
-# Boats with a dedicated mesh; new boats borrow one until V1-22's parametric hulls.
-_BOAT_MESHES = {"jon", "rowboat", "sail", "pontoon"}
 _SHALLOW_DRAFT = 0.32  # draft + 0.08 clearance reaches 0.4 m water (02 §9)
 
 # These IDs are persisted in saves and must remain loadable when content grows.
@@ -789,7 +787,7 @@ class _ContentV2Validator:
             "id", "name", "bow", "stern", "half_beam", "draft", "eye_height", "price",
             "lines", "tank", "fuel_burn", "speed_factor", "turn_factor", "acceleration",
             "well_bonus", "sail_speed", "traits", "tier", "family", "power", "blurb"},
-            {"top_speed", "hull", "sold_at"})
+            {"top_speed", "sold_at"})
 
         self.require_saved_ids(species_file, "species", species)
         self.require_saved_ids(baits_file, "baits", baits)
@@ -980,12 +978,6 @@ class _ContentV2Validator:
             self.enum(boats_file, where + ".power", row.get("power"), _BOAT_POWERS)
             if row.get("power") in _FIXED_SPEED_POWERS or "top_speed" in row:
                 self.number(boats_file, where + ".top_speed", row.get("top_speed"), minimum=0.1)
-            if "hull" in row:
-                self.enum(boats_file, where + ".hull", row["hull"], _BOAT_MESHES)
-                if bid in _BOAT_MESHES and row["hull"] != bid:
-                    self.error(boats_file, where + ".hull", "a boat with its own mesh cannot borrow another")
-            elif bid not in _BOAT_MESHES:
-                self.error(boats_file, where + ".hull", "a new boat must name an existing hull")
             if "sold_at" in row:
                 self.id_list(boats_file, where + ".sold_at", row["sold_at"],
                              {"briar", "cedar", "flathead", "crater", "nebula"})
