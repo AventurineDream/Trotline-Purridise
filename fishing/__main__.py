@@ -49,6 +49,10 @@ def main(argv: list[str] | None = None) -> int:
     if "--shots" in argv:
         i = argv.index("--shots")
         dest = argv[i + 1] if i + 1 < len(argv) else str(ROOT / "shots")
+        if "--nebula" in argv:
+            from .nebulashots import shots as nebula_shots
+            nebula_shots(dest, software="--software" in argv)
+            return 0
         if "--caldera" in argv:
             from .calderashots import shots as caldera_shots
             caldera_shots(dest, software="--software" in argv)

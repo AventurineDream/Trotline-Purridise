@@ -109,13 +109,19 @@ def _bleed_edges(img):
     return out
 
 
-def atlas(buoy_rgb, *, alpine=False, caldera=False):
+def atlas(buoy_rgb, *, alpine=False, caldera=False, nebula=False):
     names, images = [], []
-    for kind in (KINDS[6:] if caldera else (KINDS[:6] if alpine else KINDS[:3])):
+    kinds = () if nebula else (KINDS[6:] if caldera else (KINDS[:6] if alpine else KINDS[:3]))
+    for kind in kinds:
         for variant in range(3):
             names.append(f"{kind}{variant}")
             images.append(tree(kind,variant))
-    for kind, src in bake(buoy_rgb).items():
+    sprites = bake(buoy_rgb)
+    if nebula:
+        # The lagoon grows no trees: crystal sprites replace the forest layers.
+        from .sprites import nebula_sprites
+        sprites.update(nebula_sprites())
+    for kind, src in sprites.items():
         if kind in KINDS:
             continue
         names.append(kind)

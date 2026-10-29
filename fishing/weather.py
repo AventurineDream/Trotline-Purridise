@@ -28,6 +28,8 @@ for _name, _base, _mist in (("mist", "overcast", .65), ("snow_mist", "overcast",
 for _properties in _WEATHER.values():
     _properties.setdefault("mist", 0.0)
     _properties["snow"] = float(_properties is _WEATHER["snow_mist"])
+    # Curtains and water glow; crossfades with the schedule like every property.
+    _properties["aurora"] = float(_properties is _WEATHER["aurora"])
 
 
 def weather_visuals(game_minutes: float, state=None) -> dict:
@@ -124,10 +126,29 @@ def lighting_at(game_minutes: float, state=None) -> dict:
     if state is not None:
         from .lakes import LAKES
         environment = LAKES[state.lake_id].get("environment")
+        if environment and environment["kind"] == "nebula":
+            from .calendar import lake_day
+            special = lake_day(state.lake_id, game_minutes)
+            # Meteor Shower's sky show (03 §8) fills the Wednesday night sky.
+            light["meteors"] = light["night"] if special and special.id == "meteor_shower" else 0.0
+            return _nebula_light(light, hour_of_day(game_minutes), environment)
         if environment:
             strength = (1-light["night"])*(1-light["gold"])*(1-light["overcast"])*.65
             for key in ("zenith", "horizon"):
                 light[key] = _lerp(light[key], np.array(environment["sky_"+key], np.float32), strength)
+    return light
+
+
+def _nebula_light(light: dict, hour: float, environment: dict) -> dict:
+    """The Lagoon's sky is always starlit: Rising, Bright, Fading and Deep."""
+    from .nebula import sky_palette
+    palette = sky_palette(hour, environment["bands"])
+    haze = light["overcast"]
+    # Overcast is a pale stardust haze rather than a gray storm deck.
+    lilac = np.array([.44, .40, .58], np.float32) * (1 - light["night"] * .78)
+    for key in ("zenith", "horizon"):
+        light[key] = _lerp(palette[key], lilac, haze * .55).astype(np.float32)
+    light["starlight"] = palette["stars"] * (1 - haze * .6) * (1 - light["rain"] * .3)
     return light
 
 

@@ -11,7 +11,14 @@ class LakeFields:
         self.parameters = parameters
         self.bounds = tuple(parameters['bounds'])
         self.nx, self.nz = parameters['grid']
-        self.zones = tuple(tuple(row) for row in parameters['zones'])
+        self.depths = dict(parameters['depths'])
+        zones = [tuple(row) for row in parameters['zones']]
+        # A Nebula current lane is a chain of `current` circles along its
+        # authored streamline, so every habitat lookup and chart reuses them.
+        for lane in parameters.get('lanes', ()):
+            self.depths['current'] = tuple(lane['depths'])
+            zones.extend(('current', float(x), float(z), float(lane['width'])) for x, z in lane['points'])
+        self.zones = tuple(zones)
         points = np.asarray(parameters['outline'], np.float32)
         self.angles = points[:, 0] * np.float32(math.pi/180)
         self.radii = points[:, 1]
@@ -26,6 +33,9 @@ class LakeFields:
             # Positive on the island, negative in the surrounding water.
             island = (1-np.hypot((x-cx)/rx,(z-cz)/rz))*min(rx,rz)
             result = np.maximum(result,island)
+        for cx, cz, rx, rz in self.parameters.get('drifts', ()):
+            drift = (1-np.hypot((x-cx)/rx,(z-cz)/rz))*min(rx,rz)
+            result = np.maximum(result,drift)
         return result.astype(np.float32)
 
     def depth(self, x, z):
@@ -35,10 +45,13 @@ class LakeFields:
         result = .5 + 15 * (1-np.exp(-distance/100))
         if self.parameters['kind'] == 'caldera':
             result = .9 + 61 * (1-np.exp(-distance/70))
+        if self.parameters['kind'] == 'nebula':
+            # The void bed falls away quickly from every bank and drift.
+            result = .9 + 36 * (1-np.exp(-distance/90))
         nearest = np.full(x.shape, np.inf, np.float32)
         for zone, cx, cz, radius in self.zones:
             distance_to_zone = np.hypot(x-cx, z-cz)
-            lo, hi = self.parameters['depths'][zone]
+            lo, hi = self.depths[zone]
             value = lo + (hi-lo) * np.clip(1-distance_to_zone/radius, 0, 1)
             take = (distance_to_zone <= radius) & (distance_to_zone < nearest)
             result = np.where(take, value, result)
@@ -66,6 +79,15 @@ class LakeFields:
                 radial = np.hypot((x-cx)/rx,(z-cz)/rz)
                 cone = peak*np.power(np.clip(1-radial,0,1),.72)
                 height = np.where(radial<=1,np.maximum(.45,cone),height)
+        if self.parameters['kind'] == 'nebula':
+            # Soft stardust dunes: gentler facets than a mountain ridge.
+            height += (np.sin(x*.017+z*.011)*2.5 + np.sin(x*.007-z*.021)*1.5) * blend
+            for cx,cz,rx,rz in self.parameters['drifts']:
+                # Each lily drift is a low floating mat, highest at its centre.
+                radial = np.hypot((x-cx)/rx,(z-cz)/rz)
+                mat = .55+.75*np.power(np.clip(1-radial,0,1),.6)
+                height = np.where(radial<=1,mat,height)
+            return np.where(sd >= 0, np.maximum(.45, height), 0).astype(np.float32)
         # Small ridgeline facets, fixed in world coordinates and independent of RNG.
         height += (np.sin(x*.023+z*.016)*5 + np.sin(x*.009-z*.031)*3) * blend
         return np.where(sd >= 0, np.maximum(.45, height), 0).astype(np.float32)
@@ -78,7 +100,9 @@ class LakeFields:
         radius = self.radius(angles)
         coast = np.stack((np.cos(angles)*radius, np.sin(angles)*radius,
                           np.cos(angles), np.sin(angles)), axis=1).astype(np.float32)
-        for cx,cz,rx,rz,height in self.parameters.get('islands', ()):
+        rings = [row[:4] for row in self.parameters.get('islands', ())]
+        rings += [row[:4] for row in self.parameters.get('drifts', ())]
+        for cx,cz,rx,rz in rings:
             ia = np.linspace(0,math.tau,96,endpoint=False)
             island = np.stack((cx+np.cos(ia)*rx,cz+np.sin(ia)*rz,
                                -np.cos(ia),-np.sin(ia)),axis=1).astype(np.float32)
