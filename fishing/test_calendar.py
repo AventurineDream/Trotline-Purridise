@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
+import math
 import unittest
 from unittest.mock import patch
 
@@ -183,13 +184,22 @@ class CalendarPlayChecks(unittest.TestCase):
                 self.assertEqual(state.to_json(), before)
 
     def test_all_current_lake_friends_gather_and_restore_normal_schedule(self):
-        for minute, count in ((9299, 2), (9300, 6), (9479, 6), (9480, 2)):
+        # Sunday 16:59: the host and three day cats. 17:00–20:00: Briar's whole cast on
+        # the landing piers. 20:00: the host and Master Cinder.
+        keys = set()
+        for minute, count in ((9299, 4), (9300, 9), (9479, 9), (9480, 2)):
             self.state.game_minutes = minute
             actors = active_npcs(self.state, self.world, self.content)
             self.assertEqual(len(actors), count)
             self.assertEqual(len({a.anchor.position for a in actors}), count)
             self.assertTrue(all(a.anchor.lake_id == 'briar' for a in actors))
-        self.assertEqual(len(schedule_key(self.state, self.world)), 5)
+            if calendar.cookout_active(minute):
+                slip = self.world.slip
+                for actor in actors:
+                    self.assertEqual(actor.anchor.kind, 'dock')
+                    self.assertLess(math.hypot(actor.anchor.x - slip.ox, actor.anchor.z - slip.oz), 20.0)
+            keys.add(schedule_key(self.state, self.world, self.content))
+        self.assertEqual(len(keys), 3)
         # Content-only Cedar roster, without loading another lake's terrain.
         self.assertEqual(len(calendar.cookout_friends(self.content, 'cedar')), 6)
 

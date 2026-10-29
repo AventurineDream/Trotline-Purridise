@@ -468,6 +468,7 @@ _CAT_ATTIRE = {"shawl", "spectacles", "oilskin", "cap", "parka", "vest", "goggle
 _CAT_POSE_PROPS = {"sit_fish": {"rod"}, "nap_curl": {"none"}, "wave": {"none"}, "helm": {"none"},
                    "craft": {"book", "brush", "whittle", "mug", "tablet"}}
 _HANDCRAFTED_BOATS = {"jon", "rowboat", "sail", "pontoon"}
+_ROUND_ROBIN_DAYS = 3  # every encounter appears at least once in any three game days
 # Mirrors data.PAINT, which cannot be imported while data.py is still validating.
 _BOAT_PAINT_IDS = {"hull": {"aluminum", "green", "olive", "carolina", "red", "black", "sand", "white"},
                    "deck": {"aluminum", "wood", "carpet"}, "motor": {"black", "red", "white", "green"}}
@@ -1333,17 +1334,19 @@ class _ContentV2Validator:
         """The 52 cats (51 rows; Pip & Pebble share one): role, lake, boat and appearance."""
         filename = "npcs.json"
         self.root(docs, filename, {"schema_version", "npcs"})
-        rows = self.table(docs, filename, "npcs", {"id", "name", "lake", "role", "boat", "appearance"},
-                          {"boat_paint"})
+        rows = self.table(docs, filename, "npcs", {"id", "name", "lake", "role", "boat", "slot", "anchor",
+                                                   "quests", "appearance"}, {"boat_paint"})
         if filename in self.unavailable_files:
             return rows
         counts = {"host": 0, "traveler": 0, "water": 0}
         cats = 0
+        anchors, quest_ids, pools = {}, {}, {}
         for cid, row, where in self.rows(filename, "npcs"):
             self.text(filename, where + ".name", row.get("name"))
             role, lake, boat = row.get("role"), row.get("lake"), row.get("boat")
             if self.enum(filename, where + ".role", role, set(counts)):
                 counts[role] += 1
+            self.schedule_row(filename, where, cid, row, anchors, quest_ids, pools)
             if role == "traveler":
                 if lake is not None:
                     self.error(filename, where + ".lake", "travelers visit every lake; expected null")
@@ -1371,9 +1374,52 @@ class _ContentV2Validator:
             self.error(filename, "npcs", "expected one host per lake")
         for lake, pool in DAY_NPCS.items():
             for npc_id in pool:
-                if npc_id not in rows or rows[npc_id].get("lake") != lake:
-                    self.error(filename, "npcs", f"expected the V3 cat {npc_id!r} on {lake}")
+                if npc_id not in rows or rows[npc_id].get("lake") != lake or rows[npc_id].get("slot") != "day":
+                    self.error(filename, "npcs", f"expected the V3 cat {npc_id!r} on {lake} by day")
+        if "master_cinder" in rows and rows["master_cinder"].get("slot") != "night":
+            self.error(filename, "npcs", "Master Cinder keeps the Briar night slot")
+        for lake in sorted(lakes or ()):
+            day, night = pools.get((lake, "day"), 0), pools.get((lake, "night"), 0)
+            # Three day encounters a day must cover the pool every three days (02 §11.3).
+            if not 3 <= day <= 3 * _ROUND_ROBIN_DAYS:
+                self.error(filename, "npcs", f"{lake} needs 3–9 day encounters, found {day}")
+            if not 1 <= night <= _ROUND_ROBIN_DAYS:
+                self.error(filename, "npcs", f"{lake} needs 1–3 night encounters, found {night}")
         return rows
+
+    def schedule_row(self, filename, where, cid, row, anchors, quest_ids, pools):
+        """V1-30: each cat's schedule slot, its own anchor on its lake, and its quest ids."""
+        role, lake, slot, anchor = row.get("role"), row.get("lake"), row.get("slot"), row.get("anchor")
+        slots = {"host": {"landing"}, "traveler": {"traveler"}, "water": {"day", "night"}}
+        expected = slots.get(role, set()) if isinstance(role, str) else set()
+        if self.enum(filename, where + ".slot", slot, expected) and role == "water" and isinstance(lake, str):
+            pools[(lake, slot)] = pools.get((lake, slot), 0) + 1
+        if role == "traveler":
+            if anchor is not None:
+                self.error(filename, where + ".anchor", "travelers moor at each lake's mail or tinker mooring; expected null")
+        elif not isinstance(anchor, str) or not isinstance(lake, str) or not anchor.startswith(lake + ":"):
+            self.error(filename, where + ".anchor", "expected an anchor id on the cat's own lake")
+        elif anchor in anchors:
+            self.error(filename, where + ".anchor", f"already the anchor of {anchors[anchor]!r}")
+        else:
+            anchors[anchor] = cid
+        quests = row.get("quests")
+        if role == "host":
+            allowed = [set(QUEST_IDS) | {f"host_{lake}"}]
+        elif role == "water":
+            allowed = [set(QUEST_IDS) | {f"wc_{cid}_a"}, {f"wc_{cid}_b"}]
+        else:
+            allowed = []
+        if not isinstance(quests, list) or len(quests) != len(allowed):
+            self.error(filename, where + ".quests", f"expected {len(allowed)} quest id(s)")
+            return
+        for i, (qid, ids) in enumerate(zip(quests, allowed)):
+            if not isinstance(qid, str) or qid not in ids:
+                self.error(filename, f"{where}.quests[{i}]", "expected a V3 quest id or the cat's own quest id")
+            elif qid in quest_ids:
+                self.error(filename, f"{where}.quests[{i}]", f"already given by {quest_ids[qid]!r}")
+            else:
+                quest_ids[qid] = cid
 
     def cat_look(self, filename, where, look, *, twin_allowed):
         if not isinstance(look, dict):

@@ -157,3 +157,30 @@ def anchor_checks():
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RosterAnchorChecks(unittest.TestCase):
+    """V1-30: every lake's anchors validate, and each cat's own boat floats at its anchor."""
+
+    def test_every_lake_validates_and_seats_its_cats(self):
+        from .actors import _seed
+        from .content import load_content_v2
+        roster = load_content_v2().roster
+        moorings = {"pounce": "mail_mooring", "thistle": "tinker_mooring"}
+        for lake in ("briar", "cedar", "flathead", "crater", "nebula"):
+            world = World(lake)
+            validate_anchors(world)
+            for npc_id, row in roster.items():
+                if row["role"] == "host" and row["lake"] == lake:
+                    self.assertEqual(world.anchors[row["anchor"]].kind, "dock")
+                    continue
+                if row["role"] == "traveler":
+                    anchor = world.anchors[f"{lake}:{moorings[npc_id]}"]
+                elif row["lake"] == lake:
+                    anchor = world.anchors[row["anchor"]]
+                else:
+                    continue
+                yaw = _seed(anchor.id) * math.tau
+                with self.subTest(lake=lake, npc=npc_id):
+                    self.assertTrue(world.hull_clear(anchor.x, anchor.z, yaw, row["boat"]))
+

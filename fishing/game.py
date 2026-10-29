@@ -219,7 +219,7 @@ class Session:
                 self.ui.caption = ""
 
     def _refresh_npcs(self):
-        key = (id(self.state),) + schedule_key(self.state, self.world)
+        key = (id(self.state),) + schedule_key(self.state, self.world, self._npc_content)
         if key != self._npc_key:
             self.state.npcs = active_npcs(self.state, self.world, self._npc_content)
             self._npc_key = key
@@ -569,6 +569,11 @@ class Session:
         cookout_chat = calendar.chat(self.state, self.world, npc.id, self._npc_content)
         if kitchen.teach(self.state, npc.id) or cookout_chat:
             self.save()
+        if npc.quest_id is None:
+            # Cats beyond the V3 cast have no dialogue graph yet; a hail is a wave.
+            if not cookout_chat:
+                self.state.toast(f"{npc.name} waves hello.")
+            return
         self.conversation = Conversation.start(npc, self.state, self._npc_content)
         self.ui.conversation = self.conversation
         self.ui.dialogue_from = self.ui.mode
