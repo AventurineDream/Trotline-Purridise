@@ -1293,7 +1293,7 @@ They are at least 45 m apart, so hail circles never overlap, and outside the 50 
 
 The session rebuilds the cast whenever `schedule_key` changes: the day, the band, the cookout, the pins, a migrated V3 cat, or a traveler's window.
 
-**Hailing.** Hailing is unchanged: 20 m and below 3 knots. A cat with nothing to say answers a hail with a wave toast. Since V1-32 that is only the cats of the three later lakes, until V1-33 gives them dialogue.
+**Hailing.** Hailing is unchanged: 20 m and below 3 knots. A cat with nothing to say answers a hail with a wave toast. Since V1-33 that is only Tinker Thistle, and Postmaster Pounce when he carries no letter.
 
 **Migrating V3 saves.** V3 saves stored one chosen day cat per lake (`day_npc_by_lake`) and the day it was chosen (`schedule_day_by_lake`).
 
@@ -1314,7 +1314,7 @@ The session rebuilds the cast whenever `schedule_key` changes: the day, the band
 
 ## Implemented quests v2 (V1-31)
 
-V1-31 is the quest system. It shipped `quests.json` with no rows: V1-32 (below) and V1-33 author the side quests, and V1-34 the story steps. Its tests author their own rows against the real roster, lakes and places.
+V1-31 is the quest system. It shipped `quests.json` with no rows: V1-32 and V1-33 (below) author the side quests, and V1-34 the story steps. Its tests author their own rows against the real roster, lakes and places.
 
 **Content (`content_v2/quests.json`).**
 
@@ -1366,7 +1366,7 @@ Existing events gain fields: `line.set` its midpoint and cold band, `bot.scout_c
 
 **Step rules (`quests.py`).**
 
-- **Lines** match `zone_id` or `area_id` (the midpoint at set time), `tier_id` or `min_tier`, `hook_count`, `bait_id` on every section, `set_window` and `in_cold_band`. `line_scout_check` needs the report before the check.
+- **Lines** match `zone_id` or `area_id` (the midpoint at set time), `tier_id` or `min_tier`, `hook_count`, `bait_id` on every section, `set_window` and `in_cold_band`. `line_scout_check` needs the report before the check. Since V1-33 `active_soak_game_minutes` is optional: without it, any check of the set line counts.
 - **`windows`** ask for one event in each window, for each target: two windows on one zone need two reports. A `visit_sequence` needs one ordered pass inside each window, and a leg counts for one window only.
 - **`wait_weather`** accumulates anchored minutes in the place while the weather holds; drifting pauses it without resetting. With `then_weather`, it completes when the weather turns while the player is still anchored there. A long advance such as a catnap reports each forecast span (`calendar.weather_spans`), so only the minutes actually spent in that weather count.
 - **`book_stage`** counts the book as it stands and completes on acceptance if already met. So does a `catch_species` step that names only a legendary, when that legendary is already recorded (the Guardian once sighted).
@@ -1465,7 +1465,7 @@ V1-32 transcribes `04 §4.1–4.2` and `05 §4.1–4.2, §6.1–6.2, §7, §9` i
 - **Guardian.** The Whiskered Guardian's sighting emits `legendary.witnessed`, which completes Quill's quest B. Accepting that quest after the sighting completes its step at once.
 - **Cookout places.** The layout fix is described in the V1-30 section above; without it, Biscuit's and Belle's quest B could not be completed.
 
-**Tests (`test_quests_briar_cedar`).**
+**Tests (`test_quests_briar_cedar`, now `test_quests_content`).**
 
 - **The script.** The test reads `05 §6.1–6.2`, `§4.1–4.2`, `§7` and `§9`, and `04`'s keepsake names, and applies the transcription rules above. It then compares every line, journal, greeting, Ripple, letter and keepsake name with the shipped content.
 - **Rewards.** Cash by lake, Ripples 11–17 in roster order, one keepsake per water-cat, Hank's recipe, Biscuit's gift and Gus's requirement.
@@ -1480,3 +1480,53 @@ V1-32 transcribes `04 §4.1–4.2` and `05 §4.1–4.2, §6.1–6.2, §7, §9` i
 - **Systems.** The Guardian sighting readies Quill's quest B. A first line and a greeting of several bubbles lead into the quest. The book shows V1.0 Ripples and keepsakes.
 - **`test_npcs`** checks that every cookout guest on every lake can be hailed from a docked boat.
 - **`test_content_v2`** checks that an unreadable file the quests reference is reported once.
+
+## Implemented Flathead, Crater and Nebula content (V1-33)
+
+V1-33 does for the three later lakes what V1-32 did for Briar and Cedar. It transcribes `04 §2–4.5` and `05 §4.3–4.5, §6.3–6.5, §7, §9` into `content_v2`. Every lake's side quests now ship: 81 V1.0 quests in all, with the 15 story steps to come in V1-34.
+
+**What ships.**
+
+- **Quests A and B for the 27 water-cats.** Titles and objectives come from `04`; lines and `obj:` journals from `05`.
+- **The three host errands.**
+  - `host_flathead` *The Long Story*: talk to Captain Huckleberry on 3 different days.
+  - `host_crater` *Fog Names*: anchor anywhere on Crater during fog for 30 minutes, then talk to Sora.
+  - `host_nebula` *Units, Please*: 5 Nebula species at Identified.
+- **Cash.** Quest A pays $80 on Flathead, $110 on Crater and $140 on Nebula. Quest B pays 1.5× that: $120, $165 and $210. The new host errands pay as quest B. `04` sets no amount for them, and `q01` and `q02` pay about 1.33× and 1.64× their lake's quest A.
+- **Greetings.** Each water-cat has `day` and `friend` lines, and the hosts have their `day`, weather and `after_chN` states. The hosts' `first` lines belong to the story (V1-34). Bot's reply to Astra-9's `day` line is its second bubble, "Bot: It is not.", in the form his barks take.
+- **Ripples 18–44 and 27 keepsakes.** Each lake's quests A give its Ripples in roster order.
+- **Letters.** `05 §9`'s samples for Captain Huckleberry and Andi.
+- **Rumors.** `05 §8.2–8.5`, all 144 rumors and the 12 legendary pages, already matched `book.json`.
+- **Dishes and clues.** These were already in place: `kitchen.teach` gives a host's dishes in their chapter, and a clue teller's recipe on a hail (V1-15).
+- **Travelers.** Pounce's letters (V1-31) and both schedules (V1-30) are their only authored parts. `03` gives Tinker Thistle no paint catalog and `05` gives no jokes, so Thistle still waves.
+
+**Calls made where the source is silent.**
+
+- **Written journals.** Twenty quests B have no `obj:` line in `05`. Their journals are written like their neighbours: "Record …" for a legendary, "Catch …", "Cook …", "Identify N … species in the book.", and "Attend the Sunday cookout at …". `test_quests_content` pins them.
+- **Huckleberry's errand lines.** `05` gives his errand no offer or turn-in line, so these two are written in his shape (`04 §2`). His Whopper story itself is told as written.
+- **Torvald's quest A** ("set a line inside the cold layer and check it") has no soak time, so any check counts.
+- **Dakota's "4 different trout species"** is the `trout` food group with `distinct`, on any lake.
+
+**Stories.** A cats row may have a `story`: 2–5 parts, each a line of bubbles.
+
+- **Telling.** The first hail of a game day tells the next part, after the greeting and before the quest's own node.
+- **Saving.** A part counts as heard only once its node is shown, so closing the conversation on the greeting keeps the part for the next hail. Progress is saved as `v2.npcs.stories.<cat> = {heard, day}`, and the story ends after its last part.
+- **Use.** Captain Huckleberry tells the Whopper in three parts (`05 §4.3`). `dialogue.story_heard` is what Huckleberry's Whopper's gate, heard on 3 different days, will read in V1-36.
+- **Quests are counted separately.** His errand and Bjorn's quest A count their own hails (`talk_to`, `distinct_days: 3`). The story is told once, whichever comes first.
+- **The acceptance day counts.** A quest taken from the very cat its `distinct_days` step needs counts that day's hail (`quests.count_todays_hail`). The hail came before the acceptance, so the step would otherwise miss it. Huckleberry's errand is therefore ready on the day his story ends. Bjorn's quest, taken from Bjorn, counts only hails to Huckleberry.
+
+**Still waiting on other tickets.**
+
+- **Legendaries.** Six quests B record a legendary, which can only be hooked from V1-36 on: Old Silverhead, the Glacial Phantom, Huckleberry's Whopper, the Obsidian Gar, the Caldera Fire-Lizard and the Nebula Weaver.
+- **Chapters.** Ember's and Juno's quests B need chapters 4 and 5 finished (V1-34).
+- **Silent progress lines.** Those two quests are ready at the next hail after acceptance, so their generic progress line is never shown.
+
+**Tests (`test_quests_content`, which replaces `test_quests_briar_cedar`).**
+
+- **The script.** The V1-32 checks now run for all five lakes. They also cover the hosts' states and errand lines, the Whopper story, five letters, Ripples 11–44 and 44 keepsakes.
+- **Playthroughs.** There is one per lake: `test_flathead_alpine`, `test_crater_caldera` and `test_starlight_nebula`, after the two from V1-32.
+  - Each plays the host errand first, then every cat's quests A and B through their own events and real hails.
+  - Cookouts are hailed docked, and the Whopper is heard across days.
+  - Ember's and Juno's quests B wait for their chapters, and the Frog-shell and night-catch filters must hold until their last event.
+  - Every authored V1.0 node is shown, except those two silent progress lines. A reload pays nothing.
+- **Systems.** A story is told one part a game day, after the greeting, survives a reload and ends. A line check with no soak time counts a check a moment after the set. The validator rejects a one-part story and a traveler's story.
