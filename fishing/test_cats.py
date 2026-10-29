@@ -103,6 +103,24 @@ class RosterData(unittest.TestCase):
         case("npcs", "5 hosts, 2 travelers and 44 water-cat rows", lambda rows: rows.pop())
         case("npcs[0](grandmother_whiskers).appearance", "unknown field 'hat'",
              lambda rows: look(0)(rows).update(hat=True))
+        # V1-30's schedule fields.
+        case("npcs[0](grandmother_whiskers).role", "unknown value/reference ['host']",
+             lambda rows: rows[0].update(role=["host"]))
+        case("npcs[0](grandmother_whiskers).slot", "unknown value/reference 'day'",
+             lambda rows: rows[0].update(slot="day"))
+        case("npcs[5](pounce).anchor", "expected null", lambda rows: rows[5].update(anchor="briar:open"))
+        case("npcs[7](elder_moss).anchor", "on the cat's own lake", lambda rows: rows[7].update(anchor="cedar:rocks"))
+        case("npcs[7](elder_moss).anchor", "already the anchor of 'grandmother_whiskers'",
+             lambda rows: rows[7].update(anchor="briar:landing"))
+        case("npcs[7](elder_moss).quests[0]", "already given by 'grandmother_whiskers'",
+             lambda rows: rows[7]["quests"].__setitem__(0, "q01_tea_leaves_deep_holes"))
+        case("npcs[7](elder_moss).quests[1]", "the cat's own quest id",
+             lambda rows: rows[7]["quests"].__setitem__(1, "wc_willow_b"))
+        case("npcs[5](pounce).quests", "expected 0 quest id(s)", lambda rows: rows[5].update(quests=["wc_pounce_a"]))
+        case("npcs", "Master Cinder keeps the Briar night slot", lambda rows: rows[9].update(slot="day"))
+        case("npcs", "expected the V3 cat 'willow' on briar by day", lambda rows: rows[10].update(slot="night"))
+        case("npcs", "briar needs 1–3 night encounters, found 4",
+             lambda rows: [row.update(slot="night") for row in rows[10:13]])
         for raw, where, message in cases:
             with self.subTest(where=where, message=message), self.assertRaises(ContentError) as caught:
                 validate_content_v2(raw)
@@ -377,12 +395,13 @@ class Actors(unittest.TestCase):
         world, state = _lake("briar")
         renderer = LakeRenderer(world, 160, 90)
         try:
-            host, water = state.npcs
+            host, water = state.npcs[:2]
             renderer.render(state)
             before = next(s for s in renderer.actor_slots if s["npc_id"] == water.id)
             self.assertGreater(before["boat_vertices"], 0)
             # The Sunday cookout moves a water cat onto the landing, without its boat.
-            state.npcs = (host, replace(water, anchor=replace(host.anchor, id="briar:cookout:" + water.id)))
+            state.npcs = (host, replace(water, anchor=replace(host.anchor, id="briar:cookout:" + water.id)),
+                          *state.npcs[2:])
             renderer.render(state)
             actor = renderer.actor_cache.actors[water.id]
             slot = next(s for s in renderer.actor_slots if s["npc_id"] == water.id)

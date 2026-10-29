@@ -61,8 +61,8 @@ fishing/assets/content_v2/
   boats.json         # 24 boats + traits (03 §6)
   bot.json           # prefixes, shells, tools (03 §7)
   lakes.json         # 5 lakes: labels, zones, Lake Days, weather sets, palettes
-  npcs.json          # 52 cats in 51 rows: role, lake, boat, appearance (V1-29);
-                     # V1-30 adds slot, anchor and quests
+  npcs.json          # 52 cats in 51 rows: role, lake, boat, appearance (V1-29),
+                     # schedule slot, anchor and quest ids (V1-30)
   quests.json        # 96 new quests (15 story + 3 host + 34 quest A + 44 quest B);
                      # 108 in total with the 12 in narrative_v1.json
   dialogue/*.json    # one file per lake + story.json + bot.json + system.json
@@ -1145,8 +1145,8 @@ The validator requires 5 hosts (one per lake, on no boat), 2 travelers, 44
 water cats and 52 cats in all, with every V3 day cat on its lake. It also
 checks ranges, enums, attire count and uniqueness, the prop for each pose, and
 that boat paint uses the shop's paint IDs. Each error names its row; an
-unhashable value is reported, never raised. V1-30 adds slots, anchors and
-quests to these rows.
+unhashable value is reported, never raised. V1-30 added slots, anchors and
+quest ids to these rows; see "Implemented roster and schedule (V1-30)".
 
 **Rig.** `catmesh.cat_mesh(npc_id, lod)` builds one actor in NumPy:
 
@@ -1253,3 +1253,56 @@ bound passes 150 MiB. It reports the result as `cat_actor_memory`.
 
 The capture fails if the lineup is not 52 cats, if Reduced Motion moves a cat,
 if hailing changes, or if it passes 3 GB.
+
+## Implemented roster and schedule (V1-30)
+
+**Roster fields.** Every `npcs.json` row now also has:
+
+- **`slot`.** Hosts are `landing`, travelers `traveler`, and water-cats `day` or `night`, as in `04 §4`. The night cats are Master Cinder, Hank Mudpaw, Señora Luz, Torvald, Elk-Ears Eli, Nyx, Fumi, Orion-Cat and Twinkle.
+- **`anchor`.** Each cat has its own anchor on its own lake. A host's is its landing dock anchor. Travelers have `null`, because they moor at each lake's `mail_mooring` or `tinker_mooring`.
+- **`quests`.** A host gives one quest: its V3 errand or `host_<lake>`. A water-cat gives two: A, which is its V3 quest or `wc_<id>_a`, and B, `wc_<id>_b`. Travelers give none. V1-31 authors the new quests.
+
+The validator checks the slot for each role and that no two cats share an anchor or a quest. Every V3 day cat keeps a day slot on its lake, and Master Cinder keeps the night. Each lake needs 3–9 day encounters and 1–3 night encounters, so the round-robin covers every encounter in three days. Each lake has 7 day encounters, and 1 night (Briar) or 2 night encounters (the others).
+
+**Anchors.** `anchors.py` adds 47 anchors:
+
+- the Flathead, Crater and Nebula landings;
+- an anchor for every new encounter, in its `04` zone;
+- a mail and a tinker mooring on every lake.
+
+They are at least 45 m apart, so hail circles never overlap, and outside the 50 m landing exclusion. Every boat can approach each one, and each cat's own boat fits at its anchor and heading. The positions were searched once against each lake's chart and are fixed in code, like the V3 ones. A flat placeholder map has no anchors and therefore no cast.
+
+**Schedule (`npcs.py`).** Presence is a pure function of `(schedule_seed, lake_id, day)` and of the quests that pin a cat:
+
+- **Hosts** are always at their landing.
+- **Day encounters (06:00–20:00).** Each lake's day pool is put in a seeded order (SHA-256 of the seed, lake and cat), and day *d* takes the next three: positions `3d`, `3d+1` and `3d+2`, wrapping. With at most nine day cats, any three days cover them all.
+- **Night encounter (20:00–04:00).** The night belongs to the game day it starts on, and day *d* takes position *d* of the night pool's seeded order. Briar's pool is Master Cinder alone.
+- **04:00–06:00.** Only hosts.
+- **Pins.** A cat needed by an accepted quest is present every day in its own slot, taking an extra place if the round-robin hasn't brought it:
+  - a `talk_to` cat of an active quest's objective or steps;
+  - the giver of a quest waiting to be turned in.
+
+  The story's chapter steps arrive in a later ticket and add their `talk_to` cats through `npcs.pinned`.
+- **Travelers.** Postmaster Pounce moors at one unlocked lake a day, 08:00–16:00. The lake is a seeded pick, in lake order, among the lakes `travel_unlocked` opens. Tinker Thistle moors at the player's lake every Saturday, 10:00–18:00.
+- **Sunday cookout (17:00–20:00).** A lake's host and all its encounters stand on the landing's two piers, alternating sides, within hail range of the slip. On Cedar this is the public landing, not Doc's marina, so the cookout can be joined where `at_landing` applies. Cookout chat lines are still those of `calendar.json`.
+
+The session rebuilds the cast whenever `schedule_key` changes: the day, the band, the cookout, the pins, a migrated V3 cat, or a traveler's window.
+
+**Hailing.** Hailing is unchanged: 20 m and below 3 knots. The 39 cats without a V3 dialogue graph answer a hail with a wave toast until their dialogue lands.
+
+**Migrating V3 saves.** V3 saves stored one chosen day cat per lake (`day_npc_by_lake`) and the day it was chosen (`schedule_day_by_lake`).
+
+- On load, that cat stays present for the rest of its saved day, taking an extra slot if the new rule didn't pick it. From the next day the new rule alone decides.
+- An unknown or stale pick is ignored.
+- The schedule no longer writes these fields. They stay in the save as they were, so an older build can still read them.
+
+**Tests.**
+
+- `test_npcs` checks every lake over 10,000 seeds: every encounter appears in every three-day span, three distinct cats a day.
+- It also checks:
+  - the day, night and dawn boundaries;
+  - Cedar's alternating nights;
+  - quest pins, travelers and the V3 migration;
+  - determinism across save, reload, offline time and lake switches.
+- `test_anchors` validates all five lakes' anchors and seats every cat's boat.
+- The earlier V3 schedule tests in `test_npcs`, `test_calendar`, `test_dialogue`, `test_lakes` and `test_narrative` now assert the new rule.

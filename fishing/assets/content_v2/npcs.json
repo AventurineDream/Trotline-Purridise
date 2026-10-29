@@ -7,6 +7,11 @@
       "lake": "briar",
       "role": "host",
       "boat": null,
+      "slot": "landing",
+      "anchor": "briar:landing",
+      "quests": [
+        "q01_tea_leaves_deep_holes"
+      ],
       "appearance": {
         "breed": "Calico",
         "size": 0.95,
@@ -67,6 +72,11 @@
       "lake": "cedar",
       "role": "host",
       "boat": null,
+      "slot": "landing",
+      "anchor": "cedar:docs_marina_dock",
+      "quests": [
+        "q02_lonely_star_current"
+      ],
       "appearance": {
         "breed": "Orange tabby",
         "size": 1.05,
@@ -127,6 +137,11 @@
       "lake": "flathead",
       "role": "host",
       "boat": null,
+      "slot": "landing",
+      "anchor": "flathead:landing",
+      "quests": [
+        "host_flathead"
+      ],
       "appearance": {
         "breed": "Norwegian Forest Cat",
         "size": 1.2,
@@ -179,6 +194,11 @@
       "lake": "crater",
       "role": "host",
       "boat": null,
+      "slot": "landing",
+      "anchor": "crater:landing",
+      "quests": [
+        "host_crater"
+      ],
       "appearance": {
         "breed": "Bombay",
         "size": 0.95,
@@ -231,6 +251,11 @@
       "lake": "nebula",
       "role": "host",
       "boat": null,
+      "slot": "landing",
+      "anchor": "nebula:landing",
+      "quests": [
+        "host_nebula"
+      ],
       "appearance": {
         "breed": "Sphynx",
         "size": 0.9,
@@ -284,6 +309,9 @@
       "lake": null,
       "role": "traveler",
       "boat": "river_runner",
+      "slot": "traveler",
+      "anchor": null,
+      "quests": [],
       "appearance": {
         "breed": "Ragamuffin",
         "size": 1.1,
@@ -339,6 +367,9 @@
       "lake": null,
       "role": "traveler",
       "boat": "tug_skiff",
+      "slot": "traveler",
+      "anchor": null,
+      "quests": [],
       "appearance": {
         "breed": "Tortoiseshell",
         "size": 0.95,
@@ -394,6 +425,12 @@
       "lake": "briar",
       "role": "water",
       "boat": "log_raft",
+      "slot": "day",
+      "anchor": "briar:cypress",
+      "quests": [
+        "q03_unstrung_line",
+        "wc_elder_moss_b"
+      ],
       "appearance": {
         "breed": "Maine Coon",
         "size": 1.25,
@@ -446,6 +483,12 @@
       "lake": "briar",
       "role": "water",
       "boat": "dory",
+      "slot": "day",
+      "anchor": "briar:flats",
+      "quests": [
+        "q04_great_contour_chart",
+        "wc_pip_pebble_b"
+      ],
       "appearance": {
         "breed": "Tuxedo kitten",
         "size": 0.65,
@@ -543,6 +586,12 @@
       "lake": "briar",
       "role": "water",
       "boat": "flat_skiff",
+      "slot": "night",
+      "anchor": "briar:deep",
+      "quests": [
+        "q05_moonlight_trotlines",
+        "wc_master_cinder_b"
+      ],
       "appearance": {
         "breed": "Black cat",
         "size": 1.0,
@@ -606,6 +655,12 @@
       "lake": "briar",
       "role": "water",
       "boat": "birch_skiff",
+      "slot": "day",
+      "anchor": "briar:lilies",
+      "quests": [
+        "q06_unrepeatable_sunrise",
+        "wc_willow_b"
+      ],
       "appearance": {
         "breed": "Siamese",
         "size": 0.9,
@@ -658,6 +713,12 @@
       "lake": "briar",
       "role": "water",
       "boat": "flat_skiff",
+      "slot": "day",
+      "anchor": "briar:inlet",
+      "quests": [
+        "q07_art_of_the_nap",
+        "wc_silas_b"
+      ],
       "appearance": {
         "breed": "Grey tabby",
         "size": 1.0,
@@ -713,6 +774,12 @@
       "lake": "briar",
       "role": "water",
       "boat": "log_raft",
+      "slot": "day",
+      "anchor": "briar:open",
+      "quests": [
+        "wc_marigold_a",
+        "wc_marigold_b"
+      ],
       "appearance": {
         "breed": "Turkish Van",
         "size": 1.0,
@@ -756,6 +823,12 @@
       "lake": "briar",
       "role": "water",
       "boat": "flat_skiff",
+      "slot": "day",
+      "anchor": "briar:rocks",
+      "quests": [
+        "wc_old_gus_a",
+        "wc_old_gus_b"
+      ],
       "appearance": {
         "breed": "Manx",
         "size": 1.05,
@@ -811,6 +884,12 @@
       "lake": "briar",
       "role": "water",
       "boat": "marsh_runner",
+      "slot": "day",
+      "anchor": "briar:bread_flats",
+      "quests": [
+        "wc_biscuit_a",
+        "wc_biscuit_b"
+      ],
       "appearance": {
         "breed": "British Shorthair",
         "size": 1.05,
@@ -866,6 +945,12 @@
       "lake": "cedar",
       "role": "water",
       "boat": "mahogany_runabout",
+      "slot": "day",
+      "anchor": "cedar:open",
+      "quests": [
+        "q08_channel_run",
+        "wc_captain_maeve_b"
+      ],
       "appearance": {
         "breed": "Calico",
         "size": 1.0,
@@ -921,6 +1006,12 @@
       "lake": "cedar",
       "role": "water",
       "boat": "deepv_skiff",
+      "slot": "day",
+      "anchor": "cedar:inlet",
+      "quests": [
+        "q09_quiet_channel",
+        "wc_sparky_b"
+      ],
       "appearance": {
         "breed": "Orange tabby",
         "size": 0.95,
@@ -973,6 +1064,12 @@
       "lake": "cedar",
       "role": "water",
       "boat": "small_sloop",
+      "slot": "day",
+      "anchor": "cedar:flats",
+      "quests": [
+        "q10_ballad_lonely_star",
+        "wc_quill_b"
+      ],
       "appearance": {
         "breed": "Persian",
         "size": 1.0,
@@ -1025,6 +1122,12 @@
       "lake": "cedar",
       "role": "water",
       "boat": "coastal_craft",
+      "slot": "day",
+      "anchor": "cedar:deep",
+      "quests": [
+        "q11_deep_water_drift",
+        "wc_dr_alder_b"
+      ],
       "appearance": {
         "breed": "Chartreux",
         "size": 1.05,
@@ -1077,6 +1180,12 @@
       "lake": "cedar",
       "role": "water",
       "boat": "flat_skiff",
+      "slot": "day",
+      "anchor": "cedar:lilies",
+      "quests": [
+        "q12_first_voyage",
+        "wc_patch_b"
+      ],
       "appearance": {
         "breed": "Alley cat",
         "size": 1.0,
@@ -1133,6 +1242,12 @@
       "lake": "cedar",
       "role": "water",
       "boat": "duck_jon",
+      "slot": "night",
+      "anchor": "cedar:lower_inlet",
+      "quests": [
+        "wc_hank_mudpaw_a",
+        "wc_hank_mudpaw_b"
+      ],
       "appearance": {
         "breed": "American Shorthair",
         "size": 1.1,
@@ -1193,6 +1308,12 @@
       "lake": "cedar",
       "role": "water",
       "boat": "birch_skiff",
+      "slot": "day",
+      "anchor": "cedar:cypress",
+      "quests": [
+        "wc_belle_pecan_a",
+        "wc_belle_pecan_b"
+      ],
       "appearance": {
         "breed": "Selkirk Rex",
         "size": 1.0,
@@ -1245,6 +1366,12 @@
       "lake": "cedar",
       "role": "water",
       "boat": "flat_skiff",
+      "slot": "night",
+      "anchor": "cedar:rocks",
+      "quests": [
+        "wc_senora_luz_a",
+        "wc_senora_luz_b"
+      ],
       "appearance": {
         "breed": "Egyptian Mau",
         "size": 1.0,
@@ -1308,6 +1435,12 @@
       "lake": "cedar",
       "role": "water",
       "boat": "reed_dugout",
+      "slot": "day",
+      "anchor": "cedar:ranger_flats",
+      "quests": [
+        "wc_kit_a",
+        "wc_kit_b"
+      ],
       "appearance": {
         "breed": "Abyssinian kitten",
         "size": 0.7,
@@ -1368,6 +1501,12 @@
       "lake": "flathead",
       "role": "water",
       "boat": "fiberglass_cruiser",
+      "slot": "night",
+      "anchor": "flathead:deep",
+      "quests": [
+        "wc_torvald_a",
+        "wc_torvald_b"
+      ],
       "appearance": {
         "breed": "Russian Blue",
         "size": 1.1,
@@ -1428,6 +1567,12 @@
       "lake": "flathead",
       "role": "water",
       "boat": "small_sloop",
+      "slot": "day",
+      "anchor": "flathead:inlet",
+      "quests": [
+        "wc_freya_a",
+        "wc_freya_b"
+      ],
       "appearance": {
         "breed": "Birman",
         "size": 1.0,
@@ -1480,6 +1625,12 @@
       "lake": "flathead",
       "role": "water",
       "boat": "reed_dugout",
+      "slot": "day",
+      "anchor": "flathead:flats",
+      "quests": [
+        "wc_bramble_a",
+        "wc_bramble_b"
+      ],
       "appearance": {
         "breed": "Scottish Fold",
         "size": 1.0,
@@ -1540,6 +1691,12 @@
       "lake": "flathead",
       "role": "water",
       "boat": "party_barge",
+      "slot": "day",
+      "anchor": "flathead:cypress",
+      "quests": [
+        "wc_ingrid_a",
+        "wc_ingrid_b"
+      ],
       "appearance": {
         "breed": "Siberian",
         "size": 1.1,
@@ -1592,6 +1749,12 @@
       "lake": "flathead",
       "role": "water",
       "boat": "birch_skiff",
+      "slot": "night",
+      "anchor": "flathead:rocks",
+      "quests": [
+        "wc_elk_ears_eli_a",
+        "wc_elk_ears_eli_b"
+      ],
       "appearance": {
         "breed": "Lynx-point",
         "size": 1.0,
@@ -1652,6 +1815,12 @@
       "lake": "flathead",
       "role": "water",
       "boat": "dory",
+      "slot": "day",
+      "anchor": "flathead:open",
+      "quests": [
+        "wc_bjorn_a",
+        "wc_bjorn_b"
+      ],
       "appearance": {
         "breed": "Pixie-bob",
         "size": 1.1,
@@ -1704,6 +1873,12 @@
       "lake": "flathead",
       "role": "water",
       "boat": "log_raft",
+      "slot": "day",
+      "anchor": "flathead:larch_bay",
+      "quests": [
+        "wc_willa_larch_a",
+        "wc_willa_larch_b"
+      ],
       "appearance": {
         "breed": "Somali",
         "size": 1.0,
@@ -1756,6 +1931,12 @@
       "lake": "flathead",
       "role": "water",
       "boat": "birch_skiff",
+      "slot": "day",
+      "anchor": "flathead:wind_reach",
+      "quests": [
+        "wc_dakota_a",
+        "wc_dakota_b"
+      ],
       "appearance": {
         "breed": "Ocicat",
         "size": 1.0,
@@ -1808,6 +1989,12 @@
       "lake": "flathead",
       "role": "water",
       "boat": "coastal_craft",
+      "slot": "day",
+      "anchor": "flathead:trench_edge",
+      "quests": [
+        "wc_mitzi_a",
+        "wc_mitzi_b"
+      ],
       "appearance": {
         "breed": "Devon Rex",
         "size": 0.9,
@@ -1868,6 +2055,12 @@
       "lake": "crater",
       "role": "water",
       "boat": "tug_skiff",
+      "slot": "night",
+      "anchor": "crater:springs",
+      "quests": [
+        "wc_nyx_a",
+        "wc_nyx_b"
+      ],
       "appearance": {
         "breed": "Korat",
         "size": 1.0,
@@ -1928,6 +2121,12 @@
       "lake": "crater",
       "role": "water",
       "boat": "deepv_skiff",
+      "slot": "day",
+      "anchor": "crater:rocks",
+      "quests": [
+        "wc_ignis_a",
+        "wc_ignis_b"
+      ],
       "appearance": {
         "breed": "Bengal",
         "size": 1.0,
@@ -1983,6 +2182,12 @@
       "lake": "crater",
       "role": "water",
       "boat": "houseboat",
+      "slot": "day",
+      "anchor": "crater:flats",
+      "quests": [
+        "wc_ashby_a",
+        "wc_ashby_b"
+      ],
       "appearance": {
         "breed": "Havana Brown",
         "size": 1.0,
@@ -2035,6 +2240,12 @@
       "lake": "crater",
       "role": "water",
       "boat": "dory",
+      "slot": "day",
+      "anchor": "crater:basalt",
+      "quests": [
+        "wc_basalt_bea_a",
+        "wc_basalt_bea_b"
+      ],
       "appearance": {
         "breed": "LaPerm",
         "size": 1.0,
@@ -2090,6 +2301,12 @@
       "lake": "crater",
       "role": "water",
       "boat": "flat_skiff",
+      "slot": "night",
+      "anchor": "crater:lilies",
+      "quests": [
+        "wc_fumi_a",
+        "wc_fumi_b"
+      ],
       "appearance": {
         "breed": "Japanese Bobtail",
         "size": 1.0,
@@ -2153,6 +2370,12 @@
       "lake": "crater",
       "role": "water",
       "boat": "river_runner",
+      "slot": "day",
+      "anchor": "crater:open",
+      "quests": [
+        "wc_ember_a",
+        "wc_ember_b"
+      ],
       "appearance": {
         "breed": "Somali kitten",
         "size": 0.7,
@@ -2208,6 +2431,12 @@
       "lake": "crater",
       "role": "water",
       "boat": "reed_dugout",
+      "slot": "day",
+      "anchor": "crater:cypress",
+      "quests": [
+        "wc_mist_a",
+        "wc_mist_b"
+      ],
       "appearance": {
         "breed": "Turkish Angora",
         "size": 1.0,
@@ -2260,6 +2489,12 @@
       "lake": "crater",
       "role": "water",
       "boat": "party_barge",
+      "slot": "day",
+      "anchor": "crater:star_water",
+      "quests": [
+        "wc_juno_a",
+        "wc_juno_b"
+      ],
       "appearance": {
         "breed": "Burmese",
         "size": 1.0,
@@ -2320,6 +2555,12 @@
       "lake": "crater",
       "role": "water",
       "boat": "birch_skiff",
+      "slot": "day",
+      "anchor": "crater:deep",
+      "quests": [
+        "wc_tamsin_a",
+        "wc_tamsin_b"
+      ],
       "appearance": {
         "breed": "Snowshoe",
         "size": 1.0,
@@ -2372,6 +2613,12 @@
       "lake": "nebula",
       "role": "water",
       "boat": "steam_barge",
+      "slot": "night",
+      "anchor": "nebula:open",
+      "quests": [
+        "wc_orion_cat_a",
+        "wc_orion_cat_b"
+      ],
       "appearance": {
         "breed": "Persian",
         "size": 1.0,
@@ -2424,6 +2671,12 @@
       "lake": "nebula",
       "role": "water",
       "boat": "nebula_cruiser",
+      "slot": "day",
+      "anchor": "nebula:current",
+      "quests": [
+        "wc_nebula_paws_a",
+        "wc_nebula_paws_b"
+      ],
       "appearance": {
         "breed": "Ragdoll",
         "size": 1.0,
@@ -2468,6 +2721,12 @@
       "lake": "nebula",
       "role": "water",
       "boat": "nebula_cruiser",
+      "slot": "day",
+      "anchor": "nebula:inlet",
+      "quests": [
+        "wc_comet_a",
+        "wc_comet_b"
+      ],
       "appearance": {
         "breed": "Bengal kitten",
         "size": 0.7,
@@ -2520,6 +2779,12 @@
       "lake": "nebula",
       "role": "water",
       "boat": "steam_barge",
+      "slot": "day",
+      "anchor": "nebula:lilies",
+      "quests": [
+        "wc_lyra_a",
+        "wc_lyra_b"
+      ],
       "appearance": {
         "breed": "Cymric",
         "size": 1.0,
@@ -2572,6 +2837,12 @@
       "lake": "nebula",
       "role": "water",
       "boat": "nebula_cruiser",
+      "slot": "day",
+      "anchor": "nebula:far_open",
+      "quests": [
+        "wc_vega_a",
+        "wc_vega_b"
+      ],
       "appearance": {
         "breed": "Toyger",
         "size": 1.0,
@@ -2624,6 +2895,12 @@
       "lake": "nebula",
       "role": "water",
       "boat": "log_raft",
+      "slot": "day",
+      "anchor": "nebula:flats",
+      "quests": [
+        "wc_selene_a",
+        "wc_selene_b"
+      ],
       "appearance": {
         "breed": "Nebelung",
         "size": 1.0,
@@ -2676,6 +2953,12 @@
       "lake": "nebula",
       "role": "water",
       "boat": "nebula_cruiser",
+      "slot": "day",
+      "anchor": "nebula:lily_nursery",
+      "quests": [
+        "wc_andi_a",
+        "wc_andi_b"
+      ],
       "appearance": {
         "breed": "Oriental Longhair kitten",
         "size": 0.7,
@@ -2719,6 +3002,12 @@
       "lake": "nebula",
       "role": "water",
       "boat": "flat_skiff",
+      "slot": "night",
+      "anchor": "nebula:deep",
+      "quests": [
+        "wc_twinkle_a",
+        "wc_twinkle_b"
+      ],
       "appearance": {
         "breed": "Munchkin",
         "size": 0.8,
@@ -2782,6 +3071,12 @@
       "lake": "nebula",
       "role": "water",
       "boat": "small_sloop",
+      "slot": "day",
+      "anchor": "nebula:fast_current",
+      "quests": [
+        "wc_rigel_a",
+        "wc_rigel_b"
+      ],
       "appearance": {
         "breed": "Savannah",
         "size": 1.15,
