@@ -9,6 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field
 import math
+import re
 from uuid import UUID
 
 
@@ -20,6 +21,33 @@ QUEST_IDS = (
     "q12_first_voyage",
 )
 RIPPLE_BY_QUEST = {qid: f"ripple_{i:02d}" for i, qid in enumerate(QUEST_IDS[2:], 1)}
+# V1.0 quest ids (04): story steps, host errands and water-cat quests A and B. They share
+# this ledger with the V3 quests, so a later build's progress and claims load here too.
+V2_QUEST_ID = re.compile(r"wc_[a-z0-9_]+_[ab]|host_[a-z0-9_]+|story_c[1-5]_s[1-9]")
+ACCEPT_CLAIM = ":accept"  # an on-accept gift's claim key: "<quest id>:accept"
+
+
+def is_quest_id(value) -> bool:
+    return isinstance(value, str) and (value in QUEST_IDS or V2_QUEST_ID.fullmatch(value) is not None)
+
+
+def is_claim_key(value) -> bool:
+    if isinstance(value, str) and value.endswith(ACCEPT_CLAIM):
+        value = value[:-len(ACCEPT_CLAIM)]
+    return is_quest_id(value)
+
+
+class _Recognized:
+    """A membership test for ids recognized by a predicate rather than listed."""
+
+    def __init__(self, predicate):
+        self._predicate = predicate
+
+    def __contains__(self, value) -> bool:
+        return self._predicate(value)
+
+
+CLAIM_KEYS = _Recognized(is_claim_key)
 DAY_NPCS = {
     "briar": ("elder_moss", "pip_pebble", "willow", "silas"),
     "cedar": ("captain_maeve", "sparky", "quill", "dr_alder", "patch"),
@@ -33,6 +61,7 @@ BOT_JOURNAL_LIMIT = 40
 _INVALID = object()
 _QUEST_PROGRESS_FIELDS = frozenset({
     "status", "progress", "accepted_game_minute", "declined",
+    "completed_game_minute", "turned_in_by", "acknowledged",
 })
 _NARRATIVE_FIELDS = frozenset({
     "quests", "ripples", "schedule_seed", "day_npc_by_lake",
@@ -105,12 +134,23 @@ class QuestProgress:
     accepted_game_minute: float | None = None
     declined: bool = False
     extra_fields: dict = field(default_factory=dict, repr=False)
+    # V1-31: when the reward was claimed (quest B unlocks the next game day), and the
+    # host who took a turn-in for an absent giver, who acknowledges it when next met.
+    completed_game_minute: float | None = None
+    turned_in_by: str | None = None
+    acknowledged: bool = False
 
     def to_json(self):
         result = deepcopy(self.extra_fields)
         result.update({"status": self.status, "progress": deepcopy(self.progress),
                       "accepted_game_minute": self.accepted_game_minute,
                       "declined": self.declined})
+        # Written only once set, so older ledgers keep their exact shape.
+        if self.completed_game_minute is not None:
+            result["completed_game_minute"] = self.completed_game_minute
+        if self.turned_in_by is not None:
+            result["turned_in_by"] = self.turned_in_by
+            result["acknowledged"] = self.acknowledged
         return result
 
     @classmethod
@@ -121,11 +161,15 @@ class QuestProgress:
         if status not in ("available", "active", "ready", "completed"):
             status = "available"
         progress = raw.get("progress")
+        host = raw.get("turned_in_by")
         return cls(status, _json_value(progress) if isinstance(progress, dict) else {},
                    _number(raw.get("accepted_game_minute"), None),
                    raw.get("declined") is True,
                    {key: deepcopy(value) for key, value in raw.items()
-                    if key not in _QUEST_PROGRESS_FIELDS})
+                    if key not in _QUEST_PROGRESS_FIELDS},
+                   _number(raw.get("completed_game_minute"), None),
+                   host if isinstance(host, str) and host else None,
+                   raw.get("acknowledged") is True)
 
 
 @dataclass
@@ -177,17 +221,33 @@ class NarrativeState:
         self._append_bot_journal(note)
         return True
 
-    def record_reward_claim(self, quest_id: str) -> bool:
+    def quest(self, quest_id: str) -> QuestProgress | None:
+        """A quest's progress, created on first use for a recognized V1.0 id."""
+        if quest_id not in self.quests and is_quest_id(quest_id):
+            self.quests[quest_id] = QuestProgress()
+        return self.quests.get(quest_id)
+
+    def record_reward_claim(self, quest_id: str, game_minute: float | None = None) -> bool:
         """Latch a ready quest once before applying its validated reward.
 
         Completed quests also block claims, including older ledgers with no
         explicit reward_claims list. Loading this ledger never grants rewards.
         """
-        quest = self.quests[quest_id]
-        if quest_id in self.reward_claims or quest.status != "ready":
+        quest = self.quests.get(quest_id)
+        if quest is None or quest_id in self.reward_claims or quest.status != "ready":
             return False
         self.reward_claims.append(quest_id)
         quest.status = "completed"
+        quest.completed_game_minute = _number(game_minute, None)
+        return True
+
+    def record_accept_claim(self, quest_id: str) -> bool:
+        """Latch an accepted quest's on-accept gift once (V1-31)."""
+        key = quest_id + ACCEPT_CLAIM
+        quest = self.quests.get(quest_id)
+        if quest is None or quest.status == "available" or key in self.reward_claims:
+            return False
+        self.reward_claims.append(key)
         return True
 
     def to_json(self):
@@ -202,7 +262,7 @@ class NarrativeState:
         ripples = _preserve_unknown_list(self.ripples, self.source_ripples,
                                          RIPPLE_BY_QUEST.values(), self.extra_ripples)
         claims = _preserve_unknown_list(self.reward_claims, self.source_reward_claims,
-                                        QUEST_IDS, self.extra_reward_claims)
+                                        CLAIM_KEYS, self.extra_reward_claims)
         result = deepcopy(self.extra_fields)
         result.update({
             "quests": quests,
@@ -229,9 +289,11 @@ class NarrativeState:
         if isinstance(quests, dict):
             st.extra_quest_entries = {
                 key: deepcopy(value) for key, value in quests.items()
-                if key not in QUEST_IDS
+                if not is_quest_id(key)
             }
             st.quests = {qid: QuestProgress.from_json(quests.get(qid)) for qid in QUEST_IDS}
+            st.quests.update({qid: QuestProgress.from_json(value) for qid, value in quests.items()
+                              if qid not in QUEST_IDS and is_quest_id(qid)})
         ripple_values = raw.get("ripples")
         if isinstance(ripple_values, list):
             st.source_ripples = deepcopy(ripple_values)
@@ -281,12 +343,16 @@ class NarrativeState:
             # Older saves only had the last two delivered scout reports.
             st.bot_journal = (list(st.bot_notes)
                               + [note for note in st.bot_reactions.values()])[-BOT_JOURNAL_LIMIT:]
-        st.reward_claims = _ids(raw.get("reward_claims"), QUEST_IDS)
+        st.reward_claims = _ids(raw.get("reward_claims"), CLAIM_KEYS)
         raw_claims = raw.get("reward_claims")
         if isinstance(raw_claims, list):
             st.source_reward_claims = deepcopy(raw_claims)
-            st.extra_reward_claims = [deepcopy(item) for item in raw_claims
-                                      if not (isinstance(item, str) and item in QUEST_IDS)]
+            st.extra_reward_claims = [deepcopy(item) for item in raw_claims if not is_claim_key(item)]
+        for qid in st.reward_claims:
+            # A claim for a V1.0 quest whose progress entry was lost still marks it completed.
+            if qid in st.quests or ACCEPT_CLAIM in qid:
+                continue
+            st.quests[qid] = QuestProgress("completed")
         for qid, quest in st.quests.items():
             if qid in st.reward_claims:
                 quest.status = "completed"

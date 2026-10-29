@@ -124,10 +124,20 @@ def tick(state, world, dt: float) -> str | None:
                 "depth_class": depth_class,
                 "report_delivered": True,
                 "game_minute": state.game_minutes,
+                "x": state.bot_x, "z": state.bot_z,
             }
             if state.finder:
                 event["exact_depth_m"] = depth
             state.emit_quest_event(event)
+            # A report read with the scanner or the grid aboard is a use of that tool (V1-31).
+            from .bottools import cold_layer_m
+            from .data import hour_of_day
+            from .sonar import enabled as sonar_enabled
+            if (state.owns_tool("thermo_scanner") and cold_layer_m(
+                    world.id, hour_of_day(state.game_minutes), calendar.weather_at(state)) is not None):
+                state.emit_tool_use(world, "thermo_scanner")
+            if sonar_enabled(state):
+                state.emit_tool_use(world, "sonar_grid")
             return "bot"
     return sound
 

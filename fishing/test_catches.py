@@ -65,7 +65,11 @@ class CatchResolutionChecks(unittest.TestCase):
                         self.assertEqual(catch.disposition, "kept" if expected_kept else "released")
                         self.assertIsNone(state.lines[0].hooks[0].catch)
                         self.assertEqual(state.journal["bluegill"]["count"], 1)
-                        self.assertEqual(len(events), 1 if expected_kept else 0)
+                        livewell = [e for e in events if e["type"] == "fish.enter_livewell"]
+                        self.assertEqual(len(livewell), 1 if expected_kept else 0)
+                        # Every resolved fish, kept or released, is one catch.resolved (V1-31).
+                        resolved = [e for e in events if e["type"] == "catch.resolved"]
+                        self.assertEqual([e["kept"] for e in resolved], [expected_kept])
                         if full:
                             self.assertEqual(len(state.well), 1)
                         else:
@@ -112,8 +116,9 @@ class CatchResolutionChecks(unittest.TestCase):
         self.assertEqual(snapshots[0][0]["count"], 1)
         self.assertEqual(snapshots[0][2], "kept")
         self.assertEqual(snapshots[1][2], "released")
-        self.assertEqual([event["type"] for event in snapshots[0][1]], ["fish.enter_livewell"])
-        self.assertEqual(snapshots[1][1], [])
+        self.assertEqual([event["type"] for event in snapshots[0][1]], ["fish.enter_livewell", "catch.resolved"])
+        self.assertEqual([event["type"] for event in snapshots[1][1]], ["catch.resolved"])
+        self.assertEqual([events[-1]["kept"] for _record, events, _d in snapshots], [True, False])
 
     def test_explicit_keep_choice_overrides_a_preselected_release(self):
         state, catch = self.state_with_catch()

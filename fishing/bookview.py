@@ -99,10 +99,11 @@ def book_controls(layout, state=None, ui=None):
 
 
 def move_selection(state, ui, content, delta):
+    from .ui import journal_quest_ids
     field, count = (("journal_i", len(BOOK_SPECIES_IDS)),
                     ("book_entry_i", len(ENTRY_IDS)),
                     ("book_collection_i", len(collection_rows(state, content, ui.book_shelf))),
-                    ("journal_quest_i", len(QUEST_IDS)),
+                    ("journal_quest_i", len(journal_quest_ids(state, content))),
                     ("book_watch_i", len(LEGENDARY_IDS)),
                     ("book_week_i", 7))[ui.journal_page]
     setattr(ui, field, (getattr(ui, field) + delta) % max(1, count))
@@ -514,15 +515,16 @@ class BookView:
 
     def story_pages(self):
         """Lay out every quest field before choosing a visible page."""
-        from .ui import quest_journal_details
-        index = self.ui.journal_quest_i % len(QUEST_IDS)
-        detail = quest_journal_details(self.state, self.u.narrative_content, QUEST_IDS[index])
+        from .ui import journal_quest_ids, quest_journal_details
+        quests = journal_quest_ids(self.state, self.u.narrative_content)
+        index = self.ui.journal_quest_i % len(quests)
+        detail = quest_journal_details(self.state, self.u.narrative_content, quests[index])
         compact = self.compact
         width = self.w if compact else (self.w - 40) // 2
         top = self.y + self.u.cell(self.small if compact else self.head)[1] + 12
         rows = max(1, (self.bottom - top) // self.line)
         values = {
-            "chapter": f"Chapter {self.state.v2['story']['chapter']} · {len(set(self.state.narrative.ripples))}/10 Ripples · Quest {index+1}/{len(QUEST_IDS)}",
+            "chapter": f"Chapter {self.state.v2['story']['chapter']} · {len(set(self.state.narrative.ripples))}/10 Ripples · Quest {index+1}/{len(quests)}",
             "title": detail["title"], "status": "Status: " + detail["status"],
             "giver": "Giver: " + detail["giver"], "objective": "Objective: " + detail["objective"],
             "progress": "Progress: " + detail["progress"],
