@@ -12,9 +12,22 @@ uniform vec3 lake_water;
 uniform sampler2D lake_shore, lake_depth;
 uniform vec4 lake_bounds, cinder_island;
 uniform vec2 lake_grid, lily_centre;
+// Nebula: band star strength, aurora curtains and the Meteor Shower show.
+uniform float starlight, aurora_i, meteors;
+uniform vec4 drift_shapes[12];
+uniform int drift_count;
 
 // Signed distances must not use pow(x, 2): GLSL leaves negative bases undefined.
 float square(float x) { return x*x; }
+bool crater_lake() { return lake_kind>3.5 && lake_kind<4.5; }
+bool nebula_lake() { return lake_kind>4.5; }
+bool on_drift(vec2 p) {
+    for (int i=0;i<12;i++) {
+        if (i>=drift_count) break;
+        if (length((p-drift_shapes[i].xy)/drift_shapes[i].zw)<1.05) return true;
+    }
+    return false;
+}
 
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -58,6 +71,63 @@ float segment_distance(vec2 p, vec2 a, vec2 b) {
     vec2 ab = b-a;
     return length(p-a-ab*clamp(dot(p-a,ab)/dot(ab,ab),0.0,1.0));
 }
+// Point stars fixed to the dome. Two sizes, gently twinkling unless motion
+// is reduced (snow_anim is held at zero then).
+float star_field(vec3 d, float density) {
+    vec3 cell = floor(d*430.0);
+    float h = hash(cell.xy+cell.z*17.13);
+    float big = step(1.0-0.0026*density,h);
+    vec3 fine = floor(d*900.0);
+    float small = step(1.0-0.0042*density,hash(fine.xz+fine.y*7.77))*0.55;
+    return max(big,small)*(0.78+0.22*sin(snow_anim*2.3+h*61.0));
+}
+vec3 aurora_curtain(vec3 d) {
+    float az = atan(d.z,d.x);
+    float t = snow_anim;
+    float base = 0.07+sin(az*3.0+t*0.05)*0.05+sin(az*7.0-t*0.03)*0.02;
+    float v = (d.y-base)/(0.30+0.09*sin(az*2.0+1.3));
+    float ribbon = smoothstep(0.0,0.07,v)*(1.0-smoothstep(0.30,1.0,v));
+    float rays = 0.45+0.55*noise(vec2(az*42.0+t*0.09,v*1.5));
+    float folds = 0.45+0.55*sin(az*11.0+t*0.07+sin(az*4.0)*2.0);
+    vec3 colour = mix(vec3(0.18,0.95,0.62),vec3(0.80,0.34,0.88),smoothstep(0.25,1.0,v));
+    return colour*ribbon*rays*folds;
+}
+vec3 nebula_sky(vec3 d, vec3 col) {
+    float up = smoothstep(-0.02,0.25,d.y);
+    vec2 p = d.xz/(abs(d.y)+0.55)*1.7;
+    float gas_a = fbm(p*0.9+vec2(3.1,1.7)+anim*0.0004);
+    float gas_b = fbm(p*1.7-vec2(5.3,2.2));
+    vec3 gas = vec3(0.42,0.18,0.62)*smoothstep(0.45,0.85,gas_a)
+             + vec3(0.10,0.42,0.50)*smoothstep(0.52,0.90,gas_b);
+    // A galaxy band crosses the sky on one fixed great circle.
+    float band = exp(-square(dot(d,vec3(0.4153,0.5440,-0.7290)))/0.03);
+    gas += vec3(0.55,0.47,0.72)*band*(0.30+0.70*fbm(p*3.1));
+    col += gas*up*mix(0.22,0.95,starlight)*(1.0-cloud_cover*0.25);
+    col += vec3(0.85,0.88,1.0)*star_field(d,1.0+band*2.0)*starlight*up;
+    col += aurora_curtain(d)*aurora_i*step(0.0,d.y)*0.85;
+    if (meteors>0.0 && d.y>0.02) {
+        // Eight streaks fly outward from one high radiant, restarting in turn.
+        vec3 radiant = normalize(vec3(0.30,0.45,0.37));
+        for (int i=0;i<8;i++) {
+            float fi = float(i);
+            float cycle = snow_anim*0.23+fi*0.29;
+            float life = fract(cycle);
+            vec2 seed = vec2(fi,floor(cycle));
+            float az = hash(seed)*6.2832;
+            vec3 side = normalize(cross(radiant,vec3(cos(az),0.0,sin(az))));
+            vec3 start = normalize(radiant+cross(side,radiant)*(0.18+0.35*hash(seed+3.1)));
+            vec3 away = normalize(start-radiant*dot(start,radiant));
+            vec3 tangent = normalize(away-start*dot(away,start));
+            // Angle along the streak's great circle, and distance off it.
+            float along = atan(dot(d,tangent),dot(d,start));
+            float off = abs(dot(d,normalize(cross(start,tangent))));
+            float head = life*0.95, tail = max(0.0,head-0.16);
+            float on = (1.0-smoothstep(0.0016,0.0042,off))*step(tail,along)*step(along,head);
+            col += vec3(1.0,0.93,0.82)*on*(along-tail)/max(head-tail,0.001)*(1.0-life)*1.6*meteors;
+        }
+    }
+    return col;
+}
 vec3 sky(vec3 d) {
     float h = smoothstep(-0.04, 0.9, d.y);
     vec3 col = mix(horizon, zenith, h);
@@ -67,6 +137,7 @@ vec3 sky(vec3 d) {
     col += vec3(0.30,0.13,0.04)*gold*exp(-square(d.y-0.03)/0.025);
     float m = max(dot(d, moon),0.0);
     col += vec3(0.71,0.80,0.96)*smoothstep(0.99965,0.99987,m)*moon_i*1.4;
+    if (nebula_lake()) col = nebula_sky(d,col);
     if (d.y>0.015) {
         vec2 p = d.xz/(d.y+0.22)*1.3+vec2(anim*0.002,0);
         float n = fbm(p);
@@ -75,14 +146,16 @@ vec3 sky(vec3 d) {
         vec3 white = mix(vec3(0.92,0.92,0.88),vec3(0.11,0.15,0.23),night);
         white = mix(white,vec3(0.40,0.45,0.48)*(1.0-night*0.65),rain*0.55);
         white += gold*vec3(0.18,0.07,0.0);
-        col = mix(col,white,cloud*0.68);
+        // Nebula clouds are thin lilac stardust, never a gray deck.
+        if (nebula_lake()) white = mix(white,vec3(0.62,0.52,0.80)*(1.0-night*0.62),0.65);
+        col = mix(col,white,cloud*(nebula_lake() ? 0.42 : 0.68));
         float stars = step(0.9983,hash(floor(d.xz/(d.y+0.35)*620.0)));
         float visibility = 1.0-smoothstep(0.72,1.2,cloud_cover);
-        col += stars*night*max(0.0,1.0-cloud)*visibility*vec3(0.44,0.51,0.61);
+        if (!nebula_lake()) col += stars*night*max(0.0,1.0-cloud)*visibility*vec3(0.44,0.51,0.61);
     }
     // Small angular wing strokes stay legible without the old blurry circles.
     float day = 1.0-night;
-    if (day>0.35 && rain<0.8 && d.y>0.04) {
+    if (day>0.35 && rain<0.8 && d.y>0.04 && !nebula_lake()) {
         float birds = 0.0;
         float aa = max(0.00045,tanx/viewport.x*1.2);
         for (int i=0;i<4;i++) {
@@ -112,7 +185,7 @@ vec3 haze(vec3 c, vec3 p) {
     float fog = 1.0-exp(-dist*(mix(0.00085,0.0037,rain)+mist*0.004));
     // Low mist, strongest at first light and in rain.
     fog += exp(-max(p.y,0.0)*0.25)*smoothstep(45.0,500.0,dist)*(gold*0.13+rain*0.1);
-    if (lake_kind>3.5) {
+    if (crater_lake()) {
         float layer = 1.0-smoothstep(3.0+mist*45.0,20.0+mist*75.0,p.y);
         fog += layer*mist*.38*smoothstep(20.0,450.0,dist);
     }

@@ -110,7 +110,12 @@ class SoftwareRenderer:
         self.bayer = tile
         self.sprites = bake(paint_rgb("buoy", "orange"))
         self._buoy_id = "orange"
-        if world.generated:
+        if world.nebula:
+            from .nebula import lane_circles
+            from .sprites import nebula_sprites
+            self.sprites.update(nebula_sprites())
+            self._lanes = lane_circles(world)
+        elif world.generated:
             from .forest import tree
             kinds = ("hemlock", "whitebark", "deadpine") if world.caldera else ("larch", "larchgold", "spruce")
             self.sprites.update({kind: tree(kind, 0) for kind in kinds})
@@ -142,8 +147,15 @@ class SoftwareRenderer:
         zbuf[:] = 1e6
         dirs = cam.dirs
         col[:] = sky_color(dirs[:, :, 0], dirs[:, :, 1], dirs[:, :, 2], light)
+        if world.nebula:
+            from .nebula import gas_rgb, sky_add
+            half = dirs[::2, ::2]
+            gas = gas_rgb(half[:, :, 0], half[:, :, 1], half[:, :, 2], light)
+            col += gas.repeat(2, axis=0).repeat(2, axis=1)[: self.h, : self.w]
+            col += sky_add(dirs[:, :, 0], dirs[:, :, 1], dirs[:, :, 2], light, self._still_anim(state))
         self._add_clouds(dirs, state.anim, light)
-        self._add_stars(dirs, light)
+        if not world.nebula:
+            self._add_stars(dirs, light)
 
         dy = dirs[:, :, 1]
         t_plane = np.full((self.h, self.w), np.float32(1e6))
@@ -174,11 +186,16 @@ class SoftwareRenderer:
             self._rain(state.anim, light["rain"])
         if light.get("snow", 0) > 0:
             self._snow(0 if bool(state.v2.get("settings", {}).get("reduced_motion", False)) else state.anim, light["snow"])
-        if _legacy_birds_visible(light):
+        if _legacy_birds_visible(light) and not world.nebula:
             self._birds(cam, state.anim)
         rgb = self._quantize(col)
         self.last_ms = (_time.perf_counter() - t0) * 1000.0
         return rgb
+
+    @staticmethod
+    def _still_anim(state):
+        """Animation time for twinkles, aurora and dashes; held under Reduced Motion."""
+        return 0.0 if bool(state.v2.get("settings", {}).get("reduced_motion", False)) else float(state.anim)
 
     def camera_for(self, state, yaw=None, pitch=None, x=None, z=None) -> Camera:
         # Keep the horizon locked. Ripples and the wake supply surface motion.
@@ -213,6 +230,11 @@ class SoftwareRenderer:
                  + np.array([0.11, 0.15, 0.23], np.float32) * light["night"])
         cloudy = np.array([0.50, 0.53, 0.56], np.float32) * (1.0 - 0.75 * light["night"])
         white = white * (1.0 - light["cloud_shade"]) + cloudy * light["cloud_shade"]
+        if self.world.nebula:
+            # Thin lilac stardust instead of a gray deck, as in common.glsl.
+            white = white * 0.35 + np.array([0.62, 0.52, 0.80], np.float32) * (1.0 - light["night"] * 0.62) * 0.65
+            cloud = cloud * 0.6
+            up = cloud.repeat(2, axis=0).repeat(2, axis=1)[: self.h, : self.w]
         c = up[..., None]
         self.col[:] = self.col * (1.0 - c * 0.72) + white * c
 
@@ -387,8 +409,19 @@ class SoftwareRenderer:
         if world.caldera:
             moss = (ids == _LILY)[:,None] * np.clip(1-depth/12,0,1)[:,None]*.65
             body = body*(1-moss) + np.array([.09,.19,.15],np.float32)*moss
+        if world.nebula:
+            # Teal shallows, violet mid-water, and a starry void bed below 30 m.
+            mid = np.array(world.environment["water_mid"], np.float32)
+            t1 = np.clip((depth-.5)/6.5, 0, 1)[:, None]
+            t2 = np.clip((depth-7)/33, 0, 1)[:, None]
+            body = (shallow*(1-t1) + mid*t1)*(1-t2) + deep*t2
+            cx, cz = np.floor(hx*.9).astype(np.int64), np.floor(hz*.9).astype(np.int64)
+            seed = hash21(cx+31, cz+17)
+            point = np.hypot(hx*.9-cx-.5, hz*.9-cz-.5) < .16
+            star = (seed > .93) * point * np.clip((depth-6)/24, 0, 1) * np.clip(1-(dist-25)/65, 0, 1)
+            body = body + star[:, None]*np.array([.75, .80, 1.0], np.float32)
         # Bottom shows through the skinniest water.
-        sand = np.array([0.55, 0.50, 0.32], np.float32)
+        sand = np.array([0.55, 0.52, 0.66] if world.nebula else [0.55, 0.50, 0.32], np.float32)
         clear = np.clip(depth / 1.1, 0.0, 1.0)[:, None]
         body = sand * (1.0 - clear) * 0.65 + body * (0.35 + 0.65 * clear)
         # Broad patches and a swell, so open water is not one smooth ramp.
@@ -401,7 +434,7 @@ class SoftwareRenderer:
 
         from .caldera import reflection_strength
         still = reflection_strength(state, light)
-        ripple = light["ripple"]*(1-still*.95)
+        ripple = light["ripple"]*(1-still*.95)*(.55 if world.nebula else 1)
         amp = np.float32(0.22 * ripple)
         chop = np.sin(hx * np.float32(1.15) + anim * np.float32(2.4)) * np.float32(0.06 * ripple)
         chop *= 1-still*.95
@@ -416,6 +449,10 @@ class SoftwareRenderer:
         ry = dy - 2 * nd * ny
         rz = dz - 2 * nd * nz
         reflected = _reflect_sky(rx, ry, rz, light)
+        if world.nebula:
+            # The glassy Lagoon mirrors its stars and aurora.
+            from .nebula import sky_add
+            reflected = reflected + sky_add(rx, ry, rz, light, self._still_anim(state))
         if still>0:
             full_sky = sky_color(rx,ry,rz,light)
             qx,qy,qz = (np.floor(axis*200).astype(np.int64) for axis in (rx,ry,rz))
@@ -426,6 +463,8 @@ class SoftwareRenderer:
         fres = 0.05 + 0.24 * np.power(1.0 - np.clip(-dy, 0.0, 1.0), 3.0)
         fres = np.clip(fres, 0.0, 0.30)
         fres = fres*(1-still) + .94*still
+        if world.nebula:
+            fres = np.maximum(fres, .42)
         sun = light["sun"]
         sdot = np.clip(rx * sun[0] + ry * sun[1] + rz * sun[2], 0.0, 1.0)
         glitter = (np.sin(ph1 * 1.7) + np.sin(ph2 * 1.4)) > 0.35
@@ -458,24 +497,33 @@ class SoftwareRenderer:
             ((ids == _LILY) & (hsh > 0.66))
             | ((depth < 1.65) & (sdv < -3.5) & (hsh > 0.84))
         )
-        if world.generated:
+        if world.nebula:
+            pad &= ids == _LILY
+        elif world.generated:
             pad &= (ids == _LILY) & (np.abs(fx) < .075) & (np.abs(fz) < .38)
         if world.caldera:
             pad[:] = False
         rim = pad & (r2 > 0.055)
         green = np.array([0.22, 0.55, 0.16], np.float32)
         leaf = np.array([0.08, 0.30, 0.10], np.float32)
+        if world.nebula:
+            # Zero-G pads with luminous rims.
+            green, leaf = np.array([0.16, 0.38, 0.42], np.float32), np.array([0.42, 0.85, 0.90], np.float32)
         colr = np.where(pad[:, None], green, colr)
         colr = np.where(rim[:, None], leaf, colr)
 
         colr = self._wake_rope_light(colr, hx, hz, dist, state, cam, light)
         colr = self._rises(colr, hx, hz, state)
+        if world.nebula:
+            colr = self._nebula_water(colr, hx, hz, sdv, dist, fres, slip, state, light)
         fog_density = (1.0 - light["rain"]) / 820.0 + light["rain"] / 240.0 + light.get("mist", 0.0) / 250.0
         fog = np.clip(1.0 - np.exp(-dist * fog_density), 0.0, 0.72)
         fog *= comfort.fog_factor(state, dist)
         colr = colr * (1.0 - fog)[:, None] + light["horizon"] * fog[:, None]
         # Night keeps the water dark, but not a flat black.
         dim = 0.42 + 0.58 * (1.0 - light["night"]) + light["moon_i"] * 0.20
+        if world.nebula:
+            dim = 0.62 + 0.38 * (1.0 - light["night"]) + light.get("starlight", 0.0) * 0.12
         colr *= dim
         if state.light and light["night"] > 0.0:
             fx, fz = math.sin(state.yaw), math.cos(state.yaw)
@@ -489,6 +537,27 @@ class SoftwareRenderer:
             colr = colr + spot[:, None] * np.array([1.0, 0.90, 0.68], np.float32) * 0.70
         self.col.reshape(-1, 3)[idx] = np.clip(colr, 0.0, 1.0)
         self.z.reshape(-1)[idx] = dist
+
+    def _nebula_water(self, colr, hx, hz, sdv, dist, fres, slip, state, light):
+        """Lane glow and flow dashes, luminous banks and aurora glow (CPU)."""
+        from .nebula import dashes, lane_strength
+        night = light["night"]
+        glow = np.exp(-((sdv + .6) ** 2) * 1.2) * .22 * (.5 + .5 * night) * ~slip
+        colr = colr + glow[:, None] * np.array([.30, .85, .90], np.float32)
+        lane = lane_strength(self._lanes, hx, hz)
+        inside = np.flatnonzero(lane > 0)
+        if inside.size:
+            strength = lane[inside][:, None]
+            near = np.clip(1 - (dist[inside] - 40) / 90, 0, 1)
+            dash = dashes(hx[inside], hz[inside], self._still_anim(state)) * near
+            teal = np.array([.10, .40, .52], np.float32) * (.75 + .25 * (1 - night))
+            lit = colr[inside] * (1 - strength * .38) + teal * strength * .38
+            lit = lit + np.array([.12, .48, .60], np.float32) * strength * (.10 + .16 * night)
+            colr[inside] = lit + (dash[:, None] * strength) * np.array([.70, .97, 1.0], np.float32) * 1.05
+        aurora = light.get("aurora", 0.0)
+        if aurora > 0:
+            colr = colr + (aurora * (.25 + .75 * fres) * .35)[:, None] * np.array([.10, .42, .30], np.float32)
+        return colr
 
     def _rises(self, colr, hx, hz, state):
         # Rings follow anim, same as the GL water shader, and never move depth.
@@ -614,9 +683,21 @@ class SoftwareRenderer:
             _,mx,mz,_radius = next(row for row in world.zones if row[0]=="lilies")
             moss = np.hypot(hx-mx,hz-mz)<110
             colr = np.where((moss & (sdv<30))[:,None],np.array([.14,.28,.19],np.float32),colr)
+        if world.nebula:
+            # Pale stardust beaches, violet dunes and floating lily drifts.
+            dust = (np.array([.26,.22,.36],np.float32)*(1-nse[:,None])
+                    + np.array([.44,.38,.56],np.float32)*nse[:,None])
+            colr = np.array([.55,.52,.66],np.float32)*(1-shore_t) + dust*shore_t
+            ridge = np.clip((h-30)/60,0,1)[:,None]
+            colr = colr*(1-ridge) + np.array([.62,.56,.80],np.float32)*ridge
+            for cx,cz,rx,rz in world.environment["drifts"]:
+                mat = ((hx-cx)/rx)**2 + ((hz-cz)/rz)**2 < 1.1
+                colr = np.where(mat[:,None],np.array([.12,.36,.34],np.float32)*(1+nse[:,None]*.6),colr)
+            lit = lit + light.get("starlight",0.0)*light["night"]*.30
         # Shade under the treeline so the bank is not one flat stripe.
         canopy = np.clip((sdv - 2.0) / 5.0, 0.0, 1.0) * np.clip((16.0 - sdv) / 8.0, 0.0, 1.0)
-        colr = colr * (1.0 - 0.32 * canopy)[:, None]
+        if not world.nebula:
+            colr = colr * (1.0 - 0.32 * canopy)[:, None]
         colr = colr * lit[:, None]
         if state.light and light["night"] > 0.0:
             fx, fz = math.sin(state.yaw), math.cos(state.yaw)
@@ -701,6 +782,9 @@ class SoftwareRenderer:
                 dest_h *= 1.55
             else:
                 tint_v = max(ambient, 0.45)
+                if shade >= 1.5:
+                    # A self-lit Nebula crystal: shade - 2 is its emission.
+                    tint_v = max(ambient, 0.45) + (shade - 2.0) * (0.35 + 0.85 * light["night"])
             tint = np.array([tint_v, tint_v, tint_v], np.float32)
             fog = float(np.clip(1.0 - math.exp(-zz * (1 / 380.0 + light.get("mist", 0.0) / 250.0)), 0.0, 0.82))
             fog *= float(comfort.fog_factor(state, zz))

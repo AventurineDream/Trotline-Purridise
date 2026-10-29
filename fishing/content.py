@@ -650,9 +650,10 @@ class _ContentV2Validator:
             return
         for key in sorted(keys - value.keys()):
             self.error(filename, where, f"missing required field {key!r}")
-        for key in sorted(value.keys() - keys - {"rim", "islands", "thermal"}):
+        nebula_keys = {"water_mid", "lanes", "drifts", "bands"}
+        for key in sorted(value.keys() - keys - {"rim", "islands", "thermal"} - nebula_keys):
             self.error(filename, where, f"unknown field {key!r}")
-        self.enum(filename, where + ".kind", value.get("kind"), {"alpine", "caldera"})
+        self.enum(filename, where + ".kind", value.get("kind"), {"alpine", "caldera", "nebula"})
         if lake.get("placeholder") is not False:
             self.error(filename, where, "a generated environment cannot be a placeholder")
         self.number(filename, where + ".seed", value.get("seed"), integer=True, minimum=0, maximum=2**32-1)
@@ -726,7 +727,8 @@ class _ContentV2Validator:
                         or not all(-2400 <= n <= 2400 for n in row[:2])
                         or not 20 <= row[2] <= 400 or not 50 <= row[3] <= 500):
                     self.error(filename, f"{where}.peaks[{i}]", "expected x, z, height 20..400, width 50..500")
-        hooks = {"caldera_wind"} if value.get("kind") == "caldera" else {"loon", "larch_wind"}
+        hooks = {"caldera": {"caldera_wind"}, "nebula": {"star_twinkle", "nebula_hum"}}.get(
+            value.get("kind"), {"loon", "larch_wind"})
         ambience = self.id_list(filename, where + ".ambience", value.get("ambience"), hooks)
         if set(ambience) != hooks:
             self.error(filename, where + ".ambience", "environment requires its declared ambience hooks")
@@ -734,6 +736,45 @@ class _ContentV2Validator:
             for key in ("rim", "islands", "thermal"):
                 if key not in value:
                     self.error(filename, where + "." + key, "required for a caldera environment")
+        if value.get("kind") == "nebula":
+            for key in sorted(nebula_keys - value.keys()):
+                self.error(filename, where + "." + key, "required for a nebula environment")
+        elif value.keys() & nebula_keys:
+            self.error(filename, where, "lanes, drifts, bands and water_mid belong to a nebula environment")
+        if "water_mid" in value:
+            vector("water_mid", 3, 0, 1)
+        if "lanes" in value:
+            self.nebula_lanes(filename, where + ".lanes", value["lanes"], value.get("bounds"))
+        if "drifts" in value:
+            drifts = value["drifts"]
+            if not isinstance(drifts, list) or not 1 <= len(drifts) <= 12:
+                self.error(filename, where + ".drifts", "expected 1 to 12 floating lily drifts")
+            else:
+                for i, row in enumerate(drifts):
+                    if (not isinstance(row, list) or len(row) != 4
+                            or not all(type(n) in (int, float) and _is_finite(n) for n in row)
+                            or not all(-1200 <= n <= 1200 for n in row[:2])
+                            or not all(8 <= n <= 40 for n in row[2:])):
+                        self.error(filename, f"{where}.drifts[{i}]", "expected x, z and radii 8..40 metres")
+        if "bands" in value:
+            bands = value["bands"]
+            names = {"rising", "bright", "fading", "deep"}
+            if not isinstance(bands, dict) or set(bands) != names:
+                self.error(filename, where + ".bands", "expected rising, bright, fading and deep palettes")
+            else:
+                for name in sorted(names):
+                    band, at = bands[name], f"{where}.bands.{name}"
+                    if not isinstance(band, dict) or set(band) != {"zenith", "horizon", "stars"}:
+                        self.error(filename, at, "expected zenith, horizon and stars")
+                        continue
+                    for key in ("zenith", "horizon"):
+                        row = band[key]
+                        if not isinstance(row, list) or len(row) != 3:
+                            self.error(filename, f"{at}.{key}", "expected 3 numbers")
+                            continue
+                        for i, n in enumerate(row):
+                            self.number(filename, f"{at}.{key}[{i}]", n, minimum=0, maximum=1)
+                    self.number(filename, at + ".stars", band["stars"], minimum=0, maximum=1)
         if "rim" in value:
             vector("rim", 2, 20, 200)
         if "islands" in value:
@@ -758,6 +799,42 @@ class _ContentV2Validator:
                     if (not isinstance(row, list) or len(row) != 2
                             or not all(type(n) in (int, float) and _is_finite(n) and -1200 <= n <= 1200 for n in row)):
                         self.error(filename, f"{where}.thermal[{i}]", "expected finite x, z coordinates")
+
+    def nebula_lanes(self, filename, where, lanes, bounds):
+        """Current lanes are continuous chains of circles inside the lake bounds."""
+        if not isinstance(lanes, list) or not 1 <= len(lanes) <= 4:
+            self.error(filename, where, "expected 1 to 4 current lanes")
+            return
+        circles = 0
+        for i, lane in enumerate(lanes):
+            at = f"{where}[{i}]"
+            if not isinstance(lane, dict) or set(lane) != {"width", "depths", "points"}:
+                self.error(filename, at, "expected width, depths and points")
+                continue
+            width_ok = self.number(filename, at + ".width", lane["width"], minimum=20, maximum=80)
+            depths = lane["depths"]
+            if (not isinstance(depths, list) or len(depths) != 2
+                    or not all(type(n) in (int, float) and _is_finite(n) for n in depths)
+                    or not .9 <= depths[0] < depths[1] <= 100):
+                self.error(filename, at + ".depths", "expected 0.9 <= minimum < maximum <= 100 metres")
+            points = lane["points"]
+            if not isinstance(points, list) or not 2 <= len(points) <= 40:
+                self.error(filename, at + ".points", "expected 2 to 40 lane points")
+                continue
+            circles += len(points)
+            inside = isinstance(bounds, list) and len(bounds) == 4 and all(
+                type(n) in (int, float) and _is_finite(n) for n in bounds)
+            for j, point in enumerate(points):
+                if (not isinstance(point, list) or len(point) != 2
+                        or not all(type(n) in (int, float) and _is_finite(n) for n in point)):
+                    self.error(filename, f"{at}.points[{j}]", "expected finite x, z")
+                    break
+                if inside and not (bounds[0] < point[0] < bounds[2] and bounds[1] < point[1] < bounds[3]):
+                    self.error(filename, f"{at}.points[{j}]", "lane point is outside the lake bounds")
+                if j and width_ok and math.dist(point, points[j-1]) > lane["width"]:
+                    self.error(filename, f"{at}.points[{j}]", "lane points must overlap into one continuous lane")
+        if circles > 48:
+            self.error(filename, where, "at most 48 lane points fit the water shader")
 
     def validate(self, docs):
         species_file, baits_file = "species.json", "baits.json"
