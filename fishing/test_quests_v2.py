@@ -592,6 +592,13 @@ class ObjectiveFields(Worlds):
                   [at(points[0]), at(points[1]), at(points[2], player_controlled=False)],
                   [at(points[0]), at(points[1]), at(points[2], minute=600)]],
                  giver="senora_luz", lake="cedar", qid="wc_senora_luz_a")
+        # Two windows need two ordered passes, one inside each; a leg never counts for both.
+        step = {"type": "visit_sequence", "waypoint_ids": points[:2], "windows": [[360, 600], [840, 1080]]}
+        self.one(step, [at(points[0], 60), at(points[1], 60), at(points[0], 540), at(points[1], 540)],
+                 [[at(points[0], 60), at(points[1], 60)],
+                  [at(points[0], 60), at(points[1], 60), at(points[0], 60), at(points[1], 60)],
+                  [at(points[0], 60), at(points[1], 540), at(points[0], 540)]],
+                 giver="senora_luz", lake="cedar", qid="wc_senora_luz_a")
 
     def test_travel_distance_zone_propulsion_and_control(self):
         move = {"type": "boat.move", "lake_id": "briar", "zone_id": "briar:open", "distance_m": 150.0,
@@ -680,6 +687,13 @@ class ObjectiveFields(Worlds):
                         sample("mist")],
                  [[sample("mist"), sample("mist"), sample("clear")],
                   [sample("mist"), sample("mist"), sample("mist", zone_id="briar:deep")]])
+        # A catnap's single sample carries each forecast span; only the matching ones count.
+        nap = sample("mist", elapsed_game_minutes=120.0, weather_spans=[["clear", 60.0], ["mist", 60.0]])
+        self.one({"type": "wait_weather", "weather": "mist", "zone_id": "briar:lilies", "minutes": 90},
+                 [nap, sample("mist", elapsed_game_minutes=30.0)], [nap])
+        self.one({"type": "wait_weather", "weather": "fog", "then_weather": "clear", "zone_id": "briar:lilies"},
+                 sample("clear", elapsed_game_minutes=120.0, weather_spans=[["fog", 60.0], ["clear", 60.0]]),
+                 [sample("clear", elapsed_game_minutes=120.0, weather_spans=[["clear", 60.0], ["fog", 60.0]])])
         self.one({"type": "wait_weather", "weather": "drizzle", "lake_id": "briar"},
                  [sample("drizzle", elapsed_game_minutes=30.0)], [[sample("drizzle", lake_id="cedar",
                                                                           elapsed_game_minutes=30.0)]])
@@ -781,6 +795,25 @@ class EventSources(Worlds):
         self.assertEqual(state.lines[-1].zone, "reeds")
         tool = [e for e in events if e["type"] == "tool.use"][-1]
         self.assertEqual((tool["tool_id"], tool["zone_id"], tool["shell_id"]), ("reed_anchor", "briar:reeds", "frog"))
+
+    def test_a_long_advance_reports_each_forecast_span(self):
+        from .calendar import weather_at, weather_spans
+        world = self.worlds["briar"]
+        state = State.new(world, seed=5)
+        spans = weather_spans(state, 30, 30 + 600)
+        self.assertEqual(sum(minutes for _weather, minutes in spans), 600)
+        self.assertEqual([weather for weather, _m in spans],
+                         [w for i, w in enumerate(weather_at(state, m) for m in range(30, 630, 30))
+                          if i == 0 or w != weather_at(state, 30 + (i - 1) * 30)])
+        with tempfile.TemporaryDirectory() as tmp:
+            session = Session(world, Path(tmp) / "save.json", state, False)
+            session.ui.mode = "play"
+            events = self.capture(state)
+            before = state.game_minutes
+            session.advance_bulk(120)
+            sample = [e for e in events if e["type"] == "anchor.sample"][-1]
+            self.assertEqual(sample["weather_spans"], weather_spans(state, before, before + 120))
+            self.assertEqual(sum(m for _w, m in sample["weather_spans"]), sample["elapsed_game_minutes"])
 
     def test_waypoints_fire_on_entry_with_provenance(self):
         world = self.worlds["cedar"]
@@ -980,6 +1013,20 @@ class QuestFlow(Worlds):
                          "Master Cinder is out on Little Briar today, 20:00–04:00.")
         self.assertEqual(next_appearance(h.state, h.content, "grandmother_whiskers"),
                          "Grandmother Whiskers is always at Briar Landing.")
+        # Travelers keep their own rules, even while a quest pins them.
+        from .npcs import pounce_lake
+        rows = [quest("wc_marigold_a", "a", "marigold", "briar", {"type": "talk_to", "npc_id": "pounce"}),
+                quest("wc_old_gus_a", "a", "old_gus", "briar", {"type": "talk_to", "npc_id": "thistle"},
+                      reward={"cash": 45, "ripple_id": "ripple_12"})]
+        h = Harness(self, rows)
+        h.accept("wc_marigold_a")
+        h.accept("wc_old_gus_a")
+        visit = next(d for d in range(15) if pounce_lake(h.state, d) == "briar")
+        when = "today" if visit == 0 else "tomorrow" if visit == 1 else f"in {visit} days"
+        self.assertEqual(quest_journal_details(h.state, h.content, "wc_marigold_a")["progress"],
+                         f"Under way. Postmaster Pounce visits Little Briar {when}, 08:00–16:00.")
+        self.assertEqual(quest_journal_details(h.state, h.content, "wc_old_gus_a")["progress"],
+                         "Under way. Tinker Thistle moors at your lake in 5 days, 10:00–18:00.")
 
     def test_ledger_keeps_v1_0_progress_claims_and_older_shapes(self):
         legacy = NarrativeState().to_json()

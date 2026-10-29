@@ -423,16 +423,19 @@ class QuestManager:
         if (event.get("type") != _VISIT_EVENT[key] or event.get("movement_cause") != "boat"
                 or event.get("player_controlled") is not True):
             return False
-        windows = step.get("windows")
-        if windows and not any(_window_contains(window, event.get("game_minute")) for window in windows):
-            return False
-        index = data.get("sequence_index", 0)
-        if type(index) is not int or not 0 <= index < len(targets):
-            return False
-        if event.get(key) == targets[index]:
-            index += 1
-            data["sequence_index"] = index
-        return index == len(targets)
+        # With windows, each window needs its own ordered pass (02 §12.3); a leg counts once.
+        windows = step.get("windows") or [None]
+        indexes = data.get("sequence_by_window")
+        if (not isinstance(indexes, list) or len(indexes) != len(windows)
+                or any(type(index) is not int or not 0 <= index <= len(targets) for index in indexes)):
+            indexes = [0] * len(windows)
+        for w, window in enumerate(windows):
+            if (indexes[w] < len(targets) and event.get(key) == targets[indexes[w]]
+                    and (window is None or _window_contains(window, event.get("game_minute")))):
+                indexes[w] += 1
+                break
+        data["sequence_by_window"] = indexes
+        return all(index == len(targets) for index in indexes)
 
     def _v2_travel_distance(self, state, step: dict, data: dict, event: dict) -> bool:
         distance = event.get("distance_m")
@@ -466,16 +469,27 @@ class QuestManager:
             # Drifting pauses the total without resetting it, and ends a wait for the change.
             data["waiting"] = False
             return False
-        weather = event.get("weather")
-        if weather == step["weather"]:
-            data["minutes"] = _amount(data.get("minutes")) + _amount(event.get("elapsed_game_minutes"))
-            if "then_weather" not in step:
-                return data["minutes"] >= step.get("minutes", 30)
-            data["waiting"] = True
-            return False
-        if "then_weather" in step and weather == step["then_weather"] and data.get("waiting") is True:
-            return _amount(data.get("minutes")) >= step.get("minutes", 0)
-        data["waiting"] = False
+        spans = event.get("weather_spans")
+        if not isinstance(spans, list) or not spans:
+            spans = [[event.get("weather"), event.get("elapsed_game_minutes")]]
+        # A long sample (a catnap) can cross forecast changes; take its spans in order.
+        for span in spans:
+            if not isinstance(span, list) or len(span) != 2:
+                continue
+            weather, minutes = span
+            if weather == step["weather"]:
+                data["minutes"] = _amount(data.get("minutes")) + _amount(minutes)
+                if "then_weather" not in step:
+                    if data["minutes"] >= step.get("minutes", 30):
+                        return True
+                    continue
+                data["waiting"] = True
+            elif "then_weather" in step and weather == step["then_weather"] and data.get("waiting") is True:
+                if _amount(data.get("minutes")) >= step.get("minutes", 0):
+                    return True
+                data["waiting"] = False
+            else:
+                data["waiting"] = False
         return False
 
     def _v2_fish_livewell(self, state, step: dict, data: dict, event: dict) -> bool:

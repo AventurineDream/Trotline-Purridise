@@ -224,12 +224,24 @@ def next_appearance(state, content, npc_id: str) -> str:
     name = roster.names.get(npc_id, npc_id)
     if lake is not None:
         return f"{name} is always at {LAKES[lake]['landing']}."
+    today = max(0, int(state.game_minutes // 1440))
+    hour = hour_of_day(state.game_minutes)
+    if npc_id in TRAVELER_MOORINGS:
+        # Travelers are never pinned: Pounce visits one lake a day and Thistle comes on Saturdays.
+        here = state.lake_id
+        for ahead in range(15):
+            day = today + ahead
+            when = "today" if ahead == 0 else "tomorrow" if ahead == 1 else f"in {ahead} days"
+            if npc_id == "pounce" and pounce_lake(state, day) == here and (ahead or _band(hour, (6.0, 16.0))):
+                return f"{name} visits {LAKES[here]['name']} {when}, 08:00–16:00."
+            if (npc_id == "thistle" and calendar.weekday(day * 1440) == SATURDAY
+                    and (ahead or _band(hour, (6.0, 18.0)))):
+                return f"{name} moors at your lake {when}, 10:00–18:00."
+        return f"{name} travels; watch for their boat."
     lake = next((lake for lake, pool in roster.day.items() if npc_id in pool), None)
     night_lake = next((lake for lake, pool in roster.night.items() if npc_id in pool), None)
     if npc_id in pinned(state, content):
         return f"{name} waits on {LAKES[lake or night_lake]['name']} every day until then."
-    today = max(0, int(state.game_minutes // 1440))
-    hour = hour_of_day(state.game_minutes)
     seed = state.narrative.schedule_seed
     for ahead in range(len(roster.day.get(lake, ())) + len(roster.night.get(night_lake, ())) + 2):
         day = today + ahead
@@ -241,4 +253,4 @@ def next_appearance(state, content, npc_id: str) -> str:
         if (night_lake is not None and night_encounter(seed, night_lake, day) == npc_id
                 and (ahead or not 4.0 <= hour < 6.0)):
             return f"{name} is out on {LAKES[night_lake]['name']} {when}, 20:00–04:00."
-    return f"{name} travels; watch for their boat."
+    return f"{name} will be out again soon."

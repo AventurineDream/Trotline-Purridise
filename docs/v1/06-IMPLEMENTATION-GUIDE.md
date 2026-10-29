@@ -1358,13 +1358,13 @@ The validator requires this set, and `test_quests_v2` checks every area holds le
 | `npc.hail` | A cat is hailed. It carries whether that cat is the lake's host, the event under way and whether the boat is docked at the landing. | `talk_to`, `attend_event` |
 | `settle.complete` | The settle-in interaction finishes (emitted by V1-34). | `settle` |
 
-Existing events gain fields: `line.set` its midpoint and cold band, `bot.scout_complete` its position, and `anchor.sample` the weather and boat position.
+Existing events gain fields: `line.set` its midpoint and cold band, `bot.scout_complete` its position, and `anchor.sample` the weather, each forecast span it covered and the boat position.
 
 **Step rules (`quests.py`).**
 
 - **Lines** match `zone_id` or `area_id` (the midpoint at set time), `tier_id` or `min_tier`, `hook_count`, `bait_id` on every section, `set_window` and `in_cold_band`. `line_scout_check` needs the report before the check.
-- **`windows`** ask for one event in each window, for each target: two windows on one zone need two reports.
-- **`wait_weather`** accumulates anchored minutes in the place while the weather holds; drifting pauses it without resetting. With `then_weather`, it completes when the weather turns while the player is still anchored there.
+- **`windows`** ask for one event in each window, for each target: two windows on one zone need two reports. A `visit_sequence` needs one ordered pass inside each window, and a leg counts for one window only.
+- **`wait_weather`** accumulates anchored minutes in the place while the weather holds; drifting pauses it without resetting. With `then_weather`, it completes when the weather turns while the player is still anchored there. A long advance such as a catnap reports each forecast span (`calendar.weather_spans`), so only the minutes actually spent in that weather count.
 - **`book_stage`** counts the book as it stands and completes on acceptance if already met.
 - **`talk_to`** with `distinct_days` needs hails on that many game days (06:00 to 06:00).
 - **`attend_event`** needs the host hailed during the cookout, docked at that lake's landing.
@@ -1398,7 +1398,7 @@ Existing events gain fields: `line.set` its midpoint and cold band, `bot.scout_c
 
 **Letters.** Once a cat's quests are all done, they write one letter: a variant chosen from the seed, kept in `v2.npcs.letters`. Postmaster Pounce delivers the oldest letter sent before today, at most one a game day, when hailed. A cat with nothing to say yet still waves.
 
-**Journal.** The quest pages list the twelve V3 quests, then each accepted V1.0 side quest. A V1.0 page shows its `journal` text and its step. For a step that needs a cat, and for a ready quest's giver, it says when the schedule next guarantees that cat is out (`npcs.next_appearance`, `02 §12.2` rule 4).
+**Journal.** The quest pages list the twelve V3 quests, then each accepted V1.0 side quest. A V1.0 page shows its `journal` text and its step. For a step that needs a cat, and for a ready quest's giver, it says when the schedule next guarantees that cat is out (`npcs.next_appearance`, `02 §12.2` rule 4). Travelers follow their own rules: Pounce's next visit to your lake, and Thistle's next Saturday.
 
 **Tests (`test_quests_v2`).**
 

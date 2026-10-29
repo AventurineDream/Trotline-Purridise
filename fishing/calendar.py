@@ -102,6 +102,21 @@ def planned_weather(seed, lake_id, minutes):
     return weekly_plan(seed, lake_id, week)[slot]
 
 
+def weather_spans(state, start, end):
+    """The planned weather between two game minutes, as [weather, minutes] spans in order."""
+    spans = []
+    minute = start
+    while minute < end:
+        boundary = min(end, (math.floor(minute / 60) + 1) * 60)
+        weather = weather_at(state, minute)
+        if spans and spans[-1][0] == weather:
+            spans[-1][1] += boundary - minute
+        else:
+            spans.append([weather, boundary - minute])
+        minute = boundary
+    return spans
+
+
 def forecast_seed(state):
     value = state.v2.get("calendar", {}).get("seed")
     return value if type(value) is int else state.rng.s
