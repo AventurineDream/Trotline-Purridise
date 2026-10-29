@@ -234,14 +234,42 @@ def _node(node_id, npc_id, text, *, quest_id=None, next_id=None, choices=None):
     return node
 
 
-def _greeting_nodes(nodes, npc_id, text, *, quest_id=None, next_id=None) -> str:
-    """Lay a greeting's bubbles out as chained nodes; returns the first node's id."""
+def _bubble_nodes(nodes, base_id, npc_id, text, *, quest_id=None, next_id=None) -> str:
+    """Lay a line's bubbles out as chained nodes; returns the first node's id."""
     bubbles = text if isinstance(text, list) else [text]
-    ids = [f'{npc_id}:greeting'] + [f'{npc_id}:greeting:{i}' for i in range(2, len(bubbles) + 1)]
+    ids = [base_id] + [f'{base_id}:{i}' for i in range(2, len(bubbles) + 1)]
     for i, (node_id, bubble) in enumerate(zip(ids, bubbles)):
         nodes[node_id] = _node(node_id, npc_id, bubble, quest_id=quest_id,
                                next_id=ids[i + 1] if i + 1 < len(ids) else next_id)
     return ids[0]
+
+
+def _greeting_nodes(nodes, npc_id, text, *, quest_id=None, next_id=None) -> str:
+    return _bubble_nodes(nodes, f'{npc_id}:greeting', npc_id, text, quest_id=quest_id, next_id=next_id)
+
+
+def story_heard(state, npc_id: str) -> int:
+    """How many parts of a cat's story the Skipper has heard (V1-33)."""
+    stories = state.v2.get('npcs', {}).get('stories')
+    row = stories.get(npc_id) if isinstance(stories, dict) else None
+    heard = row.get('heard') if isinstance(row, dict) else None
+    return heard if type(heard) is int and heard > 0 else 0
+
+
+def _tell_story(nodes, state, content, npc_id, *, quest_id=None, next_id=None) -> str | None:
+    """The next part of a cat's story, one a game day until it is all told (05 §4.3)."""
+    from .quests import game_day
+    parts = content.cats.get(npc_id, {}).get('story') or []
+    heard, today = story_heard(state, npc_id), game_day(state.game_minutes)
+    npcs = state.v2.setdefault('npcs', {})
+    stories = npcs.get('stories')
+    if not isinstance(stories, dict):
+        stories = npcs['stories'] = {}
+    row = stories.get(npc_id)
+    if heard >= len(parts) or (isinstance(row, dict) and row.get('day') == today):
+        return None
+    stories[npc_id] = {'heard': heard + 1, 'day': today}
+    return _bubble_nodes(nodes, f'{npc_id}:story', npc_id, parts[heard], quest_id=quest_id, next_id=next_id)
 
 
 def open_conversation(npc, state, content, *, first: bool = False, world=None):
@@ -252,6 +280,7 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
     A greeting (05 §4) opens a first meeting before anything else and comes before a
     V1.0 offer. Once the cat's quests are all done, the return line answers the last
     turn-in for the rest of that game day, and the greeting takes over from the next.
+    A cat with a story tells its next part after the greeting, one part a game day.
     """
     from .quests import chain as quest_chain, current_quest, game_day, quest_status
     if npc.id == 'pounce':
@@ -290,12 +319,15 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
         finished = progress.completed_game_minute if progress is not None else None
         done = (status == 'completed' and quest_chain(content, npc.id)[-1:] == [quest_id]
                 and (finished is None or game_day(finished) < game_day(state.game_minutes)))
-        if text is not None and (first_line or ('kind' in quest and status == 'available')):
+        replaced = text is not None and done  # the greeting stands in for the return line
+        entry = _tell_story(nodes, state, content, npc.id, quest_id=quest_id,
+                            next_id=None if replaced else entry) or (None if replaced else entry)
+        if text is not None and (first_line or replaced or ('kind' in quest and status == 'available')):
             entry = _greeting_nodes(nodes, npc.id, text, quest_id=quest_id, next_id=entry)
-        elif text is not None and done:
-            entry = _greeting_nodes(nodes, npc.id, text, quest_id=quest_id)
-    elif text is not None:
-        entry = _greeting_nodes(nodes, npc.id, text)
+    else:
+        entry = _tell_story(nodes, state, content, npc.id)
+        if text is not None:
+            entry = _greeting_nodes(nodes, npc.id, text, next_id=entry)
     ready = host_turn_ins(state, content, npc.id)
     if ready:
         choices = [{'id': f'{npc.id}:hand_in:{qid}', 'quest_id': qid, 'action': 'turn_in_at_host',
