@@ -261,8 +261,9 @@ class Session:
             "anchored": state.anchored,
             "engine_idle": (not state.sail_raised and abs(state.throttle) <= 0.01
                             and abs(state.throttle_setting) <= 0.01),
-            # For wait_weather and area checks (V1-31).
+            # For wait_weather and area checks (V1-31). A long advance can cross forecast changes.
             "weather": calendar.weather_at(state),
+            "weather_spans": calendar.weather_spans(state, before, state.game_minutes),
             "x": state.x, "z": state.z,
         })
         calendar.active_tick(state, before)
