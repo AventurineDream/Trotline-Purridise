@@ -185,12 +185,18 @@ def present_ids(state, world, content) -> tuple:
     return tuple(ids)
 
 
-def _cookout_anchor(world, host_anchor, npc_id, index):
-    """Cookout guests along the landing's two piers, alternating sides, nearest first."""
+def _cookout_anchor(world, host_anchor, npc_id, index, count):
+    """Cookout guests along the landing's two piers, alternating sides, host first.
+
+    Every place is beside the docked stretch of the slip (more than 2 m in), so a
+    boat docked alongside hails that cat: `at_landing` chats and `attend_event` need it.
+    """
     from dataclasses import replace
     slip = world.slip
     side = 1 if index % 2 else -1
-    along = 0.5 + 2.2 * (index // 2)
+    rows = max(1, (count + 1) // 2)
+    step = min(2.2, (slip.land_ext - 1.0 - 2.6) / max(1, rows - 1))
+    along = 2.6 + step * (index // 2)
     x, z = slip.world(along, side * (slip.half_w + 0.85))
     return replace(host_anchor, id=world.id + ":cookout:" + npc_id, x=float(x), z=float(z), kind="dock",
                    approach=None)
@@ -209,7 +215,8 @@ def active_npcs(state, world, content):
             anchor = world.anchors[roster.anchors[npc_id]]
         if cookout:
             # Dock actors have no watercraft collider; each guest stands on a pier at the landing.
-            anchor = _cookout_anchor(world, world.anchors[roster.anchors[roster.hosts[world.id]]], npc_id, index)
+            anchor = _cookout_anchor(world, world.anchors[roster.anchors[roster.hosts[world.id]]], npc_id, index,
+                                     len(ids))
         row = content.npcs.get(npc_id)
         actors.append(NPC(npc_id, roster.names[npc_id], row["quest_id"] if row else None, anchor,
                           npc_id == roster.hosts[world.id]))

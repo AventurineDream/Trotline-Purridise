@@ -310,13 +310,18 @@ class QuestManager:
                 self._advance(state, definition, progress)
 
     def begin_step(self, state, quest_id: str) -> None:
-        """Start the current step. A book goal already met completes at once."""
+        """Start the current step. A goal on the book already met completes at once:
+        N entries at a stage, or a legendary's record, caught or witnessed (02 §12.3)."""
         definition = self.content.quests.get(quest_id)
         progress = state.narrative.quests.get(quest_id)
         if definition is None or progress is None or progress.status != "active":
             return
         step, _data = current_step(definition, progress)
-        if step is not None and step["type"] == "book_stage" and book_goal_met(state, step):
+        if step is None:
+            return
+        if ((step["type"] == "book_stage" and book_goal_met(state, step))
+                or (step["type"] == "catch_species" and set(step) == {"type", "species_id"}
+                    and legendary_recorded(state, step["species_id"]))):
             self._advance(state, definition, progress)
 
     def _advance(self, state, definition: dict, progress) -> None:
@@ -630,6 +635,19 @@ def current_step(definition: dict, progress) -> tuple[dict | None, dict]:
         data = progress.progress["data"] = {}
     progress.progress["step"] = index
     return steps[index], data
+
+
+def legendary_recorded(state, legendary_id) -> bool:
+    """A legendary's page holds a record. The V3 Guardian sighting counts as its record."""
+    from .book import LEGENDARY_IDS
+    if legendary_id not in LEGENDARY_IDS:
+        return False
+    if legendary_id == "whiskered_guardian" and state.narrative.guardian_seen:
+        return True
+    pages = state.v2.get("legendaries")
+    page = pages.get(legendary_id) if isinstance(pages, dict) else None
+    records = page.get("records") if isinstance(page, dict) else None
+    return isinstance(records, list) and bool(records)
 
 
 def book_goal_met(state, step: dict) -> bool:
