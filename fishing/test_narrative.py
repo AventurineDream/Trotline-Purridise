@@ -786,7 +786,7 @@ class NarrativeChecks(unittest.TestCase):
                               "briar", catch_game_minute=90))
         ])
         self.state.lines = [line]
-        self.state.game_minutes = 335
+        self.state.game_minutes = 1415  # 05:35, inside Willow's 05:00-08:00 window
         session = Session(self.world, self.path, self.state, False)
         events = []
         handler = self.state._quest_event_handler
@@ -799,13 +799,41 @@ class NarrativeChecks(unittest.TestCase):
         self.assertIsNone(self.state.take_hook(0, 0))
         self.assertEqual(quest.status, "ready")
         self.assertEqual(events[0]["lake_id"], "briar")
-        self.assertEqual(quest.progress["fish_entered_livewell"]["entry_game_minute"], 335)
+        self.assertEqual(quest.progress["fish_entered_livewell"]["entry_game_minute"], 1415)
         session.save()
         loaded = State.load(self.path, self.world)
         self.assertEqual(loaded.narrative.quests[qid].status, "ready")
         self.assertEqual(loaded.narrative.quests[qid].progress,
                          quest.progress)
         self.assertEqual(loaded.money, self.state.money)
+
+    def test_clock_windows_follow_the_hud_clock_not_elapsed_minutes(self):
+        """Game minute 0 is 06:00, so a 05:00-08:00 window is game minutes 1380-1440 and 0-120."""
+        manager = QuestManager(load_content())
+        for clock, minute, expected in (("05:35", 1415, "ready"), ("07:59", 119, "ready"),
+                                        ("11:35", 335, "active"), ("08:00", 120, "active")):
+            with self.subTest(clock=clock):
+                quest = self.state.narrative.quests[QUEST_IDS[5]]
+                quest.status, quest.accepted_game_minute, quest.progress = "active", 0, {}
+                manager.handle_event(self.state, {
+                    "type": "fish.enter_livewell", "species_id": "golden_shiner",
+                    "source_line_id": str(UUID(int=7)), "lake_id": "briar",
+                    "source_zone_id": "briar:lilies", "bait_id": "worm", "bait_sections": ["worm"],
+                    "catch_game_minute": minute, "entry_game_minute": minute,
+                })
+                self.assertEqual(quest.status, expected)
+        # Moonlight Trotlines sets its line between 20:00 and 04:00.
+        for clock, minute, expected in (("20:30", 870, 1), ("03:59", 1319, 1), ("02:30 the old way", 1230, 1),
+                                        ("06:30", 30, 0), ("19:59", 839, 0)):
+            with self.subTest(clock=clock):
+                quest = self.state.narrative.quests[QUEST_IDS[4]]
+                quest.status, quest.accepted_game_minute, quest.progress = "active", 0, {}
+                manager.handle_event(self.state, {
+                    "type": "line.set", "lake_id": "briar", "line_id": str(UUID(int=8)),
+                    "zone_id": "briar:deep", "tier_id": "std", "hook_count": 12, "bait_id": "shad",
+                    "game_minute": minute, "active_game_minute": 10,
+                })
+                self.assertEqual(len(quest.progress.get("deployments", {})), expected)
 
     def test_anchor_interruptions_travel_and_zone_visit_provenance(self):
         manager = QuestManager(load_content())

@@ -6,10 +6,13 @@ and reward actions are handled by their game layers; loading never runs an actio
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field
+from functools import lru_cache
 import json
 import math
 from pathlib import Path
+import re
 
 from .narrative import DAY_NPCS, QUEST_IDS, RIPPLE_BY_QUEST
 
@@ -17,7 +20,7 @@ CONTENT_PATH = Path(__file__).with_name("assets") / "narrative_v1.json"
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
                     "pantry.json", "dishes.json", "calendar.json", "bot.json", "legendaries.json",
-                    "npcs.json")
+                    "npcs.json", "quests.json")
 BOOK_CONTENT_PATH = CONTENT_V2_PATH / "book.json"
 BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
 _GAMEPLAY_REFS_LOADED = False
@@ -92,6 +95,13 @@ class NarrativeContent:
     quests: dict[str, dict]
     rewards: dict[str, dict]
     dialogue: dict[str, dict]
+    # V1-31: every roster cat (name, lake, role, quest chain, greetings, letters). `npcs`
+    # stays the V3 cast; V1.0 quests join `quests` and `dialogue` with a `kind`.
+    cats: dict[str, dict] = field(default_factory=dict)
+
+    def name(self, npc_id: str) -> str:
+        row = self.cats.get(npc_id) or self.npcs.get(npc_id) or {}
+        return row.get("name", npc_id)
 
 
 @dataclass
@@ -107,6 +117,9 @@ class GameplayContent:
     dishes: dict[str, dict]
     legendaries: dict[str, dict]
     roster: dict[str, dict]
+    places: dict[str, dict] = field(default_factory=dict)      # "<lake>:<id>" area or waypoint (V1-31)
+    quests: dict[str, dict] = field(default_factory=dict)      # quests.json rows (V1-31)
+    quest_cats: dict[str, dict] = field(default_factory=dict)  # greetings and letters by cat (V1-31)
 
 
 @dataclass(frozen=True)
@@ -469,6 +482,60 @@ _CAT_POSE_PROPS = {"sit_fish": {"rod"}, "nap_curl": {"none"}, "wave": {"none"}, 
                    "craft": {"book", "brush", "whittle", "mug", "tablet"}}
 _HANDCRAFTED_BOATS = {"jon", "rowboat", "sail", "pontoon"}
 _ROUND_ROBIN_DAYS = 3  # every encounter appears at least once in any three game days
+# V1-31: named story and fishing places in lakes.json (06 §5), by lake and kind.
+NAMED_PLACES = {
+    "briar": {"landing_edge": "area", "reed_edge_1": "waypoint", "reed_edge_2": "waypoint",
+              "reed_edge_3": "waypoint"},
+    "cedar": {"marked_pool": "area", **{f"lamp_buoy_{i}": "waypoint" for i in (1, 2, 3)},
+              **{f"drift_buoy_{i}": "waypoint" for i in (1, 2, 3)},
+              **{f"practice_buoy_{i}": "waypoint" for i in (1, 2, 3, 4)}},
+    "flathead": {},
+    "crater": {**{f"safe_cove_{i}": "area" for i in (1, 2, 3)}, "survey_marker": "waypoint"},
+    "nebula": {"calm_reflection": "area"},
+}
+# V1-31 quests (02 §12.3). Fields are closed per type, so a misspelt condition is an error.
+QUEST_KINDS = {"host", "a", "b", "story"}
+LINE_STEP_FIELDS = {"zone_id", "area_id", "tier_id", "min_tier", "hook_count", "bait_id", "set_window",
+                    "in_cold_band"}
+STEP_FIELDS = {
+    # Bot's 140 m launch range and line_scout_check's report-before-check are the types' own rules.
+    "line_scout": LINE_STEP_FIELDS,
+    "line_check": LINE_STEP_FIELDS | {"active_soak_game_minutes"},
+    "line_scout_check": LINE_STEP_FIELDS | {"active_soak_game_minutes"},
+    "anchor_idle": {"zone_id", "continuous_game_minutes"},
+    "scout_report": {"zone_id", "waypoint_ids", "windows"},
+    "fish_livewell": {"zone_id", "bait_id", "species_id", "entry_window"},
+    "travel_distance": {"zone_id", "distance_m", "propulsion"},
+    "visit_zones": {"zone_ids", "waypoint_ids", "windows"},
+    "visit_sequence": {"zone_ids", "waypoint_ids", "windows"},
+    "catch_species": {"species_id", "species_ids", "group", "tag", "any", "count", "distinct", "min_lb",
+                      "zone_id", "area_id", "lake_id", "time_band", "bait_id", "in_cold_band"},
+    "book_stage": {"species_ids", "lake_id", "stage", "count"},
+    "cook_dish": {"dish_id", "any"},
+    "catnap": {"zone_id"},
+    "tool_use": {"tool_id", "zone_id", "lake_id", "shell_id"},
+    "wait_weather": {"weather", "then_weather", "zone_id", "zone_ids", "lake_id", "area_ids", "minutes"},
+    "settle": {"zone_id", "cues"},
+    "talk_to": {"npc_id", "distinct_days"},
+    "attend_event": {"lake_id", "event"},
+}
+MAX_QUEST_STEPS = 4
+LINE_TIER_ORDER = ("std", "prem", "heavy")
+_TIER_HOOKS = {"std": 12, "prem": 18, "heavy": 24}  # mirrors data.LINE_TIERS
+TIME_BANDS = {"dawn", "day", "dusk", "night"}  # data.band_of
+# Mirror weather._WEATHER and book.BOOK_STAGES, which import this module; tests check both.
+WEATHER_STATES = {"clear", "fair", "overcast", "drizzle", "mist", "snow_mist", "fog", "aurora"}
+BOOK_STAGE_ORDER = ("rumor", "identified", "bait_known", "verified", "mastered")
+QUEST_EVENTS = {"cookout"}
+QUEST_LINE_STAGES = ("offer", "accept", "decline", "progress", "ready", "ready_wait", "done", "return")
+QUEST_CHOICE_LABELS = ("accept_choice", "decline_choice", "turn_in_choice", "later_choice")
+LINE_PLACEHOLDERS = {"BotName", "Skipper", "lake", "fish", "depth_ft", "zone"}
+GREETING_STATES = ({"stranger", "acquaintance", "friend", "first", "day", "cookout"}
+                   | {f"after_ch{n}" for n in range(1, 6)} | {f"weather:{w}" for w in WEATHER_STATES})
+UNLOCK_KINDS = {"travel", "chart", "area", "shop"}
+REWARD_FIELDS = {"cash", "ripple_id", "keepsake_id", "recipes", "dish_cards", "items", "shells", "unlocks"}
+_V2_RIPPLES = {f"ripple_{n}" for n in range(11, 45)}
+_BUBBLE_CHARS = 140
 # Mirrors data.PAINT, which cannot be imported while data.py is still validating.
 _BOAT_PAINT_IDS = {"hull": {"aluminum", "green", "olive", "carolina", "red", "black", "sand", "white"},
                    "deck": {"aluminum", "wood", "carpet"}, "motor": {"black", "red", "white", "green"}}
@@ -529,6 +596,21 @@ def _set_fallback_gameplay_refs():
     SPECIES_BY_ID = {item_id: None for item_id in _SAVE_REFERENCED_IDS["species"]}
     ZONE_ORDER = _FALLBACK_FISHING_ZONE_ORDER
     _GAMEPLAY_REFS_LOADED = True
+
+
+@dataclass
+class _QuestRefs:
+    """The validated ids a quest row may reference."""
+    lakes: dict        # lake -> its zone ids
+    places: dict       # "<lake>:<id>" -> ("area" | "waypoint", row)
+    species: dict
+    legendaries: dict
+    baits: dict
+    dishes: dict
+    pantry: dict
+    shells: dict
+    tools: dict
+    roster: dict
 
 
 class _ContentV2Validator:
@@ -975,7 +1057,8 @@ class _ContentV2Validator:
         lakes = self.table(docs, lakes_file, "lakes", {
             "id", "name", "landing", "region", "blurb", "species_count", "species_ids",
             "zone_ids", "zone_labels", "palette", "placeholder", "unlock_chapter",
-            "travel_caption", "lake_days"}, {"rate_multipliers", "placeholder_depths", "environment"})
+            "travel_caption", "lake_days"}, {"rate_multipliers", "placeholder_depths", "environment",
+                                             "areas", "waypoints"})
         self.require_saved_ids(lakes_file, "zones", zones)
         self.require_saved_ids(lakes_file, "lakes", lakes)
         if lakes_file not in self.unavailable_files and not {"briar", "cedar"}.issubset(lakes):
@@ -1142,6 +1225,7 @@ class _ContentV2Validator:
                 self.error(lakes_file, f"zone_order({zone_id})", "missing fishing zone from zone_order")
             for zone_id in sorted(set(zone_order) - fishing_zones):
                 self.error(lakes_file, f"zone_order({zone_id})", "zone order includes an unknown or non-fishing zone")
+        places = {}  # "<lake>:<id>" -> ("area" | "waypoint", row), for quest references
         for lid, row, where in self.rows(lakes_file, "lakes"):
             for key in ("name", "landing", "region", "blurb"):
                 self.text(lakes_file, where + "." + key, row.get(key))
@@ -1194,6 +1278,7 @@ class _ContentV2Validator:
             self.number(lakes_file, where + ".unlock_chapter", row.get("unlock_chapter"),
                         integer=True, minimum=0, maximum=5)
             self.text(lakes_file, where + ".travel_caption", row.get("travel_caption"))
+            self.named_places(lakes_file, where, lid, row, places)
             palette = row.get("palette")
             if not isinstance(palette, dict) or set(palette) != {"water", "land"}:
                 self.error(lakes_file, where + ".palette", "expected water and land RGB colors")
@@ -1322,13 +1407,25 @@ class _ContentV2Validator:
                 self.error(baits_file, where + ".recipe", "recipe bait is cooked, never sold")
 
         windows = self.calendar(docs, species)
-        self.bot(docs)
+        shells, tools = self.bot(docs)
         legendaries = self.legendaries(docs, species, windows)
         roster = self.roster(docs, lake_ids if lakes_file not in self.unavailable_files else None,
                              boats if boats_file not in self.unavailable_files else None)
+        if lakes_file not in self.unavailable_files:
+            for lake_id, expected in NAMED_PLACES.items():
+                for place_id, kind in sorted(expected.items()):
+                    if lake_id in lakes and places.get(f"{lake_id}:{place_id}", ("",))[0] != kind:
+                        self.error(lakes_file, f"lakes({lake_id})", f"missing {kind} {place_id!r} (06 §5)")
+        refs = _QuestRefs(
+            lakes={lid: set(row.get("zone_ids") or ()) for lid, row in lakes.items()
+                   if isinstance(row.get("zone_ids"), list)},
+            places=places, species=species, legendaries=legendaries, baits=baits, dishes=dishes,
+            pantry=pantry, shells=shells, tools=tools, roster=roster)
+        quests, quest_cats = self.quests(docs, refs)
         if self.errors:
             raise ContentError("\n".join(self.errors))
-        return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes, legendaries, roster)
+        return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes, legendaries, roster,
+                               places, quests, quest_cats)
 
     def roster(self, docs, lakes, boats):
         """The 52 cats (51 rows; Pip & Pebble share one): role, lake, boat and appearance."""
@@ -1421,6 +1518,440 @@ class _ContentV2Validator:
             else:
                 quest_ids[qid] = cid
 
+    def named_places(self, filename, where, lake, row, places):
+        """V1-31: a lake's named areas (circles, rings or polygons) and story waypoints (06 §5)."""
+        for group, kind in (("areas", "area"), ("waypoints", "waypoint")):
+            if group not in row:
+                continue
+            items = row[group]
+            if not isinstance(items, list):
+                self.error(filename, f"{where}.{group}", "expected a list")
+                continue
+            for index, item in enumerate(items):
+                item_where = f"{where}.{group}[{index}]"
+                if not isinstance(item, dict):
+                    self.error(filename, item_where, "expected an object")
+                    continue
+                pid = item.get("id")
+                if isinstance(pid, str):
+                    item_where += f"({pid})"
+                shape = item.get("shape") if kind == "area" else "circle"
+                required = {"id", "name", "x", "z", "r"} if shape == "circle" else {"id", "name", "points"}
+                if kind == "area":
+                    required |= {"shape"}
+                optional = {"inner_r"} if kind == "area" and shape == "circle" else set()
+                for key in sorted(required - item.keys()):
+                    self.error(filename, item_where, f"missing required field {key!r}")
+                for key in sorted(item.keys() - required - optional):
+                    self.error(filename, item_where, f"unknown field {key!r}")
+                self.text(filename, item_where + ".name", item.get("name"))
+                if kind == "area" and not self.enum(filename, item_where + ".shape", shape, {"circle", "polygon"}):
+                    continue
+                if shape == "circle":
+                    for key in ("x", "z"):
+                        self.number(filename, f"{item_where}.{key}", item.get(key), minimum=-5000, maximum=5000)
+                    radius_ok = self.number(filename, item_where + ".r", item.get("r"), minimum=1, maximum=400)
+                    if "inner_r" in item and self.number(filename, item_where + ".inner_r", item["inner_r"],
+                                                         minimum=0) and radius_ok and item["inner_r"] >= item["r"]:
+                        self.error(filename, item_where + ".inner_r", "must be smaller than r")
+                else:
+                    points = item.get("points")
+                    if not isinstance(points, list) or len(points) < 3:
+                        self.error(filename, item_where + ".points", "expected at least three [x, z] points")
+                    else:
+                        for i, point in enumerate(points):
+                            if not isinstance(point, list) or len(point) != 2:
+                                self.error(filename, f"{item_where}.points[{i}]", "expected [x, z]")
+                                continue
+                            for value in point:
+                                self.number(filename, f"{item_where}.points[{i}]", value,
+                                            minimum=-5000, maximum=5000)
+                if not isinstance(pid, str) or not pid.strip() or ":" in pid:
+                    self.error(filename, item_where + ".id", "expected a bare place id")
+                elif f"{lake}:{pid}" in places:
+                    self.error(filename, item_where + ".id", f"duplicate place {pid!r} on {lake}")
+                else:
+                    places[f"{lake}:{pid}"] = (kind, item)
+
+    def quests(self, docs, refs):
+        """V1-31: quests.json rows (steps, requires, rewards, lines) and each cat's greetings and letters."""
+        filename = "quests.json"
+        self.root(docs, filename, {"schema_version", "quests", "cats"})
+        rows = self.table(docs, filename, "quests", {"id", "kind", "giver_id", "lake_id", "title", "objective",
+                                                     "journal", "reward"},
+                          {"requires", "cross_lake", "on_accept", "lines"})
+        cats = self.table(docs, filename, "cats", {"id", "greetings"}, {"letters"})
+        if filename in self.unavailable_files:
+            return rows, cats
+        given = {"ripples": {}, "keepsakes": {}}
+        quest_ids = set(QUEST_IDS) | set(rows)
+        for qid, row, where in self.rows(filename, "quests"):
+            self.quest_row(filename, where, qid, row, refs, quest_ids, given)
+        for cid, row, where in self.rows(filename, "cats"):
+            self.quest_cat(filename, where, cid, row, refs)
+        return rows, cats
+
+    def quest_row(self, filename, where, qid, row, refs, quest_ids, given):
+        kind, giver, lake = row.get("kind"), row.get("giver_id"), row.get("lake_id")
+        self.text(filename, where + ".title", row.get("title"))
+        self.text(filename, where + ".journal", row.get("journal"))
+        kind_ok = self.enum(filename, where + ".kind", kind, QUEST_KINDS)
+        lake_ok = self.enum(filename, where + ".lake_id", lake, refs.lakes)
+        if isinstance(qid, str) and qid in QUEST_IDS:
+            # V1-32 adds `extends` rows for recopied V3 lines; the V3 definitions never change.
+            self.error(filename, where + ".id", "collides with a V3 quest, which stays unchanged")
+        cat = refs.roster.get(giver) if isinstance(giver, str) else None
+        if cat is None:
+            self.error(filename, where + ".giver_id", f"unknown value/reference {giver!r}")
+        elif kind_ok and kind != "story":
+            role = {"host": "host", "a": "water", "b": "water"}[kind]
+            if cat.get("role") != role:
+                self.error(filename, where + ".giver_id", f"a {kind!r} quest is given by a {role} cat")
+            if lake_ok and cat.get("lake") != lake:
+                self.error(filename, where + ".lake_id", "a cat's quests belong to its own lake")
+            expected = {"host": f"host_{lake}", "a": f"wc_{giver}_a", "b": f"wc_{giver}_b"}[kind]
+            if qid != expected:
+                self.error(filename, where + ".id", f"expected {expected!r} for this kind and giver")
+            listed = cat.get("quests")
+            if not isinstance(listed, list) or qid not in listed:
+                self.error(filename, where + ".id", f"not one of {giver}'s roster quests")
+        if kind == "story" and isinstance(qid, str) and not re.fullmatch(r"story_c[1-5]_s[1-9]", qid):
+            self.error(filename, where + ".id", "expected story_c<chapter>_s<step>")
+        objective = row.get("objective")
+        steps = objective if isinstance(objective, list) else [objective]
+        if isinstance(objective, list) and not 1 <= len(objective) <= MAX_QUEST_STEPS:
+            self.error(filename, where + ".objective", f"expected 1–{MAX_QUEST_STEPS} steps")
+        referenced = set()
+        for index, step in enumerate(steps):
+            self.quest_step(filename, where + (f".objective[{index}]" if isinstance(objective, list)
+                                               else ".objective"), step, refs, referenced)
+        listed = self.id_list(filename, where + ".cross_lake", row["cross_lake"], refs.lakes) \
+            if "cross_lake" in row else []
+        if lake_ok:
+            # Cross-lake objectives are allowed, but only when the row lists them (06 §2).
+            for other in sorted(referenced - {lake} - set(listed)):
+                self.error(filename, where + ".objective", f"references {other!r}; list it in cross_lake")
+            for other in listed:
+                if other == lake or other not in referenced:
+                    self.error(filename, where + ".cross_lake", f"{other!r} is not another lake a step uses")
+        if "requires" in row:
+            self.quest_requires(filename, where + ".requires", row["requires"], refs, quest_ids - {qid})
+        self.quest_reward(filename, where + ".reward", row.get("reward"), kind if kind_ok else None, giver,
+                          refs, given, qid)
+        if "on_accept" in row:
+            on_accept = row["on_accept"]
+            if not isinstance(on_accept, dict) or set(on_accept) != {"items"}:
+                self.error(filename, where + ".on_accept", "expected only items")
+            else:
+                self.reward_items(filename, where + ".on_accept.items", on_accept["items"], refs)
+        if "lines" in row:
+            self.quest_lines(filename, where + ".lines", row["lines"])
+        elif kind in ("host", "a", "b"):
+            self.error(filename, where, "missing required field 'lines'")
+
+    def quest_requires(self, filename, where, value, refs, quest_ids):
+        if not isinstance(value, dict) or not value:
+            self.error(filename, where, "expected chapter_complete, quest or travel_unlocked")
+            return
+        for key in sorted(value.keys() - {"chapter_complete", "quest", "travel_unlocked"}):
+            self.error(filename, where, f"unknown field {key!r}")
+        if "chapter_complete" in value:
+            self.number(filename, where + ".chapter_complete", value["chapter_complete"], integer=True,
+                        minimum=1, maximum=5)
+        if "quest" in value:
+            self.enum(filename, where + ".quest", value["quest"], quest_ids)
+        if "travel_unlocked" in value:
+            self.enum(filename, where + ".travel_unlocked", value["travel_unlocked"], refs.lakes)
+
+    def quest_zone(self, filename, where, value, refs, referenced):
+        lake, _, zone = value.partition(":") if isinstance(value, str) else ("", "", "")
+        if lake not in refs.lakes or zone not in refs.lakes[lake]:
+            self.error(filename, where, f"unknown zone {value!r}")
+            return
+        referenced.add(lake)
+
+    def quest_place(self, filename, where, value, kind, refs, referenced):
+        if not isinstance(value, str) or refs.places.get(value, ("",))[0] != kind:
+            self.error(filename, where, f"unknown {kind} {value!r}")
+            return
+        referenced.add(value.partition(":")[0])
+
+    def clock_window(self, filename, where, value):
+        if (not isinstance(value, list) or len(value) != 2
+                or any(type(n) is not int or not 0 <= n < 1440 for n in value) or value[0] == value[1]):
+            self.error(filename, where, "expected distinct start/end clock minutes in [0, 1440)")
+
+    def quest_step(self, filename, where, step, refs, referenced):
+        if not isinstance(step, dict):
+            self.error(filename, where, "expected an object")
+            return
+        kind = step.get("type")
+        if not self.enum(filename, where + ".type", kind, STEP_FIELDS):
+            return
+        for key in sorted(step.keys() - STEP_FIELDS[kind] - {"type"}):
+            self.error(filename, where, f"unknown field {key!r} for {kind}")
+
+        def one_of(*keys, required=True):
+            present = [key for key in keys if key in step]
+            if len(present) > 1 or (required and not present):
+                self.error(filename, where, "expected exactly one of " + ", ".join(keys))
+
+        def needs(*keys):
+            for key in keys:
+                if key not in step:
+                    self.error(filename, where, f"missing required field {key!r}")
+
+        def literal_true(key):
+            if key in step and step[key] is not True:
+                self.error(filename, where + "." + key, "expected true")
+
+        def ids(key, *, unique=True, minimum=1):
+            value = step[key]
+            if not isinstance(value, list) or len(value) < minimum:
+                self.error(filename, where + "." + key, f"expected a list of at least {minimum}")
+                return []
+            if unique and len({str(item) for item in value}) != len(value):
+                self.error(filename, where + "." + key, "expected unique entries")
+            return value
+
+        def positive(key, *, integer=False, maximum=None):
+            if key in step:
+                self.number(filename, where + "." + key, step[key], integer=integer, minimum=1 if integer else 0.001,
+                            maximum=maximum)
+
+        for key in ("zone_id",):
+            if key in step:
+                self.quest_zone(filename, where + "." + key, step[key], refs, referenced)
+        if "zone_ids" in step:
+            for i, zone in enumerate(ids("zone_ids", unique=kind != "visit_sequence")):
+                self.quest_zone(filename, f"{where}.zone_ids[{i}]", zone, refs, referenced)
+        if "area_id" in step:
+            self.quest_place(filename, where + ".area_id", step["area_id"], "area", refs, referenced)
+        if "area_ids" in step:
+            for i, area in enumerate(ids("area_ids")):
+                self.quest_place(filename, f"{where}.area_ids[{i}]", area, "area", refs, referenced)
+        if "waypoint_ids" in step:
+            for i, point in enumerate(ids("waypoint_ids", unique=kind != "visit_sequence")):
+                self.quest_place(filename, f"{where}.waypoint_ids[{i}]", point, "waypoint", refs, referenced)
+        if "lake_id" in step and self.enum(filename, where + ".lake_id", step["lake_id"], refs.lakes):
+            referenced.add(step["lake_id"])
+        for key in ("set_window", "entry_window"):
+            if key in step:
+                self.clock_window(filename, where + "." + key, step[key])
+        if "windows" in step:
+            for i, window in enumerate(ids("windows", unique=False)):
+                self.clock_window(filename, f"{where}.windows[{i}]", window)
+        if "bait_id" in step:
+            self.enum(filename, where + ".bait_id", step["bait_id"], refs.baits)
+        for key in ("in_cold_band", "any", "distinct"):
+            literal_true(key)
+
+        if kind in ("line_scout", "line_check", "line_scout_check"):
+            if not {"zone_id", "area_id"} & step.keys():
+                self.error(filename, where, "expected zone_id or area_id")
+            one_of("tier_id", "min_tier", required=False)
+            for key in ("tier_id", "min_tier"):
+                if key in step:
+                    self.enum(filename, where + "." + key, step[key], LINE_TIER_ORDER)
+            if "hook_count" in step:
+                if step.get("tier_id") not in _TIER_HOOKS:
+                    self.error(filename, where + ".hook_count", "an exact hook count needs tier_id")
+                elif step["hook_count"] != _TIER_HOOKS[step["tier_id"]]:
+                    self.error(filename, where + ".hook_count", "does not match line tier")
+            if kind != "line_scout":
+                needs("active_soak_game_minutes")
+                positive("active_soak_game_minutes", maximum=1440)
+        elif kind == "anchor_idle":
+            needs("zone_id", "continuous_game_minutes")
+            positive("continuous_game_minutes", maximum=1440)
+        elif kind == "scout_report":
+            one_of("zone_id", "waypoint_ids")
+        elif kind == "fish_livewell":
+            needs("zone_id", "species_id")
+            if "species_id" in step:
+                self.enum(filename, where + ".species_id", step["species_id"], refs.species)
+        elif kind == "travel_distance":
+            needs("zone_id", "distance_m")
+            positive("distance_m", maximum=20000)
+            if "propulsion" in step:
+                for i, item in enumerate(ids("propulsion")):
+                    self.enum(filename, f"{where}.propulsion[{i}]", item, {"motor", "sail", "oar"})
+        elif kind in ("visit_zones", "visit_sequence"):
+            one_of("zone_ids", "waypoint_ids")
+        elif kind == "catch_species":
+            one_of("species_id", "species_ids", "group", "tag", "any")
+            fish = set(refs.species) | set(refs.legendaries)
+            if "species_id" in step:
+                self.enum(filename, where + ".species_id", step["species_id"], fish)
+            if "species_ids" in step:
+                for i, sid in enumerate(ids("species_ids", minimum=2)):
+                    self.enum(filename, f"{where}.species_ids[{i}]", sid, fish)
+            if "group" in step:
+                self.enum(filename, where + ".group", step["group"], _SPECIES_FOODS - {"none"})
+            if "tag" in step:
+                self.enum(filename, where + ".tag", step["tag"], _SPECIES_TAGS)
+            positive("count", integer=True, maximum=50)
+            positive("min_lb", maximum=500)
+            if "time_band" in step:
+                self.enum(filename, where + ".time_band", step["time_band"], TIME_BANDS)
+            if (isinstance(step.get("species_ids"), list) and type(step.get("count")) is int
+                    and step.get("distinct") is True and step["count"] > len(step["species_ids"])):
+                self.error(filename, where + ".count", "more distinct fish than species_ids")
+        elif kind == "book_stage":
+            one_of("species_ids", "lake_id")
+            needs("stage", "count")
+            self.enum(filename, where + ".stage", step.get("stage"), BOOK_STAGE_ORDER[1:])
+            positive("count", integer=True, maximum=144)
+            scope = None
+            if "species_ids" in step:
+                scope = len([self.enum(filename, f"{where}.species_ids[{i}]", sid, refs.species)
+                             for i, sid in enumerate(ids("species_ids"))])
+            elif isinstance(step.get("lake_id"), str):
+                scope = sum(1 for row in refs.species.values()
+                            if isinstance(row.get("lakes"), list) and step["lake_id"] in row["lakes"])
+            if scope is not None and type(step.get("count")) is int and step["count"] > scope:
+                self.error(filename, where + ".count", f"more entries than the {scope} species in scope")
+        elif kind == "cook_dish":
+            one_of("dish_id", "any")
+            if "dish_id" in step:
+                self.enum(filename, where + ".dish_id", step["dish_id"], refs.dishes)
+        elif kind == "tool_use":
+            needs("tool_id")
+            self.enum(filename, where + ".tool_id", step.get("tool_id"), refs.tools)
+            if "shell_id" in step:
+                self.enum(filename, where + ".shell_id", step["shell_id"], refs.shells)
+        elif kind == "wait_weather":
+            needs("weather")
+            self.enum(filename, where + ".weather", step.get("weather"), WEATHER_STATES)
+            one_of("zone_id", "zone_ids", "lake_id", "area_ids")
+            if "then_weather" in step and self.enum(filename, where + ".then_weather", step["then_weather"],
+                                                    WEATHER_STATES) and step["then_weather"] == step.get("weather"):
+                self.error(filename, where + ".then_weather", "must differ from weather")
+            positive("minutes", integer=True, maximum=1440)
+        elif kind == "settle":
+            needs("zone_id", "cues")
+            positive("cues", integer=True, maximum=3)
+        elif kind == "talk_to":
+            needs("npc_id")
+            self.enum(filename, where + ".npc_id", step.get("npc_id"), refs.roster)
+            if "distinct_days" in step:
+                self.number(filename, where + ".distinct_days", step["distinct_days"], integer=True,
+                            minimum=2, maximum=7)
+        elif kind == "attend_event":
+            needs("lake_id", "event")
+            self.enum(filename, where + ".event", step.get("event"), QUEST_EVENTS)
+
+    def quest_reward(self, filename, where, reward, kind, giver, refs, given, qid):
+        if not isinstance(reward, dict):
+            self.error(filename, where, "expected an object")
+            return
+        for key in sorted(reward.keys() - REWARD_FIELDS):
+            self.error(filename, where, f"unknown reward kind {key!r}")
+        if "cash" in reward:
+            self.number(filename, where + ".cash", reward["cash"], integer=True, minimum=0, maximum=100000)
+        for key, pool, allowed in (("ripple_id", "ripples", _V2_RIPPLES), ("keepsake_id", "keepsakes", None)):
+            if key not in reward:
+                continue
+            value = reward[key]
+            if allowed is not None:
+                if not self.enum(filename, where + "." + key, value, allowed):
+                    continue
+            elif not isinstance(value, str) or not re.fullmatch(r"ks_[a-z0-9_]+", value):
+                self.error(filename, where + "." + key, "expected a ks_<cat id> keepsake id")
+                continue
+            elif kind == "b" and value != f"ks_{giver}":
+                self.error(filename, where + "." + key, f"expected 'ks_{giver}'")
+            if value in given[pool]:
+                self.error(filename, where + "." + key, f"already given by {given[pool][value]!r}")
+            else:
+                given[pool][value] = qid
+        if "recipes" in reward:
+            self.id_list(filename, where + ".recipes", reward["recipes"],
+                         {bid for bid, row in refs.baits.items() if "recipe" in row})
+        if "dish_cards" in reward:
+            self.id_list(filename, where + ".dish_cards", reward["dish_cards"], refs.dishes)
+        if "items" in reward:
+            self.reward_items(filename, where + ".items", reward["items"], refs)
+        if "shells" in reward:
+            self.id_list(filename, where + ".shells", reward["shells"], set(refs.shells) - {"tin"})
+        if "unlocks" in reward:
+            for i, unlock in enumerate(self.id_list(filename, where + ".unlocks", reward["unlocks"], None)):
+                kind_of, _, target = unlock.partition(":")
+                if kind_of not in UNLOCK_KINDS or not re.fullmatch(r"[a-z0-9_:]+", target):
+                    self.error(filename, f"{where}.unlocks[{i}]", "expected travel:, chart:, area: or shop:<id>")
+                elif kind_of == "travel" and target not in refs.lakes:
+                    self.error(filename, f"{where}.unlocks[{i}]", f"unknown lake {target!r}")
+        required = {"host": {"cash"}, "a": {"cash", "ripple_id"}, "b": {"cash", "keepsake_id"}}.get(kind, set())
+        for key in sorted(required - reward.keys()):
+            self.error(filename, where, f"a {kind!r} quest rewards {key!r} (02 §12.1)")
+        if required and type(reward.get("cash")) is int and reward["cash"] <= 0:
+            self.error(filename, where + ".cash", "side quests pay cash")
+        if kind == "host":
+            for key in sorted(reward.keys() - {"cash"}):
+                self.error(filename, where + "." + key, "host errands pay cash only (02 §12.1)")
+
+    def reward_items(self, filename, where, items, refs):
+        if not isinstance(items, dict) or not items:
+            self.error(filename, where, "expected an object of item ids to counts")
+            return
+        for item_id, count in items.items():
+            if item_id not in refs.baits and item_id not in refs.pantry:
+                self.error(filename, f"{where}.{item_id}", f"unknown bait or pantry item {item_id!r}")
+            self.number(filename, f"{where}.{item_id}", count, integer=True, minimum=1, maximum=99)
+
+    def bubbles(self, filename, where, value, *, limit=_BUBBLE_CHARS, most=3):
+        """Authored text: one to three bubbles of at most 140 characters, known placeholders only (05 §0)."""
+        texts = value if isinstance(value, list) else [value]
+        if isinstance(value, list) and not 1 <= len(value) <= most:
+            self.error(filename, where, f"expected one to {most} bubbles (05 §0)")
+        for i, text in enumerate(texts):
+            text_where = f"{where}[{i}]" if isinstance(value, list) else where
+            if not isinstance(text, str) or not text.strip():
+                self.error(filename, text_where, "expected non-empty text")
+                continue
+            if len(text) > limit:
+                self.error(filename, text_where, f"longer than {limit} characters (05 §0)")
+            for name in re.findall(r"\{([^{}]*)\}", text):
+                if name not in LINE_PLACEHOLDERS:
+                    self.error(filename, text_where, f"unknown placeholder {{{name}}}")
+
+    def quest_lines(self, filename, where, lines):
+        if not isinstance(lines, dict):
+            self.error(filename, where, "expected an object")
+            return
+        for key in sorted(lines.keys() - set(QUEST_LINE_STAGES) - set(QUEST_CHOICE_LABELS)):
+            self.error(filename, where, f"unknown field {key!r}")
+        for key in ("offer", "done"):
+            if key not in lines:
+                self.error(filename, where, f"missing required field {key!r}")
+        for key, value in lines.items():
+            if key in QUEST_CHOICE_LABELS:
+                self.bubbles(filename, f"{where}.{key}", value, limit=60, most=1)
+            elif key in QUEST_LINE_STAGES:
+                self.bubbles(filename, f"{where}.{key}", value)
+
+    def quest_cat(self, filename, where, cid, row, refs):
+        cat = refs.roster.get(cid) if isinstance(cid, str) else None
+        if cat is None:
+            self.error(filename, where + ".id", f"unknown cat {cid!r}")
+            return
+        greetings = row.get("greetings")
+        if not isinstance(greetings, dict) or not greetings:
+            self.error(filename, where + ".greetings", "expected an object of greeting states")
+        else:
+            for state, text in greetings.items():
+                if self.enum(filename, f"{where}.greetings", state, GREETING_STATES):
+                    self.bubbles(filename, f"{where}.greetings.{state}", text)
+        if "letters" in row:
+            letters = row["letters"]
+            if cat.get("role") == "traveler":
+                self.error(filename, where + ".letters", "travelers carry letters; they don't write them")
+            elif not isinstance(letters, list) or len(letters) != 3:
+                self.error(filename, where + ".letters", "expected three letter variants (05 §9)")
+            else:
+                for i, letter in enumerate(letters):
+                    self.bubbles(filename, f"{where}.letters[{i}]", letter, limit=280, most=1)
+
     def cat_look(self, filename, where, look, *, twin_allowed):
         if not isinstance(look, dict):
             self.error(filename, where, "expected an object")
@@ -1512,7 +2043,7 @@ class _ContentV2Validator:
         raw = self.root(docs, filename, {"schema_version", "name_prefixes", "suffix_min", "suffix_max",
                                        "shells", "tools", "collar_stages", "knots"})
         if filename in self.unavailable_files:
-            return
+            return {}, {}
         prefixes = raw.get("name_prefixes")
         expected = {"Copper", "Quark", "Zed", "Brass", "Sprocket", "Clinker", "Whirly",
                     "Widget", "Cobalt", "Anchor", "Rivet", "Echo"}
@@ -1555,6 +2086,7 @@ class _ContentV2Validator:
             self.number(filename, where + ".price", row.get("price"), integer=True, minimum=1)
             if type(row.get("requires_finder")) is not bool:
                 self.error(filename, where + ".requires_finder", "expected a boolean")
+        return shells, tools
 
     def calendar(self, docs, species):
         filename = "calendar.json"
@@ -1771,14 +2303,94 @@ def load_content_v2(directory: str | Path = CONTENT_V2_PATH) -> GameplayContent:
     return content
 
 
-def load_content(path: str | Path = CONTENT_PATH) -> NarrativeContent:
-    """Fail with actionable path/ID context instead of returning partial data."""
+def load_content(path: str | Path = CONTENT_PATH, *, gameplay: GameplayContent | None = None) -> NarrativeContent:
+    """Fail with actionable path/ID context instead of returning partial data.
+
+    The V3 bundle is validated alone, then joined by the V1.0 quests and the whole
+    roster from content_v2 (or from `gameplay`, for an authoring tool or a test).
+    """
     path = Path(path)
     try:
         raw = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_keys)
     except (OSError, ValueError) as exc:
         raise ContentError(f"{path}: {exc}") from exc
-    return validate_content(raw, source=path)
+    content = validate_content(raw, source=path)
+    return merge_quests_v2(content, gameplay if gameplay is not None else _shipped_gameplay())
+
+
+@lru_cache(maxsize=1)
+def _shipped_gameplay() -> GameplayContent:
+    """The shipped v2 content, validated once. The merge copies what it keeps, so the
+    narrative bundle each load_content() returns stays fresh."""
+    return load_content_v2()
+
+
+# 05 §6.0's generic fills, used when an entry omits a node. The script has no generic
+# ready or return line, so these two say nothing about the quest.
+GENERIC_LINES = {
+    "accept": "Wonderful. No hurry at all.",
+    "decline": "That's all right. Ask me another day.",
+    "progress": "How's it going? Don't rush on my account.",
+    "ready": "You're back! How did it go?",
+    "ready_wait": "Whenever you like. I'll be around.",
+    "return": "Good to see you again, {Skipper}.",
+}
+GENERIC_CHOICES = {"accept_choice": "I’ll give it a try.", "decline_choice": "Maybe later.",
+                   "turn_in_choice": "Here’s how it went.", "later_choice": "I’ll come back."}
+
+
+def _quest_nodes(qid: str, row: dict) -> tuple[dict, dict]:
+    """The V3 nine-stage graph for one V1.0 quest, one node per bubble (05 §0)."""
+    lines, giver = row["lines"], row["giver_id"]
+    nodes = {}
+
+    def stage(name, last):
+        value = lines.get(name, GENERIC_LINES.get(name))
+        bubbles = value if isinstance(value, list) else [value]
+        ids = [f"{qid}:dialogue:{name}"] + [f"{qid}:dialogue:{name}:{i}" for i in range(2, len(bubbles) + 1)]
+        for i, (node_id, bubble) in enumerate(zip(ids, bubbles)):
+            node = {"id": node_id, "quest_id": qid, "speaker_id": giver, "text": bubble}
+            if i + 1 < len(ids):
+                node["next"] = ids[i + 1]
+            elif last is None:
+                node["next"] = None
+            else:
+                node["choices"] = [
+                    {"id": f"{qid}:choice:{action}", "text": lines.get(label, GENERIC_CHOICES[label]),
+                     "target": f"{qid}:dialogue:{target}", "action": action}
+                    for action, label, target in last]
+            nodes[node_id] = node
+        return ids[0]
+
+    entries = {
+        "available": stage("offer", (("accept", "accept_choice", "accept"),
+                                     ("decline", "decline_choice", "decline"))),
+        "active": stage("progress", None),
+        "ready": stage("ready", (("turn_in", "turn_in_choice", "done"),
+                                 ("close", "later_choice", "ready_wait"))),
+        "completed": stage("return", None),
+    }
+    for name in ("accept", "decline", "ready_wait", "done"):
+        stage(name, None)
+    return entries, nodes
+
+
+def merge_quests_v2(content: NarrativeContent, gameplay: GameplayContent) -> NarrativeContent:
+    """Join the V1.0 quests, their synthesized dialogue and the whole roster to V3 content."""
+    cats = {}
+    for cid, row in gameplay.roster.items():
+        extra = gameplay.quest_cats.get(cid, {})
+        cats[cid] = {"id": cid, "name": row["name"], "lake_id": row["lake"], "role": row["role"],
+                     "quests": list(row["quests"]), "greetings": deepcopy(extra.get("greetings", {})),
+                     "letters": list(extra.get("letters", []))}
+    content.cats = cats
+    for qid, row in gameplay.quests.items():
+        quest = deepcopy(row)
+        if "lines" in row:
+            quest["dialogue"], nodes = _quest_nodes(qid, row)
+            content.dialogue.update(nodes)
+        content.quests[qid] = quest
+    return content
 
 
 def validate_book_content(raw, *, source=BOOK_CONTENT_PATH, species_ids=()) -> BookContent:

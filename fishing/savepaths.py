@@ -270,7 +270,7 @@ def default_v2(state=None) -> dict:
         "story": {"chapter": 0, "steps": {}, "scenes_seen": scenes_seen,
                   "pending_rewards": [], "scene_states": scene_states},
         "npcs": {"letters": [], "talk_days": {}},
-        "keepsakes": [], "ripples_v2": [],
+        "keepsakes": [], "ripples_v2": [], "unlocks": [],
         "calendar": {"weather_windows": {}},
         "settings": {
             "mode": "cozy",

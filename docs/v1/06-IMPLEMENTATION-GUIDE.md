@@ -64,7 +64,8 @@ fishing/assets/content_v2/
   npcs.json          # 52 cats in 51 rows: role, lake, boat, appearance (V1-29),
                      # schedule slot, anchor and quest ids (V1-30)
   quests.json        # 96 new quests (15 story + 3 host + 34 quest A + 44 quest B);
-                     # 108 in total with the 12 in narrative_v1.json
+                     # 108 in total with the 12 in narrative_v1.json. V1-31 ships
+                     # the schema and engine with no rows; V1-32/33/34 author them
   dialogue/*.json    # one file per lake + story.json + bot.json + system.json
   book.json          # rumors, legendary stories, folk names
   ripples.json       # 44
@@ -159,7 +160,7 @@ their new ids, rather than starting a second ledger.
     "story": {"chapter": 0, "steps": {}, "scenes_seen": [], "pending_rewards": [],
               "scene_states": {}},
     "npcs": {"letters": [], "talk_days": {}},
-    "keepsakes": [], "ripples_v2": [],
+    "keepsakes": [], "ripples_v2": [], "unlocks": [],
     "calendar": {"weather_windows": {}},
     "settings": {"text_size": 1, "haul_speed": "normal", "reduced_motion": false,
                   "key_bindings": {"throttle_up": "w", "throttle_down": "s",
@@ -1306,3 +1307,103 @@ The session rebuilds the cast whenever `schedule_key` changes: the day, the band
   - determinism across save, reload, offline time and lake switches.
 - `test_anchors` validates all five lakes' anchors and seats every cat's boat.
 - The earlier V3 schedule tests in `test_npcs`, `test_calendar`, `test_dialogue`, `test_lakes` and `test_narrative` now assert the new rule.
+
+## Implemented quests v2 (V1-31)
+
+V1-31 is the quest system. `quests.json` ships with no rows: V1-32 and V1-33 author the side quests, and V1-34 the story steps. The tests author their own rows against the real roster, lakes and places.
+
+**Content (`content_v2/quests.json`).**
+
+- **Quest rows:** `id`, `kind` (`host`, `a`, `b` or `story`), `giver_id`, `lake_id`, `title`, `objective` (one step or a list of 1–4 steps), `journal` (the `obj:` text) and `reward`. Optional fields are `requires`, `cross_lake`, `on_accept` (items given once on acceptance) and `lines`.
+- **Ids follow the kind:** `host_<lake>`, `wc_<cat>_a`, `wc_<cat>_b` or `story_c<n>_s<m>`. A side quest's id must be one of its giver's roster quests. An id that collides with a V3 quest is rejected; V1-32 adds `extends` rows for recopied V3 lines.
+- **Cats rows:** each cat's `greetings`, keyed by state, and its three letter variants.
+- **Lines** hold `offer` and `done`, plus optional `accept`, `decline`, `progress`, `ready`, `ready_wait` and `return`, and four choice labels. Each is up to three bubbles of at most 140 characters, using only `05 §0`'s placeholders. `load_content()` turns them into the V3 nine-stage graph; missing stages take `05 §6.0`'s generic fills.
+
+**Validator.**
+
+- Fields are closed per step type (`content.STEP_FIELDS`), so an unlisted field, a V3-only literal or another type's field is an error naming the row.
+- It checks:
+  - references: zones, areas, waypoints, species and legendaries, baits, dishes, tools, shells and cats;
+  - exactly one of each alternative (`species_id` / `species_ids` / `group` / `tag` / `any`, and so on);
+  - clock windows, tier and hook counts, a book count no larger than its scope, and `then_weather` ≠ `weather`.
+- A step on another lake must be listed in `cross_lake`.
+- **Rewards follow `02 §12.1`:**
+  - a host errand pays cash only;
+  - quest A pays cash and a Ripple from 11–44;
+  - quest B pays cash and `ks_<giver>`;
+  - Ripples and keepsakes are unique across quests.
+
+**Named places (`lakes.json`, 06 §5).** Areas are circles, rings (`inner_r`) or polygons; waypoints are circles. They were searched once against each chart:
+
+| Lake | Areas | Waypoints |
+| --- | --- | --- |
+| Briar | `landing_edge` (the 50–150 m ring around the slip) | `reed_edge_1`–`3` |
+| Cedar | `marked_pool` (in the rocks) | `lamp_buoy_1`–`3` around the pool; `drift_buoy_1`–`3`, the last one the jug; `practice_buoy_1`–`4` in the lilies |
+| Crater | `safe_cove_1`–`3` (lilies, cypress, flats) | `survey_marker` in open water |
+| Nebula | `calm_reflection` (200 m, open water) | — |
+
+The validator requires this set, and `test_quests_v2` checks every area holds legal line water and every waypoint is navigable. `lakes.in_place(ref, lake, x, z)` tests a point.
+
+**Events.** Each step counts only events after acceptance, and only while it is the current step.
+
+| Event | Emitted when | Steps it advances |
+| --- | --- | --- |
+| `catch.resolved` | A catch is kept or released, including a forced release at the hook. It carries the hook's position, bait, weight, hour and cold band. | `catch_species` |
+| `legendary.witnessed` | A legendary is witnessed (emitted by V1-36). | `catch_species` |
+| `book.stage_up` | A book entry reaches a new stage. | `book_stage` |
+| `cook_dish` | A dish is cooked. | `cook_dish` |
+| `catnap.complete` | A nap ends; it carries the zone. | `catnap` |
+| `tool.use` | The chime rings; a line is set in the reeds with the Reed Anchor; Bot reports with the scanner on a thermocline lake or with the Sonar Grid; a current line is checked with the winch. It carries the shell worn. | `tool_use` |
+| `waypoint.enter` | The boat crosses into a waypoint. | `visit_zones`, `visit_sequence` |
+| `npc.hail` | A cat is hailed. It carries whether that cat is the lake's host, the event under way and whether the boat is docked at the landing. | `talk_to`, `attend_event` |
+| `settle.complete` | The settle-in interaction finishes (emitted by V1-34). | `settle` |
+
+Existing events gain fields: `line.set` its midpoint and cold band, `bot.scout_complete` its position, and `anchor.sample` the weather, each forecast span it covered and the boat position.
+
+**Step rules (`quests.py`).**
+
+- **Lines** match `zone_id` or `area_id` (the midpoint at set time), `tier_id` or `min_tier`, `hook_count`, `bait_id` on every section, `set_window` and `in_cold_band`. `line_scout_check` needs the report before the check.
+- **`windows`** ask for one event in each window, for each target: two windows on one zone need two reports. A `visit_sequence` needs one ordered pass inside each window, and a leg counts for one window only.
+- **`wait_weather`** accumulates anchored minutes in the place while the weather holds; drifting pauses it without resetting. With `then_weather`, it completes when the weather turns while the player is still anchored there. A long advance such as a catnap reports each forecast span (`calendar.weather_spans`), so only the minutes actually spent in that weather count.
+- **`book_stage`** counts the book as it stands and completes on acceptance if already met.
+- **`talk_to`** with `distinct_days` needs hails on that many game days (06:00 to 06:00).
+- **`attend_event`** needs the host hailed during the cookout, docked at that lake's landing.
+- **Clock windows** are local clock minutes. Game minute 0 is 06:00, which `_window_contains` adds. Until V1-31 it compared elapsed minutes, so the V3 windows were checked six hours late: Willow's 05:00–08:00 window was read as 11:00–14:00.
+
+**Availability and chains.**
+
+- A cat's chain is its roster quests that have dialogue. A hail opens the first not yet done.
+- `requires` (a finished chapter, a completed quest, an open route) keeps a quest off offer until met.
+- Quest B opens the game day after A is turned in: `completed_game_minute` is saved with the claim. A V3 quest A completed before V1.0, with no saved minute, opens B at once.
+- A pin covers only the current step's `talk_to` cat and a ready quest's giver.
+
+**Turn-ins and friendship.**
+
+- **At the giver or the host.** A ready side quest can be turned in to its giver, or at its lake's host. The host's hail opens a hand-in menu before her own conversation.
+- **The giver's acknowledgement.** After a host turn-in, the giver's next meeting opens on that quest's return line, even when quest B is now on offer. This uses the ledger's `turned_in_by` and `acknowledged` fields.
+- **Friendship** (Stranger, Acquaintance, Friend) is derived from quests A and B and never stored.
+- **Greetings** use the most specific state the cat has a line for, in this order: cookout, `after_chN`, `weather:<state>`, `first`, friendship, `day`. A list of greetings is a set of alternatives, one picked per game day.
+
+**Rewards.**
+
+- **One ledger.** Every reward goes through `narrative_v1.reward_claims`. It recognizes V1.0 ids by their grammar (`narrative.is_quest_id`), so a later build's ids and claims load as progress. An on-accept gift claims `<quest>:accept`.
+- **Where each kind goes:**
+  - cash to the purse;
+  - Ripples to `v2.ripples_v2` (the V3 Ripples keep their list);
+  - keepsakes to `v2.keepsakes`;
+  - recipes to `v2.recipes`, and dish cards to `v2.dishes_known`;
+  - bait to the bait locker, and pantry items to the pantry;
+  - shells through `grant_shell`;
+  - unlocks to `v2.unlocks`, where `travel:<lake>` also opens that route.
+
+**Letters.** Once a cat's quests are all done, they write one letter: a variant chosen from the seed, kept in `v2.npcs.letters`. Postmaster Pounce delivers the oldest letter sent before today, at most one a game day, when hailed. A cat with nothing to say yet still waves.
+
+**Journal.** The quest pages list the twelve V3 quests, then each accepted V1.0 side quest. A V1.0 page shows its `journal` text and its step. For a step that needs a cat, and for a ready quest's giver, it says when the schedule next guarantees that cat is out (`npcs.next_appearance`, `02 §12.2` rule 4). Travelers follow their own rules: Pounce's next visit to your lake, and Thistle's next Saturday.
+
+**Tests (`test_quests_v2`).**
+
+- **Each objective type** is completed by its own events. Events before acceptance don't count, and the reward pays exactly once, including after a reload.
+- **Each field** is tested with an event that differs only in that field, which must not count.
+- **The validator** accepts every type and field, and rejects unlisted fields and bad rows without raising.
+- **The twelve V3 quests:** `narrative_v1.json`'s digest is fixed, and merging leaves its quests, dialogue and NPCs as they were.
+- **Turn-ins:** a host turn-in is acknowledged by the giver's return line at the next meeting, for a V3 quest and for a V1.0 quest.

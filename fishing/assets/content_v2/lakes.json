@@ -508,6 +508,40 @@
       "lake_days": [
         "mayfly_morning",
         "firefly_night"
+      ],
+      "areas": [
+        {
+          "id": "landing_edge",
+          "name": "Landing edge",
+          "shape": "circle",
+          "x": -435.789,
+          "z": 107.381,
+          "r": 150.0,
+          "inner_r": 50.0
+        }
+      ],
+      "waypoints": [
+        {
+          "id": "reed_edge_1",
+          "name": "Reed edge 1",
+          "x": -342.0,
+          "z": -92.0,
+          "r": 25.0
+        },
+        {
+          "id": "reed_edge_2",
+          "name": "Reed edge 2",
+          "x": -324.0,
+          "z": 10.0,
+          "r": 25.0
+        },
+        {
+          "id": "reed_edge_3",
+          "name": "Reed edge 3",
+          "x": -390.0,
+          "z": -32.0,
+          "r": 25.0
+        }
       ]
     },
     {
@@ -740,6 +774,88 @@
       "lake_days": [
         "shad_run",
         "breezy_bass"
+      ],
+      "areas": [
+        {
+          "id": "marked_pool",
+          "name": "The Marked Pool",
+          "shape": "circle",
+          "x": 403.611,
+          "z": -1212.677,
+          "r": 45.0
+        }
+      ],
+      "waypoints": [
+        {
+          "id": "lamp_buoy_1",
+          "name": "Lamp buoy 1",
+          "x": 403.611,
+          "z": -1154.677,
+          "r": 25.0
+        },
+        {
+          "id": "lamp_buoy_2",
+          "name": "Lamp buoy 2",
+          "x": 460.73,
+          "z": -1202.605,
+          "r": 25.0
+        },
+        {
+          "id": "lamp_buoy_3",
+          "name": "Lamp buoy 3",
+          "x": 413.683,
+          "z": -1269.796,
+          "r": 25.0
+        },
+        {
+          "id": "drift_buoy_1",
+          "name": "Drift buoy 1",
+          "x": 343.611,
+          "z": -822.677,
+          "r": 25.0
+        },
+        {
+          "id": "drift_buoy_2",
+          "name": "Drift buoy 2",
+          "x": 367.611,
+          "z": -984.677,
+          "r": 25.0
+        },
+        {
+          "id": "drift_buoy_3",
+          "name": "The jug",
+          "x": 397.611,
+          "z": -1122.677,
+          "r": 25.0
+        },
+        {
+          "id": "practice_buoy_1",
+          "name": "Practice buoy 1",
+          "x": 607.611,
+          "z": -996.677,
+          "r": 20.0
+        },
+        {
+          "id": "practice_buoy_2",
+          "name": "Practice buoy 2",
+          "x": 655.611,
+          "z": -1008.677,
+          "r": 20.0
+        },
+        {
+          "id": "practice_buoy_3",
+          "name": "Practice buoy 3",
+          "x": 673.611,
+          "z": -960.677,
+          "r": 20.0
+        },
+        {
+          "id": "practice_buoy_4",
+          "name": "Practice buoy 4",
+          "x": 685.611,
+          "z": -912.677,
+          "r": 20.0
+        }
       ]
     },
     {
@@ -1071,7 +1187,9 @@
           "loon",
           "larch_wind"
         ]
-      }
+      },
+      "areas": [],
+      "waypoints": []
     },
     {
       "id": "crater",
@@ -1388,7 +1506,42 @@
             -270
           ]
         ]
-      }
+      },
+      "areas": [
+        {
+          "id": "safe_cove_1",
+          "name": "Safe cove 1",
+          "shape": "circle",
+          "x": -414.0,
+          "z": -108.0,
+          "r": 35.0
+        },
+        {
+          "id": "safe_cove_2",
+          "name": "Safe cove 2",
+          "shape": "circle",
+          "x": 312.0,
+          "z": 174.0,
+          "r": 35.0
+        },
+        {
+          "id": "safe_cove_3",
+          "name": "Safe cove 3",
+          "shape": "circle",
+          "x": -48.0,
+          "z": -324.0,
+          "r": 35.0
+        }
+      ],
+      "waypoints": [
+        {
+          "id": "survey_marker",
+          "name": "Survey marker",
+          "x": 60.0,
+          "z": 252.0,
+          "r": 25.0
+        }
+      ]
     },
     {
       "id": "nebula",
@@ -2006,7 +2159,18 @@
             "stars": 1.0
           }
         }
-      }
+      },
+      "areas": [
+        {
+          "id": "calm_reflection",
+          "name": "The calm reflection",
+          "shape": "circle",
+          "x": 320.0,
+          "z": 404.0,
+          "r": 200.0
+        }
+      ],
+      "waypoints": []
     }
   ],
   "zone_fallback_multiplier": 0.07

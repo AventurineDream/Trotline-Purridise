@@ -540,7 +540,7 @@ New:
 | `cook_dish` | dish_id or any | Cook after acceptance |
 | `catnap` | zone_id? | A nap completes in the zone |
 | `tool_use` | tool_id, zone_id?, lake_id?, shell_id? | A successful tool use (chime cast, scanner read, reed anchor set). `shell_id` requires that shell to be equipped at the time |
-| `wait_weather` | weather, then_weather?, zone_id \| zone_ids \| lake_id, minutes (default 30) | Anchored in a qualifying zone while that weather is active, for `minutes` game minutes in total (accumulated; drifting pauses progress without resetting it). With `then_weather`, it completes when the weather changes to that state while the player is waiting there |
+| `wait_weather` | weather, then_weather?, zone_id \| zone_ids \| lake_id \| area_ids, minutes (default 30) | Anchored in a qualifying zone while that weather is active, for `minutes` game minutes in total (accumulated; drifting pauses progress without resetting it). With `then_weather`, it completes when the weather changes to that state while the player is waiting there |
 | `settle` | zone_id, cues | The finale "settle in" interaction (§13.5) |
 | `talk_to` | npc_id, distinct_days? | Hail that cat after acceptance (letters, introductions). `distinct_days: 3` means three different game days |
 | `attend_event` | lake_id, event | Be at that lake's landing during the event (Sunday cookout) and hail the host |
@@ -561,6 +561,12 @@ order (for example `catch_species` then `talk_to`). A quest may declare `require
 (`chapter_complete: N`, a quest id, or `travel_unlocked: lake`), which keeps it
 unavailable until met. The validator must reject any authored objective that uses
 a field not in this table.
+
+Field values (V1-31): a `group` is a species' food group (`panfish`, `catfish`, `trout`, …), so
+"4 different trout" excludes the whitefish. Weather names are the game's states, so rain is
+`drizzle`. `area_ids` on `wait_weather` lets chapter 4 offer its three coves. With `then_weather`,
+`minutes` applies only when given. A `book_stage` goal counts the book as it stands, so a goal
+already met completes on acceptance.
 
 Mechanics text belongs only in the journal objective string (`05 §0`).
 

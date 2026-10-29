@@ -117,7 +117,12 @@ def pinned(state, content) -> frozenset:
             pins.add(quest.get("giver_id"))
         elif progress.status == "active":
             objective = quest.get("objective")
-            for step in objective if isinstance(objective, list) else [objective]:
+            steps = objective if isinstance(objective, list) else [objective]
+            if "kind" in quest:
+                # A V1.0 quest's steps run in order; only the current one needs its cat.
+                index = progress.progress.get("step", 0)
+                steps = steps[index:index + 1] if type(index) is int and index >= 0 else []
+            for step in steps:
                 if isinstance(step, dict) and step.get("type") == "talk_to":
                     pins.add(step.get("npc_id"))
     return frozenset(pin for pin in pins if isinstance(pin, str) and pin in cast().names)
@@ -209,3 +214,43 @@ def active_npcs(state, world, content):
         actors.append(NPC(npc_id, roster.names[npc_id], row["quest_id"] if row else None, anchor,
                           npc_id == roster.hosts[world.id]))
     return tuple(actors)
+
+
+def next_appearance(state, content, npc_id: str) -> str:
+    """When the schedule next guarantees this cat is out, for the journal (02 §12.2 rule 4)."""
+    from .lakes import LAKES
+    roster = cast()
+    lake = next((lake for lake, host in roster.hosts.items() if host == npc_id), None)
+    name = roster.names.get(npc_id, npc_id)
+    if lake is not None:
+        return f"{name} is always at {LAKES[lake]['landing']}."
+    today = max(0, int(state.game_minutes // 1440))
+    hour = hour_of_day(state.game_minutes)
+    if npc_id in TRAVELER_MOORINGS:
+        # Travelers are never pinned: Pounce visits one lake a day and Thistle comes on Saturdays.
+        here = state.lake_id
+        for ahead in range(15):
+            day = today + ahead
+            when = "today" if ahead == 0 else "tomorrow" if ahead == 1 else f"in {ahead} days"
+            if npc_id == "pounce" and pounce_lake(state, day) == here and (ahead or _band(hour, (6.0, 16.0))):
+                return f"{name} visits {LAKES[here]['name']} {when}, 08:00–16:00."
+            if (npc_id == "thistle" and calendar.weekday(day * 1440) == SATURDAY
+                    and (ahead or _band(hour, (6.0, 18.0)))):
+                return f"{name} moors at your lake {when}, 10:00–18:00."
+        return f"{name} travels; watch for their boat."
+    lake = next((lake for lake, pool in roster.day.items() if npc_id in pool), None)
+    night_lake = next((lake for lake, pool in roster.night.items() if npc_id in pool), None)
+    if npc_id in pinned(state, content):
+        return f"{name} waits on {LAKES[lake or night_lake]['name']} every day until then."
+    seed = state.narrative.schedule_seed
+    for ahead in range(len(roster.day.get(lake, ())) + len(roster.night.get(night_lake, ())) + 2):
+        day = today + ahead
+        when = "today" if ahead == 0 else "tomorrow" if ahead == 1 else f"in {ahead} days"
+        # Today's band counts only while it is still to come or under way.
+        if (lake is not None and npc_id in day_encounters(seed, lake, day)
+                and (ahead or _band(hour, DAY_HOURS))):
+            return f"{name} is out on {LAKES[lake]['name']} {when}, 06:00–20:00."
+        if (night_lake is not None and night_encounter(seed, night_lake, day) == npc_id
+                and (ahead or not 4.0 <= hour < 6.0)):
+            return f"{name} is out on {LAKES[night_lake]['name']} {when}, 20:00–04:00."
+    return f"{name} will be out again soon."
