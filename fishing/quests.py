@@ -20,10 +20,14 @@ def _finite_number(value) -> bool:
         return False
 
 
+CLOCK_START = 360  # game minute 0 is 06:00 on the clock
+
+
 def _window_contains(window, game_minute: float) -> bool:
+    """Windows are local clock minutes, not elapsed game minutes (docs/narrative/CONTENT.md)."""
     if not isinstance(window, list) or len(window) != 2 or not _finite_number(game_minute):
         return False
-    minute = game_minute % 1440
+    minute = (game_minute + CLOCK_START) % 1440
     start, end = window
     return start <= minute < end if start < end else minute >= start or minute < end
 
