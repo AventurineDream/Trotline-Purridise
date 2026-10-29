@@ -1,0 +1,294 @@
+{
+  "backends": [
+    "native",
+    "software"
+  ],
+  "actors": 51,
+  "cats": 52,
+  "lod0_triangles": {
+    "min": 2052,
+    "median": 2320,
+    "max": 4464
+  },
+  "lod1_triangles": {
+    "min": 642,
+    "median": 750,
+    "max": 1404
+  },
+  "mesh_build_median_ms": 54.94,
+  "portrait_median_ms": 42.34,
+  "world": {
+    "briar/grandmother_whiskers/approach/native": {
+      "distance_m": 14.0,
+      "hail_available": true,
+      "position": [
+        -434.87,
+        0.555,
+        111.12
+      ],
+      "boat": null
+    },
+    "briar/grandmother_whiskers/hail/native": {
+      "distance_m": 8.0,
+      "hail_available": true,
+      "position": [
+        -434.87,
+        0.555,
+        111.12
+      ],
+      "boat": null
+    },
+    "briar/elder_moss/approach/native": {
+      "distance_m": 14.0,
+      "hail_available": true,
+      "position": [
+        329.64,
+        0.22,
+        20.19
+      ],
+      "boat": "log_raft"
+    },
+    "briar/elder_moss/hail/native": {
+      "distance_m": 8.0,
+      "hail_available": true,
+      "position": [
+        329.64,
+        0.22,
+        20.19
+      ],
+      "boat": "log_raft"
+    },
+    "briar/native/memory": {
+      "resident_actors": 2,
+      "max_actors": 14,
+      "resident_bytes": 406764,
+      "mesh_cache_bytes_bound": 5032368,
+      "portrait_bytes_bound": 4718592,
+      "gpu_bytes": 11114152,
+      "software_paint_bytes": 0,
+      "budget_bytes": 157286400,
+      "total_bytes_bound": 21271876
+    },
+    "briar/grandmother_whiskers/approach/software": {
+      "distance_m": 14.0,
+      "hail_available": true,
+      "position": [
+        -434.87,
+        0.555,
+        111.12
+      ],
+      "boat": null
+    },
+    "briar/grandmother_whiskers/hail/software": {
+      "distance_m": 8.0,
+      "hail_available": true,
+      "position": [
+        -434.87,
+        0.555,
+        111.12
+      ],
+      "boat": null
+    },
+    "briar/elder_moss/approach/software": {
+      "distance_m": 14.0,
+      "hail_available": true,
+      "position": [
+        329.64,
+        0.22,
+        20.19
+      ],
+      "boat": "log_raft"
+    },
+    "briar/elder_moss/hail/software": {
+      "distance_m": 8.0,
+      "hail_available": true,
+      "position": [
+        329.64,
+        0.22,
+        20.19
+      ],
+      "boat": "log_raft"
+    },
+    "briar/software/memory": {
+      "resident_actors": 2,
+      "max_actors": 14,
+      "resident_bytes": 406764,
+      "mesh_cache_bytes_bound": 5032368,
+      "portrait_bytes_bound": 4718592,
+      "gpu_bytes": 0,
+      "software_paint_bytes": 60768,
+      "budget_bytes": 157286400,
+      "total_bytes_bound": 10218492
+    },
+    "cedar/doc_barnaby/approach/native": {
+      "distance_m": 14.0,
+      "hail_available": true,
+      "position": [
+        -186.45,
+        0.32,
+        -400.5
+      ],
+      "boat": null
+    },
+    "cedar/doc_barnaby/hail/native": {
+      "distance_m": 8.0,
+      "hail_available": true,
+      "position": [
+        -186.45,
+        0.32,
+        -400.5
+      ],
+      "boat": null
+    },
+    "cedar/captain_maeve/approach/native": {
+      "distance_m": 14.0,
+      "hail_available": true,
+      "position": [
+        0.01,
+        0.479,
+        0.01
+      ],
+      "boat": "mahogany_runabout"
+    },
+    "cedar/captain_maeve/hail/native": {
+      "distance_m": 8.0,
+      "hail_available": true,
+      "position": [
+        0.01,
+        0.479,
+        0.01
+      ],
+      "boat": "mahogany_runabout"
+    },
+    "cedar/native/memory": {
+      "resident_actors": 2,
+      "max_actors": 14,
+      "resident_bytes": 414840,
+      "mesh_cache_bytes_bound": 5871096,
+      "portrait_bytes_bound": 4718592,
+      "gpu_bytes": 11114152,
+      "software_paint_bytes": 0,
+      "budget_bytes": 157286400,
+      "total_bytes_bound": 22118680
+    },
+    "cedar/doc_barnaby/approach/software": {
+      "distance_m": 14.0,
+      "hail_available": true,
+      "position": [
+        -186.45,
+        0.32,
+        -400.5
+      ],
+      "boat": null
+    },
+    "cedar/doc_barnaby/hail/software": {
+      "distance_m": 8.0,
+      "hail_available": true,
+      "position": [
+        -186.45,
+        0.32,
+        -400.5
+      ],
+      "boat": null
+    },
+    "cedar/captain_maeve/approach/software": {
+      "distance_m": 14.0,
+      "hail_available": true,
+      "position": [
+        0.01,
+        0.479,
+        0.01
+      ],
+      "boat": "mahogany_runabout"
+    },
+    "cedar/captain_maeve/hail/software": {
+      "distance_m": 8.0,
+      "hail_available": true,
+      "position": [
+        0.01,
+        0.479,
+        0.01
+      ],
+      "boat": "mahogany_runabout"
+    },
+    "cedar/software/memory": {
+      "resident_actors": 2,
+      "max_actors": 14,
+      "resident_bytes": 414840,
+      "mesh_cache_bytes_bound": 5871096,
+      "portrait_bytes_bound": 4718592,
+      "gpu_bytes": 0,
+      "software_paint_bytes": 60672,
+      "budget_bytes": 157286400,
+      "total_bytes_bound": 11065200
+    }
+  },
+  "budget": {
+    "resident_actors": 14,
+    "max_actors": 14,
+    "resident_bytes": 2756986,
+    "mesh_cache_bytes_bound": 8946432,
+    "portrait_bytes_bound": 5111808,
+    "gpu_bytes": 0,
+    "software_paint_bytes": 0,
+    "budget_bytes": 157286400,
+    "total_bytes_bound": 16815226,
+    "peak_resident": 14,
+    "peak_total_bytes_bound": 16971274,
+    "queued": 20
+  },
+  "hailing": {
+    "range_m": 20.0,
+    "speed_limit_mps": 1.5433,
+    "cases": [
+      {
+        "distance_m": 19.5,
+        "speed_mps": 0.0,
+        "hails": true
+      },
+      {
+        "distance_m": 20.5,
+        "speed_mps": 0.0,
+        "hails": false
+      },
+      {
+        "distance_m": 10.0,
+        "speed_mps": 1.5279,
+        "hails": true
+      },
+      {
+        "distance_m": 10.0,
+        "speed_mps": 1.5433,
+        "hails": false
+      }
+    ]
+  },
+  "motion": {
+    "npc": "grandmother_whiskers",
+    "by_distance": [
+      {
+        "distance_m": 5.0,
+        "wave_blend": 1.0,
+        "head_yaw": -0.242
+      },
+      {
+        "distance_m": 20.0,
+        "wave_blend": 1.0,
+        "head_yaw": -0.242
+      },
+      {
+        "distance_m": 35.0,
+        "wave_blend": 0.5,
+        "head_yaw": -0.121
+      },
+      {
+        "distance_m": 45.0,
+        "wave_blend": 0.0,
+        "head_yaw": -0.0
+      }
+    ],
+    "reduced_motion_still": true
+  },
+  "peak_rss_bytes": 420171776,
+  "memory_limit_bytes": 3000000000
+}
