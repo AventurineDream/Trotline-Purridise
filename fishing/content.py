@@ -864,8 +864,8 @@ class _ContentV2Validator:
             self.enum(filename, at + "pectoral", look["pectoral"], _FISH_PECTORALS)
         if "features" in look:
             features = look["features"]
-            if (not isinstance(features, list) or len(set(map(str, features))) != len(features)
-                    or not set(features) <= _FISH_FEATURES):
+            if (not isinstance(features, list) or not all(isinstance(name, str) for name in features)
+                    or len(set(features)) != len(features) or not set(features) <= _FISH_FEATURES):
                 self.error(filename, at + "features", "expected unique known features")
 
     def nebula_lanes(self, filename, where, lanes, bounds):
