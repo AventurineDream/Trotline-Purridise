@@ -296,39 +296,74 @@ class Systems(unittest.TestCase):
             self.assertTrue(chat.advance(state, c))
         self.assertEqual(texts, c.cats["old_gus"]["greetings"]["day"][0])
 
-    def test_a_story_is_told_one_part_a_game_day_after_the_greeting(self):
+    def huck(self):
         from .npcs import NPC
-        c = self.content
         flathead = World("flathead")
         state = State.new(flathead, seed=32)
-        huck = NPC("captain_huckleberry", "Captain Huckleberry", None, flathead.anchors["flathead:landing"], True)
-        parts = c.cats["captain_huckleberry"]["story"]
+        state._quest_event_handler = QuestManager(self.content).handle_event
+        return flathead, state, NPC("captain_huckleberry", "Captain Huckleberry", None,
+                                    flathead.anchors["flathead:landing"], True)
 
-        def hail():
-            chat, seen = open_conversation(huck, state, c, world=flathead), []
-            while True:
-                seen.append(chat.node_id)
-                node = chat.node(c)
-                if "choices" in node or not chat.advance(state, c):
-                    return seen, node
-        seen, node = hail()
+    def walk(self, npc, state, world, *, choose=None):
+        """Hail and read on to the first choice (taking `choose` there); the nodes seen, and the chat."""
+        from .dialogue import record_hail
+        record_hail(state, world, npc)
+        chat, seen = open_conversation(npc, state, self.content, world=world), []
+        while True:
+            seen.append(chat.node_id)
+            node = chat.node(self.content)
+            if "choices" in node:
+                if choose is None:
+                    return seen, chat
+                chat.selected = next(i for i, ch in enumerate(node["choices"]) if ch["action"] == choose)
+                choose = None
+            if not chat.advance(state, self.content):
+                return seen, chat
+
+    def test_a_story_is_told_one_part_a_game_day_when_it_is_shown(self):
+        c = self.content
+        flathead, state, huck = self.huck()
+        parts = c.cats["captain_huckleberry"]["story"]
+        story = "captain_huckleberry:story"
+        # Closing on the greeting keeps part one for the next hail (Codex, PR 106).
+        chat = open_conversation(huck, state, c, world=flathead)
+        self.assertEqual((chat.node_id, chat.node(c)["next"]), ("captain_huckleberry:greeting", story))
+        self.assertEqual(story_heard(state, "captain_huckleberry"), 0)
         # Greeting, part one, then his errand's offer.
-        self.assertEqual(seen, ["captain_huckleberry:greeting", "captain_huckleberry:story",
-                                "host_flathead:dialogue:offer"])
-        self.assertEqual(c.dialogue["host_flathead:dialogue:offer"], node)
+        seen, chat = self.walk(huck, state, flathead)
+        self.assertEqual(seen, ["captain_huckleberry:greeting", story, "host_flathead:dialogue:offer"])
+        self.assertEqual(chat.nodes[story]["text"], parts[0])
         self.assertEqual(story_heard(state, "captain_huckleberry"), 1)
-        self.assertNotIn("captain_huckleberry:story", hail()[0])  # nothing more today
+        self.assertNotIn(story, self.walk(huck, state, flathead)[0])  # nothing more today
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "save.json"
             state.save(path)
             state = State.load(path, flathead)
-        texts = []
+        told = []
         for day in range(1, 4):
             state.game_minutes = day * 1440 + 120
-            chat = open_conversation(huck, state, c, world=flathead)
-            texts.append(chat.nodes.get("captain_huckleberry:story", {}).get("text"))
-        self.assertEqual(texts, [parts[1], parts[2], None])  # the story ends after part three
+            seen, chat = self.walk(huck, state, flathead)
+            told.append(chat.nodes[story]["text"] if story in seen else None)
+        self.assertEqual(told, [parts[1], parts[2], None])  # the story ends after part three
         self.assertEqual(story_heard(state, "captain_huckleberry"), 3)
+
+    def test_taking_a_multi_day_talk_from_its_cat_counts_that_day(self):
+        # Huckleberry's errand is heard over the story's three days, the first one being the offer's (Codex, PR 106).
+        c = self.content
+        flathead, state, huck = self.huck()
+        self.walk(huck, state, flathead, choose="accept")
+        progress = state.narrative.quests["host_flathead"]
+        self.assertEqual((progress.status, progress.progress["data"]["days"]), ("active", [0]))
+        for day in (1, 2):
+            state.game_minutes = day * 1440 + 120
+            self.walk(huck, state, flathead)
+        self.assertEqual(progress.status, "ready")
+        self.assertEqual(story_heard(state, "captain_huckleberry"), 3)
+        # Bjorn's quest needs Huckleberry, not Bjorn, so taking it from Bjorn counts no day.
+        from .npcs import NPC
+        bjorn = NPC("bjorn", "Bjorn", None, flathead.anchors[cast().anchors["bjorn"]], False)
+        self.walk(bjorn, state, flathead, choose="accept")
+        self.assertEqual(state.narrative.quests["wc_bjorn_a"].progress["data"], {})
 
     def test_the_book_shows_v1_0_ripples_and_keepsakes_with_their_givers(self):
         s = self.state

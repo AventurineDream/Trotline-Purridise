@@ -637,6 +637,26 @@ def current_step(definition: dict, progress) -> tuple[dict | None, dict]:
     return steps[index], data
 
 
+def count_todays_hail(state, content, quest_id: str, npc_id: str) -> None:
+    """Accepted while talking to the cat its `distinct_days` step needs: today's hail counts (V1-33).
+
+    The hail itself came before the acceptance, so the step never saw it. One day never
+    completes the step, since `distinct_days` is at least 2.
+    """
+    definition = content.quests.get(quest_id)
+    progress = state.narrative.quests.get(quest_id)
+    if definition is None or "kind" not in definition or progress is None or progress.status != "active":
+        return
+    step, data = current_step(definition, progress)
+    if step is None or step["type"] != "talk_to" or step["npc_id"] != npc_id or "distinct_days" not in step:
+        return
+    days = data.get("days")
+    days = [day for day in days if type(day) is int] if isinstance(days, list) else []
+    if game_day(state.game_minutes) not in days:
+        days.append(game_day(state.game_minutes))
+    data["days"] = days
+
+
 def legendary_recorded(state, legendary_id) -> bool:
     """A legendary's page holds a record. The V3 Guardian sighting counts as its record."""
     from .book import LEGENDARY_IDS
