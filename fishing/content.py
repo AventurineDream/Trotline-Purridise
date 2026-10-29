@@ -16,7 +16,8 @@ from .narrative import DAY_NPCS, QUEST_IDS, RIPPLE_BY_QUEST
 CONTENT_PATH = Path(__file__).with_name("assets") / "narrative_v1.json"
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
-                    "pantry.json", "dishes.json", "calendar.json", "bot.json", "legendaries.json")
+                    "pantry.json", "dishes.json", "calendar.json", "bot.json", "legendaries.json",
+                    "npcs.json")
 BOOK_CONTENT_PATH = CONTENT_V2_PATH / "book.json"
 BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
 _GAMEPLAY_REFS_LOADED = False
@@ -105,6 +106,7 @@ class GameplayContent:
     pantry: dict[str, dict]
     dishes: dict[str, dict]
     legendaries: dict[str, dict]
+    roster: dict[str, dict]
 
 
 @dataclass(frozen=True)
@@ -456,6 +458,19 @@ _FISH_DORSAL_STYLES = {"normal", "sail", "long", "spiny"}
 _FISH_PECTORALS = {"normal", "fan"}
 _FISH_FEATURES = {"kype", "hump", "scutes", "gills", "legs", "rings", "lure", "halo",
                   "comet", "ribbon", "whiskers", "long_ear", "ocellus", "shoulder_spot"}
+# The cat roster's appearance (V1-29): catmesh.py builds and paints these.
+_CAT_COATS = {"short", "long", "rex", "hairless"}
+_CAT_EARS = {"pointed", "folded", "tufted", "rounded"}
+_CAT_TAILS = {"long", "bob", "none", "plume"}
+_CAT_PATTERNS = {"solid", "tabby", "mackerel", "calico", "tortoiseshell", "tuxedo", "point", "spotted", "bicolor"}
+_CAT_ATTIRE = {"shawl", "spectacles", "oilskin", "cap", "parka", "vest", "goggles", "life_jacket",
+               "bandana", "sweater", "lantern", "scarf"}
+_CAT_POSE_PROPS = {"sit_fish": {"rod"}, "nap_curl": {"none"}, "wave": {"none"}, "helm": {"none"},
+                   "craft": {"book", "brush", "whittle", "mug", "tablet"}}
+_HANDCRAFTED_BOATS = {"jon", "rowboat", "sail", "pontoon"}
+# Mirrors data.PAINT, which cannot be imported while data.py is still validating.
+_BOAT_PAINT_IDS = {"hull": {"aluminum", "green", "olive", "carolina", "red", "black", "sand", "white"},
+                   "deck": {"aluminum", "wood", "carpet"}, "motor": {"black", "red", "white", "green"}}
 _BOAT_TRAITS = {
     "shallow", "silent", "hammock", "wind_steady", "trophy_rail", "glow",
     "galley", "ice_hull",
@@ -1308,9 +1323,115 @@ class _ContentV2Validator:
         windows = self.calendar(docs, species)
         self.bot(docs)
         legendaries = self.legendaries(docs, species, windows)
+        roster = self.roster(docs, lake_ids if lakes_file not in self.unavailable_files else None,
+                             boats if boats_file not in self.unavailable_files else None)
         if self.errors:
             raise ContentError("\n".join(self.errors))
-        return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes, legendaries)
+        return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes, legendaries, roster)
+
+    def roster(self, docs, lakes, boats):
+        """The 52 cats (51 rows; Pip & Pebble share one): role, lake, boat and appearance."""
+        filename = "npcs.json"
+        self.root(docs, filename, {"schema_version", "npcs"})
+        rows = self.table(docs, filename, "npcs", {"id", "name", "lake", "role", "boat", "appearance"},
+                          {"boat_paint"})
+        if filename in self.unavailable_files:
+            return rows
+        counts = {"host": 0, "traveler": 0, "water": 0}
+        cats = 0
+        for cid, row, where in self.rows(filename, "npcs"):
+            self.text(filename, where + ".name", row.get("name"))
+            role, lake, boat = row.get("role"), row.get("lake"), row.get("boat")
+            if self.enum(filename, where + ".role", role, set(counts)):
+                counts[role] += 1
+            if role == "traveler":
+                if lake is not None:
+                    self.error(filename, where + ".lake", "travelers visit every lake; expected null")
+            elif lakes is not None:
+                self.enum(filename, where + ".lake", lake, lakes)
+            if role == "host":
+                if boat is not None:
+                    self.error(filename, where + ".boat", "hosts stand on their landing; expected null")
+            elif boats is not None and (not self.enum(filename, where + ".boat", boat, boats)
+                                        or boat in _HANDCRAFTED_BOATS):
+                self.error(filename, where + ".boat", "expected a generated family boat")
+            paint = row.get("boat_paint", {})
+            if not isinstance(paint, dict) or not set(paint) <= set(_BOAT_PAINT_IDS):
+                self.error(filename, where + ".boat_paint", "expected hull, deck or motor paint")
+            else:
+                for slot, value in paint.items():
+                    self.enum(filename, f"{where}.boat_paint.{slot}", value, _BOAT_PAINT_IDS[slot])
+            look = row.get("appearance")
+            self.cat_look(filename, where + ".appearance", look, twin_allowed=True)
+            cats += 1 + int(isinstance(look, dict) and "twin" in look)
+        if counts != {"host": 5, "traveler": 2, "water": 44} or cats != 52:
+            self.error(filename, "npcs", "expected 5 hosts, 2 travelers and 44 water-cat rows: 52 cats")
+        hosts = [row.get("lake") for row in rows.values() if row.get("role") == "host"]
+        if lakes is not None and sorted(map(str, hosts)) != sorted(lakes):
+            self.error(filename, "npcs", "expected one host per lake")
+        for lake, pool in DAY_NPCS.items():
+            for npc_id in pool:
+                if npc_id not in rows or rows[npc_id].get("lake") != lake:
+                    self.error(filename, "npcs", f"expected the V3 cat {npc_id!r} on {lake}")
+        return rows
+
+    def cat_look(self, filename, where, look, *, twin_allowed):
+        if not isinstance(look, dict):
+            self.error(filename, where, "expected an object")
+            return
+        required = {"breed", "size", "build", "legs", "coat", "ears", "tail", "pattern", "colors", "eyes",
+                    "whiskers", "attire", "pose", "prop"}
+        optional = {"glow", "one_ear"} | ({"twin"} if twin_allowed else set())
+        for key in sorted(required - look.keys()):
+            self.error(filename, where, f"missing required field {key!r}")
+        for key in sorted(look.keys() - required - optional):
+            self.error(filename, where, f"unknown field {key!r}")
+        at = where + "."
+        self.text(filename, at + "breed", look.get("breed"))
+        for key, low, high in (("size", 0.5, 1.4), ("build", 0.7, 1.4), ("legs", 0.5, 1.3),
+                               ("whiskers", 0.3, 1.6)):
+            self.number(filename, at + key, look.get(key), minimum=low, maximum=high)
+        for key, allowed in (("coat", _CAT_COATS), ("ears", _CAT_EARS), ("tail", _CAT_TAILS),
+                             ("pattern", _CAT_PATTERNS)):
+            self.enum(filename, at + key, look.get(key), allowed)
+
+        def colour(key, value):
+            if not isinstance(value, list) or len(value) != 3:
+                self.error(filename, at + key, "expected an RGB triple")
+                return
+            for i, n in enumerate(value):
+                self.number(filename, f"{at}{key}[{i}]", n, minimum=0, maximum=1)
+
+        colors = look.get("colors")
+        if not isinstance(colors, dict) or set(colors) != {"base", "secondary", "accent"}:
+            self.error(filename, at + "colors", "expected base, secondary and accent colours")
+        else:
+            for key in ("base", "secondary", "accent"):
+                colour("colors." + key, colors[key])
+        colour("eyes", look.get("eyes"))
+        attire = look.get("attire")
+        if not isinstance(attire, list) or len(attire) > 4:
+            self.error(filename, at + "attire", "expected at most four attire items")
+        else:
+            kinds = []
+            for i, item in enumerate(attire):
+                if not isinstance(item, dict) or set(item) != {"kind", "color"}:
+                    self.error(filename, f"{at}attire[{i}]", "expected kind and color")
+                    continue
+                if self.enum(filename, f"{at}attire[{i}].kind", item["kind"], _CAT_ATTIRE):
+                    kinds.append(item["kind"])
+                colour(f"attire[{i}].color", item["color"])
+            if len(set(kinds)) != len(kinds):
+                self.error(filename, at + "attire", "expected each attire kind once")
+        pose = look.get("pose")
+        if self.enum(filename, at + "pose", pose, set(_CAT_POSE_PROPS)):
+            self.enum(filename, at + "prop", look.get("prop"), _CAT_POSE_PROPS[pose])
+        if "glow" in look:
+            self.number(filename, at + "glow", look["glow"], minimum=0, maximum=1)
+        if "one_ear" in look and type(look["one_ear"]) is not bool:
+            self.error(filename, at + "one_ear", "expected a boolean")
+        if "twin" in look:
+            self.cat_look(filename, at + "twin", look["twin"], twin_allowed=False)
 
     def legendaries(self, docs, species, windows):
         """The twelve legendaries' bespoke looks and underwater idles (V1-28)."""

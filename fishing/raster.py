@@ -71,6 +71,90 @@ def raster_tri(color: np.ndarray, zbuf: np.ndarray, xy, zz, rgb: np.ndarray) -> 
     sub_z[hit] = z[hit]
 
 
+# Bounding-box buckets in steps of about 1.5, so padding wastes little.
+_BUCKETS = np.unique(np.concatenate([2 ** np.arange(14), 3 * 2 ** np.arange(13)])).astype(np.int64)
+_CHUNK = 1 << 21
+
+
+def cover(x: np.ndarray, y: np.ndarray, depth: np.ndarray, tris: np.ndarray, width: int, height: int,
+          near: float = 0.0):
+    """The nearest triangle at each pixel centre for a whole mesh at once.
+
+    Triangles are grouped by padded bounding box, so thousands of small ones cost a
+    few array passes rather than a Python loop. Returns (flat pixel index, triangle
+    index, barycentric weights (N, 3), depth) for each covered pixel. Triangles with
+    a vertex nearer than `near` are dropped rather than clipped.
+    """
+    empty = (np.zeros(0, np.int64), np.zeros(0, np.int64), np.zeros((0, 3), np.float32), np.zeros(0, np.float32))
+    if len(tris) == 0:
+        return empty
+    a, b, c = tris[:, 0], tris[:, 1], tris[:, 2]
+    tx = np.stack([x[a], x[b], x[c]], 1).astype(np.float32)
+    ty = np.stack([y[a], y[b], y[c]], 1).astype(np.float32)
+    tz = np.stack([depth[a], depth[b], depth[c]], 1).astype(np.float32)
+    finite = np.isfinite(tx).all(1) & np.isfinite(ty).all(1)
+    tx[~finite] = ty[~finite] = -1.0
+    ix0 = np.maximum(np.floor(tx.min(1)), 0).astype(np.int64)
+    ix1 = np.minimum(np.ceil(tx.max(1)), width - 1).astype(np.int64)
+    iy0 = np.maximum(np.floor(ty.min(1)), 0).astype(np.int64)
+    iy1 = np.minimum(np.ceil(ty.max(1)), height - 1).astype(np.int64)
+    # Edge functions about vertex a keep tiny triangles exact in float32.
+    x1, y1 = tx[:, 1] - tx[:, 0], ty[:, 1] - ty[:, 0]
+    x2, y2 = tx[:, 2] - tx[:, 0], ty[:, 2] - ty[:, 0]
+    area = x1 * y2 - y1 * x2
+    keep = finite & (ix0 <= ix1) & (iy0 <= iy1) & (np.abs(area) > 1e-6) & (tz.min(1) > near)
+    if not keep.any():
+        return empty
+    ids = np.flatnonzero(keep)
+    inv = 1.0 / area[ids]
+    coef = np.stack([y2[ids] * inv, -x2[ids] * inv, -y1[ids] * inv, x1[ids] * inv], 1).astype(np.float32)
+    ou = (ix0[ids] + 0.5 - tx[ids, 0]).astype(np.float32)
+    ov = (iy0[ids] + 0.5 - ty[ids, 0]).astype(np.float32)
+    bw = _BUCKETS[np.searchsorted(_BUCKETS, ix1[ids] - ix0[ids] + 1)]
+    bh = _BUCKETS[np.searchsorted(_BUCKETS, iy1[ids] - iy0[ids] + 1)]
+    keys = bw * 65536 + bh
+    # The nearest sample so far at each pixel: one pass's samples are resolved at a time.
+    best = np.full(width * height, np.inf, np.float32)
+    owner = np.full(width * height, -1, np.int64)
+    weight = np.zeros((width * height, 3), np.float32)
+    passes = []
+    for key in np.unique(keys):
+        gw, gh = int(key // 65536), int(key % 65536)
+        bucket = np.flatnonzero(keys == key)
+        # A close camera makes big triangles: bound each pass to _CHUNK samples.
+        step = max(1, _CHUNK // (gw * gh))
+        passes += [(gw, gh, bucket[start:start + step]) for start in range(0, len(bucket), step)]
+    for gw, gh, sub in passes:
+        u = (ou[sub, None] + np.arange(gw, dtype=np.float32))[:, None, :]
+        v = (ov[sub, None] + np.arange(gh, dtype=np.float32))[:, :, None]
+        k = coef[sub]
+        w1 = u * k[:, 0, None, None] + v * k[:, 1, None, None]
+        w2 = u * k[:, 2, None, None] + v * k[:, 3, None, None]
+        inside = (w1 >= -1e-4) & (w2 >= -1e-4) & (w1 + w2 <= 1.0001)
+        t, r, q = np.nonzero(inside)
+        if not len(t):
+            continue
+        group = ids[sub[t]]
+        px, py = ix0[group] + q, iy0[group] + r
+        onscreen = (px < width) & (py < height)
+        t, r, q, group, px, py = t[onscreen], r[onscreen], q[onscreen], group[onscreen], px[onscreen], py[onscreen]
+        b1, b2 = w1[t, r, q], w2[t, r, q]
+        bary = np.stack([1.0 - b1 - b2, b1, b2], 1).astype(np.float32)
+        pixels = py * width + px
+        depths = (bary * tz[group]).sum(1)
+        order = np.lexsort((depths, pixels))
+        first = np.ones(len(order), bool)
+        first[1:] = pixels[order][1:] != pixels[order][:-1]
+        pick = order[first]
+        pick = pick[depths[pick] < best[pixels[pick]]]
+        at = pixels[pick]
+        best[at], owner[at], weight[at] = depths[pick], group[pick], bary[pick]
+    covered = np.flatnonzero(owner >= 0)
+    if not len(covered):
+        return empty
+    return covered, owner[covered], weight[covered], best[covered]
+
+
 def blit_sprite(
     color: np.ndarray,
     zbuf: np.ndarray,
