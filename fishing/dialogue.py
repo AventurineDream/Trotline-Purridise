@@ -234,14 +234,56 @@ def _node(node_id, npc_id, text, *, quest_id=None, next_id=None, choices=None):
     return node
 
 
-def _greeting_nodes(nodes, npc_id, text, *, quest_id=None, next_id=None) -> str:
-    """Lay a greeting's bubbles out as chained nodes; returns the first node's id."""
+def _bubble_nodes(nodes, base_id, npc_id, text, *, quest_id=None, next_id=None) -> str:
+    """Lay a line's bubbles out as chained nodes; returns the first node's id."""
     bubbles = text if isinstance(text, list) else [text]
-    ids = [f'{npc_id}:greeting'] + [f'{npc_id}:greeting:{i}' for i in range(2, len(bubbles) + 1)]
+    ids = [base_id] + [f'{base_id}:{i}' for i in range(2, len(bubbles) + 1)]
     for i, (node_id, bubble) in enumerate(zip(ids, bubbles)):
         nodes[node_id] = _node(node_id, npc_id, bubble, quest_id=quest_id,
                                next_id=ids[i + 1] if i + 1 < len(ids) else next_id)
     return ids[0]
+
+
+def _greeting_nodes(nodes, npc_id, text, *, quest_id=None, next_id=None) -> str:
+    return _bubble_nodes(nodes, f'{npc_id}:greeting', npc_id, text, quest_id=quest_id, next_id=next_id)
+
+
+def story_heard(state, npc_id: str) -> int:
+    """How many parts of a cat's story the Skipper has heard (V1-33)."""
+    stories = state.v2.get('npcs', {}).get('stories')
+    row = stories.get(npc_id) if isinstance(stories, dict) else None
+    heard = row.get('heard') if isinstance(row, dict) else None
+    return heard if type(heard) is int and heard > 0 else 0
+
+
+def _tell_story(nodes, state, content, npc_id, *, quest_id=None, next_id=None) -> str | None:
+    """The next part of a cat's story, one a game day until it is all told (05 §4.3).
+
+    The part counts as heard only when its node is shown (`_hear_story`), so closing the
+    conversation on the greeting keeps it for the next hail.
+    """
+    from .quests import game_day
+    parts = content.cats.get(npc_id, {}).get('story') or []
+    heard = story_heard(state, npc_id)
+    stories = state.v2.get('npcs', {}).get('stories')
+    row = stories.get(npc_id) if isinstance(stories, dict) else None
+    if heard >= len(parts) or (isinstance(row, dict) and row.get('day') == game_day(state.game_minutes)):
+        return None
+    first = _bubble_nodes(nodes, f'{npc_id}:story', npc_id, parts[heard], quest_id=quest_id, next_id=next_id)
+    nodes[first]['story'] = [npc_id, heard]
+    return first
+
+
+def _hear_story(state, node) -> None:
+    """Record a story part once its first bubble is on screen."""
+    from .quests import game_day
+    mark = node.get('story') if isinstance(node, dict) else None
+    if not mark or story_heard(state, mark[0]) != mark[1]:
+        return
+    npcs = state.v2.setdefault('npcs', {})
+    if not isinstance(npcs.get('stories'), dict):
+        npcs['stories'] = {}
+    npcs['stories'][mark[0]] = {'heard': mark[1] + 1, 'day': game_day(state.game_minutes)}
 
 
 def open_conversation(npc, state, content, *, first: bool = False, world=None):
@@ -252,6 +294,7 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
     A greeting (05 §4) opens a first meeting before anything else and comes before a
     V1.0 offer. Once the cat's quests are all done, the return line answers the last
     turn-in for the rest of that game day, and the greeting takes over from the next.
+    A cat with a story tells its next part after the greeting, one part a game day.
     """
     from .quests import chain as quest_chain, current_quest, game_day, quest_status
     if npc.id == 'pounce':
@@ -290,12 +333,15 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
         finished = progress.completed_game_minute if progress is not None else None
         done = (status == 'completed' and quest_chain(content, npc.id)[-1:] == [quest_id]
                 and (finished is None or game_day(finished) < game_day(state.game_minutes)))
-        if text is not None and (first_line or ('kind' in quest and status == 'available')):
+        replaced = text is not None and done  # the greeting stands in for the return line
+        entry = _tell_story(nodes, state, content, npc.id, quest_id=quest_id,
+                            next_id=None if replaced else entry) or (None if replaced else entry)
+        if text is not None and (first_line or replaced or ('kind' in quest and status == 'available')):
             entry = _greeting_nodes(nodes, npc.id, text, quest_id=quest_id, next_id=entry)
-        elif text is not None and done:
-            entry = _greeting_nodes(nodes, npc.id, text, quest_id=quest_id)
-    elif text is not None:
-        entry = _greeting_nodes(nodes, npc.id, text)
+    else:
+        entry = _tell_story(nodes, state, content, npc.id)
+        if text is not None:
+            entry = _greeting_nodes(nodes, npc.id, text, next_id=entry)
     ready = host_turn_ins(state, content, npc.id)
     if ready:
         choices = [{'id': f'{npc.id}:hand_in:{qid}', 'quest_id': qid, 'action': 'turn_in_at_host',
@@ -308,6 +354,7 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
         return Conversation(npc.id, quest_id, f'{npc.id}:hand_in', nodes=nodes)
     if entry is None:
         return None
+    _hear_story(state, nodes.get(entry))
     return Conversation(npc.id, quest_id, entry, nodes=nodes)
 
 
@@ -330,13 +377,14 @@ class Conversation:
         return self.nodes.get(self.node_id) or content.dialogue[self.node_id]
 
     def advance(self, state, content):
-        from .quests import accept_quest
+        from .quests import accept_quest, count_todays_hail
         node = self.node(content)
         if 'choices' in node:
             choice = node['choices'][self.selected % len(node['choices'])]
             action = choice['action']
             if action == 'accept':
-                accept_quest(state, content, self.quest_id)
+                if accept_quest(state, content, self.quest_id):
+                    count_todays_hail(state, content, self.quest_id, self.npc_id)
             elif action == 'decline':
                 progress = state.narrative.quest(self.quest_id) if self.quest_id else None
                 if progress is not None and progress.status == 'available':
@@ -355,4 +403,5 @@ class Conversation:
         self.node_id = target
         self.quest_id = self.node(content).get('quest_id') or self.quest_id
         self.selected = 0
+        _hear_story(state, self.node(content))
         return True

@@ -571,6 +571,1243 @@
         "offer": "Last badge! I have to teach someone a whole fishing line. Set one on the flats with worms and let it soak an hour, then show me!",
         "done": "I'M A RANGER! You get my practice badge. You earned it too."
       }
+    },
+    {
+      "id": "wc_torvald_a",
+      "kind": "a",
+      "giver_id": "torvald",
+      "lake_id": "flathead",
+      "title": "The Deep Lantern",
+      "objective": {
+        "type": "line_check",
+        "zone_id": "flathead:deep",
+        "in_cold_band": true
+      },
+      "journal": "In the Glacial trench, set a line inside the cold layer and check it.",
+      "reward": {
+        "cash": 80,
+        "ripple_id": "ripple_18"
+      },
+      "lines": {
+        "offer": "Old Silverhead lives where the cold is. Set a line down in it in the trench. Your little sub can find it.",
+        "done": "Good. The cold remembers. Here's how to make Huckleberry's mash; Silverhead likes it."
+      }
+    },
+    {
+      "id": "wc_torvald_b",
+      "kind": "b",
+      "giver_id": "torvald",
+      "lake_id": "flathead",
+      "title": "Silverhead",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "old_silverhead"
+      },
+      "journal": "Record Old Silverhead.",
+      "reward": {
+        "cash": 120,
+        "keepsake_id": "ks_torvald"
+      },
+      "lines": {
+        "offer": "Show me Silverhead before I really retire.",
+        "done": "Still there. Still silver. Take my old depth weight; I'll fish shallower now."
+      }
+    },
+    {
+      "id": "wc_freya_a",
+      "kind": "a",
+      "giver_id": "freya",
+      "lake_id": "flathead",
+      "title": "Snow Light",
+      "objective": {
+        "type": "wait_weather",
+        "weather": "snow_mist",
+        "zone_id": "flathead:inlet",
+        "minutes": 30
+      },
+      "journal": "Anchor in Snowmelt inlet for 30 game minutes during snow mist.",
+      "reward": {
+        "cash": 80,
+        "ripple_id": "ripple_19"
+      },
+      "lines": {
+        "offer": "Wait with me in the snowmelt inlet next time the snow mist comes. Mist makes the best light.",
+        "done": "Look at that. I forgot my lens cap, and it's still the best photo I've taken."
+      }
+    },
+    {
+      "id": "wc_freya_b",
+      "kind": "b",
+      "giver_id": "freya",
+      "lake_id": "flathead",
+      "title": "The Phantom",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "glacial_phantom"
+      },
+      "journal": "Record the Glacial Phantom.",
+      "reward": {
+        "cash": 120,
+        "keepsake_id": "ks_freya"
+      },
+      "lines": {
+        "offer": "Find the Phantom. I want one picture. Just one.",
+        "done": "Got it. And look, I got you in the frame too. Keep this one."
+      }
+    },
+    {
+      "id": "wc_bramble_a",
+      "kind": "a",
+      "giver_id": "bramble",
+      "lake_id": "flathead",
+      "title": "Field Test",
+      "objective": {
+        "type": "catnap",
+        "zone_id": "flathead:flats"
+      },
+      "journal": "Catnap in Gravel flats.",
+      "reward": {
+        "cash": 80,
+        "ripple_id": "ripple_20"
+      },
+      "lines": {
+        "offer": "Nap on the gravel flats and tell me if you were cozy. Science!",
+        "done": "Cozy? I knew it. It's me that's the problem."
+      }
+    },
+    {
+      "id": "wc_bramble_b",
+      "kind": "b",
+      "giver_id": "bramble",
+      "lake_id": "flathead",
+      "title": "Cocoa Science",
+      "objective": {
+        "type": "cook_dish",
+        "any": true
+      },
+      "journal": "Cook any dish.",
+      "reward": {
+        "cash": 120,
+        "keepsake_id": "ks_bramble"
+      },
+      "lines": {
+        "offer": "Cook something warm and tell me about it. That's also science.",
+        "done": "Data recorded: soup works. Take a mitten. I have nine."
+      }
+    },
+    {
+      "id": "wc_ingrid_a",
+      "kind": "a",
+      "giver_id": "ingrid",
+      "lake_id": "flathead",
+      "title": "Models from Life",
+      "objective": {
+        "type": "book_stage",
+        "lake_id": "flathead",
+        "stage": "identified",
+        "count": 8
+      },
+      "journal": "Identify 8 Flathead species in the book.",
+      "reward": {
+        "cash": 80,
+        "ripple_id": "ripple_21"
+      },
+      "lines": {
+        "offer": "Bring eight Flathead fish into your book. I carve from what you've seen, not from stories.",
+        "done": "Good shapes. Very good shapes."
+      }
+    },
+    {
+      "id": "wc_ingrid_b",
+      "kind": "b",
+      "giver_id": "ingrid",
+      "lake_id": "flathead",
+      "title": "The Burbot Figure",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "burbot"
+      },
+      "journal": "Catch a burbot.",
+      "reward": {
+        "cash": 120,
+        "keepsake_id": "ks_ingrid"
+      },
+      "lines": {
+        "offer": "The burbot is the hardest to carve. Show me one.",
+        "done": "Ah. It's all chin. Lovely. Here's a trout I made you."
+      }
+    },
+    {
+      "id": "wc_elk_ears_eli_a",
+      "kind": "a",
+      "giver_id": "elk_ears_eli",
+      "lake_id": "flathead",
+      "title": "Back They Go",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "bull_trout"
+      },
+      "journal": "Catch a bull trout (it is always released).",
+      "reward": {
+        "cash": 80,
+        "ripple_id": "ripple_22"
+      },
+      "lines": {
+        "offer": "If you catch a bull trout, you'll see it go right back. That's the rule here, and it's a good one. Catch one, and watch it swim off.",
+        "done": "There it goes. Letting it go is how we keep it."
+      }
+    },
+    {
+      "id": "wc_elk_ears_eli_b",
+      "kind": "b",
+      "giver_id": "elk_ears_eli",
+      "lake_id": "flathead",
+      "title": "Owl Count",
+      "objective": {
+        "type": "anchor_idle",
+        "zone_id": "flathead:rocks",
+        "continuous_game_minutes": 120
+      },
+      "journal": "Anchor in Gravel reefs for 2 game hours.",
+      "reward": {
+        "cash": 120,
+        "keepsake_id": "ks_elk_ears_eli"
+      },
+      "lines": {
+        "offer": "Sit with me on the gravel reefs a while. I lose count when I'm alone.",
+        "done": "Fourteen owls. Best count all year. Take a feather. I found it, I didn't take it."
+      }
+    },
+    {
+      "id": "wc_bjorn_a",
+      "kind": "a",
+      "giver_id": "bjorn",
+      "lake_id": "flathead",
+      "title": "Uncle's Stories",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "captain_huckleberry",
+        "distinct_days": 3
+      },
+      "journal": "Talk to Captain Huckleberry on 3 different days.",
+      "reward": {
+        "cash": 80,
+        "ripple_id": "ripple_23"
+      },
+      "lines": {
+        "offer": "Listen to the whole Whopper story. All three parts, on three days. I'll know if you skip.",
+        "done": "You heard it all. The boot part's true, you know. I was there."
+      }
+    },
+    {
+      "id": "wc_bjorn_b",
+      "kind": "b",
+      "giver_id": "bjorn",
+      "lake_id": "flathead",
+      "title": "The Whopper",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "huckleberrys_whopper"
+      },
+      "journal": "Record Huckleberry's Whopper.",
+      "reward": {
+        "cash": 120,
+        "keepsake_id": "ks_bjorn"
+      },
+      "lines": {
+        "offer": "Catch the Whopper. Prove him right. Please.",
+        "done": "IT'S REAL! (composes himself) I mean. Obviously. Take the tin cup; he drinks from it when he tells it."
+      }
+    },
+    {
+      "id": "wc_willa_larch_a",
+      "kind": "a",
+      "giver_id": "willa_larch",
+      "lake_id": "flathead",
+      "title": "Larch Gold",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "yellow_perch",
+        "count": 3
+      },
+      "journal": "Catch 3 yellow perch.",
+      "reward": {
+        "cash": 80,
+        "ripple_id": "ripple_24"
+      },
+      "lines": {
+        "offer": "Catch three perch for my basket supper, they're the color of larch!",
+        "done": "Gold fish for a gold week!"
+      }
+    },
+    {
+      "id": "wc_willa_larch_b",
+      "kind": "b",
+      "giver_id": "willa_larch",
+      "lake_id": "flathead",
+      "title": "Outpost Supper",
+      "objective": {
+        "type": "attend_event",
+        "lake_id": "flathead",
+        "event": "cookout"
+      },
+      "journal": "Attend the Sunday cookout at Glacial Peak Outpost.",
+      "reward": {
+        "cash": 120,
+        "keepsake_id": "ks_willa_larch"
+      },
+      "lines": {
+        "offer": "Come to the outpost supper on Sunday! I'll weave you something while we talk!",
+        "done": "There! A needle basket, I made it while you ate, I'm slow but I'm chatty."
+      }
+    },
+    {
+      "id": "wc_dakota_a",
+      "kind": "a",
+      "giver_id": "dakota",
+      "lake_id": "flathead",
+      "title": "Big Open",
+      "objective": {
+        "type": "travel_distance",
+        "zone_id": "flathead:open",
+        "distance_m": 400
+      },
+      "journal": "Travel 400 m in Big open water.",
+      "reward": {
+        "cash": 80,
+        "ripple_id": "ripple_25"
+      },
+      "lines": {
+        "offer": "Ride the big open water with me. Let the wind do the work.",
+        "done": "Yeehaw. Quietly."
+      }
+    },
+    {
+      "id": "wc_dakota_b",
+      "kind": "b",
+      "giver_id": "dakota",
+      "lake_id": "flathead",
+      "title": "Trout Trail",
+      "objective": {
+        "type": "catch_species",
+        "group": "trout",
+        "count": 4,
+        "distinct": true
+      },
+      "journal": "Catch 4 different trout species.",
+      "reward": {
+        "cash": 120,
+        "keepsake_id": "ks_dakota"
+      },
+      "lines": {
+        "offer": "Four kinds of trout. That's a proper trail.",
+        "done": "Now that's a trail. Wear this pennant on your boat."
+      }
+    },
+    {
+      "id": "wc_mitzi_a",
+      "kind": "a",
+      "giver_id": "mitzi",
+      "lake_id": "flathead",
+      "title": "Cold Layer",
+      "objective": {
+        "type": "tool_use",
+        "tool_id": "thermo_scanner",
+        "lake_id": "flathead"
+      },
+      "journal": "Use the Thermocline Scanner on Flathead.",
+      "reward": {
+        "cash": 80,
+        "ripple_id": "ripple_26"
+      },
+      "lines": {
+        "offer": "Can your Bot measure the cold layer here? I want my map to match the water.",
+        "done": "There's the floor you can't see. Perfect."
+      }
+    },
+    {
+      "id": "wc_mitzi_b",
+      "kind": "b",
+      "giver_id": "mitzi",
+      "lake_id": "flathead",
+      "title": "Two Lakes, One Layer",
+      "objective": {
+        "type": "tool_use",
+        "tool_id": "thermo_scanner",
+        "lake_id": "crater"
+      },
+      "journal": "Use the Thermocline Scanner on Crater Caldera.",
+      "reward": {
+        "cash": 120,
+        "keepsake_id": "ks_mitzi"
+      },
+      "cross_lake": [
+        "crater"
+      ],
+      "lines": {
+        "offer": "Sora says the caldera has a cold layer too. Same physics, different lake. Measure it?",
+        "done": "Two lakes, one law. Here's my rock hammer; I have a spare in sweater two."
+      }
+    },
+    {
+      "id": "wc_nyx_a",
+      "kind": "a",
+      "giver_id": "nyx",
+      "lake_id": "crater",
+      "title": "Warm Water",
+      "objective": {
+        "type": "line_check",
+        "bait_id": "grub",
+        "zone_id": "crater:springs",
+        "active_soak_game_minutes": 60
+      },
+      "journal": "Line with ember grubs in Thermal springs, 60 active minutes, then check it.",
+      "reward": {
+        "cash": 110,
+        "ripple_id": "ripple_27"
+      },
+      "lines": {
+        "offer": "Set a line near the warm springs with ember grubs. If the fish come, the guests will too.",
+        "done": "Warm water, happy fish. I'll put the lanterns up again."
+      }
+    },
+    {
+      "id": "wc_nyx_b",
+      "kind": "b",
+      "giver_id": "nyx",
+      "lake_id": "crater",
+      "title": "The Old Bather",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "caldera_fire_lizard"
+      },
+      "journal": "Record the Caldera Fire-Lizard.",
+      "reward": {
+        "cash": 165,
+        "keepsake_id": "ks_nyx"
+      },
+      "lines": {
+        "offer": "Find the old bather. I want to know it's well.",
+        "done": "A salamander! Of course. Take a token; it can bathe for free."
+      }
+    },
+    {
+      "id": "wc_ignis_a",
+      "kind": "a",
+      "giver_id": "ignis",
+      "lake_id": "crater",
+      "title": "Glass Shore",
+      "objective": {
+        "type": "scout_report",
+        "zone_id": "crater:rocks"
+      },
+      "journal": "Bot scouts Obsidian cliffs.",
+      "reward": {
+        "cash": 110,
+        "ripple_id": "ripple_28"
+      },
+      "lines": {
+        "offer": "Send your Bot along the obsidian cliffs! Tell me what he sees!",
+        "done": "SEE?! Glass!"
+      }
+    },
+    {
+      "id": "wc_ignis_b",
+      "kind": "b",
+      "giver_id": "ignis",
+      "lake_id": "crater",
+      "title": "Black Glass",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "obsidian_gar"
+      },
+      "journal": "Record the Obsidian Gar.",
+      "reward": {
+        "cash": 165,
+        "keepsake_id": "ks_ignis"
+      },
+      "lines": {
+        "offer": "(whisper) Catch it. Then tell me loudly.",
+        "done": "IT'S SO SHINY!! Take a bead from the shore."
+      }
+    },
+    {
+      "id": "wc_ashby_a",
+      "kind": "a",
+      "giver_id": "ashby",
+      "lake_id": "crater",
+      "title": "Fog Cocoa",
+      "objective": {
+        "type": "wait_weather",
+        "weather": "fog",
+        "zone_id": "crater:flats",
+        "minutes": 30
+      },
+      "journal": "Anchor on Pumice shelf for 30 game minutes during fog.",
+      "reward": {
+        "cash": 110,
+        "ripple_id": "ripple_29"
+      },
+      "lines": {
+        "offer": "Wait with me in the next fog on the pumice shelf. I'll make two cups.",
+        "done": "(sip) Perfect. Don't tell the fog."
+      }
+    },
+    {
+      "id": "wc_ashby_b",
+      "kind": "b",
+      "giver_id": "ashby",
+      "lake_id": "crater",
+      "title": "Mineral Cup",
+      "objective": {
+        "type": "cook_dish",
+        "dish_id": "mineral_broth"
+      },
+      "journal": "Cook Cobalt Mineral Broth.",
+      "reward": {
+        "cash": 165,
+        "keepsake_id": "ks_ashby"
+      },
+      "lines": {
+        "offer": "Sora makes a mineral broth. Cook it? I want to try a savory cup.",
+        "done": "Savory cocoa. I've made a terrible mistake and I love it. Take the mug."
+      }
+    },
+    {
+      "id": "wc_basalt_bea_a",
+      "kind": "a",
+      "giver_id": "basalt_bea",
+      "lake_id": "crater",
+      "title": "Pumice Float",
+      "objective": {
+        "type": "visit_zones",
+        "zone_ids": [
+          "crater:flats",
+          "crater:rocks",
+          "crater:cypress"
+        ]
+      },
+      "journal": "Visit Pumice shelf, Obsidian cliffs and Drowned pines.",
+      "reward": {
+        "cash": 110,
+        "ripple_id": "ripple_30"
+      },
+      "lines": {
+        "offer": "Pumice floats! Want to see where it washes up? Shelf, cliffs, drowned pines!",
+        "done": "Floating stone. Still amazes me."
+      }
+    },
+    {
+      "id": "wc_basalt_bea_b",
+      "kind": "b",
+      "giver_id": "basalt_bea",
+      "lake_id": "crater",
+      "title": "Stone Tour",
+      "objective": {
+        "type": "visit_zones",
+        "zone_ids": [
+          "briar:rocks",
+          "cedar:rocks",
+          "flathead:rocks"
+        ]
+      },
+      "journal": "Visit South rocks on Little Briar, Dam riprap on Cedar Creek and Gravel reefs on Flathead.",
+      "reward": {
+        "cash": 165,
+        "keepsake_id": "ks_basalt_bea"
+      },
+      "cross_lake": [
+        "briar",
+        "cedar",
+        "flathead"
+      ],
+      "lines": {
+        "offer": "I want a rock from every lake. Go look at the rocky spots on Briar, Cedar and Flathead for me?",
+        "done": "You remembered all of them! I won't. Keep this pocket stone."
+      }
+    },
+    {
+      "id": "wc_fumi_a",
+      "kind": "a",
+      "giver_id": "fumi",
+      "lake_id": "crater",
+      "title": "Moss Lanterns",
+      "objective": {
+        "type": "anchor_idle",
+        "zone_id": "crater:lilies",
+        "continuous_game_minutes": 120
+      },
+      "journal": "Anchor in Moss gardens for 2 game hours.",
+      "reward": {
+        "cash": 110,
+        "ripple_id": "ripple_31"
+      },
+      "lines": {
+        "offer": "Sit with me in the moss gardens while I light the lanterns. It takes a while. That is the point.",
+        "done": "All lit. One for you."
+      }
+    },
+    {
+      "id": "wc_fumi_b",
+      "kind": "b",
+      "giver_id": "fumi",
+      "lake_id": "crater",
+      "title": "Night Friends",
+      "objective": {
+        "type": "catch_species",
+        "any": true,
+        "count": 3,
+        "distinct": true,
+        "time_band": "night",
+        "lake_id": "crater"
+      },
+      "journal": "Catch 3 different species at night on Crater Caldera.",
+      "reward": {
+        "cash": 165,
+        "keepsake_id": "ks_fumi"
+      },
+      "lines": {
+        "offer": "I make a lantern for each friend. Catch three kinds of night fish here, so I know your colors.",
+        "done": "Your lantern. It suits you. (sneeze) Ha!"
+      }
+    },
+    {
+      "id": "wc_ember_a",
+      "kind": "a",
+      "giver_id": "ember",
+      "lake_id": "crater",
+      "title": "Lookout Loop",
+      "objective": {
+        "type": "travel_distance",
+        "zone_id": "crater:open",
+        "distance_m": 500
+      },
+      "journal": "Travel 500 m in Caldera open.",
+      "reward": {
+        "cash": 110,
+        "ripple_id": "ripple_32"
+      },
+      "lines": {
+        "offer": "Do a lookout loop across the open caldera! Report anything big!",
+        "done": "Report: everything is big. Good job."
+      }
+    },
+    {
+      "id": "wc_ember_b",
+      "kind": "b",
+      "giver_id": "ember",
+      "lake_id": "crater",
+      "title": "All Clear",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "ember"
+      },
+      "journal": "Finish chapter 4, then talk to Ember.",
+      "reward": {
+        "cash": 165,
+        "keepsake_id": "ks_ember"
+      },
+      "requires": {
+        "chapter_complete": 4
+      },
+      "lines": {
+        "offer": "Is the fog marker fixed? Sora won't tell me. Fix it and tell me!",
+        "done": "ALL CLEAR! Take my binoculars, I have, um, a spare pair. My eyes."
+      }
+    },
+    {
+      "id": "wc_mist_a",
+      "kind": "a",
+      "giver_id": "mist",
+      "lake_id": "crater",
+      "title": "The Poem",
+      "objective": [
+        {
+          "type": "wait_weather",
+          "weather": "fog",
+          "zone_id": "crater:cypress",
+          "minutes": 30
+        },
+        {
+          "type": "talk_to",
+          "npc_id": "mist"
+        }
+      ],
+      "journal": "Anchor in Drowned pines for 30 game minutes during fog, then talk to Mist.",
+      "reward": {
+        "cash": 110,
+        "ripple_id": "ripple_33"
+      },
+      "lines": {
+        "offer": "(whisper) My poem is about the fog. Wait in it with me, among the drowned pines. Then I'll read it.",
+        "done": "Something warm walks under the cold, / carrying a lamp it was never told about. / I hear it more than see it, / and I don't mind."
+      }
+    },
+    {
+      "id": "wc_mist_b",
+      "kind": "b",
+      "giver_id": "mist",
+      "lake_id": "crater",
+      "title": "Hide-Away",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "fog_mudminnow"
+      },
+      "journal": "Catch a fog mudminnow.",
+      "reward": {
+        "cash": 165,
+        "keepsake_id": "ks_mist"
+      },
+      "lines": {
+        "offer": "There's a minnow that hides in fog too. Hide-away. Find one for me?",
+        "done": "(whisper) there it is. Take the poem; I know it by heart."
+      }
+    },
+    {
+      "id": "wc_juno_a",
+      "kind": "a",
+      "giver_id": "juno",
+      "lake_id": "crater",
+      "title": "Clear Water",
+      "objective": {
+        "type": "wait_weather",
+        "weather": "clear",
+        "zone_id": "crater:open",
+        "minutes": 30
+      },
+      "journal": "Anchor in Caldera open for 30 game minutes while it's clear.",
+      "reward": {
+        "cash": 110,
+        "ripple_id": "ripple_34"
+      },
+      "lines": {
+        "offer": "On a clear day the water's so still it shows the sky. Wait in it with me?",
+        "done": "See? The sky lies down on the water. I knew it."
+      }
+    },
+    {
+      "id": "wc_juno_b",
+      "kind": "b",
+      "giver_id": "juno",
+      "lake_id": "crater",
+      "title": "I Told You So",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "juno"
+      },
+      "journal": "Finish chapter 5, then talk to Juno.",
+      "reward": {
+        "cash": 165,
+        "keepsake_id": "ks_juno"
+      },
+      "requires": {
+        "chapter_complete": 5
+      },
+      "lines": {
+        "offer": "You went IN the reflection? Come tell me everything.",
+        "done": "I told everyone. I TOLD them. Take my chart, you'll use it more than me."
+      }
+    },
+    {
+      "id": "wc_tamsin_a",
+      "kind": "a",
+      "giver_id": "tamsin",
+      "lake_id": "crater",
+      "title": "Clear Keepers",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "lahontan_cutthroat"
+      },
+      "journal": "Catch a Lahontan cutthroat (it is always released).",
+      "reward": {
+        "cash": 110,
+        "ripple_id": "ripple_35"
+      },
+      "lines": {
+        "offer": "If you catch a Lahontan, it goes right back, and you'll see why. They're rare here. Catch one and let it go.",
+        "done": "Back home it goes. Clear water is a lot of small kindnesses."
+      }
+    },
+    {
+      "id": "wc_tamsin_b",
+      "kind": "b",
+      "giver_id": "tamsin",
+      "lake_id": "crater",
+      "title": "Clear Count",
+      "objective": {
+        "type": "book_stage",
+        "lake_id": "crater",
+        "stage": "identified",
+        "count": 15
+      },
+      "journal": "Identify 15 Crater Caldera species in the book.",
+      "reward": {
+        "cash": 165,
+        "keepsake_id": "ks_tamsin"
+      },
+      "lines": {
+        "offer": "Help me count what lives here. Fifteen kinds in your book.",
+        "done": "Fifteen. The water's in good paws. Wear this pin."
+      }
+    },
+    {
+      "id": "wc_orion_cat_a",
+      "kind": "a",
+      "giver_id": "orion_cat",
+      "lake_id": "nebula",
+      "title": "Drift Lines",
+      "objective": {
+        "type": "line_check",
+        "zone_id": "nebula:current",
+        "active_soak_game_minutes": 60
+      },
+      "journal": "Line in Astral current, 60 active minutes, then check it.",
+      "reward": {
+        "cash": 140,
+        "ripple_id": "ripple_36"
+      },
+      "lines": {
+        "offer": "Set a line in the astral current and check it after an hour. Watch how far it drifts. Data!",
+        "done": "Drifted. Of course. But you tied it well."
+      }
+    },
+    {
+      "id": "wc_orion_cat_b",
+      "kind": "b",
+      "giver_id": "orion_cat",
+      "lake_id": "nebula",
+      "title": "Hold Fast",
+      "objective": {
+        "type": "tool_use",
+        "tool_id": "zero_g_winch"
+      },
+      "journal": "Use the Zero-G Winch.",
+      "reward": {
+        "cash": 210,
+        "keepsake_id": "ks_orion_cat"
+      },
+      "lines": {
+        "offer": "When you've a winch, hold a line in the current. I want to see the knot hold.",
+        "done": "Old knot, new winch. Perfect. Take my star-knot."
+      }
+    },
+    {
+      "id": "wc_nebula_paws_a",
+      "kind": "a",
+      "giver_id": "nebula_paws",
+      "lake_id": "nebula",
+      "title": "Star-Chimes",
+      "objective": {
+        "type": "anchor_idle",
+        "zone_id": "nebula:current",
+        "continuous_game_minutes": 120
+      },
+      "journal": "Anchor in Astral current for 2 game hours.",
+      "reward": {
+        "cash": 140,
+        "ripple_id": "ripple_37"
+      },
+      "lines": {
+        "offer": "Sit with me in the current while I practice? Two hours. I'm less nervous with a friend.",
+        "done": "I played the whole thing! Here, the Weaver's favorite bait. Moon-milk on stardust."
+      }
+    },
+    {
+      "id": "wc_nebula_paws_b",
+      "kind": "b",
+      "giver_id": "nebula_paws",
+      "lake_id": "nebula",
+      "title": "The Dance",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "nebula_weaver"
+      },
+      "journal": "Record the Nebula Weaver.",
+      "reward": {
+        "cash": 210,
+        "keepsake_id": "ks_nebula_paws"
+      },
+      "lines": {
+        "offer": "Find the Weaver while I play?",
+        "done": "It DANCED. Take a chime. Play it badly; it likes that."
+      }
+    },
+    {
+      "id": "wc_comet_a",
+      "kind": "a",
+      "giver_id": "comet",
+      "lake_id": "nebula",
+      "title": "Comet Stream",
+      "objective": {
+        "type": "travel_distance",
+        "zone_id": "nebula:inlet",
+        "distance_m": 400
+      },
+      "journal": "Travel 400 m in Comet stream.",
+      "reward": {
+        "cash": 140,
+        "ripple_id": "ripple_38"
+      },
+      "lines": {
+        "offer": "Race me up the comet stream! Well, travel. Travel me!",
+        "done": "You WIN. Or I won. Everyone wins!"
+      }
+    },
+    {
+      "id": "wc_comet_b",
+      "kind": "b",
+      "giver_id": "comet",
+      "lake_id": "nebula",
+      "title": "Comet Nap",
+      "objective": {
+        "type": "catnap",
+        "zone_id": "nebula:inlet"
+      },
+      "journal": "Catnap in Comet stream.",
+      "reward": {
+        "cash": 210,
+        "keepsake_id": "ks_comet"
+      },
+      "lines": {
+        "offer": "Nap with me by the stream. I nap the hardest.",
+        "done": "(waking) …I won the nap. Take a ribbon."
+      }
+    },
+    {
+      "id": "wc_lyra_a",
+      "kind": "a",
+      "giver_id": "lyra",
+      "lake_id": "nebula",
+      "title": "Light-Reed String",
+      "objective": {
+        "type": "catch_species",
+        "any": true,
+        "zone_id": "nebula:reeds"
+      },
+      "journal": "Catch any fish in Light-reeds.",
+      "reward": {
+        "cash": 140,
+        "ripple_id": "ripple_39"
+      },
+      "lines": {
+        "offer": "Catch a fish in the light-reeds. Where there are fish, there are good reeds for strings.",
+        "done": "Perfect reed. Hear it hum?"
+      }
+    },
+    {
+      "id": "wc_lyra_b",
+      "kind": "b",
+      "giver_id": "lyra",
+      "lake_id": "nebula",
+      "title": "Station Song",
+      "objective": {
+        "type": "attend_event",
+        "lake_id": "nebula",
+        "event": "cookout"
+      },
+      "journal": "Attend the Sunday cookout at Cosmic Drift Station.",
+      "reward": {
+        "cash": 210,
+        "keepsake_id": "ks_lyra"
+      },
+      "lines": {
+        "offer": "Station supper on Sunday. I'll play. You'll listen and pretend you hate it.",
+        "done": "You tapped your paw. I SAW it. Take a string."
+      }
+    },
+    {
+      "id": "wc_vega_a",
+      "kind": "a",
+      "giver_id": "vega",
+      "lake_id": "nebula",
+      "title": "Edge of the Map",
+      "objective": {
+        "type": "visit_zones",
+        "zone_ids": [
+          "nebula:open",
+          "nebula:deep",
+          "nebula:current",
+          "nebula:reeds"
+        ]
+      },
+      "journal": "Visit Nebula open, Void well, Astral current and Light-reeds.",
+      "reward": {
+        "cash": 140,
+        "ripple_id": "ripple_40"
+      },
+      "lines": {
+        "offer": "Help me find the edges: the open, the deep, the current and the reeds.",
+        "done": "No edge. It just goes on, gently. I like that."
+      }
+    },
+    {
+      "id": "wc_vega_b",
+      "kind": "b",
+      "giver_id": "vega",
+      "lake_id": "nebula",
+      "title": "Star Census",
+      "objective": {
+        "type": "book_stage",
+        "lake_id": "nebula",
+        "stage": "identified",
+        "count": 10
+      },
+      "journal": "Identify 10 Starlight Nebula species in the book.",
+      "reward": {
+        "cash": 210,
+        "keepsake_id": "ks_vega"
+      },
+      "lines": {
+        "offer": "Ten kinds of fish for my chart's border, please. It's a decorative border.",
+        "done": "Gorgeous border. Take my compass; it points to friends, which is you."
+      }
+    },
+    {
+      "id": "wc_selene_a",
+      "kind": "a",
+      "giver_id": "selene",
+      "lake_id": "nebula",
+      "title": "Moon Garden",
+      "objective": {
+        "type": "cook_dish",
+        "dish_id": "moon_pudding"
+      },
+      "journal": "Cook Moon-Milk Pudding.",
+      "reward": {
+        "cash": 140,
+        "ripple_id": "ripple_41"
+      },
+      "lines": {
+        "offer": "Cook Astra-9's moon pudding? I'll grow something from the spoon.",
+        "done": "A sprout! An actual sprout!"
+      }
+    },
+    {
+      "id": "wc_selene_b",
+      "kind": "b",
+      "giver_id": "selene",
+      "lake_id": "nebula",
+      "title": "Sun and Moon",
+      "objective": {
+        "type": "catch_species",
+        "species_ids": [
+          "solar_sunfish",
+          "lunar_loach"
+        ],
+        "count": 2,
+        "distinct": true
+      },
+      "journal": "Catch a solar sunfish and a lunar loach.",
+      "reward": {
+        "cash": 210,
+        "keepsake_id": "ks_selene"
+      },
+      "lines": {
+        "offer": "A sun fish and a moon fish, for the garden's two halves.",
+        "done": "Day and night, both in bloom. Take a moon-flower."
+      }
+    },
+    {
+      "id": "wc_andi_a",
+      "kind": "a",
+      "giver_id": "andi",
+      "lake_id": "nebula",
+      "title": "Tell Me About Frogs",
+      "objective": [
+        {
+          "type": "catch_species",
+          "any": true,
+          "zone_id": "briar:lilies"
+        },
+        {
+          "type": "talk_to",
+          "npc_id": "andi"
+        }
+      ],
+      "journal": "Catch any fish in Lily cove on Little Briar, then talk to Andi.",
+      "reward": {
+        "cash": 140,
+        "ripple_id": "ripple_42"
+      },
+      "cross_lake": [
+        "briar"
+      ],
+      "lines": {
+        "offer": "Catch a fish in a lily cove down there and tell me about it. Especially the frogs.",
+        "done": "They SING? Frogs SING?"
+      }
+    },
+    {
+      "id": "wc_andi_b",
+      "kind": "b",
+      "giver_id": "andi",
+      "lake_id": "nebula",
+      "title": "Frog Day",
+      "objective": {
+        "type": "tool_use",
+        "tool_id": "reed_anchor",
+        "zone_id": "nebula:reeds",
+        "shell_id": "frog"
+      },
+      "journal": "Wearing the Frog shell, set the Reed Anchor in Light-reeds.",
+      "reward": {
+        "cash": 210,
+        "keepsake_id": "ks_andi"
+      },
+      "lines": {
+        "offer": "Can your Bot be a frog? Can it frog in the light-reeds? Please?",
+        "done": "RIBBIT! I drew you a picture."
+      }
+    },
+    {
+      "id": "wc_twinkle_a",
+      "kind": "a",
+      "giver_id": "twinkle",
+      "lake_id": "nebula",
+      "title": "Count the Lights",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "purrsec_lanternfish",
+        "count": 3
+      },
+      "journal": "Catch 3 purrsec lanternfish.",
+      "reward": {
+        "cash": 140,
+        "ripple_id": "ripple_43"
+      },
+      "lines": {
+        "offer": "Help me count? Catch three and I'll count them twice.",
+        "done": "Three! Then three more is six! Then it's lots again."
+      }
+    },
+    {
+      "id": "wc_twinkle_b",
+      "kind": "b",
+      "giver_id": "twinkle",
+      "lake_id": "nebula",
+      "title": "The Edge-Sitter",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "event_horizon_goby"
+      },
+      "journal": "Catch an event-horizon goby.",
+      "reward": {
+        "cash": 210,
+        "keepsake_id": "ks_twinkle"
+      },
+      "lines": {
+        "offer": "There's a goby that sits right at the edge of the deep. I've never reached it. Could you?",
+        "done": "The Edge-Sitter! Take my crook. I'll herd with my paws."
+      }
+    },
+    {
+      "id": "wc_rigel_a",
+      "kind": "a",
+      "giver_id": "rigel",
+      "lake_id": "nebula",
+      "title": "Slow Sail",
+      "objective": {
+        "type": "travel_distance",
+        "zone_id": "nebula:current",
+        "distance_m": 300
+      },
+      "journal": "Travel 300 m in Astral current.",
+      "reward": {
+        "cash": 140,
+        "ripple_id": "ripple_44"
+      },
+      "lines": {
+        "offer": "Sail the astral current with me, slowly. Teach me.",
+        "done": "I saw a star I've passed a thousand times. Today it waved."
+      }
+    },
+    {
+      "id": "wc_rigel_b",
+      "kind": "b",
+      "giver_id": "rigel",
+      "lake_id": "nebula",
+      "title": "Burst",
+      "objective": {
+        "type": "catch_species",
+        "species_id": "supernova_salmon"
+      },
+      "journal": "Catch a supernova salmon.",
+      "reward": {
+        "cash": 210,
+        "keepsake_id": "ks_rigel"
+      },
+      "lines": {
+        "offer": "One last fast thing: the Supernova salmon. It only bites for the patient. Funny, right?",
+        "done": "Patient AND fast. Take a sail patch."
+      }
+    },
+    {
+      "id": "host_flathead",
+      "giver_id": "captain_huckleberry",
+      "lake_id": "flathead",
+      "title": "The Long Story",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "captain_huckleberry",
+        "distinct_days": 3
+      },
+      "journal": "Talk to Captain Huckleberry on 3 different days.",
+      "lines": {
+        "offer": "Ho-ho! Got the patience for a long story? Come by now and then, and you'll hear the whole Whopper.",
+        "done": "Ho-ho! You heard the whole thing! Nobody ever stays for all of it. Here, for your patience."
+      },
+      "kind": "host",
+      "reward": {
+        "cash": 120
+      }
+    },
+    {
+      "id": "host_crater",
+      "giver_id": "sora",
+      "lake_id": "crater",
+      "title": "Fog Names",
+      "objective": [
+        {
+          "type": "wait_weather",
+          "weather": "fog",
+          "lake_id": "crater",
+          "minutes": 30
+        },
+        {
+          "type": "talk_to",
+          "npc_id": "sora"
+        }
+      ],
+      "journal": "Anchor anywhere on Crater Caldera for 30 game minutes during fog, then talk to Sora.",
+      "lines": {
+        "offer": "Every fog here has a name. Wait in one, and tell me how it felt. I'll tell you what it's called.",
+        "done": "That one is Bartholomew. He's shy. He liked you."
+      },
+      "kind": "host",
+      "reward": {
+        "cash": 165
+      }
+    },
+    {
+      "id": "host_nebula",
+      "giver_id": "astra_9",
+      "lake_id": "nebula",
+      "title": "Units, Please",
+      "objective": {
+        "type": "book_stage",
+        "lake_id": "nebula",
+        "stage": "identified",
+        "count": 5
+      },
+      "journal": "Identify 5 Starlight Nebula species in the book.",
+      "lines": {
+        "offer": "Teach me your units, Skipper. Catch five kinds of fish here and tell me their sizes in your 'feet'.",
+        "done": "Feet! Fish have no feet! I love it."
+      },
+      "kind": "host",
+      "reward": {
+        "cash": 210
+      }
     }
   ],
   "cats": [
@@ -718,6 +1955,241 @@
       "greetings": {
         "day": "Junior Ranger Kit! Life jacket check! …Pass!",
         "friend": "Ranger Kit reporting! Life jacket? Good! Me? …Also good! Probably!"
+      }
+    },
+    {
+      "id": "torvald",
+      "greetings": {
+        "day": "Evening. I'm retired. Don't tell anyone you saw me out here.",
+        "friend": "Out again. Retired again. Hello."
+      }
+    },
+    {
+      "id": "freya",
+      "greetings": {
+        "day": "Shh. The light's nearly right. …No. Gone. Hello!",
+        "friend": "Hold still! …Lens cap. Again. Hi!"
+      }
+    },
+    {
+      "id": "bramble",
+      "greetings": {
+        "day": "(shivering) This sleeping sack is rated for very cold. I am testing whether I am.",
+        "friend": "Hello! I'm wearing four layers! It's going great!"
+      }
+    },
+    {
+      "id": "ingrid",
+      "greetings": {
+        "day": "I carve fish. Show me fish.",
+        "friend": "Hello. That is a big talk for me."
+      }
+    },
+    {
+      "id": "elk_ears_eli",
+      "greetings": {
+        "day": "Evening, angler. Counting owls. Seven. Eight. Hello.",
+        "friend": "(mouth full) Huckleberries? No. What huckleberries."
+      }
+    },
+    {
+      "id": "bjorn",
+      "greetings": {
+        "day": "My uncle's Huckleberry. Don't ask him about the Whopper. …You asked him, didn't you.",
+        "friend": "Uncle says you're in four of his stories now."
+      }
+    },
+    {
+      "id": "willa_larch",
+      "greetings": {
+        "day": "Hello-hello! The larches are going gold, it's my favorite week, have you got a minute, I've got many.",
+        "friend": "Hello-hello! Guess how many baskets. More."
+      }
+    },
+    {
+      "id": "dakota",
+      "greetings": {
+        "day": "Howdy. Mighty fine wind. Tied my hat down twice.",
+        "friend": "Howdy, partner. Wind says hi."
+      }
+    },
+    {
+      "id": "mitzi",
+      "greetings": {
+        "day": "(three sweaters) I study glaciers. I'm fine. I'm toasty.",
+        "friend": "Fourth sweater today. It's for science."
+      }
+    },
+    {
+      "id": "nyx",
+      "greetings": {
+        "day": "Welcome to the bathhouse. Do not splash. I'm only half joking.",
+        "friend": "Skipper. Come in. Carefully."
+      }
+    },
+    {
+      "id": "ignis",
+      "greetings": {
+        "day": "HELLO! Have you seen the cinder isle?! The shore is GLASS!",
+        "friend": "SKIPPER! (whisper) Hi."
+      }
+    },
+    {
+      "id": "ashby",
+      "greetings": {
+        "day": "Cocoa? It's better on foggy mornings. I hate foggy mornings.",
+        "friend": "Two cups ready. Fog or no fog."
+      }
+    },
+    {
+      "id": "basalt_bea",
+      "greetings": {
+        "day": "Hold this rock. No, this one. Where did I put the other one?",
+        "friend": "I found a rock. It was in my pocket. Was it yours?"
+      }
+    },
+    {
+      "id": "fumi",
+      "greetings": {
+        "day": "Good evening. Welcome. (sneeze) Ha! Excuse me.",
+        "friend": "Your lantern is still lit. I checked."
+      }
+    },
+    {
+      "id": "ember",
+      "greetings": {
+        "day": "I'm the lookout. Official. My dad says I'm a lookout, but I'm the lookout.",
+        "friend": "Lookout Ember! You're cleared to fish."
+      }
+    },
+    {
+      "id": "mist",
+      "greetings": {
+        "day": "(whisper) hello… (enormous sneeze) …sorry.",
+        "friend": "(whisper) hello again."
+      }
+    },
+    {
+      "id": "juno",
+      "greetings": {
+        "day": "(yawning) Is it night yet? I'm an astronomer. I keep missing it.",
+        "friend": "I stayed up for the stars! …Fell asleep at eight."
+      }
+    },
+    {
+      "id": "tamsin",
+      "greetings": {
+        "day": [
+          [
+            "Mind your wake near the shore, please. Clear water is everyone's.",
+            "(her paws are muddy)"
+          ]
+        ],
+        "friend": "Hello! Ignore the paws."
+      }
+    },
+    {
+      "id": "orion_cat",
+      "greetings": {
+        "day": "Good evening, fellow engineer. Your deckhand has an excellent chassis.",
+        "friend": "Colleague! And colleague's Skipper!"
+      }
+    },
+    {
+      "id": "nebula_paws",
+      "greetings": {
+        "day": "Oh! An audience. (drops a chime) Hello.",
+        "friend": "(confidently) Hello! (drops chime)"
+      }
+    },
+    {
+      "id": "comet",
+      "greetings": {
+        "day": "ZOOM! Hi! Bye! Hi!",
+        "friend": "Zoom! (I'm sleepy.)"
+      }
+    },
+    {
+      "id": "lyra",
+      "greetings": {
+        "day": "Harp music! Do you like harps? You're wrong, you do.",
+        "friend": "Admit it. You hum my songs."
+      }
+    },
+    {
+      "id": "vega",
+      "greetings": {
+        "day": "I chart the Lagoon. Don't look down; I get dizzy.",
+        "friend": "Hello. Don't look down. I'm fine. I'm looking up."
+      }
+    },
+    {
+      "id": "selene",
+      "greetings": {
+        "day": "My moon garden! It's… well, it's mostly moon.",
+        "friend": "Two sprouts now! A record!"
+      }
+    },
+    {
+      "id": "andi",
+      "greetings": {
+        "day": "Are you from the lakes below? Is it true there are FROGS?",
+        "friend": "Frog report, please!"
+      },
+      "letters": [
+        "I drew 40 frogs. Are they right? (They have stars on, for fun.) — A"
+      ]
+    },
+    {
+      "id": "twinkle",
+      "greetings": {
+        "day": "These are my lanternfish. One, two, three… lots.",
+        "friend": "Lots and lots of lanternfish today!"
+      }
+    },
+    {
+      "id": "rigel",
+      "greetings": {
+        "day": "Fastest sail in the sky. Hello. I'd like to stop being that.",
+        "friend": "Hello, slowly."
+      }
+    },
+    {
+      "id": "captain_huckleberry",
+      "greetings": {
+        "day": "Ho-ho! Warm your paws by the stove! I've got a story, it's short, I promise.",
+        "weather:snow_mist": "Snow mist! The trout love it. My whiskers don't.",
+        "after_ch3": "Used your note this morning. You saved me a very long story!"
+      },
+      "story": [
+        "Did I tell you about the Whopper? Longest burbot in the world. It ate my boot.",
+        "The Whopper, part two: it returned my boot. Polished. I'm not making this up.",
+        "Last part: I saw it again on the gravel reefs, snowy night, roe on the hook. It winked. You'll see."
+      ],
+      "letters": [
+        "SKIPPER! New story. It's long. Come hear it. — Huck"
+      ]
+    },
+    {
+      "id": "sora",
+      "greetings": {
+        "day": "Skipper. The water is deep and calm today. What will you look for?",
+        "weather:fog": "This fog is called Marguerite. She's slow but kind.",
+        "weather:clear": "Clear. You can see sixty feet down. Don't let it make you dizzy.",
+        "after_ch4": "My chart has no gaps now. I keep looking at where the gap was."
+      }
+    },
+    {
+      "id": "astra_9",
+      "greetings": {
+        "day": [
+          [
+            "Salutations! Today's currents are glowing at forty-two… purples. Is purple a unit?",
+            "Bot: It is not."
+          ]
+        ],
+        "weather:aurora": "Aurora tide! Everything's biting! Including my curiosity!",
+        "after_ch5": "I've stopped surveying on Tuesdays. I've seen three new things."
       }
     }
   ],
