@@ -377,12 +377,13 @@ class Actors(unittest.TestCase):
         world, state = _lake("briar")
         renderer = LakeRenderer(world, 160, 90)
         try:
-            host, water = state.npcs
+            host, water = state.npcs[:2]
             renderer.render(state)
             before = next(s for s in renderer.actor_slots if s["npc_id"] == water.id)
             self.assertGreater(before["boat_vertices"], 0)
             # The Sunday cookout moves a water cat onto the landing, without its boat.
-            state.npcs = (host, replace(water, anchor=replace(host.anchor, id="briar:cookout:" + water.id)))
+            state.npcs = (host, replace(water, anchor=replace(host.anchor, id="briar:cookout:" + water.id)),
+                          *state.npcs[2:])
             renderer.render(state)
             actor = renderer.actor_cache.actors[water.id]
             slot = next(s for s in renderer.actor_slots if s["npc_id"] == water.id)
