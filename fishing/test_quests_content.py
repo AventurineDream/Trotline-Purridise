@@ -1,8 +1,9 @@
-"""V1-32: the shipped Briar and Cedar quests, greetings, letters, Ripples and keepsakes.
+"""The shipped side quests of all five lakes: quests, greetings, stories, letters, Ripples, keepsakes.
 
-The content is a transcription of `04 §4.1–4.2` and `05 §4.1–4.2, §6.1–6.2, §7, §9`.
-These checks read the script itself, walk every dialogue graph, and play every
-Briar and Cedar quest through scripted events and real hails.
+The content is a transcription of `04 §2–4.5` and `05 §4, §6, §7, §9` (V1-32 for Briar
+and Cedar, V1-33 for Flathead, Crater and Nebula). These checks read the script
+itself, walk every dialogue graph, and play every quest through scripted events and
+real hails, one lake at a time.
 """
 import math
 from pathlib import Path
@@ -14,10 +15,10 @@ from .bookview import collection_rows
 from .calendar import cookout_active, planned_weather
 from .content import GREETING_STATES, load_content
 from .data import LAKE_SPECIES_IDS
-from .dialogue import nearby_npc, open_conversation
+from .dialogue import greeting, nearby_npc, open_conversation, story_heard
 from .game import Session
 from .guardian import maybe_start_sighting
-from .npcs import day_encounters, night_encounter
+from .npcs import cast, day_encounters, night_encounter
 from .quests import QuestManager, accept_quest, chain as quest_chain
 from .sim import State
 from .ui import quest_journal_details
@@ -25,8 +26,31 @@ from .world import World
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (ROOT / "docs/v1/05-SCRIPT.md").read_text(encoding="utf-8")
-LAKES = ("briar", "cedar")
-CASH = {"briar": (45, 68), "cedar": (55, 83)}  # 04 §0: quest B pays 1.5×, rounded half up
+LAKES = ("briar", "cedar", "flathead", "crater", "nebula")
+# 04 §0: quest A pays by lake, and quest B 1.5× that, rounded half up; new host errands pay as quest B.
+CASH = {"briar": (45, 68), "cedar": (55, 83), "flathead": (80, 120), "crater": (110, 165), "nebula": (140, 210)}
+# Journals 05 has no `obj:` line for, written like their neighbours ("Record …" for a legendary).
+WRITTEN_JOURNALS = {
+    "wc_hank_mudpaw_b": "Record the Channel Leviathan.",
+    "wc_torvald_b": "Record Old Silverhead.", "wc_freya_b": "Record the Glacial Phantom.",
+    "wc_bramble_b": "Cook any dish.", "wc_ingrid_b": "Catch a burbot.",
+    "wc_bjorn_b": "Record Huckleberry's Whopper.",
+    "wc_willa_larch_b": "Attend the Sunday cookout at Glacial Peak Outpost.",
+    "wc_nyx_b": "Record the Caldera Fire-Lizard.", "wc_ignis_b": "Record the Obsidian Gar.",
+    "wc_ashby_b": "Cook Cobalt Mineral Broth.",
+    "wc_basalt_bea_b": "Visit South rocks on Little Briar, Dam riprap on Cedar Creek and Gravel reefs on Flathead.",
+    "wc_fumi_b": "Catch 3 different species at night on Crater Caldera.", "wc_mist_b": "Catch a fog mudminnow.",
+    "wc_juno_b": "Finish chapter 5, then talk to Juno.",
+    "wc_tamsin_b": "Identify 15 Crater Caldera species in the book.",
+    "wc_nebula_paws_b": "Record the Nebula Weaver.", "wc_comet_b": "Catnap in Comet stream.",
+    "wc_lyra_b": "Attend the Sunday cookout at Cosmic Drift Station.",
+    "wc_vega_b": "Identify 10 Starlight Nebula species in the book.",
+    "wc_twinkle_b": "Catch an event-horizon goby.", "wc_rigel_b": "Catch a supernova salmon.",
+}
+# 05 gives Huckleberry's errand no offer or turn-in line, so these were written for it.
+WRITTEN_LINES = {"host_flathead": {
+    "offer": "Ho-ho! Got the patience for a long story? Come by now and then, and you'll hear the whole Whopper.",
+    "done": "Ho-ho! You heard the whole thing! Nobody ever stays for all of it. Here, for your patience."}}
 
 
 def water_cats(lake):
@@ -35,8 +59,8 @@ def water_cats(lake):
 
 
 def script_lines():
-    """05 §6.1–6.2 by cat: quoted speech as bubbles, `obj:` lines, markup as the game shows it."""
-    section = SCRIPT[SCRIPT.index("### 6.1 Little Briar"):SCRIPT.index("### 6.3 Flathead Alpine")]
+    """05 §6 by cat: quoted speech as bubbles, `obj:` lines by the offer they follow, markup as shown."""
+    section = SCRIPT[SCRIPT.index("### 6.1 Little Briar"):SCRIPT.index("## 7. New Ripples")]
     cats = {}
     for paragraph in section.split("\n\n"):
         paragraph = " ".join(paragraph.split())
@@ -47,10 +71,10 @@ def script_lines():
         for segment in re.split(r" · (?=\*|`obj:`)", paragraph[name.end():]):
             label = re.match(r"(?:\*\*([^*]+?):\*\*|\*([^*]+?):\*|`obj:`)\s*(.*)", segment)
             if label:
-                key = re.sub(r"\s*\(.*?\)", "", label.group(1) or label.group(2) or "obj")
-                if key == "obj":
-                    entry.setdefault("obj", []).append(label.group(3))
+                if not (label.group(1) or label.group(2)):
+                    entry.setdefault("obj", {})[key[0]] = label.group(3)  # "A" or "B"
                     continue
+                key = re.sub(r"\s*\(.*?\)", "", label.group(1) or label.group(2))
                 entry[key], segment = [], label.group(3)
             elif not segment.startswith("*("):
                 continue
@@ -78,10 +102,14 @@ class ShippedContent(unittest.TestCase):
     def setUpClass(cls):
         cls.content = load_content()
 
-    def test_every_briar_and_cedar_cat_has_its_quests_and_rewards(self):
+    def test_every_cat_has_its_quests_and_rewards(self):
         c = self.content
         given_ripples, keepsakes = [], []
         for lake in LAKES:
+            host = next(cid for cid, cat in c.cats.items() if cat["role"] == "host" and cat["lake_id"] == lake)
+            if lake not in ("briar", "cedar"):  # the V3 hosts keep their errands
+                self.assertEqual(c.quests[f"host_{lake}"]["reward"], {"cash": CASH[lake][1]})
+                self.assertEqual(quest_chain(c, host), [f"host_{lake}"])
             cash_a, cash_b = CASH[lake]
             for cid in water_cats(lake):
                 a, b = quest_chain(c, cid)
@@ -93,14 +121,17 @@ class ShippedContent(unittest.TestCase):
                         reward = c.quests[a]["reward"]
                         self.assertEqual(reward["cash"], cash_a)
                         given_ripples.append(reward["ripple_id"])
-        self.assertEqual(sum("kind" in q for q in c.quests.values()), 24)
-        # The seven new cats give Ripples 11-17 in roster order; each keepsake belongs to its giver.
-        self.assertEqual(given_ripples, [f"ripple_{n}" for n in range(11, 18)])
+        # 44 quests B, 34 quests A and 3 host errands; the story steps arrive with V1-34.
+        self.assertEqual(sum("kind" in q for q in c.quests.values()), 81)
+        # The new cats give Ripples 11-44 in roster order; each keepsake belongs to its giver.
+        self.assertEqual(given_ripples, [f"ripple_{n}" for n in range(11, 45)])
         self.assertEqual(sorted(c.keepsakes), sorted(keepsakes))
         self.assertEqual(set(c.ripples), set(given_ripples))
         self.assertEqual(c.quests["wc_hank_mudpaw_a"]["reward"]["recipes"], ["pecan_smoked_shad"])
         self.assertEqual(c.quests["wc_biscuit_a"]["on_accept"], {"items": {"dough": 12}})
         self.assertEqual(c.quests["wc_old_gus_b"]["requires"], {"travel_unlocked": "flathead"})
+        self.assertEqual(c.quests["wc_ember_b"]["requires"], {"chapter_complete": 4})
+        self.assertEqual(c.quests["wc_juno_b"]["requires"], {"chapter_complete": 5})
 
     def test_lines_journals_and_greetings_follow_the_script(self):
         c, script = self.content, script_lines()
@@ -116,9 +147,10 @@ class ShippedContent(unittest.TestCase):
                     kind = qid[-1].upper()
                     for stage, key in (("offer", f"{kind} offer"), ("done", f"{kind} done")):
                         self.assertEqual(bubbles(c.quests[qid]["lines"][stage]), entry[key])
-                # `obj:` lines as written; Hank's quest B has none in 05, so it reads like Luz's.
-                expected = entry["obj"] + (["Record the Channel Leviathan."] if cid == "hank_mudpaw" else [])
+                # `obj:` lines as written, and a written journal only where 05 has none.
+                expected = [entry["obj"].get(qid[-1].upper()) or WRITTEN_JOURNALS[qid] for qid in ids]
                 self.assertEqual(journals, expected)
+                self.assertFalse({qid for qid in ids if qid[-1].upper() in entry["obj"]} & set(WRITTEN_JOURNALS))
                 self.assertEqual(bubbles(cat["greetings"]["friend"]), entry["friend greet"])
                 if "greet" in entry and cid != "captain_maeve":
                     # `greet` is the cat's `day` line; several bubbles are one alternative.
@@ -129,25 +161,43 @@ class ShippedContent(unittest.TestCase):
         self.assertEqual(c.dialogue["q08_channel_run:dialogue:greeting"]["text"], script["Captain Maeve"]["greet"][0])
         self.assertEqual(c.dialogue["q08_channel_run:dialogue:offer"]["text"],
                          script["Captain Maeve"]["A, recopied offer"][0])
-        # Hosts (05 §4.1-4.2): `weather:rain` is the game's drizzle.
-        for heading, hid in (("### 4.1 Grandmother Whiskers", "grandmother_whiskers"),
-                             ("### 4.2 Doc Barnaby", "doc_barnaby")):
-            block = SCRIPT[SCRIPT.index(heading) + len(heading):].split("\n### ")[0]
+        # Hosts (05 §4): `weather:rain` is the game's drizzle, and `first: see story_…` is the story's.
+        hosts = (("4.1 Grandmother Whiskers", "grandmother_whiskers"), ("4.2 Doc Barnaby", "doc_barnaby"),
+                 ("4.3 Captain Huckleberry", "captain_huckleberry"), ("4.4 Sora the Obsidian", "sora"),
+                 ("4.5 Professor Astra-9", "astra_9"))
+        for heading, hid in hosts:
+            block = SCRIPT[SCRIPT.index("### " + heading) + len(heading) + 4:].split("\n### ")[0].split("\n---")[0]
+            block = block.replace("\n  ", " ").replace("\n     ", " ")
             authored = {}
-            for state, text in re.findall(r'^- (?:`([^`]+)`:|\*\*Cookout:\*\*) "(.+?)"', block.replace("\n  ", " "),
-                                          re.M):
+            for state, text in re.findall(r'^- (?:`([^`]+)`:|\*\*Cookout:\*\*) "(.+?)"', block, re.M):
                 authored.setdefault((state or "cookout").replace("weather:rain", "weather:drizzle"), []).append(text)
-            greetings = c.cats[hid]["greetings"]
-            self.assertEqual({k: bubbles(v) for k, v in greetings.items()}, authored, hid)
+            greetings = {k: bubbles(v) for k, v in c.cats[hid]["greetings"].items()}
+            if hid == "astra_9":
+                # Bot answers her `day` line (**Bot:** "It is not."), shown as his barks are.
+                self.assertIn('- **Bot:** "It is not."', block)
+                authored["day"] = [authored["day"] + ["Bot: It is not."]]
+            self.assertEqual(greetings, authored, hid)
+            errand = re.search(r'offer "(.+?)" / turn-in "(.+?)"', block)
+            if errand:
+                lines = c.quests[f"host_{c.cats[hid]['lake_id']}"]["lines"]
+                self.assertEqual((lines["offer"], lines["done"]), errand.groups())
+        self.assertEqual({k: c.quests["host_flathead"]["lines"][k] for k in ("offer", "done")},
+                         WRITTEN_LINES["host_flathead"])
+        # Huckleberry's Whopper story, told one part a day (05 §4.3), emphasis dropped.
+        story = SCRIPT.split("**The Whopper story (3 different days):**")[1].split("- `after_ch3`")[0]
+        parts = [re.sub(r"\*([^*]+)\*", r"\1", text) for text in re.findall(r'\d\. "(.+?)"', " ".join(story.split()))]
+        self.assertEqual(c.cats["captain_huckleberry"]["story"], parts)
+        self.assertEqual(len(parts), 3)
         # Ripples (05 §7) and the sample letters (05 §9).
         table = dict(re.findall(r"^\| (ripple_\d+) \| (.+?) \|$", SCRIPT, re.M))
         self.assertEqual({rid: row["text"] for rid, row in c.ripples.items()},
                          {rid: table[rid] for rid in c.ripples})
         samples = dict(re.findall(r'^- \*\*From (.+?):\*\* "(.+?)"', SCRIPT.replace("\n  ", " "), re.M))
         letters = {cid: cat["letters"] for cid, cat in c.cats.items() if cat["letters"]}
-        self.assertEqual(letters, {names[name]: [samples[name]] for name in ("Elder Moss", "Hank Mudpaw",
-                                                                             "Señora Luz")})
-        # Keepsake names (04 §4.1-4.2).
+        names["Captain Huckleberry"] = "captain_huckleberry"
+        # 05 §9's five samples, one variant each.
+        self.assertEqual(letters, {names[name]: [samples[name]] for name in samples})
+        # Keepsake names (04 §4).
         characters = (ROOT / "docs/v1/04-CHARACTERS.md").read_text(encoding="utf-8")
         for kid, row in c.keepsakes.items():
             self.assertRegex(" ".join(characters.split()), rf"`{kid}` {re.escape(row['name'])}[.\s]")
@@ -246,6 +296,40 @@ class Systems(unittest.TestCase):
             self.assertTrue(chat.advance(state, c))
         self.assertEqual(texts, c.cats["old_gus"]["greetings"]["day"][0])
 
+    def test_a_story_is_told_one_part_a_game_day_after_the_greeting(self):
+        from .npcs import NPC
+        c = self.content
+        flathead = World("flathead")
+        state = State.new(flathead, seed=32)
+        huck = NPC("captain_huckleberry", "Captain Huckleberry", None, flathead.anchors["flathead:landing"], True)
+        parts = c.cats["captain_huckleberry"]["story"]
+
+        def hail():
+            chat, seen = open_conversation(huck, state, c, world=flathead), []
+            while True:
+                seen.append(chat.node_id)
+                node = chat.node(c)
+                if "choices" in node or not chat.advance(state, c):
+                    return seen, node
+        seen, node = hail()
+        # Greeting, part one, then his errand's offer.
+        self.assertEqual(seen, ["captain_huckleberry:greeting", "captain_huckleberry:story",
+                                "host_flathead:dialogue:offer"])
+        self.assertEqual(c.dialogue["host_flathead:dialogue:offer"], node)
+        self.assertEqual(story_heard(state, "captain_huckleberry"), 1)
+        self.assertNotIn("captain_huckleberry:story", hail()[0])  # nothing more today
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "save.json"
+            state.save(path)
+            state = State.load(path, flathead)
+        texts = []
+        for day in range(1, 4):
+            state.game_minutes = day * 1440 + 120
+            chat = open_conversation(huck, state, c, world=flathead)
+            texts.append(chat.nodes.get("captain_huckleberry:story", {}).get("text"))
+        self.assertEqual(texts, [parts[1], parts[2], None])  # the story ends after part three
+        self.assertEqual(story_heard(state, "captain_huckleberry"), 3)
+
     def test_the_book_shows_v1_0_ripples_and_keepsakes_with_their_givers(self):
         s = self.state
         s.v2["ripples_v2"] = ["ripple_14"]
@@ -258,14 +342,14 @@ class Systems(unittest.TestCase):
 
 
 class Playthrough(unittest.TestCase):
-    """Every Briar and Cedar quest, offered, declined, accepted, completed by its events,
+    """Every side quest on a lake, offered, declined, accepted, completed by its events,
     put off and turned in through real hails, with every authored node shown."""
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.path = Path(tmp.name) / "save.json"
-        self.shown = set()
+        self.shown, self.stories = set(), []
 
     def start(self, lake):
         self.world = World(lake)
@@ -290,6 +374,7 @@ class Playthrough(unittest.TestCase):
         after a turn-in releases the pin."""
         first = int(self.state.game_minutes // 1440) if day is None else day
         seed, lake = self.state.narrative.schedule_seed, self.world.id
+        scheduled = scheduled and npc_id not in cast().hosts.values()  # hosts never leave
         for d in range(first, first + 30):
             for minute in (120, 900):  # 08:00 and 21:00
                 if d * 1440 + minute < self.state.game_minutes:
@@ -317,10 +402,13 @@ class Playthrough(unittest.TestCase):
         self.assertIsNotNone(chat, f"{npc_id} only waved")
         self.texts = []
         while True:
-            nodes.append(chat.node_id)
-            self.shown.add(chat.node_id)
             node = chat.node(self.content)
-            self.texts.append(node["text"])
+            if chat.node_id.startswith(f"{npc_id}:story"):
+                self.stories.append(node["text"])  # a story part, told once a day (05 §4.3)
+            else:
+                nodes.append(chat.node_id)
+                self.texts.append(node["text"])
+            self.shown.add(chat.node_id)
             if "choices" in node:
                 if not actions:
                     break  # walk away from a choice nobody asked for
@@ -351,10 +439,10 @@ class Playthrough(unittest.TestCase):
         """One quest from offer to its same-day return line."""
         c = self.content
         self.meet(cid)
+        # The cat's greeting comes before each offer; V3 cats but Elder Moss have none for it (05 §6).
+        text = greeting(self.state, c, cid)
+        greet = bubbles(text) if text is not None else []
         offer = self.talk(cid, "decline")
-        # A cat's `day` line greets you before each offer; V3 cats but Elder Moss have none (05 §6).
-        day = c.cats[cid]["greetings"].get("day")
-        greet = bubbles(day[0] if isinstance(day, list) else day) if day is not None else []
         greeting_ids = [f"{cid}:greeting"] + [f"{cid}:greeting:{n}" for n in range(2, len(greet) + 1)]
         self.assertEqual(offer[:len(greet) + 1], greeting_ids[:len(greet)] + [f"{qid}:dialogue:offer"], qid)
         self.assertEqual(self.texts[:len(greet)], greet)
@@ -363,10 +451,12 @@ class Playthrough(unittest.TestCase):
         self.assertEqual(self.talk(cid, "accept")[-1], f"{qid}:dialogue:accept")
         self.assertEqual(self.status(qid), "active")
         self.assertEqual(quest_journal_details(self.state, c, qid)["objective"], c.quests[qid]["journal"])
-        self.assertEqual(self.talk(cid), [f"{qid}:dialogue:progress"])
+        steps = c.quests[qid]["objective"] if isinstance(c.quests[qid]["objective"], list) else [
+            c.quests[qid]["objective"]]
+        if steps[0] != {"type": "talk_to", "npc_id": cid}:  # otherwise the next hail is the step itself
+            self.assertEqual(self.talk(cid), [f"{qid}:dialogue:progress"])
         events()
-        ends_with_talk = isinstance(c.quests[qid]["objective"], list) and \
-            c.quests[qid]["objective"][-1]["type"] == "talk_to"
+        ends_with_talk = steps[-1]["type"] == "talk_to" and "distinct_days" not in steps[-1]
         self.assertEqual(self.status(qid), "active" if ends_with_talk else "ready", qid)
         self.meet(cid, scheduled=True)
         self.assertEqual(self.talk(cid, "close"), [f"{qid}:dialogue:ready", f"{qid}:dialogue:ready_wait"])
@@ -409,10 +499,10 @@ class Playthrough(unittest.TestCase):
         self.assertEqual(nodes[0], f"{cid}:greeting")
         self.assertEqual(self.texts, bubbles(self.content.cats[cid]["greetings"]["friend"]))
 
-    def line(self, zone, tier, hooks, bait):
+    def line(self, zone, tier, hooks, bait, *, cold=False):
         line_id = "00000000-0000-0000-0000-000000000032"
         self.emit(type="line.set", line_id=line_id, zone_id=zone, tier_id=tier, hook_count=hooks, bait_id=bait,
-                  bait_sections=[bait], active_game_minute=10, x=0.0, z=0.0, in_cold_band=False)
+                  bait_sections=[bait], active_game_minute=10, x=0.0, z=0.0, in_cold_band=cold)
         self.emit(type="line.check", line_id=line_id, zone_id=zone, active_game_minute=70)
 
     def enter(self, *zones):
@@ -424,9 +514,37 @@ class Playthrough(unittest.TestCase):
         for ref in refs:
             self.emit(type="waypoint.enter", waypoint_id=ref, movement_cause="boat", player_controlled=True)
 
-    def catch(self, species, zone, *, bait="worm", legendary=False):
+    def catch(self, species, zone, *, bait="worm", legendary=False, hour=9.0):
         self.emit(type="catch.resolved", species_id=species, legendary=legendary, kept=True, zone_id=zone,
-                  x=0.0, z=0.0, bait_id=bait, weight_lb=1.0, catch_hour=9.0, in_cold_band=False)
+                  lake_id=zone.split(":")[0], x=0.0, z=0.0, bait_id=bait, weight_lb=1.0, catch_hour=hour,
+                  in_cold_band=False)
+
+    def anchor(self, zone, minutes):
+        for _ in range(2):
+            self.emit(type="anchor.sample", zone_id=zone, anchored=True, engine_idle=True,
+                      elapsed_game_minutes=minutes / 2, weather="clear", x=0.0, z=0.0)
+
+    def cook(self, dish):
+        self.emit(type="cook_dish", dish_id=dish)
+
+    def tool(self, tool_id, zone, **fields):
+        self.emit(type="tool.use", tool_id=tool_id, lake_id=zone.split(":")[0], zone_id=zone, **fields)
+
+    def until_last(self, qid, steps):
+        """Run the events in order; only the last one may complete the quest."""
+        for step in steps[:-1]:
+            step()
+            self.assertEqual(self.status(qid), "active", qid)
+        steps[-1]()
+
+    def visit_days(self, npc_id, days):
+        """Hail a cat on that many more game days."""
+        for _ in range(days):
+            self.next_day(npc_id)
+            self.talk(npc_id)
+
+    def finish_chapter(self, number):
+        self.state.v2.setdefault("story", {}).setdefault("completed_chapters", []).append(number)
 
     def wait(self, weather, zone):
         for _ in range(2):
@@ -443,8 +561,16 @@ class Playthrough(unittest.TestCase):
         authored = {nid for nid, node in c.dialogue.items()
                     if node["quest_id"] in c.quests and "kind" in c.quests[node["quest_id"]]
                     and c.quests[node["quest_id"]]["lake_id"] == lake}
-        self.assertEqual(authored - self.shown, set())
-        self.assertEqual(len({c.dialogue[nid]["quest_id"] for nid in authored}), {"briar": 11, "cedar": 13}[lake])
+        # A quest whose first step is talking to its giver is ready at the next hail, so its
+        # (generic) progress line has no moment to be shown: Ember's and Juno's quest B.
+        silent = {f"{qid}:dialogue:progress" for qid, quest in c.quests.items()
+                  if quest.get("lake_id") == lake and "kind" in quest
+                  and (quest["objective"] if isinstance(quest["objective"], list) else [quest["objective"]])[0]
+                  == {"type": "talk_to", "npc_id": quest["giver_id"]}}
+        self.assertEqual(authored - self.shown, silent)
+        self.assertEqual(silent - set(c.dialogue), set())
+        self.assertEqual(len({c.dialogue[nid]["quest_id"] for nid in authored}),
+                         {"briar": 11, "cedar": 13}.get(lake, 19))
 
     def test_little_briar(self):
         self.start("briar")
@@ -525,6 +651,127 @@ class Playthrough(unittest.TestCase):
         self.check_every_node_was_shown("cedar")
         self.host("doc_barnaby")
         self.reload_pays_nothing()
+
+    def play_lake(self, lake, events, *, before_b=None):
+        """The lake's host errand first (its book goal is the smallest), then each cat's A and B."""
+        c, s = self.content, self.state
+        host = cast().hosts[lake]
+        errand = quest_chain(c, host)[0]
+        self.play(host, errand, events[errand])
+        for cid in water_cats(lake):
+            a, b = quest_chain(c, cid)
+            self.play(cid, a, events[a])
+            self.next_day(cid)
+            if before_b and cid in before_b:
+                # Quest B waits for its requirement; until then the cat answers with quest A's return line.
+                self.assertEqual(self.talk(cid), [f"{a}:dialogue:return"])
+                before_b[cid]()
+            self.play(cid, b, events[b])
+            self.finish(cid)
+        first = 18 + 9 * ("flathead", "crater", "nebula").index(lake)
+        self.assertEqual(s.v2["ripples_v2"], [f"ripple_{n}" for n in range(first, first + 9)])
+        self.check_every_node_was_shown(lake)
+        self.reload_pays_nothing()
+
+    def test_flathead_alpine(self):
+        self.start("flathead")
+        legendary = dict(bait="roe", legendary=True)
+        events = {
+            # Huckleberry's errand counts its acceptance day's hail, then two more days of his story.
+            "host_flathead": lambda: self.visit_days("captain_huckleberry", 2),
+            "wc_torvald_a": lambda: self.line("flathead:deep", "prem", 18, "minnow", cold=True),
+            "wc_torvald_b": lambda: self.catch("old_silverhead", "flathead:deep", **legendary),
+            "wc_freya_a": lambda: self.wait("snow_mist", "flathead:inlet"),
+            "wc_freya_b": lambda: self.catch("glacial_phantom", "flathead:inlet", **legendary),
+            "wc_bramble_a": lambda: self.emit(type="catnap.complete", zone_id="flathead:flats"),
+            "wc_bramble_b": lambda: self.cook("smoked_trout"),
+            "wc_ingrid_a": lambda: self.book("flathead", 8),
+            "wc_ingrid_b": lambda: self.catch("burbot", "flathead:deep"),
+            "wc_elk_ears_eli_a": lambda: self.catch("bull_trout", "flathead:inlet"),
+            "wc_elk_ears_eli_b": lambda: self.anchor("flathead:rocks", 120),
+            "wc_bjorn_a": lambda: self.visit_days("captain_huckleberry", 3),
+            "wc_bjorn_b": lambda: self.catch("huckleberrys_whopper", "flathead:rocks", **legendary),
+            "wc_willa_larch_a": lambda: [self.catch("yellow_perch", "flathead:cypress") for _ in range(3)],
+            "wc_willa_larch_b": lambda: self.cookout("captain_huckleberry"),
+            "wc_dakota_a": lambda: [self.emit(type="boat.move", zone_id="flathead:open", distance_m=200.0,
+                                              player_controlled=True, propulsion="sail") for _ in range(2)],
+            "wc_dakota_b": lambda: [self.catch(sid, "flathead:inlet") for sid in
+                                    ("lake_trout", "bull_trout", "lake_trout", "rainbow_trout", "brook_trout")],
+            "wc_mitzi_a": lambda: self.tool("thermo_scanner", "flathead:deep"),
+            "wc_mitzi_b": lambda: self.tool("thermo_scanner", "crater:deep"),
+        }
+        self.play_lake("flathead", events)
+        s = self.state
+        # The whole Whopper, one part a day, and the gate V1-36 reads (03 §3).
+        self.assertEqual(self.stories, self.content.cats["captain_huckleberry"]["story"])
+        self.assertEqual(story_heard(s, "captain_huckleberry"), 3)
+        self.assertEqual([row["from"] for row in s.v2["npcs"]["letters"]], ["captain_huckleberry"])
+
+    def test_crater_caldera(self):
+        self.start("crater")
+        legendary = dict(bait="shad", legendary=True)
+        night = [sid for sid in LAKE_SPECIES_IDS["crater"]][:3]
+        events = {
+            "host_crater": lambda: self.wait("fog", "crater:open"),
+            "wc_nyx_a": lambda: self.line("crater:springs", "std", 12, "grub"),
+            "wc_nyx_b": lambda: self.catch("caldera_fire_lizard", "crater:springs", **legendary),
+            "wc_ignis_a": lambda: self.emit(type="bot.scout_complete", zone_id="crater:rocks", depth_class="deep",
+                                            report_delivered=True, x=0.0, z=0.0),
+            "wc_ignis_b": lambda: self.catch("obsidian_gar", "crater:rocks", **legendary),
+            "wc_ashby_a": lambda: self.wait("fog", "crater:flats"),
+            "wc_ashby_b": lambda: self.cook("mineral_broth"),
+            "wc_basalt_bea_a": lambda: self.enter("crater:flats", "crater:rocks", "crater:cypress"),
+            "wc_basalt_bea_b": lambda: self.enter("briar:rocks", "cedar:rocks", "flathead:rocks"),
+            "wc_fumi_a": lambda: self.anchor("crater:lilies", 120),
+            "wc_fumi_b": lambda: self.until_last("wc_fumi_b", [
+                lambda sid=sid, hour=hour: self.catch(sid, "crater:deep", hour=hour) for sid, hour in
+                # Three species at night: a day catch and a repeat don't count.
+                ((night[0], 12.0), (night[0], 22.0), (night[0], 23.0), (night[1], 1.0), (night[2], 12.5),
+                 (night[2], 21.0))]),
+            "wc_ember_a": lambda: [self.emit(type="boat.move", zone_id="crater:open", distance_m=250.0,
+                                             player_controlled=True, propulsion="oar") for _ in range(2)],
+            "wc_ember_b": lambda: None,  # the hail that follows is the whole step
+            "wc_mist_a": lambda: self.wait("fog", "crater:cypress"),
+            "wc_mist_b": lambda: self.catch("fog_mudminnow", "crater:cypress"),
+            "wc_juno_a": lambda: self.wait("clear", "crater:open"),
+            "wc_juno_b": lambda: None,
+            "wc_tamsin_a": lambda: self.catch("lahontan_cutthroat", "crater:deep"),
+            "wc_tamsin_b": lambda: self.book("crater", 15),
+        }
+        self.play_lake("crater", events, before_b={"ember": lambda: self.finish_chapter(4),
+                                                    "juno": lambda: self.finish_chapter(5)})
+        self.assertEqual(self.state.v2["npcs"]["letters"], [])
+
+    def test_starlight_nebula(self):
+        self.start("nebula")
+        legendary = dict(bait="moonmilk_stardust", legendary=True)
+        events = {
+            "host_nebula": lambda: self.book("nebula", 5),
+            "wc_orion_cat_a": lambda: self.line("nebula:current", "heavy", 24, "stardust"),
+            "wc_orion_cat_b": lambda: self.tool("zero_g_winch", "nebula:current"),
+            "wc_nebula_paws_a": lambda: self.anchor("nebula:current", 120),
+            "wc_nebula_paws_b": lambda: self.catch("nebula_weaver", "nebula:current", **legendary),
+            "wc_comet_a": lambda: [self.emit(type="boat.move", zone_id="nebula:inlet", distance_m=200.0,
+                                             player_controlled=True, propulsion="sail") for _ in range(2)],
+            "wc_comet_b": lambda: self.emit(type="catnap.complete", zone_id="nebula:inlet"),
+            "wc_lyra_a": lambda: self.catch("purrsec_lanternfish", "nebula:reeds"),
+            "wc_lyra_b": lambda: self.cookout("astra_9"),
+            "wc_vega_a": lambda: self.enter("nebula:open", "nebula:deep", "nebula:current", "nebula:reeds"),
+            "wc_vega_b": lambda: self.book("nebula", 10),
+            "wc_selene_a": lambda: self.cook("moon_pudding"),
+            "wc_selene_b": lambda: [self.catch(sid, "nebula:lilies") for sid in ("solar_sunfish", "lunar_loach")],
+            "wc_andi_a": lambda: self.catch("bluegill", "briar:lilies"),
+            # Only with the Frog shell on: the same use in the tin shell doesn't count.
+            "wc_andi_b": lambda: self.until_last("wc_andi_b", [
+                lambda shell=shell: self.tool("reed_anchor", "nebula:reeds", shell_id=shell) for shell in ("tin", "frog")]),
+            "wc_twinkle_a": lambda: [self.catch("purrsec_lanternfish", "nebula:deep") for _ in range(3)],
+            "wc_twinkle_b": lambda: self.catch("event_horizon_goby", "nebula:deep"),
+            "wc_rigel_a": lambda: [self.emit(type="boat.move", zone_id="nebula:current", distance_m=150.0,
+                                             player_controlled=True, propulsion="sail") for _ in range(2)],
+            "wc_rigel_b": lambda: self.catch("supernova_salmon", "nebula:current"),
+        }
+        self.play_lake("nebula", events)
+        self.assertEqual([row["from"] for row in self.state.v2["npcs"]["letters"]], ["andi"])
 
     def host(self, hid):
         """The host's own errand: its return line answers today's turn-in, her greeting takes over tomorrow."""
