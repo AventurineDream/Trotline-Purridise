@@ -171,7 +171,8 @@ class LakeRenderer(SoftwareRenderer):
             boat_vbo = self.own(ctx.buffer(reserve=CAT_BOAT_BYTES,dynamic=True))
             boat_vao = self.mesh_vao(boat_vbo)
             self.actor_slots.append({"vbo":vbo,"ibo":ibo,"vao":vao,"boat_vbo":boat_vbo,"boat_vao":boat_vao,
-                                     "npc_id":None,"layer":self.actor_layer0+index})
+                                     "actor":None,"npc_id":None,
+                                     "layer":self.actor_layer0+index})
         self.impostor_buf = self.own(ctx.buffer(reserve=7*4*MAX_ACTORS,dynamic=True))
         self.impostor_vao = self.tree_vao(self.impostor_buf)
 
@@ -210,7 +211,7 @@ class LakeRenderer(SoftwareRenderer):
             raise RuntimeError(f"boat for {actor.npc_id} exceeds its GPU slot")
         if len(boat):
             slot["boat_vbo"].write(boat.tobytes())
-        slot.update(npc_id=actor.npc_id, ranges=ranges, boat_vertices=len(boat))
+        slot.update(actor=actor, npc_id=actor.npc_id, ranges=ranges, boat_vertices=len(boat))
         # The impostor fills its atlas layer, feet on the bottom edge.
         sprite,width_m,height_m,base_m = impostor(actor.npc_id)
         ys = np.minimum(np.arange(ATLAS_H)*sprite.shape[0]//ATLAS_H,sprite.shape[0]-1)
@@ -225,14 +226,16 @@ class LakeRenderer(SoftwareRenderer):
         actors = self.actor_cache.sync(getattr(state,"npcs",()) or (), roster())
         reduced = bool(state.v2.get("settings",{}).get("reduced_motion",False)) if isinstance(state.v2,dict) else False
         draws, impostors = [], []
-        live = {actor.npc_id for actor in actors}
+        # Slots follow the placed actor, not the cat: a cat moved to a new anchor
+        # (a cookout on the landing) is re-placed, and its slot is uploaded afresh.
+        live = {id(actor) for actor in actors}
         for slot in self.actor_slots:
-            if slot["npc_id"] not in live:
-                slot["npc_id"] = None
+            if id(slot["actor"]) not in live:
+                slot["actor"] = slot["npc_id"] = None
         for actor in actors:
-            slot = next((s for s in self.actor_slots if s["npc_id"]==actor.npc_id),None)
+            slot = next((s for s in self.actor_slots if s["actor"] is actor),None)
             if slot is None:
-                slot = next(s for s in self.actor_slots if s["npc_id"] is None)
+                slot = next(s for s in self.actor_slots if s["actor"] is None)
                 self._upload_actor(slot,actor)
             distance = math.hypot(actor.x-cam.eye[0],actor.z-cam.eye[2])
             lod = lod_for(distance)

@@ -370,6 +370,28 @@ class Actors(unittest.TestCase):
             renderer.close()
 
 
+    def test_a_cat_moved_to_a_new_anchor_gets_a_fresh_gl_slot(self):
+        _gl_context(self).release()
+        from dataclasses import replace
+        from .glrender import LakeRenderer
+        world, state = _lake("briar")
+        renderer = LakeRenderer(world, 160, 90)
+        try:
+            host, water = state.npcs
+            renderer.render(state)
+            before = next(s for s in renderer.actor_slots if s["npc_id"] == water.id)
+            self.assertGreater(before["boat_vertices"], 0)
+            # The Sunday cookout moves a water cat onto the landing, without its boat.
+            state.npcs = (host, replace(water, anchor=replace(host.anchor, id="briar:cookout:" + water.id)))
+            renderer.render(state)
+            actor = renderer.actor_cache.actors[water.id]
+            slot = next(s for s in renderer.actor_slots if s["npc_id"] == water.id)
+            self.assertIs(slot["actor"], actor)
+            self.assertEqual(actor.boat_faces, [])
+            self.assertEqual(slot["boat_vertices"], 0)
+        finally:
+            renderer.close()
+
 class Portraits(unittest.TestCase):
     def test_portraits_are_cached_read_only_and_differ_by_cat(self):
         catart.clear_caches()
