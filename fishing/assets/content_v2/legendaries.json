@@ -1,0 +1,693 @@
+{
+  "schema_version": 2,
+  "legendaries": [
+    {
+      "id": "old_lantern",
+      "name": "Old Lantern",
+      "lake": "briar",
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.4,
+        "body_depth": 1.0,
+        "head_shape": "flat",
+        "snout": 0.0,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "haloed",
+        "colors": {
+          "top": [
+            0.62,
+            0.46,
+            0.16
+          ],
+          "side": [
+            0.92,
+            0.72,
+            0.3
+          ],
+          "belly": [
+            0.98,
+            0.9,
+            0.66
+          ]
+        },
+        "marks": [
+          1.0,
+          0.95,
+          0.7
+        ],
+        "mark_scale": 0.8,
+        "features": [
+          "whiskers"
+        ],
+        "glow": 0.45,
+        "band": [
+          1.0,
+          0.82,
+          0.4
+        ],
+        "fins": [
+          0.86,
+          0.62,
+          0.26
+        ]
+      },
+      "idle": {
+        "sway": 0.08,
+        "rate": 0.45,
+        "bob": 0.025
+      }
+    },
+    {
+      "id": "lily_queen",
+      "name": "The Lily Queen",
+      "lake": "briar",
+      "look": {
+        "family": "pike",
+        "length_depth_ratio": 5.0,
+        "body_depth": 1.0,
+        "head_shape": "flat",
+        "snout": 0.26,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "chain",
+        "colors": {
+          "top": [
+            0.12,
+            0.3,
+            0.18
+          ],
+          "side": [
+            0.42,
+            0.62,
+            0.34
+          ],
+          "belly": [
+            0.92,
+            0.92,
+            0.8
+          ]
+        },
+        "marks": [
+          0.08,
+          0.16,
+          0.1
+        ],
+        "fins": [
+          0.58,
+          0.7,
+          0.42
+        ],
+        "fin_edge": [
+          0.97,
+          0.95,
+          0.88
+        ]
+      },
+      "idle": {
+        "sway": 0.1,
+        "rate": 0.55,
+        "bob": 0.02
+      }
+    },
+    {
+      "id": "spillway_monster",
+      "name": "The Spillway Monster",
+      "lake": "cedar",
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.05,
+        "head_shape": "flat",
+        "snout": 0.0,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "mottled",
+        "colors": {
+          "top": [
+            0.2,
+            0.28,
+            0.38
+          ],
+          "side": [
+            0.46,
+            0.56,
+            0.64
+          ],
+          "belly": [
+            0.86,
+            0.88,
+            0.88
+          ]
+        },
+        "marks": [
+          0.3,
+          0.38,
+          0.46
+        ],
+        "features": [
+          "whiskers"
+        ],
+        "fins": [
+          0.34,
+          0.42,
+          0.5
+        ]
+      },
+      "idle": {
+        "sway": 0.07,
+        "rate": 0.35,
+        "bob": 0.03
+      }
+    },
+    {
+      "id": "channel_leviathan",
+      "name": "The Channel Leviathan",
+      "lake": "cedar",
+      "look": {
+        "family": "gar",
+        "length_depth_ratio": 5.6,
+        "body_depth": 1.0,
+        "head_shape": "flat",
+        "snout": 0.55,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "colors": {
+          "top": [
+            0.26,
+            0.28,
+            0.18
+          ],
+          "side": [
+            0.5,
+            0.5,
+            0.32
+          ],
+          "belly": [
+            0.84,
+            0.8,
+            0.62
+          ]
+        },
+        "marks": [
+          0.16,
+          0.16,
+          0.1
+        ],
+        "features": [
+          "scutes"
+        ],
+        "fins": [
+          0.44,
+          0.42,
+          0.28
+        ]
+      },
+      "idle": {
+        "sway": 0.06,
+        "rate": 0.3,
+        "bob": 0.015
+      }
+    },
+    {
+      "id": "whiskered_guardian",
+      "name": "The Whiskered Guardian",
+      "lake": "cedar",
+      "look": {
+        "family": "catfish",
+        "length_depth_ratio": 3.4,
+        "body_depth": 1.0,
+        "head_shape": "flat",
+        "snout": 0.0,
+        "mouth": "inferior",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 4,
+        "scale_pattern": "vermiculate",
+        "colors": {
+          "top": [
+            0.24,
+            0.18,
+            0.36
+          ],
+          "side": [
+            0.62,
+            0.42,
+            0.52
+          ],
+          "belly": [
+            0.96,
+            0.76,
+            0.52
+          ]
+        },
+        "marks": [
+          1.0,
+          0.8,
+          0.5
+        ],
+        "features": [
+          "whiskers"
+        ],
+        "glow": 0.6,
+        "band": [
+          1.0,
+          0.72,
+          0.45
+        ],
+        "fins": [
+          0.52,
+          0.36,
+          0.5
+        ]
+      },
+      "idle": {
+        "sway": 0.09,
+        "rate": 0.4,
+        "bob": 0.04
+      }
+    },
+    {
+      "id": "glacial_phantom",
+      "name": "The Glacial Phantom",
+      "lake": "flathead",
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.6,
+        "body_depth": 1.0,
+        "head_shape": "flat",
+        "snout": 0.05,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "truncate",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "colors": {
+          "top": [
+            0.72,
+            0.78,
+            0.84
+          ],
+          "side": [
+            0.88,
+            0.92,
+            0.95
+          ],
+          "belly": [
+            0.97,
+            0.98,
+            0.99
+          ]
+        },
+        "marks": [
+          0.56,
+          0.72,
+          0.9
+        ],
+        "fin_edge": [
+          0.96,
+          0.95,
+          0.92
+        ],
+        "glow": 0.35,
+        "band": [
+          0.8,
+          0.92,
+          1.0
+        ],
+        "fins": [
+          0.82,
+          0.88,
+          0.94
+        ]
+      },
+      "idle": {
+        "sway": 0.12,
+        "rate": 0.6,
+        "bob": 0.02
+      }
+    },
+    {
+      "id": "old_silverhead",
+      "name": "Old Silverhead",
+      "lake": "flathead",
+      "look": {
+        "family": "trout",
+        "length_depth_ratio": 4.6,
+        "body_depth": 1.08,
+        "head_shape": "pointed",
+        "snout": 0.05,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": true,
+        "tail_shape": "forked",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "colors": {
+          "top": [
+            0.2,
+            0.26,
+            0.34
+          ],
+          "side": [
+            0.66,
+            0.7,
+            0.74
+          ],
+          "belly": [
+            0.92,
+            0.92,
+            0.9
+          ]
+        },
+        "marks": [
+          0.92,
+          0.92,
+          0.88
+        ],
+        "features": [
+          "kype",
+          "hump"
+        ],
+        "fin_edge": [
+          0.96,
+          0.95,
+          0.92
+        ],
+        "band": [
+          0.62,
+          0.7,
+          0.92
+        ],
+        "glow": 0.15,
+        "fins": [
+          0.4,
+          0.44,
+          0.5
+        ]
+      },
+      "idle": {
+        "sway": 0.07,
+        "rate": 0.32,
+        "bob": 0.02
+      }
+    },
+    {
+      "id": "huckleberrys_whopper",
+      "name": "Huckleberry's Whopper",
+      "lake": "flathead",
+      "look": {
+        "family": "eel",
+        "length_depth_ratio": 5.6,
+        "body_depth": 1.0,
+        "head_shape": "flat",
+        "snout": 0.0,
+        "mouth": "terminal",
+        "dorsal_count": 2,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 1,
+        "scale_pattern": "blotched",
+        "dorsal_style": "long",
+        "colors": {
+          "top": [
+            0.3,
+            0.26,
+            0.3
+          ],
+          "side": [
+            0.5,
+            0.44,
+            0.46
+          ],
+          "belly": [
+            0.82,
+            0.78,
+            0.74
+          ]
+        },
+        "marks": [
+          0.36,
+          0.2,
+          0.4
+        ],
+        "fins": [
+          0.42,
+          0.34,
+          0.42
+        ]
+      },
+      "idle": {
+        "sway": 0.14,
+        "rate": 0.5,
+        "bob": 0.02
+      }
+    },
+    {
+      "id": "obsidian_gar",
+      "name": "The Obsidian Gar",
+      "lake": "crater",
+      "look": {
+        "family": "gar",
+        "length_depth_ratio": 6.0,
+        "body_depth": 1.0,
+        "head_shape": "pointed",
+        "snout": 0.6,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "rounded",
+        "barbels": 0,
+        "scale_pattern": "speckled",
+        "colors": {
+          "top": [
+            0.03,
+            0.03,
+            0.05
+          ],
+          "side": [
+            0.08,
+            0.08,
+            0.11
+          ],
+          "belly": [
+            0.24,
+            0.24,
+            0.3
+          ]
+        },
+        "marks": [
+          0.55,
+          0.58,
+          0.7
+        ],
+        "glow": 0.15,
+        "band": [
+          0.6,
+          0.6,
+          0.8
+        ],
+        "fins": [
+          0.1,
+          0.1,
+          0.14
+        ]
+      },
+      "idle": {
+        "sway": 0.06,
+        "rate": 0.4,
+        "bob": 0.015
+      }
+    },
+    {
+      "id": "caldera_fire_lizard",
+      "name": "The Caldera Fire-Lizard",
+      "lake": "crater",
+      "look": {
+        "family": "salamander",
+        "length_depth_ratio": 4.6,
+        "body_depth": 1.0,
+        "head_shape": "flat",
+        "snout": 0.0,
+        "mouth": "terminal",
+        "dorsal_count": 0,
+        "adipose": false,
+        "tail_shape": "pointed",
+        "barbels": 0,
+        "scale_pattern": "spots",
+        "colors": {
+          "top": [
+            0.2,
+            0.12,
+            0.1
+          ],
+          "side": [
+            0.36,
+            0.18,
+            0.12
+          ],
+          "belly": [
+            0.8,
+            0.4,
+            0.18
+          ]
+        },
+        "marks": [
+          1.0,
+          0.55,
+          0.15
+        ],
+        "glow": 0.6,
+        "features": [
+          "gills"
+        ],
+        "band": [
+          1.0,
+          0.55,
+          0.2
+        ],
+        "fins": [
+          0.4,
+          0.2,
+          0.14
+        ]
+      },
+      "idle": {
+        "sway": 0.1,
+        "rate": 0.35,
+        "bob": 0.01
+      }
+    },
+    {
+      "id": "nebula_weaver",
+      "name": "The Nebula Weaver",
+      "lake": "nebula",
+      "look": {
+        "family": "cosmic",
+        "length_depth_ratio": 7.0,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.02,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "flowing",
+        "barbels": 0,
+        "scale_pattern": "stars",
+        "colors": {
+          "top": [
+            0.3,
+            0.2,
+            0.56
+          ],
+          "side": [
+            0.58,
+            0.46,
+            0.86
+          ],
+          "belly": [
+            0.86,
+            0.82,
+            0.98
+          ]
+        },
+        "dorsal_style": "long",
+        "marks": [
+          0.95,
+          0.95,
+          1.0
+        ],
+        "features": [
+          "ribbon"
+        ],
+        "glow": 0.6,
+        "band": [
+          0.6,
+          0.9,
+          1.0
+        ],
+        "fins": [
+          0.6,
+          0.5,
+          0.92
+        ]
+      },
+      "idle": {
+        "sway": 0.18,
+        "rate": 0.65,
+        "bob": 0.03
+      }
+    },
+    {
+      "id": "star_whale",
+      "name": "The Celestial Star-Whale",
+      "lake": "nebula",
+      "look": {
+        "family": "whale",
+        "length_depth_ratio": 3.6,
+        "body_depth": 1.0,
+        "head_shape": "rounded",
+        "snout": 0.0,
+        "mouth": "terminal",
+        "dorsal_count": 1,
+        "adipose": false,
+        "tail_shape": "fluke",
+        "barbels": 0,
+        "scale_pattern": "stars",
+        "colors": {
+          "top": [
+            0.1,
+            0.12,
+            0.32
+          ],
+          "side": [
+            0.2,
+            0.26,
+            0.55
+          ],
+          "belly": [
+            0.7,
+            0.78,
+            0.95
+          ]
+        },
+        "marks": [
+          1.0,
+          0.96,
+          0.8
+        ],
+        "glow": 0.8,
+        "band": [
+          0.6,
+          0.75,
+          1.0
+        ],
+        "fins": [
+          0.18,
+          0.24,
+          0.52
+        ]
+      },
+      "idle": {
+        "sway": 0.05,
+        "rate": 0.18,
+        "bob": 0.05
+      }
+    }
+  ]
+}
