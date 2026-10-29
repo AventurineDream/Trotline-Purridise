@@ -345,6 +345,9 @@ class QuestData(Worlds):
             ("one to three letter variants", [], [{"id": "marigold", "greetings": {"day": "Hi."},
                                                     "letters": ["a", "b", "c", "d"]}]),
             ("they don't write them", [], [{"id": "pounce", "greetings": {"day": "Hi."}, "letters": ["a", "b", "c"]}]),
+            ("expected 2–5 parts", [], [{"id": "marigold", "greetings": {"day": "Hi."}, "story": ["Once."]}]),
+            ("travelers don't tell stories", [], [{"id": "thistle", "greetings": {"day": "Hi."},
+                                                   "story": ["Once.", "Twice."]}]),
             ("expected story_c<chapter>_s<step>", [quest("story_9", "story", "pip_pebble", "briar", catnap)], []),
         ]
         for message, rows, cats in cases:
@@ -432,6 +435,9 @@ class ObjectiveTypes(Worlds):
         set_event, _scout, check = self.line_events("briar", "briar:deep")
         self.check({"type": "line_check", "zone_id": "briar:deep", "active_soak_game_minutes": 60},
                    [set_event, {**check, "active_game_minute": 69}, check])
+        # Without a soak time (V1-33), any check of the set line counts, even a moment later.
+        self.check({"type": "line_check", "zone_id": "briar:deep", "in_cold_band": True},
+                   [{**set_event, "in_cold_band": True}, {**check, "active_game_minute": 10.5}])
 
     def test_line_scout_check_needs_the_report_before_the_check(self):
         set_event, scout, check = self.line_events("briar", "briar:deep")

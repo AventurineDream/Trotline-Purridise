@@ -525,6 +525,7 @@ STEP_FIELDS = {
     "attend_event": {"lake_id", "event"},
 }
 MAX_QUEST_STEPS = 4
+MAX_STORY_PARTS = 5
 LINE_TIER_ORDER = ("std", "prem", "heavy")
 _TIER_HOOKS = {"std": 12, "prem": 18, "heavy": 24}  # mirrors data.LINE_TIERS
 TIME_BANDS = {"dawn", "day", "dusk", "night"}  # data.band_of
@@ -1593,7 +1594,7 @@ class _ContentV2Validator:
         rows = self.table(docs, filename, "quests", {"id", "kind", "giver_id", "lake_id", "title", "objective",
                                                      "journal", "reward"},
                           {"requires", "cross_lake", "on_accept", "lines"})
-        cats = self.table(docs, filename, "cats", {"id", "greetings"}, {"letters"})
+        cats = self.table(docs, filename, "cats", {"id", "greetings"}, {"letters", "story"})
         extends = self.table(docs, filename, "extends", {"id", "extends", "lines"})
         if filename in self.unavailable_files or self.unavailable_files & _QUEST_REFERENCE_FILES:
             # An unreadable file is reported once; checking rows against its ids would cascade.
@@ -1806,9 +1807,8 @@ class _ContentV2Validator:
                     self.error(filename, where + ".hook_count", "an exact hook count needs tier_id")
                 elif step["hook_count"] != _TIER_HOOKS[step["tier_id"]]:
                     self.error(filename, where + ".hook_count", "does not match line tier")
-            if kind != "line_scout":
-                needs("active_soak_game_minutes")
-                positive("active_soak_game_minutes", maximum=1440)
+            # Without a soak time, any check of the line after the set counts (V1-33).
+            positive("active_soak_game_minutes", maximum=1440)
         elif kind == "anchor_idle":
             needs("zone_id", "continuous_game_minutes")
             positive("continuous_game_minutes", maximum=1440)
@@ -2009,6 +2009,16 @@ class _ContentV2Validator:
             else:
                 for i, letter in enumerate(letters):
                     self.bubbles(filename, f"{where}.letters[{i}]", letter, limit=280, most=1)
+        if "story" in row:
+            # A story told one part a game day (05 §4.3); each part is a line of bubbles.
+            story = row["story"]
+            if cat.get("role") == "traveler":
+                self.error(filename, where + ".story", "travelers don't tell stories")
+            elif not isinstance(story, list) or not 2 <= len(story) <= MAX_STORY_PARTS:
+                self.error(filename, where + ".story", f"expected 2–{MAX_STORY_PARTS} parts")
+            else:
+                for i, part in enumerate(story):
+                    self.bubbles(filename, f"{where}.story[{i}]", part)
 
     def cat_look(self, filename, where, look, *, twin_allowed):
         if not isinstance(look, dict):
@@ -2440,7 +2450,7 @@ def merge_quests_v2(content: NarrativeContent, gameplay: GameplayContent) -> Nar
         extra = gameplay.quest_cats.get(cid, {})
         cats[cid] = {"id": cid, "name": row["name"], "lake_id": row["lake"], "role": row["role"],
                      "quests": list(row["quests"]), "greetings": deepcopy(extra.get("greetings", {})),
-                     "letters": list(extra.get("letters", []))}
+                     "letters": list(extra.get("letters", [])), "story": deepcopy(extra.get("story", []))}
     content.cats = cats
     content.ripples = deepcopy(gameplay.ripples)
     content.keepsakes = deepcopy(gameplay.keepsakes)

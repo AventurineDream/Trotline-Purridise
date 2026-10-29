@@ -380,7 +380,7 @@ class QuestManager:
         soaked = max(0.0, current - start)
         attempt["active_soak_game_minutes"] = max(_amount(attempt.get("active_soak_game_minutes")), soaked)
         data["active_soak_game_minutes"] = max(_amount(data.get("active_soak_game_minutes")), soaked)
-        if soaked < step["active_soak_game_minutes"]:
+        if soaked < step.get("active_soak_game_minutes", 0):
             return False
         return step["type"] == "line_check" or attempt.get("scouted") is True
 
