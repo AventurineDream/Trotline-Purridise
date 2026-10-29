@@ -50,7 +50,9 @@ _ANCHORS = (
     Anchor("cedar:flats", "cedar:flats", "Upper lake flats", -234.448, 509.948),
     Anchor("cedar:deep", "cedar:deep", "Southern basin", 330.854, -754.864),
     Anchor("cedar:lilies", "cedar:lilies", "Clear Creek coves", 632.171, -964.758),
-    Anchor("cedar:trinidad_cove", "cedar:deep", "Trinidad Cove", 186.862, -855.722),
+    # Five metres off, bow toward the cove, so the longest hulls clear the launch.
+    Anchor("cedar:trinidad_cove", "cedar:deep", "Trinidad Cove", 186.862, -855.722,
+           "water", (184.362, -851.392, 2.6179938779914944)),
     Anchor("cedar:lonely_star_deep", "cedar:deep", "Lonely Star Deep", 330.854, -754.864),
 )
 ANCHORS = MappingProxyType({anchor.id: anchor for anchor in _ANCHORS})
