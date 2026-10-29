@@ -76,9 +76,13 @@ class SpeciesDataChecks(unittest.TestCase):
 
     def test_original_36_rows_five_baits_and_habitat_matches_are_unchanged(self):
         baseline = json.loads((ROOT / 'docs/issue-52/baseline.json').read_text())
+        # V1-28 repainted every look, so the original rows are pinned without it.
+        repainted = json.loads((ROOT / 'docs/issue-56/baseline.json').read_text())['species_without_look']
+        self.assertEqual(set(repainted), set(baseline['species']))
         authored = {r['id']: r for r in CONTENT_V2_RAW['species.json']['species']}
-        for sid, expected in baseline['species'].items():
-            digest = hashlib.sha256(json.dumps(authored[sid], sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        for sid, expected in repainted.items():
+            row = {key: value for key, value in authored[sid].items() if key != 'look'}
+            digest = hashlib.sha256(json.dumps(row, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
             self.assertEqual(digest, expected, sid)
         for bait in ('worm', 'liver', 'shad', 'minnow', 'craw'):
             for sid in baseline['species']:

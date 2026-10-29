@@ -16,7 +16,7 @@ from .narrative import DAY_NPCS, QUEST_IDS, RIPPLE_BY_QUEST
 CONTENT_PATH = Path(__file__).with_name("assets") / "narrative_v1.json"
 CONTENT_V2_PATH = Path(__file__).with_name("assets") / "content_v2"
 CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
-                    "pantry.json", "dishes.json", "calendar.json", "bot.json")
+                    "pantry.json", "dishes.json", "calendar.json", "bot.json", "legendaries.json")
 BOOK_CONTENT_PATH = CONTENT_V2_PATH / "book.json"
 BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
 _GAMEPLAY_REFS_LOADED = False
@@ -104,6 +104,7 @@ class GameplayContent:
     zones: dict[str, dict]
     pantry: dict[str, dict]
     dishes: dict[str, dict]
+    legendaries: dict[str, dict]
 
 
 @dataclass(frozen=True)
@@ -442,12 +443,19 @@ def validate_content(raw, *, source="<content>") -> NarrativeContent:
 _SPECIES_FOODS = {"none", "panfish", "catfish", "hearty", "bass", "trout", "fillet", "cosmic"}
 _SPECIES_TAGS = {"surface", "cold", "shy", "current", "protected"}
 _SHINY_PALETTES = {"albino", "golden", "starry", "glow", "ink", "rose"}
-_FISH_FAMILIES = {"catfish", "bass", "sunfish", "trout", "gar", "sucker",
-                  "minnow", "pike", "sculpin", "eel", "cosmic"}
+# Fish looks name their own colours and anatomy; fishart.py paints and meshes them.
+_FISH_FAMILIES = {"catfish", "bass", "sunfish", "trout", "gar", "sucker", "minnow", "pike",
+                  "sculpin", "eel", "cosmic", "sturgeon", "salamander", "ray", "whale"}
 _FISH_HEAD_SHAPES = {"rounded", "pointed", "flat"}
 _FISH_MOUTHS = {"terminal", "inferior", "upturned"}
-_FISH_TAILS = {"forked", "rounded", "truncate"}
-_FISH_PATTERNS = {"plain", "spots", "bars", "stripes", "mottled", "vermiculate"}
+_FISH_TAILS = {"forked", "rounded", "truncate", "heterocercal", "pointed", "fluke", "flowing"}
+_FISH_PATTERNS = {"plain", "spots", "bars", "stripes", "mottled", "vermiculate",
+                  "speckled", "haloed", "saddles", "chain", "blotched", "stars"}
+_FISH_STYLE_COLORS = {"marks", "fins", "fin_edge", "band", "throat", "parr", "eye", "ear", "ear_edge"}
+_FISH_DORSAL_STYLES = {"normal", "sail", "long", "spiny"}
+_FISH_PECTORALS = {"normal", "fan"}
+_FISH_FEATURES = {"kype", "hump", "scutes", "gills", "legs", "rings", "lure", "halo",
+                  "comet", "ribbon", "whiskers", "long_ear", "ocellus", "shoulder_spot"}
 _BOAT_TRAITS = {
     "shallow", "silent", "hammock", "wind_steady", "trophy_rail", "glow",
     "galley", "ice_hull",
@@ -800,6 +808,66 @@ class _ContentV2Validator:
                             or not all(type(n) in (int, float) and _is_finite(n) and -1200 <= n <= 1200 for n in row)):
                         self.error(filename, f"{where}.thermal[{i}]", "expected finite x, z coordinates")
 
+    def fish_look(self, filename, where, look):
+        """The look schema shared by species and legendaries.
+
+        Every look names its own back, flank and belly `colors` and may add
+        markings, fin styles and signature features.
+        """
+        if not isinstance(look, dict):
+            self.error(filename, where, "expected an object")
+            return
+        required = {"family", "length_depth_ratio", "body_depth", "head_shape", "snout",
+                    "mouth", "dorsal_count", "adipose", "tail_shape", "barbels",
+                    "scale_pattern", "colors"}
+        optional = _FISH_STYLE_COLORS | {"mark_scale", "dorsal_style", "pectoral", "features", "glow"}
+        for key in sorted(required - look.keys()):
+            self.error(filename, where, f"missing required field {key!r}")
+        for key in sorted(look.keys() - required - optional):
+            self.error(filename, where, f"unknown field {key!r}")
+        at = where + "."
+        self.enum(filename, at + "family", look.get("family"), _FISH_FAMILIES)
+        self.number(filename, at + "length_depth_ratio", look.get("length_depth_ratio"), minimum=1.5, maximum=8.0)
+        self.number(filename, at + "body_depth", look.get("body_depth"), minimum=0.5, maximum=1.5)
+        self.enum(filename, at + "head_shape", look.get("head_shape"), _FISH_HEAD_SHAPES)
+        self.number(filename, at + "snout", look.get("snout"), minimum=0.0, maximum=0.75)
+        self.enum(filename, at + "mouth", look.get("mouth"), _FISH_MOUTHS)
+        self.number(filename, at + "dorsal_count", look.get("dorsal_count"), integer=True, minimum=0, maximum=2)
+        if type(look.get("adipose")) is not bool:
+            self.error(filename, at + "adipose", "expected a boolean")
+        self.enum(filename, at + "tail_shape", look.get("tail_shape"), _FISH_TAILS)
+        self.number(filename, at + "barbels", look.get("barbels"), integer=True, minimum=0, maximum=6)
+        self.enum(filename, at + "scale_pattern", look.get("scale_pattern"), _FISH_PATTERNS)
+
+        def colour(key, value):
+            if not isinstance(value, list) or len(value) != 3:
+                self.error(filename, at + key, "expected an RGB triple")
+                return
+            for i, n in enumerate(value):
+                self.number(filename, f"{at}{key}[{i}]", n, minimum=0, maximum=1)
+
+        colors = look.get("colors")
+        if not isinstance(colors, dict) or set(colors) != {"top", "side", "belly"}:
+            self.error(filename, at + "colors", "expected top, side and belly colours")
+        else:
+            for key in ("top", "side", "belly"):
+                colour("colors." + key, colors[key])
+        for key in sorted(_FISH_STYLE_COLORS & look.keys()):
+            colour(key, look[key])
+        if "mark_scale" in look:
+            self.number(filename, at + "mark_scale", look["mark_scale"], minimum=0.4, maximum=3.0)
+        if "glow" in look:
+            self.number(filename, at + "glow", look["glow"], minimum=0, maximum=1)
+        if "dorsal_style" in look:
+            self.enum(filename, at + "dorsal_style", look["dorsal_style"], _FISH_DORSAL_STYLES)
+        if "pectoral" in look:
+            self.enum(filename, at + "pectoral", look["pectoral"], _FISH_PECTORALS)
+        if "features" in look:
+            features = look["features"]
+            if (not isinstance(features, list) or len(set(map(str, features))) != len(features)
+                    or not set(features) <= _FISH_FEATURES):
+                self.error(filename, at + "features", "expected unique known features")
+
     def nebula_lanes(self, filename, where, lanes, bounds):
         """Current lanes are continuous chains of circles inside the lake bounds."""
         if not isinstance(lanes, list) or not 1 <= len(lanes) <= 4:
@@ -854,8 +922,8 @@ class _ContentV2Validator:
 
         species = self.table(docs, species_file, "species", {
             "id", "name", "price", "min_lb", "max_lb", "pref_time", "depth", "blurb",
-            "folk_name", "lakes", "food", "tags", "shiny"},
-            {"rate", "trophy", "tier", "look", "baits", "zones", "weather_affinities"})
+            "folk_name", "lakes", "food", "tags", "shiny", "look"},
+            {"rate", "trophy", "tier", "baits", "zones", "weather_affinities"})
         if species_file not in self.unavailable_files and len(species) != 144:
             self.error(species_file, "species", "expected exactly 144 standard species")
         baits = self.table(docs, baits_file, "baits", {"id", "name", "price", "blurb", "matches"},
@@ -989,42 +1057,7 @@ class _ContentV2Validator:
                                   {"clear", "fair", "overcast", "drizzle", "mist", "snow_mist", "fog", "aurora"})
                         self.number(species_file, where + ".weather_affinities." + str(condition),
                                     value, minimum=1, maximum=2)
-            if "look" in row:
-                look = row["look"]
-                if not isinstance(look, dict):
-                    self.error(species_file, where + ".look", "expected an object")
-                    continue
-                required_look = {
-                    "family", "length_depth_ratio", "body_depth", "head_shape", "snout",
-                    "mouth", "dorsal_count", "adipose", "tail_shape", "barbels",
-                    "scale_pattern", "palette",
-                }
-                for key in sorted(required_look - look.keys()):
-                    self.error(species_file, where + ".look", f"missing required field {key!r}")
-                for key in sorted(look.keys() - required_look):
-                    self.error(species_file, where + ".look", f"unknown field {key!r}")
-                look_where = where + ".look."
-                self.enum(species_file, look_where + "family", look.get("family"), _FISH_FAMILIES)
-                self.number(species_file, look_where + "length_depth_ratio",
-                            look.get("length_depth_ratio"), minimum=1.5, maximum=8.0)
-                self.number(species_file, look_where + "body_depth",
-                            look.get("body_depth"), minimum=0.5, maximum=1.5)
-                self.enum(species_file, look_where + "head_shape",
-                          look.get("head_shape"), _FISH_HEAD_SHAPES)
-                self.number(species_file, look_where + "snout", look.get("snout"),
-                            minimum=0.0, maximum=0.75)
-                self.enum(species_file, look_where + "mouth", look.get("mouth"), _FISH_MOUTHS)
-                self.number(species_file, look_where + "dorsal_count", look.get("dorsal_count"),
-                            integer=True, minimum=0, maximum=2)
-                if type(look.get("adipose")) is not bool:
-                    self.error(species_file, look_where + "adipose", "expected a boolean")
-                self.enum(species_file, look_where + "tail_shape",
-                          look.get("tail_shape"), _FISH_TAILS)
-                self.number(species_file, look_where + "barbels", look.get("barbels"),
-                            integer=True, minimum=0, maximum=6)
-                self.enum(species_file, look_where + "scale_pattern",
-                          look.get("scale_pattern"), _FISH_PATTERNS)
-                self.enum(species_file, look_where + "palette", look.get("palette"), species)
+            self.fish_look(species_file, where + ".look", row.get("look"))
 
         if baits_file not in self.unavailable_files:
             self.number(baits_file, "fallback_multiplier", baits_root.get("fallback_multiplier"), minimum=0, maximum=1)
@@ -1272,11 +1305,40 @@ class _ContentV2Validator:
             if row.get("price") != 0 or row.get("sold_at"):
                 self.error(baits_file, where + ".recipe", "recipe bait is cooked, never sold")
 
-        self.calendar(docs, species)
+        windows = self.calendar(docs, species)
         self.bot(docs)
+        legendaries = self.legendaries(docs, species, windows)
         if self.errors:
             raise ContentError("\n".join(self.errors))
-        return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes)
+        return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes, legendaries)
+
+    def legendaries(self, docs, species, windows):
+        """The twelve legendaries' bespoke looks and underwater idles (V1-28)."""
+        filename = "legendaries.json"
+        self.root(docs, filename, {"schema_version", "legendaries"})
+        rows = self.table(docs, filename, "legendaries", {"id", "name", "lake", "look", "idle"})
+        if filename in self.unavailable_files:
+            return rows
+        if len(rows) != 12:
+            self.error(filename, "legendaries", "expected all twelve legendaries")
+        if windows is not None and set(rows) != set(windows):
+            self.error(filename, "legendaries", "expected the same IDs as calendar.json legendary_windows")
+        for lid, row, where in self.rows(filename, "legendaries"):
+            self.text(filename, where + ".name", row.get("name"))
+            if lid in species:
+                self.error(filename, where, "a legendary must not reuse a standard species ID")
+            lake = (windows or {}).get(lid, {}).get("lake")
+            if windows and lid in windows and row.get("lake") != lake:
+                self.error(filename, where + ".lake", f"expected {lake!r} from its legendary window")
+            self.fish_look(filename, where + ".look", row.get("look"))
+            idle = row.get("idle")
+            if not isinstance(idle, dict) or set(idle) != {"sway", "rate", "bob"}:
+                self.error(filename, where + ".idle", "expected sway, rate and bob")
+                continue
+            self.number(filename, where + ".idle.sway", idle["sway"], minimum=0, maximum=0.3)
+            self.number(filename, where + ".idle.rate", idle["rate"], minimum=0.05, maximum=1.0)
+            self.number(filename, where + ".idle.bob", idle["bob"], minimum=0, maximum=0.08)
+        return rows
 
     def bot(self, docs):
         filename = "bot.json"
@@ -1332,7 +1394,7 @@ class _ContentV2Validator:
         raw = self.root(docs, filename, {"schema_version", "lake_days", "legendary_windows",
                                        "reservations", "cookout", "cookout_lines"})
         if filename in self.unavailable_files:
-            return
+            return None
         lakes = {"briar", "cedar", "flathead", "crater", "nebula"}
         weather = {"clear", "fair", "overcast", "drizzle", "mist", "snow_mist", "fog", "aurora"}
         days = self.table(docs, filename, "lake_days", {"id", "lake", "weekday", "name", "band",
@@ -1406,6 +1468,7 @@ class _ContentV2Validator:
             self.error(filename, "cookout_lines", "expected one line per current lake cat")
         elif any(not isinstance(line, str) or not line.strip() for line in lines.values()):
             self.error(filename, "cookout_lines", "expected non-empty chat lines")
+        return windows
 
 
 def validate_content_v2(raw_files, *, unavailable_files=()) -> GameplayContent:

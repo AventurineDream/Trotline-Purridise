@@ -1,0 +1,249 @@
+{
+  "thresholds": {
+    "silhouette_iou": 0.9,
+    "palette_overlap": 0.6
+  },
+  "lakes": {
+    "briar": {
+      "fish": 38,
+      "pairs": 703,
+      "closest": [
+        {
+          "a": "hybrid_striper",
+          "b": "white_crappie",
+          "iou": 0.8806,
+          "palette_overlap": 0.7247,
+          "alike": false
+        },
+        {
+          "a": "crappie",
+          "b": "white_crappie",
+          "iou": 0.8446,
+          "palette_overlap": 0.5592,
+          "alike": false
+        },
+        {
+          "a": "buffalo",
+          "b": "crappie",
+          "iou": 0.8353,
+          "palette_overlap": 0.5887,
+          "alike": false
+        },
+        {
+          "a": "alligator_gar",
+          "b": "spotted_gar",
+          "iou": 0.8298,
+          "palette_overlap": 0.7212,
+          "alike": false
+        },
+        {
+          "a": "bullhead",
+          "b": "golden_shiner",
+          "iou": 0.8358,
+          "palette_overlap": 0.5465,
+          "alike": false
+        },
+        {
+          "a": "bigmouth_buffalo",
+          "b": "warmouth",
+          "iou": 0.8192,
+          "palette_overlap": 0.6043,
+          "alike": false
+        }
+      ]
+    },
+    "cedar": {
+      "fish": 39,
+      "pairs": 741,
+      "closest": [
+        {
+          "a": "hybrid_striper",
+          "b": "white_crappie",
+          "iou": 0.8806,
+          "palette_overlap": 0.7247,
+          "alike": false
+        },
+        {
+          "a": "crappie",
+          "b": "white_crappie",
+          "iou": 0.8446,
+          "palette_overlap": 0.5592,
+          "alike": false
+        },
+        {
+          "a": "buffalo",
+          "b": "crappie",
+          "iou": 0.8353,
+          "palette_overlap": 0.5887,
+          "alike": false
+        },
+        {
+          "a": "alligator_gar",
+          "b": "spotted_gar",
+          "iou": 0.8298,
+          "palette_overlap": 0.7212,
+          "alike": false
+        },
+        {
+          "a": "bullhead",
+          "b": "golden_shiner",
+          "iou": 0.8358,
+          "palette_overlap": 0.5465,
+          "alike": false
+        },
+        {
+          "a": "bigmouth_buffalo",
+          "b": "warmouth",
+          "iou": 0.8192,
+          "palette_overlap": 0.6043,
+          "alike": false
+        }
+      ]
+    },
+    "flathead": {
+      "fish": 37,
+      "pairs": 666,
+      "closest": [
+        {
+          "a": "lake_chub",
+          "b": "mottled_sculpin",
+          "iou": 0.8604,
+          "palette_overlap": 0.6374,
+          "alike": false
+        },
+        {
+          "a": "bull_trout",
+          "b": "peamouth",
+          "iou": 0.895,
+          "palette_overlap": 0.5671,
+          "alike": false
+        },
+        {
+          "a": "tiger_trout",
+          "b": "walleye",
+          "iou": 0.8475,
+          "palette_overlap": 0.6277,
+          "alike": false
+        },
+        {
+          "a": "lake_whitefish",
+          "b": "pygmy_whitefish",
+          "iou": 0.8436,
+          "palette_overlap": 0.7694,
+          "alike": false
+        },
+        {
+          "a": "mountain_whitefish",
+          "b": "northern_pikeminnow",
+          "iou": 0.9553,
+          "palette_overlap": 0.5607,
+          "alike": false
+        },
+        {
+          "a": "bull_trout",
+          "b": "westslope_cutthroat",
+          "iou": 0.8989,
+          "palette_overlap": 0.5574,
+          "alike": false
+        }
+      ]
+    },
+    "crater": {
+      "fish": 36,
+      "pairs": 630,
+      "closest": [
+        {
+          "a": "klamath_smallscale_sucker",
+          "b": "prickly_sculpin",
+          "iou": 0.8591,
+          "palette_overlap": 0.5954,
+          "alike": false
+        },
+        {
+          "a": "ash_minnow",
+          "b": "blue_chub",
+          "iou": 0.8552,
+          "palette_overlap": 0.6564,
+          "alike": false
+        },
+        {
+          "a": "chiselmouth",
+          "b": "prickly_sculpin",
+          "iou": 0.8451,
+          "palette_overlap": 0.5718,
+          "alike": false
+        },
+        {
+          "a": "redband_trout",
+          "b": "speckled_dace",
+          "iou": 0.8451,
+          "palette_overlap": 0.5611,
+          "alike": false
+        },
+        {
+          "a": "speckled_dace",
+          "b": "umpqua_pikeminnow",
+          "iou": 0.8391,
+          "palette_overlap": 0.6021,
+          "alike": false
+        },
+        {
+          "a": "blue_chub",
+          "b": "chinook",
+          "iou": 0.8389,
+          "palette_overlap": 0.657,
+          "alike": false
+        }
+      ]
+    },
+    "nebula": {
+      "fish": 36,
+      "pairs": 630,
+      "closest": [
+        {
+          "a": "moonbeam_crappie",
+          "b": "twinkle_shad",
+          "iou": 0.8108,
+          "palette_overlap": 0.7497,
+          "alike": false
+        },
+        {
+          "a": "halo_whitefish",
+          "b": "twinkle_shad",
+          "iou": 0.8078,
+          "palette_overlap": 0.5533,
+          "alike": false
+        },
+        {
+          "a": "celestial_catfish",
+          "b": "milky_way_buffalo",
+          "iou": 0.7636,
+          "palette_overlap": 0.5392,
+          "alike": false
+        },
+        {
+          "a": "celestial_catfish",
+          "b": "starling_shiner",
+          "iou": 0.762,
+          "palette_overlap": 0.6238,
+          "alike": false
+        },
+        {
+          "a": "halo_whitefish",
+          "b": "lunar_loach",
+          "iou": 0.7606,
+          "palette_overlap": 0.6338,
+          "alike": false
+        },
+        {
+          "a": "gravity_drum",
+          "b": "milky_way_buffalo",
+          "iou": 0.9264,
+          "palette_overlap": 0.5031,
+          "alike": false
+        }
+      ]
+    }
+  },
+  "failures": []
+}
