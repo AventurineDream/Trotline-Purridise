@@ -288,7 +288,9 @@ class World:
             if p.kind in ("rock","stump","knee","deadpine",*SOLID_RADIUS)],np.float64).reshape(-1,3)
         self.map_rgb, self.map_small = self._bake_map()
         from .anchors import anchors_for_lake
-        self.anchors = anchors_for_lake(self.id)
+        from types import MappingProxyType
+        # Anchors are charted on a lake's real water; a flat placeholder has none, so no cast.
+        self.anchors = MappingProxyType({}) if self.placeholder else anchors_for_lake(self.id)
 
     def _in_marina_clearing(self,x,z):
         a,s = self.slip.local(x,z)

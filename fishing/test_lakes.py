@@ -146,7 +146,13 @@ class LakeFrameworkChecks(unittest.TestCase):
     def test_placeholders_do_not_mutate_or_load_a_previous_lake_cast(self):
         world = World("nebula")
         before = self.state.narrative.to_json()
-        self.assertEqual(active_npcs(self.state, world, self.session._npc_content), ())
+        # Nebula has its own cast (V1-30); nothing is borrowed from the previous lake.
+        actors = active_npcs(self.state, world, self.session._npc_content)
+        self.assertEqual(actors[0].id, "astra_9")
+        self.assertTrue(all(actor.anchor.lake_id == "nebula" for actor in actors))
+        with flat_placeholder("nebula"):
+            flat = World("nebula")
+        self.assertEqual(active_npcs(self.state, flat, self.session._npc_content), ())
         self.assertEqual(self.state.narrative.to_json(), before)
 
     def test_loaded_map_is_collectible_after_travel(self):
@@ -157,7 +163,8 @@ class LakeFrameworkChecks(unittest.TestCase):
         gc.collect()
         self.assertIsNone(previous())
         self.assertEqual(self.state._world.id, "nebula")
-        self.assertEqual(self.state.npcs, ())
+        self.assertTrue(self.state.npcs)
+        self.assertTrue(all(npc.anchor.lake_id == "nebula" for npc in self.state.npcs))
 
     def test_placeholder_save_load_preserves_story_gear_forecast_and_future_data(self):
         self.state.v2["story"]["chapter"] = 5

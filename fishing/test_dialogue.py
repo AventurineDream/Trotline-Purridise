@@ -257,15 +257,22 @@ class DialogueChecks(unittest.TestCase):
         for lake in DAY_NPCS:
             world = self.world if lake == 'briar' else World(lake)
             state = State.new(world)
-            for seed in range(len(DAY_NPCS[lake])):
-                state.narrative.schedule_seed = seed
-                for minute in (0, 840):
+            # Any three days bring every encounter (02 §11.3), day and night.
+            for day in range(3):
+                for minute in (day * 1440, day * 1440 + 840):
                     state.game_minutes = minute
                     for npc in active_npcs(state, world, content):
                         seen.add(npc.id)
                         state.npcs = (npc,)
                         state.x, state.z = npc.anchor.position
                         session = Session(world, self.path, state, False)
+                        if npc.quest_id is None:
+                            # The rest of the cast has no dialogue graph yet: a hail is a wave.
+                            session.ui.mode = 'play'
+                            session.tick(Keys(pressed=['c']), 0)
+                            self.assertIsNone(session.conversation)
+                            self.assertIn(npc.name + ' waves', state.toasts[-1][0])
+                            continue
                         for status in ('available', 'active', 'ready', 'completed'):
                             state.narrative.quests[npc.quest_id].status = status
                             session.ui.mode = 'play'
@@ -273,7 +280,7 @@ class DialogueChecks(unittest.TestCase):
                             self.assertEqual(session.conversation.node_id,
                                 content.quests[npc.quest_id]['dialogue'][status])
                             session.tick(Keys(pressed=['esc']), 0)
-        self.assertEqual(seen, set(content.npcs))
+        self.assertEqual(seen & set(content.npcs), set(content.npcs))
 
     def test_arrow_and_wasd_choices(self):
         self.key('c'); self.key('c')
