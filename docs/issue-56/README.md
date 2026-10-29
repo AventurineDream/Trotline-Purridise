@@ -162,8 +162,9 @@ every fish, the silhouette IoU against the card is at least 0.92.
 
 | Measurement | Result |
 | --- | --- |
-| Card variants painted | 348 (156 field, 192 shiny), median 40.9 ms through the GL paint pass |
+| Card requests | 348 (174 lake entries, field and shiny), median 40.9 ms through the GL paint pass; Cedar's 30 shared species are cache hits |
 | Haul mesh build | median 49.8 ms, including its card, once per fish per session |
+| First haul sprite in game (CPU) | median 187 ms, up from 95 ms on main, because the mesh paints the card first. The "A fish surfaces" panel then reuses that card, so a catch costs 182 ms against 139 ms on main. |
 | Haul triangles | 1,312–1,662 (median 1,602) |
 | Idle frame (192×96, CPU) | median 81.9 ms |
 | Idle loops | 3.1–11.1 s; every loop closes and every Reduced Motion pose is still |
