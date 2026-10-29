@@ -57,22 +57,28 @@ class FleetData(unittest.TestCase):
             with self.subTest(boat=boat_id):
                 model = BOATS[boat_id]
                 self.assertEqual(tuple(getattr(model, field) for field in NUMBER_FIELDS), numbers)
-                self.assertEqual(model.mesh_id, boat_id)
+                self.assertTrue(model.handcrafted)
         self.assertEqual([BOATS[b].name for b in fleet.LEGACY_BOATS],
                          ["Aluminum Jon Boat", "Cat-Rigged Daysailer", "Classic Pontoon", "Reinforced Rowboat"])
         self.assertIn("hammock", BOATS["pontoon"].traits)
         self.assertEqual(BOATS["pontoon"].lines, 6)
 
-    def test_new_boats_borrow_an_existing_hull_until_parametric_hulls_land(self):
-        for model in BOATS.values():
-            if model.id in fleet.LEGACY_BOATS:
-                continue
-            with self.subTest(boat=model.id):
-                hull = BOATS[model.mesh_id]
-                self.assertIn(model.mesh_id, fleet.LEGACY_BOATS)
-                self.assertEqual((model.bow, model.stern, model.half_beam, model.eye_height),
-                                 (hull.bow, hull.stern, hull.half_beam, hull.eye_height))
-                self.assertLessEqual(model.draft, max(b.draft for b in BOATS.values()))
+    def test_new_boats_have_their_own_footprint_at_the_tables_length(self):
+        feet = {"log_raft": 10, "birch_skiff": 12, "reed_dugout": 11, "dory": 14, "flat_skiff": 14,
+                "river_runner": 14, "duck_jon": 14, "marsh_runner": 16, "deepv_skiff": 17,
+                "coastal_craft": 18, "mahogany_runabout": 17, "fiberglass_cruiser": 20, "lake_taxi": 19,
+                "small_sloop": 18, "tug_skiff": 18, "party_barge": 24, "houseboat": 32,
+                "steam_barge": 22, "nebula_cruiser": 20, "celestial_flagship": 30}
+        self.assertEqual(set(feet), {m.id for m in BOATS.values() if not m.handcrafted})
+        deepest = max(BOATS[b].draft for b in fleet.LEGACY_BOATS)
+        for boat_id, length_ft in feet.items():
+            with self.subTest(boat=boat_id):
+                model = BOATS[boat_id]
+                self.assertAlmostEqual(model.length, length_ft * 0.3048, delta=0.02)
+                self.assertGreater(model.bow, 0.0)
+                self.assertLess(model.stern, 0.0)
+                # Catchability witnesses are measured at the deepest existing draft.
+                self.assertLessEqual(model.draft, deepest)
 
 
 class PowerAndWells(unittest.TestCase):

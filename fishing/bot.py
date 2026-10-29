@@ -145,7 +145,11 @@ def faces(state) -> list[Face]:
                 anim=float(state.anim), reduced_motion=bool(settings.get("reduced_motion", False)))
     if state.bot_phase == "home":
         eye, right, up, forward = _boat_basis(state)
-        lx, ly, lz = _PERCH.get(state.boat.mesh_id, _PERCH["jon"])
+        if state.boat.handcrafted:
+            lx, ly, lz = _PERCH[state.boat_id]
+        else:
+            from .boatfamilies import perch
+            lx, ly, lz = perch(state.boat)
         origin = eye + right * lx + up * ly + forward * lz
         # Look back at the skipper so the lamp is in view.
         return _mesh(origin, -right, up, -forward, bob=0.0,
