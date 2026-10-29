@@ -48,7 +48,7 @@ from .data import (
 )
 from .world import World
 from .boat import (
-    BOATS, FUEL_PRICE, THROTTLE_RATE, REVERSE_LIMIT, sailing_speed,
+    BOATS, COAST_RATE, FUEL_PRICE, THROTTLE_RATE, REVERSE_LIMIT, sailing_speed,
     ROWBOAT_ROW_SPEED, ROWBOAT_ELECTRIC_SPEED, ROWBOAT_MOTOR_POWER_KW,
     ROWBOAT_BATTERY_KWH, ROWBOAT_MOTOR_PRICE, ELECTRICITY_PRICE,
     BATTERY_CHARGE_KWH,
@@ -1063,7 +1063,7 @@ class State:
             factor = comfort.speed_factor(self.v2)
             target_speed = engine*self.max_speed()+self.sail_drive()*factor
             target_speed = min(target_speed,max(self.max_speed(),self.boat.sail_speed*factor))
-            rate = self.boat.acceleration if abs(target_speed) > abs(self.speed) else 0.65
+            rate = self.boat.acceleration if abs(target_speed) > abs(self.speed) else COAST_RATE[self.boat.power]
             self.speed += (target_speed - self.speed) * min(1.0, dt * rate)
             if world.zone_at(self.x, self.z) == "reeds":
                 self.speed = max(-REEDS_CRAWL_SPEED, min(REEDS_CRAWL_SPEED, self.speed))

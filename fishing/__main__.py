@@ -559,6 +559,8 @@ def shots(dest: str) -> int:
     bot_gallery(out, text=text, world=world, background=renderer.render(dawn))
     from .botshots import bot_shell_gallery
     bot_shell_gallery(out, text=text, renderer=renderer)
+    from .boatshots import boat_lineup
+    boat_lineup(out, text=text, renderer=software_renderer, world=world)
     renderer.close()
     software_renderer.close()
     text.close()

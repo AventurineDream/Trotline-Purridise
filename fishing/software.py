@@ -748,7 +748,7 @@ class SoftwareRenderer:
     def _boat_faces(self, state) -> list[Face]:
         """Square-bow jon boat, camera space. Sides stay parallel. The bow is a flat plate."""
         from .boatmesh import boat_faces, glow_hull
-        if state.boat.mesh_id!="jon":
+        if state.boat_id!="jon":
             return glow_hull(state, boat_faces(state))
         hull = np.array(paint_rgb("hull", state.look_paint["hull"]), np.float32)
         deck = np.array(paint_rgb("deck", state.look_paint["deck"]), np.float32)

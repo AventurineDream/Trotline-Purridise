@@ -13,6 +13,12 @@ from .data import BOAT_DATA, WELLS
 UNFUELLED_POWER = frozenset({"paddle", "oars", "starlight"})
 # Existing livewell upgrades (+40/+100 lb) apply to tiers 2-7 only.
 WELL_UPGRADE_TIERS = range(2, 8)
+HANDCRAFTED_BOATS = frozenset({"jon", "rowboat", "sail", "pontoon"})
+# How quickly each power sheds speed when easing off, per second. Paddles stop
+# short, inboards carry way, and starlight barges glide. Tiller, oars and sail
+# keep the original 0.65, so the four older boats handle exactly as before.
+COAST_RATE = {"paddle": 1.1, "oars": 0.65, "tiller": 0.65, "console": 0.75,
+              "inboard": 0.5, "sail": 0.65, "starlight": 0.22}
 
 HULL_BOW = 2.86
 HULL_STERN = -0.80
@@ -54,7 +60,6 @@ class BoatModel:
     family: str = "jon"
     power: str = "tiller"
     top_speed: float = 0.0  # m/s for powers without motor upgrades
-    hull: str = ""  # existing boat whose mesh and footprint this one borrows
     blurb: str = ""
     sold_at: tuple[str, ...] = ()  # lake ids; empty means every landing
 
@@ -63,8 +68,9 @@ class BoatModel:
         return self.bow - self.stern
 
     @property
-    def mesh_id(self) -> str:
-        return self.hull or self.id
+    def handcrafted(self) -> bool:
+        """The four original boats keep their hand-built meshes; the rest are generated."""
+        return self.id in HANDCRAFTED_BOATS
 
     @property
     def fuelled(self) -> bool:

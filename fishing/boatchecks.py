@@ -11,7 +11,7 @@ import numpy as np
 from .game import Keys,Session
 from .sim import State
 from .world import shore_sd,shore_xy
-from .boat import hull_samples
+from .boat import BOATS,hull_samples
 
 
 def boat_checks(world):
@@ -129,5 +129,57 @@ def boat_checks(world):
     x,z,yaw=world.clear_boat_position(x,z,original_yaw)
     if not world.hull_clear(x,z,yaw):
         raise AssertionError("legacy collision recovery did not find water")
+    every_hull_collides(world,original_yaw)
     print("boat ok  held throttle, both Shift keys, reverse, coasting, anchor, "
-          "dock, rotating corners, seven banks, thin obstacles and legacy saves")
+          f"dock, rotating corners, seven banks, thin obstacles and legacy saves; all {len(BOATS)} hulls")
+
+
+def every_hull_collides(world,pier_yaw):
+    """Each hull meets the bank, post, pier and dock rules with its own footprint."""
+    for boat_id,model in BOATS.items():
+        def fresh(seed,x,z,yaw):
+            state=State.new(world,seed=seed)
+            state.boat_id=boat_id
+            state.fuel=state.boat.tank
+            state.x,state.z,state.yaw=world.clear_boat_position(x,z,yaw,boat_id)
+            state.anchored=False
+            state.motor=2
+            return state
+        def full_speed(state):
+            state.speed=state.max_speed()
+            state.throttle=state.throttle_setting=1.0
+        for angle in (0.0,0.8,1.6,2.2,3.3,4.4,5.5):
+            yaw=math.atan2(math.cos(angle),math.sin(angle))
+            for offset in (-14.0,-22.0,-30.0,-45.0,-60.0):
+                x,z=shore_xy(angle,offset)
+                if world.hull_clear(x,z,yaw,boat_id):
+                    break
+            else:
+                raise AssertionError(f"{boat_id}: bank fixture has no clear starting water at {angle}")
+            state=fresh(43,x,z,yaw)
+            full_speed(state)
+            for _ in range(12):
+                state.drive(0.25,0,0,world)
+                if not world.hull_clear(state.x,state.z,state.yaw,boat_id):
+                    raise AssertionError(f"{boat_id} crossed the bank at angle {angle}")
+        original_props=world.solid_props
+        try:
+            world.solid_props=np.vstack([original_props,[0.0,6.0+model.bow,0.20]])
+            state=fresh(44,0.0,0.0,0.0)
+            full_speed(state)
+            state.drive(1.0,0,0,world)
+            if not world.hull_clear(state.x,state.z,state.yaw,boat_id) or state.z>6.0:
+                raise AssertionError(f"{boat_id} tunneled through a narrow solid prop")
+        finally:
+            world.solid_props=original_props
+        state=fresh(42,*world.slip.world(5.0,2.2),pier_yaw)
+        for _ in range(80):
+            state.drive(0.05,0,1,world)
+            if not world.hull_clear(state.x,state.z,state.yaw,boat_id):
+                raise AssertionError(f"{boat_id} clipped a hull corner through the pier")
+        state=fresh(41,*world.slip.world(6.0,0.0),math.atan2(world.slip.ix,world.slip.iz))
+        full_speed(state)
+        for _ in range(24):
+            state.drive(0.25,0,0,world)
+            if not world.hull_clear(state.x,state.z,state.yaw,boat_id):
+                raise AssertionError(f"{boat_id} crossed the dock crossbeam")
