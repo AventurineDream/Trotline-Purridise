@@ -56,9 +56,41 @@ def _bird(out, x, y, z, yaw, species, t, phase):
             face([(-0.11,0,-0.22),(0.11,0,-0.22),(0.08,0,-0.43),(-0.08,0,-0.43)],color)
 
 
+def _star_motes(state, world, out):
+    """The Lagoon has no birds: small motes of starlight hover over the water.
+
+    The same bounded 5x5 cell neighborhood as the fireflies, anchored to the
+    water rather than the bank. Reduced Motion holds them still.
+    """
+    reduced = bool(state.v2.get("settings", {}).get("reduced_motion", False))
+    t = 0.0 if reduced else float(state.anim)
+    cx, cz = math.floor(state.x/8), math.floor(state.z/8)
+    for iz in range(cz-2, cz+3):
+        for ix in range(cx-2, cx+3):
+            seed = ((ix*73856093) ^ (iz*19349663)) & 0xffff
+            if seed % 3:
+                continue
+            x, z = ix*8+1.5+(seed%47)/10, iz*8+1.5+((seed//47)%47)/10
+            if not 3 < math.hypot(x-state.x, z-state.z) < 19 or float(world.shore_sd(x, z)) > -2:
+                continue
+            x += math.sin(t*0.5+seed)*0.9
+            z += math.cos(t*0.4+seed)*0.9
+            y = 0.5+0.4*math.sin(t*0.9+seed)
+            pulse = 0.5+0.5*math.sin(t*1.4+seed)
+            r = 0.03+0.03*pulse
+            col = (0.55, 0.95, 1.0) if seed % 2 else (1.0, 0.72, 0.96)
+            _quad(out, [(x-r,y-r,z),(x+r,y-r,z),(x+r,y+r,z),(x-r,y+r,z)], col)
+            _quad(out, [(x,y-r,z-r),(x,y-r,z+r),(x,y+r,z+r),(x,y+r,z-r)], col)
+    for face in out:
+        face.emissive = 1.0
+    return out
+
+
 def faces(state, world, light=None):
     light = lighting_at(state.game_minutes+state.minute_acc, state) if light is None else light
     out = []
+    if world.nebula:
+        return _star_motes(state, world, out)
     if world.caldera:
         from .caldera import thermal_faces
         out.extend(thermal_faces(state, world))

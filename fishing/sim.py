@@ -1970,7 +1970,9 @@ class State:
         if st.slip_status(world) != "docked":
             st.rowboat_charge_kwh_this_visit = 0.0
         st.v2 = merge_v2_defaults(st, raw.get("v2") if version == SAVE_VERSION else None)
-        if getattr(world, "caldera", False):
+        if getattr(world, "caldera", False) or getattr(world, "nebula", False):
+            # New islands (Crater's cinder isle, the Lagoon's lily drifts) can
+            # sit where an older save's rope lies; move it to clear water.
             from .caldera import recover_displaced_lines
             recover_displaced_lines(st, world)
         return st

@@ -1472,6 +1472,7 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
     last = platform.ticks()
     save_acc = 0.0
     blip = None
+    low = None
     try:
         while not session.quit:
             now = platform.ticks()
@@ -1485,17 +1486,12 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
             if session.quit:
                 break
             if renderer.world is not session.world:
-                loading[:] = (17,31,32)
-                ui._center(loading,f"Opening {session.world.name}...",width/2,height/2,
-                           max(18,height//30),(238,233,216),"serif")
-                platform.present(loading)
-                renderer.close()
+                # The transition runs on the last lake image without its HUD.
+                scene = None if low is None else resize_rgb(low, width, height)
+                renderer, ui = _enter_lake(platform, session, renderer, ui, text, loading,
+                                           software or platform.context is None, scene)
                 # The startup variable must not retain the first lake's grids.
                 world = session.world
-                ui = UI(text,session.world)
-                renderer = Renderer(session.world,width,height,
-                                    software=software or platform.context is None,context=platform.context)
-                ui.fish_card_renderer = getattr(renderer, "fish_card", None)
                 last = platform.ticks()
             cam = _camera(renderer, session)
             platform.make_current()
@@ -1536,6 +1532,57 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
         renderer.close()
         text.close()
         platform.close()
+
+
+def _enter_lake(platform, session, renderer, ui, text, loading, software, last_frame):
+    """Swap to the session's new lake and return its renderer and UI.
+
+    Travel to or from the Lagoon tips into starlight from the last lake image
+    (`last_frame`, without the HUD); the new lake loads under the full
+    starfield. Other routes show the plain loading card, as before.
+    """
+    from . import starlight
+    height, width = loading.shape[:2]
+    starlit = (last_frame is not None
+               and starlight.touches_starlight(renderer.world.id, session.world.id))
+    reduced = bool(session.state.v2.get("settings", {}).get("reduced_motion", False))
+    if starlit:
+        _play_starlight(platform, session, last_frame, None, 0.0, starlight.TIP_END, reduced)
+    else:
+        loading[:] = (17,31,32)
+        ui._center(loading,f"Opening {session.world.name}...",width/2,height/2,
+                   max(18,height//30),(238,233,216),"serif")
+        platform.present(loading)
+    renderer.close()
+    ui = UI(text,session.world)
+    renderer = Renderer(session.world,width,height,software=software,context=platform.context)
+    ui.fish_card_renderer = getattr(renderer, "fish_card", None)
+    if starlit and not session.quit:
+        platform.make_current()
+        # The HUD returns with the first ordinary frame on the new water.
+        arrival = resize_rgb(renderer.render(session.state, _camera(renderer, session)), width, height)
+        _play_starlight(platform, session, last_frame, arrival, starlight.TIP_END, 1.0, reduced)
+    return renderer, ui
+
+
+def _play_starlight(platform, session, source, destination, start, end, reduced):
+    """Present the starlight transition from progress `start` to `end`.
+
+    The session does not tick, so the world and the clock stay paused. Closing
+    the window still quits immediately.
+    """
+    from . import starlight
+    begin = platform.ticks()
+    while True:
+        elapsed = (platform.ticks() - begin) / 1000.0
+        t = min(end, start + elapsed / starlight.DURATION)
+        if platform.poll(0.0).quit:
+            session.quit = True
+            return
+        platform.present(starlight.frame(source, destination, t, reduced_motion=reduced))
+        if t >= end:
+            return
+        platform.delay(8)
 
 
 def _camera(renderer: Renderer, session: Session):

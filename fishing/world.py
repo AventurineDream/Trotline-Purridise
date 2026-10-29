@@ -214,7 +214,9 @@ class World:
         self.environment = LAKES[lake_id].get("environment")
         self.generated = self.environment is not None
         self.caldera = self.generated and self.environment["kind"] == "caldera"
+        self.nebula = self.generated and self.environment["kind"] == "nebula"
         self.placeholder = LAKES[lake_id]["placeholder"]
+        self.placeholder_depths = LAKES[lake_id].get("placeholder_depths", {})
         self.palette = LAKES[lake_id]["palette"]
         self.bounds = (X0,Z0,X1,Z1)
         self.nx,self.nz = NX,NZ
@@ -250,7 +252,7 @@ class World:
         self.zones = self._zone_table()
         self.height = self._bake_height()
         self.faces = self._build_camp()
-        if self.generated and not self.caldera:
+        if self.generated and not self.caldera and not self.nebula:
             from .lakegen import chimney_faces
             self.faces.extend(chimney_faces(self))
         if self.caldera:
@@ -261,12 +263,16 @@ class World:
         from .marina import Marina, build_marina
         self.marina = Marina([], (), ()) if self.placeholder else build_marina(self)
         self.faces.extend(self.marina.faces)
+        if self.nebula:
+            from .nebula import restyle_station, station_faces
+            restyle_station(self.faces)
+            self.faces.extend(station_faces(self))
         self.props = [] if self.placeholder else self._place_props()
         # Static buildings and piers occupy these clearings. Keep random old
         # scenery from growing through them as the shoreline becomes richer.
         self.props = [p for p in self.props if not self._in_marina_clearing(p.x,p.z)]
         from .shoreline import shoreline_props
-        if not self.placeholder:
+        if not self.placeholder and not self.nebula:
             self.props.extend(shoreline_props(self, Prop))
         # Physical footprints of the two piers and the crossbeam. The values
         # match the camp meshes, including their extent into the slip.
@@ -276,9 +282,10 @@ class World:
             (self.slip.land_ext-0.4,0.0,0.20,self.slip.half_w+1.6),
         ],np.float64)
         self.dock_barriers = np.vstack((self.dock_barriers,self.marina.barriers))
+        from .nebula import SOLID_RADIUS
         self.solid_props = np.array([
-            (p.x,p.z,max(0.16,p.h*0.23)) for p in self.props
-            if p.kind in ("rock","stump","knee","deadpine")],np.float64).reshape(-1,3)
+            (p.x,p.z,max(0.16,p.h*SOLID_RADIUS.get(p.kind,0.23))) for p in self.props
+            if p.kind in ("rock","stump","knee","deadpine",*SOLID_RADIUS)],np.float64).reshape(-1,3)
         self.map_rgb, self.map_small = self._bake_map()
         from .anchors import anchors_for_lake
         self.anchors = anchors_for_lake(self.id)
@@ -348,7 +355,7 @@ class World:
     def depth(self, x, z) -> np.ndarray:
         sd = self.shore_sd(x, z)
         if self.placeholder:
-            profiles = LAKES[self.id].get("placeholder_depths", {})
+            profiles = self.placeholder_depths
             if not profiles:
                 return np.where((sd < 0) | self.slip.contains(x, z), 4.0, 0.0).astype(np.float32)
             x, z = np.broadcast_arrays(_as(x), _as(z))
@@ -402,12 +409,28 @@ class World:
         open_i = ZONE_ORDER.index("open")
         best = np.full(x.shape, open_i, dtype=np.int32)
         best_d = np.full(x.shape, np.float32(1e9))
-        for name, cx, cz, radius in self.zones:
-            d = np.hypot(x - np.float32(cx), z - np.float32(cz))
-            idx = ZONE_ORDER.index(name)
-            take = (d <= radius) & (d < best_d)
-            best = np.where(take, idx, best)
-            best_d = np.where(take, d, best_d)
+        if len(self.zones) > 12:
+            # Nebula's lanes add dozens of small circles: test each one only
+            # where its bounding square can contain a point. Same result.
+            x, z = np.broadcast_arrays(x, z)
+            flat_x, flat_z = x.reshape(-1), z.reshape(-1)
+            flat_best = np.full(flat_x.shape, open_i, dtype=np.int32)
+            flat_d = np.full(flat_x.shape, np.float32(1e9))
+            for name, cx, cz, radius in self.zones:
+                near = np.flatnonzero((np.abs(flat_x-np.float32(cx)) <= radius)
+                                      & (np.abs(flat_z-np.float32(cz)) <= radius))
+                d = np.hypot(flat_x[near]-np.float32(cx), flat_z[near]-np.float32(cz))
+                take = (d <= radius) & (d < flat_d[near])
+                flat_best[near[take]] = ZONE_ORDER.index(name)
+                flat_d[near[take]] = d[take]
+            best = flat_best.reshape(x.shape)
+        else:
+            for name, cx, cz, radius in self.zones:
+                d = np.hypot(x - np.float32(cx), z - np.float32(cz))
+                idx = ZONE_ORDER.index(name)
+                take = (d <= radius) & (d < best_d)
+                best = np.where(take, idx, best)
+                best_d = np.where(take, d, best_d)
         dock_d = np.hypot(x - np.float32(self.slip.ox), z - np.float32(self.slip.oz))
         best = np.where(dock_d < 50.0, ZONE_ORDER.index("landing"), best)
         return best
@@ -618,6 +641,9 @@ class World:
         if self.caldera:
             from .caldera import caldera_props
             return caldera_props(self, Prop)
+        if self.nebula:
+            from .nebula import nebula_props
+            return nebula_props(self, Prop)
         if self.generated:
             from .lakegen import alpine_props
             return alpine_props(self, Prop)
@@ -800,6 +826,7 @@ class World:
         sand = np.array([92, 78, 52], dtype=np.float32)
         if self.placeholder:
             col = col * 0.35 + np.array(self.palette["water"], np.float32) * 255 * 0.65
+        if self.placeholder or self.nebula:
             land = np.array(self.palette["land"], np.float32) * 255
             sand = land * 1.15
         bank = (sd >= 0) & (sd < 8)

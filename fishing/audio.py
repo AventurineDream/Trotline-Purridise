@@ -31,6 +31,7 @@ class Audio:
         self._wind_at = 0
         self._crickets = self._make_crickets()
         self._cricket_at = 0
+        self._hum_at = 0
         self._bird_at = 4.0
         self._frog_at = 2.5
         self._hour = 12.0
@@ -177,6 +178,15 @@ class Audio:
             wave += np.sin(2 * np.pi * (410 - 22 * t) * t) * second
             wave *= trem
             gain = 0.20
+        elif kind == "twinkle":
+            # Three soft rising bell partials: the Lagoon's starlight.
+            n = int(SR * 0.9)
+            t = np.arange(n, dtype=np.float32) / SR
+            wave = np.zeros(n, np.float32)
+            for i, freq in enumerate((1568.0, 2093.0, 2637.0)):
+                onset = np.clip(t - i * 0.11, 0, None)
+                wave += np.sin(2 * np.pi * freq * onset) * np.exp(-onset * 4.5) * (t >= i * 0.11)
+            gain = 0.07
         elif kind == "gull":
             n = int(SR * 0.46)
             t = np.arange(n, dtype=np.float32) / SR
@@ -228,6 +238,12 @@ class Audio:
         hour = self._hour
         alpine = getattr(self, "_lake_id", "briar") == "flathead"
         rain = self._rain
+        if getattr(self, "_lake_id", "briar") == "nebula":
+            # No birds or frogs beyond the reflection; only star twinkles.
+            if self.time >= self._bird_at:
+                self._cue("twinkle")
+                self._bird_at = self.time + self._span(9.0, 14.0)
+            return
         edge = (5.3 <= hour <= 8.3) or (17.5 <= hour <= 20.9)
         day = 8.3 < hour < 17.5
         night = hour < 5.1 or hour > 20.6
@@ -319,7 +335,16 @@ class Audio:
         pan = 0.22 * math.sin(self.time * 0.31)
         ambience_left = ambience + wind * gust * (1.0 - pan)
         ambience_right = ambience + wind * gust * (1.0 + pan)
-        if getattr(self, "_lake_id", "briar") != "flathead" and (self._hour < 5.1 or self._hour > 20.6):
+        lake = getattr(self, "_lake_id", "briar")
+        if lake == "nebula":
+            # A low two-voice hum with a slow swell sits under the water.
+            hum_t = (self._hum_at + idx) / SR
+            self._hum_at = (self._hum_at + frames) % (SR * 60)
+            swell = 0.6 + 0.4 * np.sin(2 * np.pi * 0.07 * hum_t)
+            hum = (np.sin(2 * np.pi * 110.0 * hum_t) + 0.6 * np.sin(2 * np.pi * 164.8 * hum_t)) * 0.012 * swell
+            ambience_left += hum
+            ambience_right += hum
+        if lake not in ("flathead", "nebula") and (self._hour < 5.1 or self._hour > 20.6):
             bugs, self._cricket_at = self._slice(self._crickets, self._cricket_at, frames)
             level = 0.055 * (1.0 - min(1.0, self._rain) * 0.65)
             ambience_left += bugs * level * 0.85

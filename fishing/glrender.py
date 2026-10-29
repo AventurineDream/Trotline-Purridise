@@ -102,7 +102,8 @@ class LakeRenderer(SoftwareRenderer):
                 color = self.own(ctx.renderbuffer((self.w,self.h),3,samples=self.samples))
                 depth = self.own(ctx.depth_renderbuffer((self.w,self.h),samples=self.samples))
                 self.draw_fb = self.own(ctx.framebuffer([color],depth))
-        self.reflect_tex,self.reflect_fb = self.target(max(80,self.w//2),max(45,self.h//2),sample_depth=self.world.caldera)
+        self.celestial = self.world.caldera or self.world.nebula
+        self.reflect_tex,self.reflect_fb = self.target(max(80,self.w//2),max(45,self.h//2),sample_depth=self.celestial)
         self.output_tex,self.output_fb = self.target(self.w,self.h)
         for name,grid in (("shore_tex",self.world.shore_grid),
                           ("depth_tex",getattr(self.world,"depth_grid",None))):
@@ -121,7 +122,9 @@ class LakeRenderer(SoftwareRenderer):
                           [x0,0,z0],[x1,0,z1],[x0,0,z1]],np.float32)
         water_buf = self.own(ctx.buffer(plane.tobytes()))
         self.water_vao = self.own(ctx.vertex_array(self.water_p,[(water_buf,"3f","in_pos")]))
-        self.layers,images = atlas(paint_rgb("buoy","orange"), alpine=self.world.generated, caldera=self.world.caldera)
+        self.layers,images = atlas(paint_rgb("buoy","orange"), alpine=self.world.generated,
+                                   caldera=self.world.caldera, nebula=self.world.nebula)
+        self._nebula_arrays = self._nebula_uniforms()
         self.atlas = self.own(ctx.texture_array((ATLAS_W,ATLAS_H,len(images)),4,images.tobytes()))
         self.atlas.filter = (moderngl.LINEAR,moderngl.LINEAR)
         self.atlas.repeat_x = self.atlas.repeat_y = False
@@ -139,6 +142,21 @@ class LakeRenderer(SoftwareRenderer):
         self.tree_p["atlas"] = 0
         self.water_p["reflection"] = 1
         self.post_p["scene"] = 2
+
+    def _nebula_uniforms(self):
+        """Fixed lane circles and drift ellipses, packed once for the shaders."""
+        lanes = np.zeros((48,3),np.float32)
+        drifts = np.zeros((12,4),np.float32)
+        lane_count = drift_count = 0
+        if self.world.nebula:
+            from .nebula import lane_circles
+            rows = lane_circles(self.world)
+            lane_count = len(rows)
+            lanes[:lane_count] = rows
+            shapes = np.asarray(self.world.environment["drifts"],np.float32)
+            drift_count = len(shapes)
+            drifts[:drift_count] = shapes
+        return {"lane_circles":(lanes.tobytes(),lane_count),"drift_shapes":(drifts.tobytes(),drift_count)}
 
     def mesh_vao(self, buf, indices=None):
         return self.own(self.ctx.vertex_array(self.mesh_p,
@@ -296,7 +314,12 @@ class LakeRenderer(SoftwareRenderer):
             sun=tuple(light["sun"]),sun_i=light["sun_i"],moon=tuple(light["moon"]),moon_i=light["moon_i"],
             night=light["night"],gold=light["gold"],horizon=tuple(light["horizon"]),zenith=tuple(light["zenith"]),
             cloud_cover=light["cloud_cover"],rain=light["rain"],mist=light.get("mist", 0.0),mirror=float(mirror),
-            lake_kind=4.0 if self.world.caldera else 3.0 if self.world.generated else (2.0 if self.world.placeholder else float(self.world.id=="cedar")),
+            lake_kind=(5.0 if self.world.nebula else 4.0 if self.world.caldera else 3.0 if self.world.generated
+                       else (2.0 if self.world.placeholder else float(self.world.id=="cedar"))),
+            starlight=float(light.get("starlight",0.0)),aurora_i=float(light.get("aurora",0.0)),
+            meteors=float(light.get("meteors",0.0)),
+            nebula_mid=tuple((self.world.environment or {}).get("water_mid",(.2,.1,.4))),
+            shoal=next((tuple(row[1:4]) for row in self.world.zones if row[0]=="flats"),(0,0,1)),
             snow=light.get("snow", 0.0),snow_anim=0.0 if bool(state.v2.get("settings", {}).get("reduced_motion", False)) else float(state.anim)%10000,
             snow_line=(self.world.environment or {}).get("snow_line", 95),
             alpine_shallow=tuple((self.world.environment or {}).get("water_shallow", (.17,.49,.43))),
@@ -312,6 +335,10 @@ class LakeRenderer(SoftwareRenderer):
         for key,value in values.items():
             if key in program:
                 program[key].value = value
+        for key,(data,count) in self._nebula_arrays.items():
+            if key in program:
+                program[key].write(data)
+                program[key.split("_")[0]+"_count"].value = count
 
     def _buoys(self,state):
         bid = state.look_paint["buoy"]
@@ -427,7 +454,7 @@ class LakeRenderer(SoftwareRenderer):
         self._scene(state,cam,light,1,self.draw_fb,buoys,corks)
         self._uniforms(self.water_p,state,cam,light,1,self.draw_fb.size)
         self.reflect_tex.use(1)
-        if self.world.caldera:
+        if self.celestial:
             self.reflect_fb.depth_attachment.use(5)
         segments = np.zeros((8,4),np.float32)
         heat = np.zeros(8,np.float32)
