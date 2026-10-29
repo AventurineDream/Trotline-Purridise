@@ -293,9 +293,52 @@ def _quest_progress_text(quest: dict, quest_progress, narrative) -> str:
     return "Objective in progress."
 
 
+def journal_quest_ids(state, content) -> tuple:
+    """The twelve V3 quests, then each V1.0 side quest once it has been accepted."""
+    accepted = tuple(qid for qid, quest in content.quests.items()
+                     if quest.get("kind") in ("host", "a", "b") and qid in state.narrative.quests
+                     and state.narrative.quests[qid].status != "available")
+    return QUEST_IDS + accepted
+
+
+def _v2_journal_details(state, content, quest_id: str) -> dict:
+    """A V1.0 quest's row: its authored objective, its step, and when a needed cat is next out."""
+    from .npcs import next_appearance
+    from .quests import current_step, steps_of
+    quest = content.quests[quest_id]
+    progress = state.narrative.quests[quest_id]
+    steps = steps_of(quest)
+    needed = None
+    if progress.status == "active":
+        step, _data = current_step(quest, progress)
+        text = f"Step {progress.progress.get('step', 0) + 1} of {len(steps)}." if len(steps) > 1 else "Under way."
+        if step is not None and step["type"] == "talk_to":
+            needed = step["npc_id"]
+    elif progress.status == "ready":
+        text = "Ready to turn in, to the giver or at the landing."
+        needed = quest["giver_id"]
+    else:
+        text = "Completed; the reward has been claimed once."
+    if needed is not None:
+        text += " " + next_appearance(state, content, needed)
+    giver = content.cats.get(quest["giver_id"], {})
+    return {
+        "title": quest["title"],
+        "status": _STATUS_LABELS.get(progress.status, "Available"),
+        "giver": f"{content.name(quest['giver_id'])} · {LAKES.get(giver.get('lake_id'), {}).get('name', '')}",
+        "objective": quest["journal"],
+        "progress": text,
+        "prerequisites": "none",
+        "bot_notes": [], "latest_bot_note": None,
+        "guardian_status": "",
+    }
+
+
 def quest_journal_details(state, content, quest_id: str) -> dict:
     """Build safe, contract-grounded text for the selected narrative journal row."""
     quest = content.quests[quest_id]
+    if "kind" in quest:
+        return _v2_journal_details(state, content, quest_id)
     giver = content.npcs[quest["giver_id"]]
     quest_progress = state.narrative.quests[quest_id]
     prerequisites = quest.get("prerequisites", [])
@@ -691,8 +734,10 @@ class UI:
         chat = ui.conversation
         if chat is None:
             return
-        node = ui.dialogue_content.dialogue[chat.node_id]
-        name = ui.dialogue_content.npcs[chat.npc_id]['name']
+        # A conversation may carry runtime nodes (greetings, host turn-ins, letters).
+        node = (chat.node(ui.dialogue_content) if hasattr(chat, "node")
+                else ui.dialogue_content.dialogue[chat.node_id])
+        name = ui.dialogue_content.name(chat.npc_id)
         h, w = frame.shape[:2]
         size = self._size(frame, "small")
         cw, ch = self.cell(size)

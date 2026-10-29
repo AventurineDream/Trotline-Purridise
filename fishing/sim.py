@@ -56,7 +56,7 @@ from .boat import (
 from .weather import wind_at
 from . import calendar
 from .calendar import weather_at
-from .lakes import LAKES
+from .lakes import LAKES, place_contains, waypoints as lake_waypoints
 from .data import weight_string
 from .narrative import NarrativeState, deployment_id
 from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, confirm_shiny, lose_shiny,
@@ -782,6 +782,9 @@ class State:
         self.sail_raised = False
         self.advance_bulk(comfort.NAP_MINUTES)
         clue = comfort.finish_nap(self, world, eligible)
+        self.emit_quest_event({"type": "catnap.complete", "lake_id": world.id,
+                               "zone_id": f"{world.id}:{world.zone_at(self.x, self.z)}",
+                               "game_minute": self.game_minutes})
         self.toast("A two-hour catnap. Rested, with room for a dream." if eligible
                    else "A two-hour catnap. The lines kept soaking.")
         if clue:
@@ -961,6 +964,7 @@ class State:
                 reason = self._forced_release_reason(catch)
                 if reason:
                     self._release_hook_catch(hook, catch, reason, announce=announce)
+                    self._emit_catch(catch, line, i, kept=False)
                 if collect:
                     events.append((li, sp, weight, x, z))
         if collect:
@@ -994,6 +998,8 @@ class State:
                                      previous_count, rec["count"]):
             self.book_events.append(event)
             self.toast(event["toast"], event["toast_seconds"])
+            self.emit_quest_event({"type": "book.stage_up", "species_id": catch.species,
+                                   "stage": event["stage"], "game_minute": self.game_minutes})
         refresh_collection_title(self.v2.setdefault("book", {}), self.journal)
         if announce and not first and catch.weight > previous + 0.01:
             self._records.append((catch.weight, SPECIES_BY_ID[catch.species].name))
@@ -1115,6 +1121,15 @@ class State:
     def _emit_movement_events(self, world: World, x0: float, z0: float,
                               x1: float, z1: float, *, player_controlled: bool,
                               propulsion: str | None) -> None:
+        for point in lake_waypoints(world.id):
+            if place_contains(point, x1, z1) and not place_contains(point, x0, z0):
+                self.emit_quest_event({
+                    "type": "waypoint.enter", "lake_id": world.id,
+                    "waypoint_id": f"{world.id}:{point['id']}",
+                    "game_minute": self.game_minutes,
+                    "movement_cause": "boat",
+                    "player_controlled": bool(player_controlled),
+                })
         previous = world.zone_at(x0, z0)
         for zone, distance in _zone_path_segments(world, x0, z0, x1, z1):
             if zone != previous:
@@ -1147,6 +1162,33 @@ class State:
             "bait_sections": list(line.bait_sections),
             "catch_game_minute": catch.catch_game_minute,
             "entry_game_minute": self.game_minutes,
+        })
+
+    def _emit_catch(self, catch: Catch, line: SetLine, hook_index: int, *, kept: bool) -> None:
+        """A catch resolved, kept or released, for `catch_species` (V1-31)."""
+        x, z = line.point_at(hook_index)
+        minute = catch.catch_game_minute if catch.catch_game_minute is not None else self.game_minutes
+        cold = bottools.cold_layer_m(catch.lake_id, catch.hour, weather_at(self, minute))
+        self.emit_quest_event({
+            "type": "catch.resolved", "species_id": catch.species, "legendary": bool(catch.legendary),
+            "kept": kept, "lake_id": catch.lake_id, "zone_id": f"{catch.lake_id}:{catch.zone}",
+            "x": float(x), "z": float(z), "bait_id": catch.bait, "weight_lb": catch.weight,
+            "catch_hour": catch.hour, "in_cold_band": (cold is not None and catch.depth_m is not None
+                                                       and cold <= catch.depth_m <= cold + bottools.COLD_BAND_M),
+            "game_minute": self.game_minutes,
+        })
+
+    def emit_tool_use(self, world: World, tool_id: str, zone: str | None = None) -> None:
+        """A successful Bot tool use, with the shell worn at the time (V1-31).
+
+        `zone` is where the tool acted (a line's zone); it defaults to the boat's.
+        """
+        profile = self.v2.get("profile", {})
+        self.emit_quest_event({
+            "type": "tool.use", "tool_id": tool_id, "lake_id": world.id,
+            "zone_id": f"{world.id}:{zone or world.zone_at(self.x, self.z)}",
+            "shell_id": profile.get("shell") if isinstance(profile, dict) else None,
+            "game_minute": self.game_minutes,
         })
 
     @staticmethod
@@ -1447,6 +1489,7 @@ class State:
         line.chime_until = self.game_minutes + bottools.CHIME_LAST_MINUTES
         tools["chime_ready_at"] = self.game_minutes + bottools.CHIME_COOLDOWN_MINUTES
         self.toast("The Wave Chime rings out over your line.")
+        self.emit_tool_use(world, "wave_chime", line.zone)
         return None
 
     def try_set(self, world: World, held_index: int,
@@ -1518,8 +1561,12 @@ class State:
         self.lines.append(SetLine(held.tier, sections, x0, z0, x1, z1, zone, line_hooks))
         line = self.lines[-1]
         self.preferred_bait = line.bait
+        cold = bottools.cold_layer_m(self.lake_id, hour_of_day(self.game_minutes), weather_at(self))
+        set_depth = float(world.depth(mx, mz))
         self.emit_quest_event({
             "type": "line.set",
+            "x": mx, "z": mz,
+            "in_cold_band": cold is not None and cold <= set_depth <= cold + bottools.COLD_BAND_M,
             "lake_id": self.lake_id,
             "line_id": line.line_id,
             "zone_id": f"{self.lake_id}:{line.zone}",
@@ -1530,6 +1577,8 @@ class State:
             "game_minute": self.game_minutes,
             "active_game_minute": self.narrative.active_play_game_minutes,
         })
+        if zone == "reeds" and self.boat_id not in REED_LINE_BOATS:
+            self.emit_tool_use(world, "reed_anchor", zone)
         from .world import zone_label
         bait_text = ", ".join(BAIT_BY_ID[bait].name.lower() for bait in line.bait_sections)
         self.toast(f"Line set on the {zone_label(zone, self.lake_id).lower()}. {hooks} hooks, {bait_text}.")
@@ -1556,6 +1605,7 @@ class State:
             catch.disposition = disposition
         if reason or catch.disposition == "release":
             self._release_hook_catch(hook, catch, reason)
+            self._emit_catch(catch, line, hook_index, kept=False)
             return None
         if self.well_load() + catch.weight > self.well_cap() + 1e-6:
             return "The livewell won't take that one. Mark a fish Release or make room."
@@ -1563,6 +1613,7 @@ class State:
         confirm_shiny(self.v2["book"], catch)
         self.well.append(catch)
         self._emit_livewell_entry(catch, line)
+        self._emit_catch(catch, line, hook_index, kept=True)
         hook.catch = None
         hook.baited = False
         return None
@@ -1580,19 +1631,21 @@ class State:
             return "The livewell is full. Mark more fish Release before keeping them."
 
         kept = released = 0
-        for hook in line.hooks:
+        for index, hook in enumerate(line.hooks):
             catch = hook.catch
             if catch is None:
                 continue
             reason = self._forced_release_reason(catch)
             if reason or catch.disposition == "release":
                 self._release_hook_catch(hook, catch, reason)
+                self._emit_catch(catch, line, index, kept=False)
                 released += 1
             else:
                 catch.disposition = "kept"
                 confirm_shiny(self.v2["book"], catch)
                 self.well.append(catch)
                 self._emit_livewell_entry(catch, line)
+                self._emit_catch(catch, line, index, kept=True)
                 hook.catch = None
                 hook.baited = False
                 kept += 1

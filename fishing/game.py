@@ -11,7 +11,7 @@ import numpy as np
 
 from .content import load_content
 from .quests import QuestManager
-from .dialogue import Conversation, nearby_npc
+from .dialogue import nearby_npc, open_conversation, record_hail
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
 from .data import BAITS, BAIT_BY_ID, SPECIES, hour_of_day
@@ -261,6 +261,9 @@ class Session:
             "anchored": state.anchored,
             "engine_idle": (not state.sail_raised and abs(state.throttle) <= 0.01
                             and abs(state.throttle_setting) <= 0.01),
+            # For wait_weather and area checks (V1-31).
+            "weather": calendar.weather_at(state),
+            "x": state.x, "z": state.z,
         })
         calendar.active_tick(state, before)
         self._refresh_npcs()
@@ -566,15 +569,18 @@ class Session:
         npc = nearby_npc(self.state)
         if npc is None:
             return
+        # The hail is an event first, so a talk_to step can make its quest ready.
+        first = record_hail(self.state, self.world, npc)
         cookout_chat = calendar.chat(self.state, self.world, npc.id, self._npc_content)
         if kitchen.teach(self.state, npc.id) or cookout_chat:
             self.save()
-        if npc.quest_id is None:
-            # Cats beyond the V3 cast have no dialogue graph yet; a hail is a wave.
+        conversation = open_conversation(npc, self.state, self._npc_content, first=first, world=self.world)
+        if conversation is None:
+            # A cat with nothing to say yet (no quest on offer, no greeting) waves.
             if not cookout_chat:
                 self.state.toast(f"{npc.name} waves hello.")
             return
-        self.conversation = Conversation.start(npc, self.state, self._npc_content)
+        self.conversation = conversation
         self.ui.conversation = self.conversation
         self.ui.dialogue_from = self.ui.mode
         self.ui.mode = "dialogue"
@@ -595,7 +601,7 @@ class Session:
         if chat is None:
             self._close_dialogue()
             return
-        node = self._npc_content.dialogue[chat.node_id]
+        node = chat.node(self._npc_content)
         choices = node.get('choices', [])
         if choices:
             if keys.tap("up", dt):
@@ -744,6 +750,9 @@ class Session:
                     for hook in line.hooks if hook.catch is not None
                 ],
             })
+            if line.zone == "current" and self.state.owns_tool("zero_g_winch"):
+                # The winch held this line against the current while it soaked.
+                self.state.emit_tool_use(self.world, "zero_g_winch", line.zone)
             settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
             if settings.get("haul_speed") == "instant":
                 self._start_haul_perk(line)
