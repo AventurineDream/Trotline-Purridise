@@ -1808,6 +1808,198 @@
       "reward": {
         "cash": 210
       }
+    },
+    {
+      "id": "story_c1_s1",
+      "kind": "story",
+      "giver_id": "pip_pebble",
+      "lake_id": "briar",
+      "title": "Map With a Hole in It",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "pip_pebble"
+      },
+      "journal": "Story — Talk to Pip & Pebble on Little Briar.",
+      "reward": {},
+      "lines": {
+        "offer": "Skipper! Look at our map. It's missing something.",
+        "ready": [
+          "Skipper! Life jacket? Good. Look at our map. There's a way through the reeds, but it isn't on here.",
+          "Pebble: Frogs live in the reeds. Big ones. (quietly) I don't go in there.",
+          "Could you and {BotName} find where the reeds open up? Three spots should do it."
+        ],
+        "turn_in_choice": "We'll find the reeds.",
+        "done": "Go on, then! Send {BotName} along the reed edge.",
+        "return": "Find the passage, Skipper. Pebble's already drawing it."
+      }
+    },
+    {
+      "id": "story_c1_s2",
+      "kind": "story",
+      "giver_id": "pip_pebble",
+      "lake_id": "briar",
+      "title": "Reed Scouts",
+      "objective": {
+        "type": "scout_report",
+        "waypoint_ids": [
+          "briar:reed_edge_1",
+          "briar:reed_edge_2",
+          "briar:reed_edge_3"
+        ]
+      },
+      "journal": "Send Bot to scout 3 marked points along the reed edge (any order).",
+      "reward": {
+        "tools": [
+          "reed_anchor"
+        ]
+      },
+      "requires": {
+        "quest": "story_c1_s1"
+      },
+      "lines": {
+        "offer": "Send Bot to the reed edge, three spots.",
+        "progress": "Three marks along the reed edge. Bot knows where to look.",
+        "ready": "Bot says the three openings line up. There's a passage through the reeds!",
+        "turn_in_choice": "Let's hear it.",
+        "done": [
+          "It goes all the way?! Pebble, write it down, write it down!",
+          "Here, take our old reed anchor. Grandmother says a passage isn't real until somebody fishes it."
+        ],
+        "return": "The Reed Passage is ours now. Go and fish it."
+      }
+    },
+    {
+      "id": "story_c1_s3",
+      "kind": "story",
+      "giver_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "title": "A Useful Note",
+      "objective": {
+        "type": "catch_species",
+        "any": true,
+        "zone_id": "briar:reeds"
+      },
+      "journal": "Catch any fish in the Reed Passage (a Reed Anchor is provided).",
+      "reward": {
+        "shells": [
+          "frog"
+        ],
+        "unlocks": [
+          "chart:reeds"
+        ]
+      },
+      "requires": {
+        "quest": "story_c1_s2"
+      },
+      "lines": {
+        "offer": "Catch a fish in the Reed Passage, dear.",
+        "progress": "Fish the reeds, dear. The passage won't fish itself.",
+        "ready": [
+          "The Reed Passage. My grandmother used to row through there, you know. Then the reeds closed and everyone forgot.",
+          "That's a useful note. Write it in, dear. And {BotName}, come here a moment. Hold still."
+        ],
+        "turn_in_choice": "Here's the note.",
+        "done": [
+          "Bot: It is warm. I do not need to be warm. I like it.",
+          "Pip left you something too. A frog-shaped shell, of all things. Pebble insisted."
+        ],
+        "return": "Doc Barnaby at Cedar Creek has lost something, dear. Go and see him."
+      }
+    },
+    {
+      "id": "story_c2_s1",
+      "kind": "story",
+      "giver_id": "doc_barnaby",
+      "lake_id": "cedar",
+      "title": "The Missing Jug",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "doc_barnaby"
+      },
+      "journal": "Story — Talk to Doc Barnaby at Cedar Creek.",
+      "reward": {},
+      "requires": {
+        "chapter_complete": 1
+      },
+      "lines": {
+        "offer": "Skipper! Heard you found a whole passage on Briar. Well, I've lost a whole jug.",
+        "ready": [
+          "Skipper! Heard you found a whole passage on Briar. Well, I've lost a whole jug.",
+          "For thirty years my blue jug marked the catfish pool. Now I keep sending folks to the wrong water.",
+          "The current took it, I'd guess. Follow the drift line, would you? Bot's got better eyes than my gauges."
+        ],
+        "turn_in_choice": "I'll follow the drift line.",
+        "done": "Go on, then! Bot's got the eyes.",
+        "return": "Follow the drift line, Skipper. The jug's out there."
+      }
+    },
+    {
+      "id": "story_c2_s2",
+      "kind": "story",
+      "giver_id": "doc_barnaby",
+      "lake_id": "cedar",
+      "title": "Following the Drift",
+      "objective": {
+        "type": "visit_sequence",
+        "waypoint_ids": [
+          "cedar:drift_buoy_1",
+          "cedar:drift_buoy_2",
+          "cedar:drift_buoy_3"
+        ]
+      },
+      "journal": "Follow the 3 drift buoys in order to find the blue jug.",
+      "reward": {},
+      "requires": {
+        "quest": "story_c2_s1"
+      },
+      "lines": {
+        "offer": "Follow the drift buoys, in order.",
+        "progress": "Keep to the drift buoys. The current is setting toward the dam riprap.",
+        "ready": [
+          "Bot: Blue jug located. It is wedged on the riprap, upright and pleased with itself.",
+          "Ha! The old rascal. So the pool moved too. Fish follow the soft water, not my jug."
+        ],
+        "turn_in_choice": "Where should I set the line?",
+        "done": "Set a good line right where it sits now. Nightfall's best.",
+        "return": "Nightfall's best, Skipper. Set the line and tell me how it went."
+      }
+    },
+    {
+      "id": "story_c2_s3",
+      "kind": "story",
+      "giver_id": "doc_barnaby",
+      "lake_id": "cedar",
+      "title": "The Marked Pool",
+      "objective": {
+        "type": "line_check",
+        "min_tier": "prem",
+        "area_id": "cedar:marked_pool",
+        "active_soak_game_minutes": 60
+      },
+      "journal": "Set a premium or heavy line in the Marked Pool and let it soak 60 active minutes, then check it.",
+      "reward": {
+        "shells": [
+          "duck"
+        ],
+        "unlocks": [
+          "travel:flathead"
+        ]
+      },
+      "requires": {
+        "quest": "story_c2_s2"
+      },
+      "lines": {
+        "offer": "Set a premium or heavy line in the Marked Pool, and let it soak.",
+        "progress": "The pool is calm. Let the line soak.",
+        "ready": [
+          "That's it, that's the spot! I'll have a proper barrier and a sign up by morning. Calm water, marked edges, nobody near the spillway.",
+          "Sparky made you a duck shell. Says it squeaks on purpose.",
+          "And Skipper, you've earned a trip north. My trailer's hitched."
+        ],
+        "turn_in_choice": "Thanks, Doc.",
+        "done": "Mind the trailer hitch on the way north, Skipper.",
+        "return": "The Marked Pool is yours to fish now. Tell Huckleberry I sent you."
+      }
     }
   ],
   "cats": [

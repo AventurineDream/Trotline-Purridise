@@ -294,9 +294,9 @@ def _quest_progress_text(quest: dict, quest_progress, narrative) -> str:
 
 
 def journal_quest_ids(state, content) -> tuple:
-    """The twelve V3 quests, then each V1.0 side quest once it has been accepted."""
+    """The twelve V3 quests, then each V1.0 side quest and story step once it has been accepted."""
     accepted = tuple(qid for qid, quest in content.quests.items()
-                     if quest.get("kind") in ("host", "a", "b") and qid in state.narrative.quests
+                     if quest.get("kind") in ("host", "a", "b", "story") and qid in state.narrative.quests
                      and state.narrative.quests[qid].status != "available")
     return QUEST_IDS + accepted
 

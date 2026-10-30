@@ -66,6 +66,12 @@ def _claim_and_pay(state, content, quest_id: str) -> bool:
         if not state.narrative.record_reward_claim(quest_id, state.game_minutes):
             return False
         apply_reward(state, definition['reward'])
+    if definition.get('kind') == 'story':
+        # A story step is not a side quest: no friend's letter, and the chapter may finish (V1-34).
+        from .quests import autostart_story, finish_story_step
+        finish_story_step(state, quest_id)
+        autostart_story(state, content)
+        return True
     queue_letter(state, content, definition['giver_id'])
     return True
 
@@ -296,7 +302,7 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
     turn-in for the rest of that game day, and the greeting takes over from the next.
     A cat with a story tells its next part after the greeting, one part a game day.
     """
-    from .quests import chain as quest_chain, current_quest, game_day, quest_status
+    from .quests import chain as quest_chain, current_quest, game_day, quest_status, story_focus
     if npc.id == 'pounce':
         letter = next_letter(state, content)
         if letter is None:
@@ -319,7 +325,7 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
                 and progress.turned_in_by is not None and not progress.acknowledged):
             progress.acknowledged = True
             return Conversation(npc.id, quest_id, quest['dialogue']['completed'])
-    quest_id = current_quest(state, content, npc.id)
+    quest_id = story_focus(state, content, npc.id) or current_quest(state, content, npc.id)
     if quest_id is None and npc.quest_id in content.quests:
         quest_id = npc.quest_id  # a V3 cat outside the roster, as in older tests
     entry = None
