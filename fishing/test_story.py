@@ -104,6 +104,11 @@ class Story(unittest.TestCase):
         x, z = centre(ref)
         return {"x": x, "z": z, **extra}
 
+    def play_chapter_one_meet(self):
+        self.meet("pip_pebble")
+        self.talk("pip_pebble")  # the hail completes step one
+        self.talk("pip_pebble", "turn_in")
+
     def play_chapter_one(self):
         # Meet: Pip & Pebble, the first hail (talk_to) completes the step.
         self.meet("pip_pebble")
@@ -223,6 +228,14 @@ class Story(unittest.TestCase):
         self.play_chapter_one()
         self.play_chapter_two()
         self.assertEqual(self.state.v2["npcs"]["letters"], [])
+
+    def test_a_step_under_way_shows_its_progress_when_its_giver_is_hailed(self):
+        # Codex, PR 107: a scouting step (not a talk step) must still speak through its giver.
+        self.play_chapter_one_meet()
+        self.assertEqual(self.status("story_c1_s2"), "active")
+        self.meet("pip_pebble")  # not pinned now: the schedule alone decides when she is out
+        seen = self.talk("pip_pebble")
+        self.assertIn("story_c1_s2:dialogue:progress", seen)
 
     def test_story_steps_are_journal_entries(self):
         from .ui import journal_quest_ids
