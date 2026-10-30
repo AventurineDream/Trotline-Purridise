@@ -90,7 +90,8 @@ def faces(state, world, light=None):
     light = lighting_at(state.game_minutes+state.minute_acc, state) if light is None else light
     out = []
     if world.nebula:
-        return _star_motes(state, world, out)
+        from .finale import faces as finale_faces
+        return _star_motes(state, world, out) + finale_faces(state, world)  # Settle In (V1-35)
     if world.caldera:
         from .caldera import thermal_faces
         out.extend(thermal_faces(state, world))

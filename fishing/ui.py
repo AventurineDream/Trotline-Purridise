@@ -720,6 +720,8 @@ class UI:
             if ui.stage_fx:  # a staged story scene: letterbox and fade, without the HUD (V1-35)
                 from .staging import overlay
                 overlay(frame, ui.stage_fx)
+                if "sketch" in ui.stage_fx:
+                    self._sketch(frame, ui.stage_fx["sketch"])
             else:
                 self._hud(frame, state, ui, interactions=False)
             self._dialogue(frame, state, ui)
@@ -772,6 +774,22 @@ class UI:
         if ui.credits_s >= CREDITS_HOLD_S:  # keys do nothing while the credits hold
             hint = self._controls(ui, "Press any key to keep fishing.", "Press A to keep fishing.")
             self._center(frame, hint, w / 2, int(h * 0.82), small, DIM)
+
+    def _sketch(self, frame, progress: float):
+        """The Skipper's drawing of the Star-Whale on a page of the book, stroke by stroke (V1-35)."""
+        from .finale import sketch_strokes
+        h, w = frame.shape[:2]
+        pw, ph = int(w * 0.30), int(h * 0.27)
+        x, y = w - pw - int(w * 0.04), int(h * 0.15)
+        page = np.array([236, 226, 200], np.float32)
+        frame[y:y + ph, x:x + pw] = (frame[y:y + ph, x:x + pw] * 0.12 + page * 0.88).astype(frame.dtype)
+        pad = int(pw * 0.07)
+        bw, bh = pw - pad * 2, ph - pad * 2
+        width = max(2, int(h / 240))
+        for stroke in sketch_strokes(progress):
+            for (ax, ay), (bx, by) in zip(stroke, stroke[1:]):
+                self._haul_segment(frame, x + pad + ax * bw, y + pad + ay * bh, x + pad + bx * bw,
+                                   y + pad + by * bh, (58, 56, 64), width)
 
     def _dialogue(self, frame, state, ui):
         chat = ui.conversation
