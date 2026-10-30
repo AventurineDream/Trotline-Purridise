@@ -13,6 +13,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import numpy as np
+
 from .content import ContentError, load_content, validate_content_v2
 from .data import CONTENT_V2_RAW
 from .dialogue import nearby_npc
@@ -182,15 +184,28 @@ class Prologue(unittest.TestCase):
         self.assertIsNone(scene_state(self.state, "pro_05b"))
         self.assertEqual(scene_state(self.state, "prologue"), "done")
 
+    def drawn_text(self):
+        from .platform import Text
+        from .ui import UI
+        text = Text()
+        self.addCleanup(text.close)
+        renderer, drawn = UI(text, self.world), []
+        original = renderer._text
+        renderer._text = lambda frame, s, *args, **kw: (drawn.append(s), original(frame, s, *args, **kw))[1]
+        renderer._dialogue(np.zeros((720, 1280, 3), np.uint8), self.state, self.session.ui)
+        return drawn
+
     def test_a_scene_is_read_through_and_esc_does_not_leave_it(self):
         self.new_morning()
         self.press("esc")
         self.assertEqual(self.session.ui.mode, "dialogue")
         self.assertEqual(self.node(), "scene:pro_01")
+        self.assertFalse(any("Esc" in line for line in self.drawn_text()))  # nor is it offered
         self.read()
         # An ordinary conversation still closes with Esc.
         self.hail_grandmother()
         self.assertEqual(self.node(), "story_c0_s1:dialogue:progress")
+        self.assertTrue(any("Esc leave" in line for line in self.drawn_text()))
         self.press("esc")
         self.assertEqual(self.session.ui.mode, "play")
 
@@ -389,6 +404,8 @@ class SceneValidation(unittest.TestCase):
             "one to three choices": [self.scene("pro_01", choices=None)],
             "unknown scene ['pro_02']": [self.scene("pro_01", next=["pro_02"]), self.scene("pro_02")],
             "unknown scene {'a': 1}": [self.scene("pro_01", choices=[{"text": "Yes.", "next": {"a": 1}}])],
+            "unknown value/reference 'granny'": [self.scene("story_c4_knot", choices=[{"text": "Granny", "next": None, "knot": "granny"}])],
+            "optionally knot": [self.scene("story_c4_knot", choices=[{"text": "Bow", "next": None, "colour": "red"}])],
         }
         for expected, scenes in cases.items():
             with self.subTest(expected):
