@@ -19,13 +19,18 @@ _AUTO = (
     ("pro_01", lambda state: scene_state(state, "prologue") == "pending"),   # a new game (05 §1)
     ("pro_03", lambda state: quest_status(state, "story_c0_s1") == "ready"),  # the first line is set
     ("pro_04", lambda state: quest_status(state, "story_c0_s2") == "ready"),  # the first catch
+    ("story_c3_cold", lambda state: quest_status(state, "story_c3_s2") == "ready"),  # both readings (05 §2.3)
+    ("story_c4_clear", lambda state: quest_status(state, "story_c4_s2") == "ready"),  # the fog lifts (05 §2.4)
+    # At the marker, before the reading; it stays due until Bot has his knot.
+    ("story_c4_knot", lambda state: quest_status(state, "story_c4_s3") in ("ready", "completed")),
 )
 # Scenes a hail opens: (first scene, the cat hailed, whether its moment has come).
 _HAIL = (
     ("pro_05", "grandmother_whiskers", lambda state: quest_status(state, "story_c0_s3") == "ready"),
 )
 # The story step a scene turns in once it is done.
-_TURNS_IN = {"pro_03": "story_c0_s1", "pro_04": "story_c0_s2", "pro_06": "story_c0_s3"}
+_TURNS_IN = {"pro_03": "story_c0_s1", "pro_04": "story_c0_s2", "pro_06": "story_c0_s3",
+             "story_c3_cold": "story_c3_s2", "story_c4_clear": "story_c4_s2"}
 
 
 def begin_prologue(state) -> None:
@@ -105,7 +110,8 @@ def scene_conversation(state, content, scene_id: str):
                 if "choices" in row:
                     node["choices"] = [
                         {"id": f"scene:{sid}:choice:{j}", "text": choice["text"], "action": "scene",
-                         "target": f"scene:{choice['next']}" if choice["next"] is not None else None}
+                         "target": f"scene:{choice['next']}" if choice["next"] is not None else None,
+                         **({"knot": choice["knot"]} if "knot" in choice else {})}
                         for j, choice in enumerate(row["choices"])]
                 else:
                     node["next"] = f"scene:{row['next']}" if row.get("next") is not None else None

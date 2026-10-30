@@ -1559,8 +1559,8 @@ V1-34 (#62) is the story: a prologue, five chapters, the Settle In finale and th
 - **Turn-in labels.** Each step's `turn_in_choice` is a line of the step, for example "Let's find the reeds.", rather than the generic label.
 
 **Not built yet.** Each of these is a later part of V1-34.
-- Chapters 3–5, which need the Settle In interaction (`settle` steps and their cues) and the Flathead and Crater authoring.
-- The collar's later beats, the knot choice scene and the ending, including the book retitle and credits.
+- Chapter 5, which needs the Settle In interaction (`settle` steps and their cues). Chapters 3–4 follow in part 3, below.
+- The ending, including the book retitle and credits.
 - Tools lent for chapter three, and a chapter's visible world changes (the Marked Pool barrier and sign, for instance), which belong to V1-35.
 
 **Tests (`test_story`).** A new save's first step starts only once its chapter is open. Chapter one runs from Pip's hail through turn-ins to Grandmother's, and chapter two on Cedar through Doc's, all by real hails and events. A reload mid-chapter keeps the progress and pays nothing twice. A story step has no time limit, story steps appear in the journal, and no friend's letter is queued for a story giver.
@@ -1606,3 +1606,44 @@ When `pro_06` is done, the prologue is done and chapter one opens: `story.chapte
 - Each scene is interrupted at its first bubble, by quitting, and continued in a new session. It replays from its start, and no step is paid twice.
 - The scenes match `05 §1` bubble for bubble. Bad scenes are rejected.
 - `test_story` now starts from a finished prologue. It adds the collar and the errand-before-reminder checks.
+
+## Implemented chapters 3–4 and the collar beats (V1-34, part 3)
+
+**Chapters 3–4 as authored (`05 §2.3–2.4`, `02 §13`).**
+
+| Step | Cat | Objective | Reward |
+| --- | --- | --- | --- |
+| `story_c3_s1` Huckleberry's Note | Huckleberry | talk to Huckleberry | Thermocline Scanner, lent for the readings |
+| `story_c3_s2` Two Readings | Huckleberry | Bot reports in `flathead:deep` once 06:00–10:00 and once 14:00–18:00 | none |
+| `story_c3_s3` The Cold Layer | Huckleberry | any `cold`-tagged fish from a line in the cold band, on Flathead | Sub shell, the scanner kept, Crater travel |
+| `story_c4_s1` One Question First | Sora | talk to Sora | none |
+| `story_c4_s2` The Fog Marker | Sora | fog then clear, anchored 20 fog minutes in one of the three safe coves; drifting pauses without resetting | none |
+| `story_c4_s3` The Reading | Sora | Bot scouts `crater:survey_marker` | Nebula travel |
+
+**Bot's scenes.**
+- **Where the step ends.** The two "notice" steps end where Bot notices, not at a hail. `story_c3_cold` ("The cold moves.") and `story_c4_clear` ("The marker is visible.") are Bot scenes that turn their step in on the spot.
+- **The knot.** `story_c4_knot` plays at the marker, before the reading. Bot asks for help, and the Skipper chooses one of the three knots. A scene choice may carry a `knot`, validated against `bot.json`, which `botidentity.choose_knot` ties. Then `story_c4_tied` ("It adjusts.") plays. The scene can't be left without a knot.
+- **The speaker.** A scene's speaker may be `bot`, whose name in the panel is his saved name, with no portrait. A scene is read through wherever its speaker is, so the "cat has left" check skips scenes: Bot is never on a lake's roster.
+
+**The collar beats (`02 §13`).**
+- The wool collar is tied when chapter one is turned in (part 2).
+- It slips loose in the mountain wind when chapter three is.
+- It is retied with the chosen knot at the marker.
+- The marker scene counts as the chapter-four scene while it is pending, so `knot_available` accepts `pending`.
+
+**Also.**
+- A story step being turned in is told whole: Huckleberry's Whopper waits for his next hail.
+- A scene's controls no longer offer Esc (B on a gamepad), which part 2 already ignored there.
+
+**Calls made where the script is silent or doesn't fit one node.**
+- **Bot's live reports.** The `[F]`/`[U]` readings and fog reports of `05 §2.3–2.4` are Bot's live reports, which the scanner and weather already give. The steps' progress lines are the hosts'.
+- **Chapter 3's end.** It has five bubbles. Its ready node keeps Huckleberry's two lines and Bot's collar line, and the done node is "Keep the scanner, it's yours…".
+- **Chapter 4's end.** It splits after "I've checked it eleven times." Bot's "a twelfth time" and Sora's last line follow the turn-in.
+- **Sora's question.** Her opening ends at the question about waiting. The Skipper answers "I like waiting.", and her instruction about the coves follows.
+- **The fog wait.** It asks for 20 anchored fog minutes. Crater's fog lifts at 07:00 on Fog Lift mornings (`calendar.json`).
+
+**Tests (`test_story`).**
+- Chapters three and four run from Huckleberry's hail through Sora's turn-in, by real hails, events and scenes. The collar goes from received to loose to retied with the knot chosen.
+- Readings outside their windows, or outside the trench, don't count.
+- Each new scene is interrupted and reloaded. It replays, the knot must be chosen, and every step is paid once.
+- A Bot scene stays open across frames and shows his name. A scene's footer offers no Esc (`test_prologue`).

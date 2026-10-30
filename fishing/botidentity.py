@@ -177,12 +177,14 @@ def knot_available(state):
     chapter = story.get('chapter', 0) if isinstance(story, dict) else 0
     states = story.get('scene_states', {}) if isinstance(story, dict) else {}
     scene = states.get('story_c4_knot') if isinstance(states, dict) else None
-    ready = ((type(chapter) is int and chapter >= 4) or 4 in completed_chapters(story)) and scene in ('ready', 'active', 'done', 'skipped')
+    # The marker scene is pending while it plays (V1-34); older builds wrote ready/active.
+    ready = ((type(chapter) is int and chapter >= 4) or 4 in completed_chapters(story)) and scene in (
+        'pending', 'ready', 'active', 'done', 'skipped')
     return ready and profile(state)['collar'].get('stage') == 'loose'
 
 
-def choose_knot(state, knot_id):
-    """Shared by the landing menu and the future authored marker scene."""
+def choose_knot(state, knot_id, *, toast=True):
+    """Shared by the landing menu and the authored marker scene, which says its own line."""
     if not isinstance(knot_id, str) or knot_id not in BOT_KNOTS:
         return 'Choose a known collar knot.'
     collar = profile(state)['collar']
@@ -191,7 +193,8 @@ def choose_knot(state, knot_id):
     if not knot_available(state) or collar.get('knot') is not None:
         return 'Bot chooses his adjustable knot during chapter 4.'
     collar['knot'], collar['stage'] = knot_id, 'retied'
-    state.toast(name(state) + ': This one. It adjusts.')
+    if toast:
+        state.toast(name(state) + ': This one. It adjusts.')
     return None
 
 

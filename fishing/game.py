@@ -334,12 +334,12 @@ class Session:
             if state.hooked_total > hooked_before:
                 self.sound = "bite"
             self._react_to_nearby_npc()
-            if self.conversation and not any(n.id == self.conversation.npc_id for n in state.npcs):
+            if self._speaker_left():
                 self._close_dialogue()
         else:
             pause_sighting_clock(state)
             self._refresh_npcs()
-            if self.conversation and not any(n.id == self.conversation.npc_id for n in state.npcs):
+            if self._speaker_left():
                 self._close_dialogue()
         if self.world_running():
             if comfort.doze_due(state.v2):
@@ -352,6 +352,13 @@ class Session:
                     self.ui.mode = "needs"
                     self.save()
         state.tick_toasts(dt)
+
+    def _speaker_left(self) -> bool:
+        """A cat who has left ends the conversation. A story scene is read through wherever its
+        speaker is; Bot, who speaks some, is never on the lake's roster (V1-34)."""
+        chat = self.conversation
+        return (chat is not None and not chat.in_scene(self._npc_content)
+                and not any(n.id == chat.npc_id for n in self.state.npcs))
 
     def _react_to_nearby_npc(self):
         npc = nearby_npc(self.state)

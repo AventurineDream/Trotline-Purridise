@@ -357,8 +357,11 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
         done = (status == 'completed' and quest_chain(content, npc.id)[-1:] == [quest_id]
                 and (finished is None or game_day(finished) < game_day(state.game_minutes)))
         replaced = text is not None and done  # the greeting stands in for the return line
-        entry = _tell_story(nodes, state, content, npc.id, quest_id=quest_id,
-                            next_id=None if replaced else entry) or (None if replaced else entry)
+        if quest.get('kind') == 'story' and status == 'ready':
+            pass  # a story beat is told whole; the cat's own story waits for the next hail (V1-34)
+        else:
+            entry = _tell_story(nodes, state, content, npc.id, quest_id=quest_id,
+                                next_id=None if replaced else entry) or (None if replaced else entry)
         if text is not None and (first_line or replaced or ('kind' in quest and status == 'available')):
             entry = _greeting_nodes(nodes, npc.id, text, quest_id=quest_id, next_id=entry)
     else:
@@ -424,6 +427,9 @@ class Conversation:
             elif action == 'turn_in_at_host':
                 if not turn_in_at_host(state, content, choice['quest_id'], self.npc_id):
                     return False
+            elif action == 'scene' and choice.get('knot'):
+                from .botidentity import choose_knot
+                choose_knot(state, choice['knot'], toast=False)  # the scene says it (05 §2.4)
             target = choice['target']
         else:
             target = node['next']

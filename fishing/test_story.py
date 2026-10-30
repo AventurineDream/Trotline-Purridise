@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import numpy as np
+
 from .botidentity import profile
 from .content import load_content
 from .dialogue import nearby_npc, open_conversation, story_heard
@@ -18,7 +20,7 @@ from .sim import State
 from .world import World
 from .test_quests_v2 import centre
 
-STEPS = [f"story_c{c}_s{s}" for c in (1, 2) for s in (1, 2, 3)]
+STEPS = [f"story_c{c}_s{s}" for c in (1, 2, 3, 4) for s in (1, 2, 3)]
 
 
 class Story(unittest.TestCase):
@@ -94,6 +96,33 @@ class Story(unittest.TestCase):
         self.session._close_dialogue()
         self.assertEqual(pending, [], f"{npc_id}: choices not offered")
         return seen
+
+    def press(self, key):
+        self.session.tick(Keys(pressed={key}), 0.05)
+
+    def scene(self, *choices):
+        """The story scene whose moment has come plays at once; read it through. Returns its nodes."""
+        self.press("x")
+        self.assertEqual(self.session.ui.mode, "dialogue", "no scene played")
+        seen, pending = [], list(choices)
+        while self.session.conversation is not None:
+            chat = self.session.conversation
+            seen.append(chat.node_id)
+            node = chat.node(self.content)
+            if "choices" in node:
+                index = next(i for i, c in enumerate(node["choices"]) if c["text"] == pending[0])
+                pending.pop(0)
+                self.press(str(index + 1))
+            else:
+                self.press("c")
+        self.assertEqual(pending, [])
+        return seen
+
+    def reload(self):
+        """Quit (which saves) and continue the save in a new session."""
+        self.session.tick(Keys(quit=True), 0.05)
+        self.state = State.load(self.path, World(self.state.lake_id))
+        self.open_session()
 
     def emit(self, **event):
         event.setdefault("lake_id", self.world.id)
@@ -214,6 +243,184 @@ class Story(unittest.TestCase):
                   active_game_minute=70)
         self.assertEqual(self.status("story_c2_s3"), "ready")
         self.talk("doc_barnaby", "turn_in")
+
+    def at_clock(self, hour):
+        """Move the clock forward to the next given hour of the day (game minute 0 is 06:00)."""
+        minute = (hour - 6) % 24 * 60
+        day = self.state.game_minutes // 1440 + 1
+        self.state.game_minutes = day * 1440 + minute
+
+    def cold_catch(self, **extra):
+        event = dict(type="catch.resolved", species_id="lake_trout", legendary=False, kept=True,
+                     zone_id="flathead:deep", lake_id="flathead", x=0.0, z=0.0, bait_id="minnow", weight_lb=6.0,
+                     catch_hour=9.0, in_cold_band=True)
+        event.update(extra)
+        self.emit(**event)
+
+    def play_chapter_three(self):
+        self.travel("flathead")
+        # Meet: Huckleberry's first hail is the step itself; his Whopper waits (05 §2.3, §4.3).
+        self.assertEqual(self.status("story_c3_s1"), "active")
+        seen = self.talk("captain_huckleberry", "turn_in")
+        self.assertEqual(seen[0], "story_c3_s1:dialogue:ready")
+        self.assertNotIn("captain_huckleberry:story", seen)
+        self.assertIn("thermo_scanner", profile(self.state)["tools"])  # lent for the readings
+        # Notice: one report in the Glacial trench each morning and afternoon window.
+        self.assertEqual(self.status("story_c3_s2"), "active")
+        self.at_clock(8)
+        report = dict(type="bot.scout_complete", zone_id="flathead:deep", depth_class="deep", report_delivered=True,
+                      x=0.0, z=0.0)
+        self.emit(**report)
+        self.emit(**report)  # a second morning report counts once
+        self.assertEqual(self.status("story_c3_s2"), "active")
+        self.at_clock(15)
+        self.emit(**report)
+        self.assertEqual(self.status("story_c3_s2"), "ready")
+        self.assertEqual(self.scene(), ["scene:story_c3_cold"])  # Bot says it on the spot
+        self.assertEqual(self.status("story_c3_s2"), "completed")
+        # Share: a cold-water fish from a line in the cold layer, turned in to Huckleberry.
+        self.cold_catch(in_cold_band=False)
+        self.cold_catch(species_id="smallmouth_bass")
+        self.assertEqual(self.status("story_c3_s3"), "active")
+        self.cold_catch()
+        self.assertEqual(self.status("story_c3_s3"), "ready")
+        self.talk("captain_huckleberry", "turn_in")
+
+    def play_chapter_four(self, knot="Bow"):
+        self.travel("crater")
+        self.talk("sora", "turn_in")
+        self.assertEqual(self.status("story_c4_s2"), "active")
+        cove = self.at("crater:safe_cove_2")
+        sample = dict(type="anchor.sample", lake_id="crater", zone_id="crater:flats", **cove)
+        self.emit(**sample, anchored=True, weather="fog", elapsed_game_minutes=12)
+        self.emit(**sample, anchored=False, weather="fog", elapsed_game_minutes=5)  # drifting pauses, keeps 12
+        self.emit(**sample, anchored=True, weather="fog", elapsed_game_minutes=10)
+        self.assertEqual(self.status("story_c4_s2"), "active")
+        self.emit(**sample, anchored=True, weather_spans=[["fog", 1], ["clear", 15]], elapsed_game_minutes=16)
+        self.assertEqual(self.status("story_c4_s2"), "ready")
+        self.assertEqual(self.scene(), ["scene:story_c4_clear"])
+        self.assertEqual(self.status("story_c4_s3"), "active")
+        self.emit(type="bot.scout_complete", zone_id="crater:open", depth_class="deep", report_delivered=True,
+                  **self.at("crater:survey_marker"))
+        self.assertEqual(self.status("story_c4_s3"), "ready")
+        # At the marker, before the reading: Bot chooses his knot with the Skipper.
+        self.assertEqual(self.scene(knot), ["scene:story_c4_knot", "scene:story_c4_tied"])
+        self.talk("sora", "turn_in")
+
+    def test_chapters_three_and_four_run_to_the_nebula_route(self):
+        self.play_chapter_one()
+        self.play_chapter_two()
+        self.assertEqual(profile(self.state)["collar"]["stage"], "received")
+        self.play_chapter_three()
+        story = self.state.v2["story"]
+        self.assertEqual(story["completed_chapters"], [1, 2, 3])
+        self.assertIn("sub", profile(self.state)["shells"])
+        self.assertIn("travel:crater", self.state.v2["unlocks"])
+        self.assertEqual(profile(self.state)["collar"]["stage"], "loose")  # the mountain wind (05 §2.3)
+        self.play_chapter_four("Sailor's hitch")
+        self.assertEqual(story["completed_chapters"], [1, 2, 3, 4])
+        self.assertEqual(story["chapter"], 5)
+        self.assertIn("travel:nebula", self.state.v2["unlocks"])
+        collar = profile(self.state)["collar"]
+        self.assertEqual((collar["stage"], collar["knot"]), ("retied", "sailors_hitch"))
+        self.assertEqual(self.state.v2["npcs"]["letters"], [])
+        for scene in ("story_c3_cold", "story_c4_clear", "story_c4_knot", "story_c4_tied"):
+            self.assertEqual(self.state.v2["story"]["scene_states"][scene], "done")
+
+    def test_the_new_scenes_replay_after_a_reload_and_pay_once(self):
+        self.play_chapter_one()
+        self.play_chapter_two()
+        self.travel("flathead")
+        self.talk("captain_huckleberry", "turn_in")
+        report = dict(type="bot.scout_complete", zone_id="flathead:deep", depth_class="deep", report_delivered=True,
+                      x=0.0, z=0.0)
+        self.at_clock(8)
+        self.emit(**report)
+        self.at_clock(15)
+        self.emit(**report)
+        self.press("x")
+        self.assertEqual(self.session.conversation.node_id, "scene:story_c3_cold")
+        self.reload()
+        self.assertEqual(self.status("story_c3_s2"), "ready")
+        self.assertEqual(self.scene(), ["scene:story_c3_cold"])
+        self.cold_catch()
+        self.talk("captain_huckleberry", "turn_in")
+        self.travel("crater")
+        self.talk("sora", "turn_in")
+        cove = self.at("crater:safe_cove_1")
+        self.emit(type="anchor.sample", lake_id="crater", zone_id="crater:lilies", anchored=True,
+                  weather_spans=[["fog", 30], ["clear", 5]], elapsed_game_minutes=35, **cove)
+        self.press("x")
+        self.assertEqual(self.session.conversation.node_id, "scene:story_c4_clear")
+        self.reload()
+        self.assertEqual(self.scene(), ["scene:story_c4_clear"])
+        self.emit(type="bot.scout_complete", zone_id="crater:open", depth_class="deep", report_delivered=True,
+                  **self.at("crater:survey_marker"))
+        self.press("x")
+        self.assertEqual(self.session.conversation.node_id, "scene:story_c4_knot")
+        self.press("esc")  # the choice must be made
+        self.assertEqual(self.session.conversation.node_id, "scene:story_c4_knot")
+        self.reload()
+        self.assertIsNone(profile(self.state)["collar"]["knot"])
+        self.assertEqual(self.scene("Square knot"), ["scene:story_c4_knot", "scene:story_c4_tied"])
+        self.talk("sora", "turn_in")
+        self.reload()
+        self.press("x")
+        self.assertIsNone(self.session.conversation)  # every scene is done; nothing replays
+        claims = self.state.narrative.reward_claims
+        self.assertEqual(len(claims), len(set(claims)))
+        self.assertEqual(sorted(q for q in claims if q.startswith(("story_c3", "story_c4"))),
+                         [f"story_c{c}_s{s}" for c in (3, 4) for s in (1, 2, 3)])
+        self.assertEqual(profile(self.state)["collar"]["knot"], "square")
+        self.assertEqual(self.state.v2["story"]["completed_chapters"], [1, 2, 3, 4])
+
+    def test_a_scene_is_not_restarted_while_it_is_read(self):
+        # Bot is never on a lake's roster; his scenes must not close and replay each frame.
+        self.play_chapter_one()
+        self.play_chapter_two()
+        self.play_chapter_three()
+        self.travel("crater")
+        self.state.narrative.quest("story_c4_s1")  # under way since chapter four opened
+        progress = self.state.narrative.quests["story_c4_s3"]
+        progress.status = "ready"
+        self.press("x")
+        chat = self.session.conversation
+        self.assertEqual(chat.node_id, "scene:story_c4_knot")
+        # He speaks it in his own name, with no cat's portrait.
+        from .botidentity import name
+        from .platform import Text
+        from .ui import UI
+        text = Text()
+        self.addCleanup(text.close)
+        renderer, drawn = UI(text, self.world), []
+        renderer._text = lambda frame, s, *args, **kw: drawn.append(s)
+        renderer._blit_rgb = lambda *args: self.fail("a portrait for Bot")
+        renderer._dialogue(np.zeros((720, 1280, 3), np.uint8), self.state, self.session.ui)
+        self.assertEqual(drawn[0], name(self.state))
+        self.session.tick(Keys(), 0.05)
+        self.assertIs(self.session.conversation, chat)  # not closed and reopened from its start
+        self.press("2")  # "Bow"
+        self.assertEqual(chat.node_id, "scene:story_c4_tied")
+        self.session.tick(Keys(), 0.05)
+        self.assertIs(self.session.conversation, chat)
+        self.assertEqual(self.state.v2["story"]["scene_states"]["story_c4_knot"], "done")
+        self.press("c")
+        self.assertIsNone(self.session.conversation)
+        self.assertEqual(self.state.v2["story"]["scene_states"]["story_c4_tied"], "done")
+
+    def test_a_reading_outside_its_window_does_not_count(self):
+        self.play_chapter_one()
+        self.play_chapter_two()
+        self.travel("flathead")
+        self.talk("captain_huckleberry", "turn_in")
+        report = dict(type="bot.scout_complete", zone_id="flathead:deep", depth_class="deep", report_delivered=True,
+                      x=0.0, z=0.0)
+        for hour in (12, 20, 3):  # midday, evening and night readings
+            self.at_clock(hour)
+            self.emit(**report)
+        self.at_clock(9)
+        self.emit(**{**report, "zone_id": "flathead:open"})  # a morning reading, but not in the trench
+        self.assertEqual(self.status("story_c3_s2"), "active")
 
     def test_chapter_two_runs_on_cedar_and_opens_the_flathead_route(self):
         self.play_chapter_one()
