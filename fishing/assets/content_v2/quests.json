@@ -1810,6 +1810,73 @@
       }
     },
     {
+      "id": "story_c0_s1",
+      "kind": "story",
+      "giver_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "title": "Her Old Boat",
+      "objective": {
+        "type": "line_set",
+        "area_id": "briar:landing_edge"
+      },
+      "journal": "Story — Set a trotline (F) anywhere near the landing.",
+      "reward": {},
+      "lines": {
+        "offer": "Let's get you a line in the water before the tea goes cold.",
+        "progress": "Anywhere near the landing will do, dear. The tea will keep.",
+        "done": "Good. Now we wait, which is most of fishing."
+      }
+    },
+    {
+      "id": "story_c0_s2",
+      "kind": "story",
+      "giver_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "title": "Most of Fishing",
+      "objective": [
+        {
+          "type": "scout_report",
+          "lake_id": "briar"
+        },
+        {
+          "type": "catch_species",
+          "any": true,
+          "lake_id": "briar"
+        }
+      ],
+      "journal": "Story — Send Bot to scout (B), then check your line (E) for your first catch.",
+      "reward": {},
+      "requires": {
+        "quest": "story_c0_s1"
+      },
+      "lines": {
+        "offer": "Bot, would you show {Skipper} how you scout?",
+        "progress": "Let Bot have a look around, dear. Then see what your line has for you.",
+        "done": "Oh, look at that. Your first one."
+      }
+    },
+    {
+      "id": "story_c0_s3",
+      "kind": "story",
+      "giver_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "title": "The Old Fish Book",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "grandmother_whiskers"
+      },
+      "journal": "Story — Come inside the landing and talk to Grandmother Whiskers.",
+      "reward": {},
+      "requires": {
+        "quest": "story_c0_s2"
+      },
+      "lines": {
+        "offer": "Come inside a moment, dear.",
+        "progress": "Come inside a moment, dear. The book's on the counter.",
+        "done": "Then write small, dear."
+      }
+    },
+    {
       "id": "story_c1_s1",
       "kind": "story",
       "giver_id": "pip_pebble",
@@ -2393,6 +2460,86 @@
         "greeting": "Ahoy, Skipper! Forty years on riverboats, and you know what I learned? Slow turns win.",
         "offer": "Take a long, easy run across the open water with me. Your own pace. I want to see how you hold a line."
       }
+    }
+  ],
+  "scenes": [
+    {
+      "id": "pro_01",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "There you are, dear. Mind the third plank; it likes to squeak. And this must be your deckhand.",
+        "Bot: Deckhand Unit 04. The plate says {BotName}. Hello.",
+        "{BotName}. What a fine, shiny name."
+      ],
+      "next": "pro_02"
+    },
+    {
+      "id": "pro_02",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "This was my old boat. She's slow, but she's honest. Let's get you a line in the water before the tea goes cold."
+      ],
+      "next": null
+    },
+    {
+      "id": "pro_03",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "Good. Now we wait, which is most of fishing. Bot, would you show {Skipper} how you scout?",
+        "Bot: Scouting means I go and look. Then I tell you what I saw. I like it very much."
+      ],
+      "next": null
+    },
+    {
+      "id": "pro_04",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "Oh, look at that. Your first one. Every fish here has a story, you know. Come inside a moment."
+      ],
+      "next": null
+    },
+    {
+      "id": "pro_05",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "This is the landing's old fish book. My grandmother started it. Anyone who ever tied up here wrote in it.",
+        "It's mostly stories. Some are true. Some are very true. The last pages are empty.",
+        "Would you carry it for a while? Bring back one useful new note from each water. Not the biggest fish. A useful note."
+      ],
+      "choices": [
+        {
+          "text": "I'd love to.",
+          "next": "pro_06"
+        },
+        {
+          "text": "What kind of note?",
+          "next": "pro_05b"
+        }
+      ]
+    },
+    {
+      "id": "pro_05b",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "The kind that helps the next cat. Where the fish really are, when the weed moves, which way the mist goes. You'll know it when you find it."
+      ],
+      "next": "pro_06"
+    },
+    {
+      "id": "pro_06",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "Bot: There is a pencil in the spine. It is very short.",
+        "Then write small, dear. Pip and Pebble were asking for you out on the flats. They have a map with a hole in it."
+      ],
+      "next": null
     }
   ]
 }

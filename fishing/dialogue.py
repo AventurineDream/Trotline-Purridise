@@ -47,8 +47,11 @@ def _v3_reward(content, quest_id: str):
 
 def _claim_and_pay(state, content, quest_id: str) -> bool:
     """Latch the claim, then credit every reward kind in the same save (06 §3.3)."""
-    from .quests import apply_reward
+    from .quests import apply_reward, claim_story_step
     definition = content.quests[quest_id]
+    if definition.get('kind') == 'story':
+        # A story step is not a side quest: no friend's letter, and the chapter may finish (V1-34).
+        return claim_story_step(state, content, quest_id)
     if 'kind' not in definition:
         reward = _v3_reward(content, quest_id)
         if reward is None or not state.narrative.record_reward_claim(quest_id, state.game_minutes):
@@ -66,12 +69,6 @@ def _claim_and_pay(state, content, quest_id: str) -> bool:
         if not state.narrative.record_reward_claim(quest_id, state.game_minutes):
             return False
         apply_reward(state, definition['reward'])
-    if definition.get('kind') == 'story':
-        # A story step is not a side quest: no friend's letter, and the chapter may finish (V1-34).
-        from .quests import autostart_story, finish_story_step
-        finish_story_step(state, quest_id)
-        autostart_story(state, content)
-        return True
     queue_letter(state, content, definition['giver_id'])
     return True
 
@@ -280,6 +277,14 @@ def _tell_story(nodes, state, content, npc_id, *, quest_id=None, next_id=None) -
     return first
 
 
+def enter_node(state, node) -> None:
+    """A node is on screen: a story part counts as heard, and a scene begins (pending)."""
+    _hear_story(state, node)
+    if isinstance(node, dict) and node.get('scene_start'):
+        from .story import start_scene
+        start_scene(state, node['scene_start'])
+
+
 def _hear_story(state, node) -> None:
     """Record a story part once its first bubble is on screen."""
     from .quests import game_day
@@ -295,14 +300,20 @@ def _hear_story(state, node) -> None:
 def open_conversation(npc, state, content, *, first: bool = False, world=None):
     """What hailing this cat opens, or None when they only wave (V1-31).
 
-    In order: Pounce's letter; a host's offer to take other cats' finished quests;
-    a giver acknowledging a turn-in their host took; then the cat's current quest.
+    In order: a story scene of theirs (V1-34); Pounce's letter; a host's offer to take
+    other cats' finished quests; a giver acknowledging a turn-in their host took; then
+    the cat's current quest. A story step comes first, except that the cat's own
+    finished errand is handed in before the story's progress line.
     A greeting (05 §4) opens a first meeting before anything else and comes before a
     V1.0 offer. Once the cat's quests are all done, the return line answers the last
     turn-in for the rest of that game day, and the greeting takes over from the next.
     A cat with a story tells its next part after the greeting, one part a game day.
     """
     from .quests import chain as quest_chain, current_quest, game_day, quest_status, story_focus
+    from .story import hail_scene, scene_conversation
+    scene_id = hail_scene(state, content, npc.id)
+    if scene_id is not None:
+        return scene_conversation(state, content, scene_id)
     if npc.id == 'pounce':
         letter = next_letter(state, content)
         if letter is None:
@@ -325,7 +336,13 @@ def open_conversation(npc, state, content, *, first: bool = False, world=None):
                 and progress.turned_in_by is not None and not progress.acknowledged):
             progress.acknowledged = True
             return Conversation(npc.id, quest_id, quest['dialogue']['completed'])
-    quest_id = story_focus(state, content, npc.id) or current_quest(state, content, npc.id)
+    quest_id = story_focus(state, content, npc.id, progress_lines=False)
+    if quest_id is None:
+        own = current_quest(state, content, npc.id)
+        if own is not None and quest_status(state, own) == 'ready':
+            quest_id = own  # their own finished errand before the story's reminder (V1-34)
+        else:
+            quest_id = story_focus(state, content, npc.id) or own
     if quest_id is None and npc.quest_id in content.quests:
         quest_id = npc.quest_id  # a V3 cat outside the roster, as in older tests
     entry = None
@@ -370,8 +387,14 @@ class Conversation:
     quest_id: str | None
     node_id: str
     selected: int = 0
-    # Runtime nodes (greetings, host turn-ins, letters) laid over the authored graph.
+    # Runtime nodes (greetings, host turn-ins, letters, scenes) laid over the authored graph.
     nodes: dict = field(default_factory=dict)
+    # Set when a story scene is done, so the session saves its effects at once (06 §3.3).
+    finished_scene: bool = False
+
+    def in_scene(self, content) -> bool:
+        """A story scene is on screen; it can't be left half-read (V1-34)."""
+        return bool(self.node(content).get('scene'))
 
     @classmethod
     def start(cls, npc, state, content):
@@ -404,10 +427,17 @@ class Conversation:
             target = choice['target']
         else:
             target = node['next']
+        if node.get('scene_end'):
+            from .story import finish_scene
+            if finish_scene(state, content, node['scene_end']):
+                self.finished_scene = True
         if target is None:
             return False
         self.node_id = target
-        self.quest_id = self.node(content).get('quest_id') or self.quest_id
+        entered = self.node(content)
+        self.quest_id = entered.get('quest_id') or self.quest_id
+        if entered.get('scene'):
+            self.npc_id = entered['speaker_id']  # a chained scene speaks in its own voice (V1-34)
         self.selected = 0
-        _hear_story(state, self.node(content))
+        enter_node(state, entered)
         return True
