@@ -32,6 +32,8 @@ class Key:
     bars: float = 0.0                 # letterbox, 0..1
     mist: float | None = None         # the visual mist, overriding the weather's
     hour: float | None = None         # the light's hour of day, overriding the clock's
+    whale: float | None = None        # how far the Star-Whale has risen (`finale.py`), 0..1
+    sketch: float | None = None       # how much of the Skipper's drawing is on the page, 0..1
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,22 @@ STAGES = {
         Key(2.0, (2.5, 1.9, 0.8, -0.18, -0.10), bars=1.0),
         Key(12.0, (1.6, 1.7, 0.5, -0.12, -0.08), bars=1.0),
     ), hold=True),
+    # 05 §2.5: the Star-Whale rises out of the deep glow ahead, and the view lifts with it. It
+    # holds, risen, until the Skipper draws it.
+    "story_c5_whale": Stage("boat", (
+        Key(0.0, (0.0, EYE, 0.0, 0.0, -0.06), bars=1.0, whale=0.0),
+        Key(2.0, (0.0, EYE, 0.0, 0.0, -0.04), bars=1.0, whale=0.12),
+        Key(6.5, (0.0, EYE - 0.1, 0.0, 0.0, 0.10), bars=1.0, whale=0.85),
+        Key(9.0, (0.0, EYE - 0.1, 0.0, 0.0, 0.07), bars=1.0, whale=1.0),
+    ), hold=True),
+    # "Draw it": the drawing appears stroke by stroke while the whale floats; then it sinks
+    # unhurried, after the Skipper is free to sail again.
+    "story_c5_drawn": Stage("boat", (
+        Key(0.0, None, bars=1.0, whale=1.0, sketch=0.0),
+        Key(3.0, None, bars=1.0, whale=1.0, sketch=1.0),
+        Key(24.0, None, bars=0.0, whale=1.0, sketch=1.0),
+        Key(30.0, None, bars=0.0, whale=0.0, sketch=1.0),
+    )),
     # The credits roll over the boat at dawn (05 §3): a slow pull back and up.
     "credits": Stage("boat", (
         Key(0.0, (5.0, 2.6, 0.0, 0.0, -0.18), fade=1.0, bars=1.0, hour=6.4),
@@ -132,7 +150,7 @@ def sample(clock: Clock | None, *, reduced: bool = False) -> dict | None:
         return None
     a, b, k = _span(clock.stage, clock.t)
     out = {"fade": _mix(a.fade, b.fade, k), "bars": _mix(a.bars, b.bars, k)}
-    for name in ("mist", "hour"):
+    for name in ("mist", "hour", "whale", "sketch"):
         va, vb = getattr(a, name), getattr(b, name)
         if va is not None or vb is not None:
             out[name] = _mix(va if va is not None else vb, vb if vb is not None else va, k)
@@ -141,15 +159,20 @@ def sample(clock: Clock | None, *, reduced: bool = False) -> dict | None:
         for name in ("mist", "hour"):  # the light settles at once; nothing drifts
             if getattr(last, name) is not None:
                 out[name] = getattr(last, name)
+        for name in ("whale", "sketch"):  # the whale is simply there, and the drawing complete
+            values = [getattr(key, name) for key in clock.stage.keys if getattr(key, name) is not None]
+            if values:
+                out[name] = max(values)
     return out
 
 
 def light_overrides(clock: Clock | None, *, reduced: bool = False) -> dict | None:
-    """What `weather.lighting_at` should use instead of the clock and the weather."""
+    """What the renderers draw differently: `weather.lighting_at`'s mist and hour, and the
+    Star-Whale (`finale.faces`)."""
     values = sample(clock, reduced=reduced)
     if not values:
         return None
-    light = {name: values[name] for name in ("mist", "hour") if name in values}
+    light = {name: values[name] for name in ("mist", "hour", "whale") if name in values}
     return light or None
 
 
