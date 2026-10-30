@@ -22,6 +22,9 @@ class Camera:
         self.h = int(h)
         self.build_rays = bool(build_rays)
         self.eye = np.array([self.x, self.y, self.z], dtype=np.float32)
+        # The camera the boat and the Skipper's paws ride with. None is this one, as in play;
+        # a staged story view (V1-35) sets the Skipper's own, so the boat stays where it floats.
+        self.boat = None
         self._build()
 
     def _build(self):
@@ -71,6 +74,12 @@ class Camera:
         self._sp = float(sp)
         self._cr = float(cr)
         self._sr = float(sr)
+
+    def eye_to_world(self, pts: np.ndarray) -> np.ndarray:
+        """Points in this camera's level eye frame (x right, y up, z ahead) in world space."""
+        pts = np.asarray(pts, dtype=np.float32)
+        return (self.eye + pts[..., 0:1] * self.right + pts[..., 1:2] * self.up
+                + pts[..., 2:3] * self.forward).astype(np.float32)
 
     def world_to_cam(self, pts: np.ndarray) -> np.ndarray:
         v = np.asarray(pts, dtype=np.float32) - self.eye

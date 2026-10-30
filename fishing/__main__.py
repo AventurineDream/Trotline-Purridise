@@ -53,6 +53,10 @@ def main(argv: list[str] | None = None) -> int:
             from .nebulashots import shots as nebula_shots
             nebula_shots(dest, software="--software" in argv)
             return 0
+        if "--story" in argv:
+            from .storyshots import shots as story_shots
+            story_shots(dest, software="--software" in argv)
+            return 0
         if "--caldera" in argv:
             from .calderashots import shots as caldera_shots
             caldera_shots(dest, software="--software" in argv)

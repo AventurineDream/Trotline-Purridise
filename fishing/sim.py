@@ -563,6 +563,8 @@ class State:
     splash_anim: float = -100.0
     # The Skipper's paws pull the line while the haul screen is up. Not saved.
     hauling: bool = field(default=False, repr=False, compare=False)
+    # A story scene's staged light (V1-35): {"mist": 0..1, "hour": h}. Not saved.
+    stage_light: dict | None = field(default=None, repr=False, compare=False)
     # Brief visual only; guardian_seen is the persisted encounter latch.
     guardian_sighting_pending: bool = field(default=False, repr=False, compare=False)
     guardian_sighting_started_at: float | None = field(default=None, repr=False, compare=False)
