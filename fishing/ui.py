@@ -738,6 +738,9 @@ class UI:
         node = (chat.node(ui.dialogue_content) if hasattr(chat, "node")
                 else ui.dialogue_content.dialogue[chat.node_id])
         name = ui.dialogue_content.name(chat.npc_id)
+        if chat.npc_id == "bot":
+            from .botidentity import name as bot_name
+            name = bot_name(state)  # Bot speaks a story scene in his own name (V1-34)
         h, w = frame.shape[:2]
         size = self._size(frame, "small")
         cw, ch = self.cell(size)
@@ -767,6 +770,10 @@ class UI:
         if not choices:
             foot = self._controls(ui, "C / Enter / Space continue    Esc leave    H Help",
                                   "A continue    B leave    RB continue")
+        if node.get('scene'):  # a story scene is read through; Esc does not leave it (V1-34)
+            foot = (self._controls(ui, "W/S or arrows choose / Enter Space C select / H Help",
+                                   "D-pad choose / A select / RB continue") if choices
+                    else self._controls(ui, "C / Enter / Space continue    H Help", "A continue    RB continue"))
         footer = textwrap.wrap(foot, cols)
         height = (len(rows) + len(footer) + 2) * (ch + 3) + margin*2
         if portrait is not None:
