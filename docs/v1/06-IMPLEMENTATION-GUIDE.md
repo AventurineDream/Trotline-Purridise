@@ -1688,7 +1688,7 @@ The Zero-G Winch is unlocked for sale by the Astral shell, as the Duck shell unl
 
 ## Implemented story staging, part 1 (V1-35)
 
-V1-35 (#63) stages the story's scenes: their cameras, fades and light. This part builds the staging timeline and stages four moments. The Settle In cues, the Star-Whale and "Draw it" (part 2), and the book, collar and knot vignettes (part 3) follow.
+V1-35 (#63) stages the story's scenes: their cameras, fades and light. This part builds the staging timeline and stages four moments. The Settle In cues, the Star-Whale and "Draw it" are part 2 (below), and the book, collar and knot vignettes part 3.
 
 **The timeline (`staging.py`).** A staged scene plays keyframes on a clock that starts with its first bubble. Each key sets a view about an anchor (the boat, or the boat facing a waypoint), a fade to black, a letterbox, and optionally the light's mist and hour. Values ease between keys, and a view of `None` is the Skipper's own.
 - **Hand-back.** When the clock passes the last key, the Skipper's view and HUD return. The credits and the ending hold their last key instead.
@@ -1729,3 +1729,44 @@ V1-35 (#63) stages the story's scenes: their cameras, fades and light. This part
 - Reduced Motion never moves the camera.
 - In a session: a new game stages the arrival, and a replay can be skipped with Esc but its bubbles can't. A first showing can't be skipped, and Help pauses the staging. A scene read early plays out quickly.
 - An unstaged frame is pixel-identical to before. A pulled-back view still sees the boat's bow on screen.
+
+## Implemented the Settle In finale's staging, part 2 (V1-35)
+
+This part stages the finale (`02 §13.5`, `05 §2.5`): the three Settle In cues on the water, the Star-Whale rising, and "Draw it" drawn stroke by stroke.
+
+**The cues, seen with no sound (`finale.py`).** Each cue is a caption (Bot's line, as before), a count in the HUD prompt ("2 of 3"), and a change in the water around the boat:
+
+| Cue | At | On the water |
+| --- | --- | --- |
+| The stars stop rippling | 15 s | The Lagoon turns mirror-still: `caldera.reflection_strength` gives the Lagoon `finale.settle_still`, which both renderers already read to calm and mirror the water |
+| The lilies drift together | 30 s | Eight glowing star-lilies close in from 26 m to 7 m around a point 9 m ahead of the bow |
+| A deep glow rises | 45 s | A glow spreads under the water 22 m ahead, 9 m across |
+
+- **Saved progress.** The cues follow the saved Settle In progress, so a reload shows the same water. They show while the settle step is under way or ready (the whale's scenes), and fade out between 200 m and 260 m from the reflection. Once the whale is drawn the Lagoon is itself again.
+- **Drawn by both renderers.** The lilies, the glow and the whale are world-space emissive faces, added to the Lagoon's ambient motes. They stay inside `ambient.MAX_FACES` with the motes: discs are fans of quads, and every cue with the whale is at most 89 faces.
+
+**The Star-Whale (`story_c5_whale`).** It rises out of the glow, side-on across the view, over 9 s. It breaches nose-up and arcs to rest 1.6 m over the water. It is starlit blue, with stars along the flank the Skipper sees. The view lifts with it, and it holds, risen, until the Skipper draws it.
+
+**"Draw it" (`story_c5_drawn`).**
+- **The drawing.** The Skipper's drawing appears on a book page beside the dialogue over 3 s, stroke by stroke: the back, the belly, the flukes, the eye, then the stars (`finale.SKETCH`).
+- **The whale sinks.** It stays risen for 24 s, then sinks over 6 s. A scene read early lets that play out in play, four times faster, so the whale sinks unhurried after the Skipper is free to sail.
+- **Staying early.** If the Skipper stays before the drawing is done, the page stays on screen in play until it is finished.
+- **The trip home** leaves the staging behind: `_travel_to` drops it.
+
+**Reduced Motion.** The whale is simply there, risen, and the drawing appears complete. Fades and the letterbox stay.
+
+**Timing.** The whale's two bubbles (30 words) take about 10 s to read, past the 9 s rise. "Bot: That is a useful note." takes about 2 s, and the drawing completes in 3 s.
+
+**Shots.** `--shots <dir> --story` adds:
+- `story-settle-in-0..3.png`: the HUD and water before, and at each cue, with its caption;
+- `story-star-whale-*.png`;
+- `story-draw-it-*.png`.
+
+`story-staging.json` records each cue frame's look.
+
+**Tests (`test_staging`, `Finale`).**
+- Each cue shows when it is reached. The cues belong to the reflection and the step.
+- The first cue stills the water through `reflection_strength`, and Crater's clear-night mirror is unchanged.
+- The lilies, glow and whale are drawn on the Lagoon only. The whale rises and holds, and the drawing only adds strokes.
+- Reduced Motion shows the whale and the drawing whole.
+- Played through: the whale scene stages its rise, "Draw it" shows the drawing, and the trip home leaves the staging behind.
