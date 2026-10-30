@@ -1530,3 +1530,38 @@ V1-33 does for the three later lakes what V1-32 did for Briar and Cedar. It tran
   - Ember's and Juno's quests B wait for their chapters, and the Frog-shell and night-catch filters must hold until their last event.
   - Every authored V1.0 node is shown, except those two silent progress lines. A reload pays nothing.
 - **Systems.** A story is told one part a game day, after the greeting, survives a reload and ends. A line check with no soak time counts a check a moment after the set. The validator rejects a one-part story and a traveler's story.
+
+## Implemented story spine, chapters 1–2 (V1-34, part 1)
+
+V1-34 (#62) is the story: a prologue, five chapters, the Settle In finale and the ending. This part builds the story engine and chapters 1–2. The rest is listed at the end of this section.
+
+**Shape.** Each chapter is three steps, *meet → notice → share* (`01 §5`). A step is a `story`-kind quest row with id `story_c<chapter>_s<step>`, and its `journal` reads "Story — …".
+
+- **Starting.** A step starts by itself. It is never offered or declined, once its chapter is the current one (`story.chapter`) and its `requires` are met. The prologue will open chapter one. Until then, no step starts, so existing saves and older suites are unchanged.
+- **Finishing a chapter.** Turning in step three completes the chapter: `story.completed_chapters` gains its number, and `story.chapter` moves to the next. Turn-ins of story steps never queue a friend's letter.
+- **Conversation.** A cat's story takes precedence over their own side quest, with one exception: a host's turn-in menu still comes first. Their own errand comes back on the next hail, once the story step is done.
+- **Rewards.** Quest rewards gain `tools`, applied through `botidentity.grant_tool`. The Reed Anchor, for example, is granted at chapter one's second step.
+
+**Chapters 1–2 as authored (`content_v2/quests.json`).**
+
+| Step | Cat | Objective | Reward |
+| --- | --- | --- | --- |
+| `story_c1_s1` Map With a Hole in It | Pip & Pebble | talk to Pip | none |
+| `story_c1_s2` Reed Scouts | Pip & Pebble | Bot scouts 3 reed-edge points, any order | Reed Anchor (tool) |
+| `story_c1_s3` A Useful Note | Grandmother | catch any fish in `briar:reeds` | Frog shell, Reed Passage chart |
+| `story_c2_s1` The Missing Jug | Doc Barnaby | talk to Doc | none |
+| `story_c2_s2` Following the Drift | Doc Barnaby | visit the 3 drift buoys in order | none |
+| `story_c2_s3` The Marked Pool | Doc Barnaby | premium-or-heavy line in the Marked Pool, 60 active minutes | Duck shell, Flathead travel |
+
+**Calls made where the script is silent or doesn't fit one node:**
+- **Speakers.** A node has one speaker, the step's giver. Where a node carries a second voice, the line is prefixed with the speaker, as in "Pebble: Frogs live in the reeds." or "Bot: It is warm." The portrait stays the giver's.
+- **Trimmed lines.** Chapter 2's `05 §2.2` has four bubbles at the end, and a node holds at most three. Bot's "I am a duck now" line is dropped.
+- **Turn-in labels.** Each step's `turn_in_choice` is a line of the step, for example "Let's find the reeds.", rather than the generic label.
+
+**Not built yet.** Each of these is a later part of V1-34.
+- The prologue (`pro_01`–`pro_06`), which opens chapter one and gives the Skipper the book.
+- Chapters 3–5, which need the Settle In interaction (`settle` steps and their cues) and the Flathead and Crater authoring.
+- The collar beats, the knot choice scene and the ending, including the book retitle and credits.
+- Tools lent for chapter three, and a chapter's visible world changes (the Marked Pool barrier and sign, for instance), which belong to V1-35.
+
+**Tests (`test_story`).** A new save's first step starts only once its chapter is open. Chapter one runs from Pip's hail through turn-ins to Grandmother's, and chapter two on Cedar through Doc's, all by real hails and events. A reload mid-chapter keeps the progress and pays nothing twice. A story step has no time limit, story steps appear in the journal, and no friend's letter is queued for a story giver.

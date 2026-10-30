@@ -542,7 +542,7 @@ LINE_PLACEHOLDERS = {"BotName", "Skipper", "lake", "fish", "depth_ft", "zone"}
 GREETING_STATES = ({"stranger", "acquaintance", "friend", "first", "day", "cookout"}
                    | {f"after_ch{n}" for n in range(1, 6)} | {f"weather:{w}" for w in WEATHER_STATES})
 UNLOCK_KINDS = {"travel", "chart", "area", "shop"}
-REWARD_FIELDS = {"cash", "ripple_id", "keepsake_id", "recipes", "dish_cards", "items", "shells", "unlocks"}
+REWARD_FIELDS = {"cash", "ripple_id", "keepsake_id", "recipes", "dish_cards", "items", "shells", "unlocks", "tools"}
 _V2_RIPPLES = {f"ripple_{n}" for n in range(11, 45)}
 _QUEST_REFERENCE_FILES = {"species.json", "baits.json", "lakes.json", "pantry.json", "dishes.json", "bot.json",
                           "legendaries.json", "npcs.json", "ripples.json", "keepsakes.json"}
@@ -1925,6 +1925,8 @@ class _ContentV2Validator:
             self.reward_items(filename, where + ".items", reward["items"], refs)
         if "shells" in reward:
             self.id_list(filename, where + ".shells", reward["shells"], set(refs.shells) - {"tin"})
+        if "tools" in reward:
+            self.id_list(filename, where + ".tools", reward["tools"], set(refs.tools))
         if "unlocks" in reward:
             for i, unlock in enumerate(self.id_list(filename, where + ".unlocks", reward["unlocks"], None)):
                 kind_of, _, target = unlock.partition(":")
