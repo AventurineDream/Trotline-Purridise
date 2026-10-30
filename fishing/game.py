@@ -14,6 +14,7 @@ from .quests import QuestManager, autostart_story, scene_state
 from .dialogue import nearby_npc, open_conversation, record_hail
 from .story import (begin_prologue, due_scene, scene_conversation, settle_near, settle_progress, settle_spot,
                     settle_step_active, settle_tick)
+from . import staging
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
 from .data import BAITS, BAIT_BY_ID, SPECIES, hour_of_day
@@ -133,6 +134,14 @@ class Session:
         self.ui.dialogue_content = self._npc_content
         self._npc_key = None
         self._refresh_npcs()
+        self.stage = None  # the story staging under way (V1-35)
+        self._replays = self._saved_pending()
+
+    def _saved_pending(self) -> set:
+        """Scenes (and the credits) left pending in the save: they replay, and can be skipped."""
+        story = self.state.v2.get("story", {}) if isinstance(self.state.v2, dict) else {}
+        states = story.get("scene_states", {}) if isinstance(story, dict) else {}
+        return {sid for sid, st in states.items() if st == "pending"} if isinstance(states, dict) else set()
 
     def tick(self, keys, dt: float) -> None:
         self.sound = None
@@ -164,7 +173,48 @@ class Session:
         self._simulate(keys, dt, driving_presses)
         self._tick_settle(dt)
         self._play_due_scene()
+        self._tick_stage(dt)
         self._tick_caption(dt)
+
+    def _tick_stage(self, dt: float) -> None:
+        """Run the staging of the story scene, or the credits, on screen (V1-35)."""
+        scene = None
+        if self.ui.mode == "credits":
+            scene = "credits"
+        elif self.ui.mode == "dialogue" and self.conversation is not None:
+            scene = self.conversation.node(self._npc_content).get("scene")
+        stage_id = staging.stage_of(scene)
+        clock = self.stage
+        if self.ui.mode == "help" and clock is not None:
+            pass  # Help pauses the staging, and returns to it
+        elif stage_id is None and clock is not None and not clock.over and not clock.stage.hold \
+                and self.ui.mode == "play":
+            # A scene read before its staging is done: the rest plays out quickly, so the fog
+            # thins and the view comes home instead of cutting.
+            clock.t = min(clock.stage.duration, clock.t + dt * staging.RELEASE)
+        elif stage_id is None:
+            self.stage = None
+        elif self.stage is None or self.stage.stage_id != stage_id:
+            self.stage = staging.Clock(stage_id, repeat=scene in self._replays)
+        elif self.focused:
+            self.stage.t += dt
+        reduced = bool(self.state.v2.get("settings", {}).get("reduced_motion", False))
+        self.ui.stage_fx = staging.sample(self.stage, reduced=reduced)
+        self.ui.stage_skip = self.stage_skippable()
+        self.ui.credits_rise = staging.credits_rise(self.stage, reduced=reduced)
+        self.state.stage_light = staging.light_overrides(self.stage, reduced=reduced)
+
+    def stage_skippable(self) -> bool:
+        """A scene replayed from the save can skip the rest of its staging (V1-35)."""
+        clock = self.stage
+        return clock is not None and clock.repeat and clock.t < clock.stage.duration
+
+    def _skip_stage(self, keys) -> bool:
+        """Esc (B) skips a replayed scene's staging to its last frame; reading keys still read."""
+        if "esc" not in keys.pressed or not self.stage_skippable():
+            return False
+        self.stage.t = self.stage.stage.duration
+        return True
 
     def _play_due_scene(self) -> None:
         """A story scene whose moment has come plays as soon as the Skipper is free (V1-34).
@@ -570,6 +620,7 @@ class Session:
             state.v2["profile"]["collar"]["visible"] = previous.get("collar_visible", True)
             begin_prologue(state)
             self.state = state
+            self._replays = set()
             self._attach_quest_manager()
             self._title_catchup_pending = False
             self.ui = UIState(mode="play", input_device=self.ui.input_device,
@@ -687,6 +738,8 @@ class Session:
 
     def _dialogue_keys(self, keys, dt):
         chat = self.conversation
+        if self._skip_stage(keys):
+            return
         if "esc" in keys.pressed and not (chat is not None and chat.in_scene(self._npc_content)):
             # A story scene is read through; closing the game mid-scene replays it (V1-34).
             self._close_dialogue()
@@ -1721,7 +1774,8 @@ def _play_starlight(platform, session, source, destination, start, end, reduced)
 def _camera(renderer: Renderer, session: Session):
     state = session.state
     if session.ui.mode != "title":
-        return renderer.camera_for(state)
+        reduced = bool(state.v2.get("settings", {}).get("reduced_motion", False))
+        return staging.staged_camera(renderer, state, session.stage, reduced=reduced)  # V1-35
     settings = state.v2.get("settings", {}) if isinstance(state.v2, dict) else {}
     reduced_motion = bool(settings.get("reduced_motion", False))
     yaw = state.yaw if reduced_motion else state.yaw + math.sin(state.anim * 0.12) * 0.55

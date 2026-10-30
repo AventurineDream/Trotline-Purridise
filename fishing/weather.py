@@ -122,7 +122,15 @@ def frame_light(hour: float, weather: str, conditions: dict | None = None) -> di
 def lighting_at(game_minutes: float, state=None) -> dict:
     from .calendar import weather_at as planned
     weather = weather_at(game_minutes) if state is None else planned(state, game_minutes)
-    light = frame_light(hour_of_day(game_minutes), weather, weather_visuals(game_minutes, state))
+    conditions = weather_visuals(game_minutes, state)
+    hour = hour_of_day(game_minutes)
+    staged = getattr(state, "stage_light", None)
+    if staged:  # a story scene's light (V1-35): the fog lifting, or the credits' dawn
+        if "mist" in staged:
+            fog, k = _WEATHER["fog"], min(1.0, max(0.0, float(staged["mist"])))
+            conditions = {key: value * (1 - k) + fog[key] * k for key, value in conditions.items()}
+        hour = float(staged.get("hour", hour))
+    light = frame_light(hour, weather, conditions)
     if state is not None:
         from .lakes import LAKES
         environment = LAKES[state.lake_id].get("environment")
@@ -131,7 +139,7 @@ def lighting_at(game_minutes: float, state=None) -> dict:
             special = lake_day(state.lake_id, game_minutes)
             # Meteor Shower's sky show (03 §8) fills the Wednesday night sky.
             light["meteors"] = light["night"] if special and special.id == "meteor_shower" else 0.0
-            return _nebula_light(light, hour_of_day(game_minutes), environment)
+            return _nebula_light(light, hour, environment)
         if environment:
             strength = (1-light["night"])*(1-light["gold"])*(1-light["overcast"])*.65
             for key in ("zenith", "horizon"):

@@ -459,6 +459,10 @@ class UIState:
     settling: bool = False
     settle_prompt: str = ""
     credits_s: float = 0.0  # real seconds the credits have shown
+    # V1-35 staging: the fade and letterbox over a story scene, and how far the credits have risen.
+    stage_fx: dict | None = None
+    stage_skip: bool = False  # a replayed scene's staging can be skipped with Esc (B)
+    credits_rise: float = math.inf
 
 
 def comfort_controls(viewport):
@@ -713,7 +717,11 @@ class UI:
             self._toasts(frame, state, ui.input_device)
             return
         if mode == "dialogue":
-            self._hud(frame, state, ui, interactions=False)
+            if ui.stage_fx:  # a staged story scene: letterbox and fade, without the HUD (V1-35)
+                from .staging import overlay
+                overlay(frame, ui.stage_fx)
+            else:
+                self._hud(frame, state, ui, interactions=False)
             self._dialogue(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
         elif mode == "shop":
@@ -745,20 +753,25 @@ class UI:
         self._caption(frame, state, ui)
 
     def _credits(self, frame, state, ui):
-        """The story's end (05 §3). V1-35 stages the roll over the boat at dawn."""
+        """The story's end (05 §3): the credits rise over the boat at dawn (V1-35), then rest."""
         from .botidentity import book_credit
+        from .staging import overlay
         h, w = frame.shape[:2]
-        frame[:] = (frame.astype(np.float32) * 0.25).astype(frame.dtype)
+        frame[:] = (frame.astype(np.float32) * 0.62).astype(frame.dtype)
+        overlay(frame, ui.stage_fx)
         big, small = self._size(frame, "title"), self._size(frame, "small")
         rows = [(CREDITS_TITLE, big, GOLD), (book_credit(state), small, INK), ("", small, INK)]
         rows += [(line, small, INK) for line in CREDITS_LINES]
-        hint = (self._controls(ui, "Press any key to keep fishing.", "Press A to keep fishing.")
-                if ui.credits_s >= CREDITS_HOLD_S else "")  # keys do nothing while the credits hold
-        rows += [("", small, INK), (hint, small, DIM)]
-        y = h // 2 - sum(self.cell(size)[1] + 8 for _text, size, _color in rows) // 2
+        block = sum(self.cell(size)[1] + 8 for _text, size, _color in rows)
+        rest = h // 2 - block // 2
+        y = max(rest, h - int(min(ui.credits_rise, 4.0 * h) * h / 720))  # rising from below, then at rest
         for text, size, color in rows:
-            self._center(frame, text, w / 2, y, size, color)
+            if -40 < y < h:
+                self._center(frame, text, w / 2, y, size, color)
             y += self.cell(size)[1] + 8
+        if ui.credits_s >= CREDITS_HOLD_S:  # keys do nothing while the credits hold
+            hint = self._controls(ui, "Press any key to keep fishing.", "Press A to keep fishing.")
+            self._center(frame, hint, w / 2, int(h * 0.82), small, DIM)
 
     def _dialogue(self, frame, state, ui):
         chat = ui.conversation
@@ -804,6 +817,8 @@ class UI:
             foot = (self._controls(ui, "W/S or arrows choose / Enter Space C select / H Help",
                                    "D-pad choose / A select / RB continue") if choices
                     else self._controls(ui, "C / Enter / Space continue    H Help", "A continue    RB continue"))
+            if ui.stage_skip:  # a replay's staging can be skipped (V1-35)
+                foot += self._controls(ui, "    Esc skip", "    B skip")
         footer = textwrap.wrap(foot, cols)
         height = (len(rows) + len(footer) + 2) * (ch + 3) + margin*2
         if portrait is not None:
