@@ -2260,6 +2260,83 @@
         ],
         "return": "Tell Astra-9 her units are wrong. She'll be delighted."
       }
+    },
+    {
+      "id": "story_c5_s1",
+      "kind": "story",
+      "giver_id": "astra_9",
+      "lake_id": "nebula",
+      "title": "Salutations",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "astra_9"
+      },
+      "journal": "Story — Talk to Professor Astra-9 at Cosmic Drift Station.",
+      "reward": {},
+      "requires": {
+        "chapter_complete": 4
+      },
+      "lines": {
+        "offer": "Salutations, Skipper and {BotName}!",
+        "ready": [
+          "Salutations, Skipper and {BotName}! Welcome to Cosmic Drift Station, three point one parsecs above sea level!",
+          "Bot: That is not how parsecs work.",
+          "Splendid, a colleague! Listen: there's a visitor here, a whale made of light. It rises where the reflection is calmest."
+        ],
+        "turn_in_choice": "What keeps it away?",
+        "done": [
+          "But every time I survey the spot, the water ripples and it won't come.",
+          "I have measured everything. Perhaps the answer is to measure nothing?"
+        ],
+        "return": "Measure nothing, Skipper. Anchor by the calm reflection and settle in."
+      }
+    },
+    {
+      "id": "story_c5_s2",
+      "kind": "story",
+      "giver_id": "astra_9",
+      "lake_id": "nebula",
+      "title": "Settle In",
+      "objective": {
+        "type": "settle",
+        "zone_id": "nebula:open",
+        "cues": 3
+      },
+      "journal": "Anchor near the calm reflection in Nebula open and choose \"Settle in\".",
+      "reward": {
+        "shells": [
+          "astral"
+        ]
+      },
+      "requires": {
+        "quest": "story_c5_s1"
+      },
+      "lines": {
+        "offer": "Settle in, Skipper.",
+        "progress": "Anchor by the calm reflection and settle in. Measure nothing. I shall try to as well.",
+        "done": "Splendid."
+      }
+    },
+    {
+      "id": "story_c5_s3",
+      "kind": "story",
+      "giver_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "title": "The First New Page",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "grandmother_whiskers"
+      },
+      "journal": "Story — Go home to Briar Landing.",
+      "reward": {},
+      "requires": {
+        "quest": "story_c5_s2"
+      },
+      "lines": {
+        "offer": "Come home, dear.",
+        "progress": "Come home, dear. The kettle's on.",
+        "done": "Keep filling it, dear."
+      }
     }
   ],
   "cats": [
@@ -2783,6 +2860,109 @@
       "lake_id": "crater",
       "lines": [
         "This one. I can loosen it myself when it is cold, and tighten it when it is windy. It adjusts."
+      ],
+      "next": null
+    },
+    {
+      "id": "story_c5_arrive",
+      "speaker_id": "bot",
+      "lake_id": "nebula",
+      "lines": [
+        "We are on the sky. I do not have a word for this. I will keep looking for one."
+      ],
+      "next": null
+    },
+    {
+      "id": "story_c5_together",
+      "speaker_id": "astra_9",
+      "lake_id": "nebula",
+      "lines": [
+        "May I watch with you?"
+      ],
+      "choices": [
+        {
+          "text": "Watch together",
+          "next": null,
+          "together": true
+        },
+        {
+          "text": "We'll keep still",
+          "next": null
+        }
+      ]
+    },
+    {
+      "id": "story_c5_whale",
+      "speaker_id": "astra_9",
+      "lake_id": "nebula",
+      "lines": [
+        "(whispering) I have wanted to see that for my whole life. I've never once kept still long enough.",
+        "Bot: Skipper. You should write this one. I will hold the book."
+      ],
+      "choices": [
+        {
+          "text": "Draw it",
+          "next": "story_c5_drawn"
+        }
+      ]
+    },
+    {
+      "id": "story_c5_drawn",
+      "speaker_id": "astra_9",
+      "lake_id": "nebula",
+      "lines": [
+        "Bot: That is a useful note."
+      ],
+      "choices": [
+        {
+          "text": "Go home to Briar Landing",
+          "next": null,
+          "trip": "briar"
+        },
+        {
+          "text": "Stay a while",
+          "next": null
+        }
+      ]
+    },
+    {
+      "id": "end_01",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "Read them to me, dear. All five. The others are listening on Pounce's radio. Doc insisted.",
+        "Doc Barnaby (radio): The jug and me thank you!",
+        "Captain Huckleberry (radio): Ho-ho! I've told that one six times already!"
+      ],
+      "next": "end_01b"
+    },
+    {
+      "id": "end_01b",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "Sora (radio): Gap filled. Thank you.",
+        "Professor Astra-9 (radio): Still no units! Wonderful!"
+      ],
+      "next": "end_02"
+    },
+    {
+      "id": "end_02",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "Five useful notes. My grandmother would have liked you, Skipper. She'd have said the book's been waiting for you.",
+        "There. Now it's yours as much as anyone's. Keep filling it. Or don't. The lake won't mind either way."
+      ],
+      "next": "end_03"
+    },
+    {
+      "id": "end_03",
+      "speaker_id": "grandmother_whiskers",
+      "lake_id": "briar",
+      "lines": [
+        "And look at you, {BotName}. A new knot.",
+        "Bot: Different knot. Still my favorite."
       ],
       "next": null
     }

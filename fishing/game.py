@@ -10,9 +10,10 @@ import time
 import numpy as np
 
 from .content import load_content
-from .quests import QuestManager, autostart_story
+from .quests import QuestManager, autostart_story, scene_state
 from .dialogue import nearby_npc, open_conversation, record_hail
-from .story import begin_prologue, due_scene, scene_conversation
+from .story import (begin_prologue, due_scene, scene_conversation, settle_near, settle_progress, settle_spot,
+                    settle_step_active, settle_tick)
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
 from .data import BAITS, BAIT_BY_ID, SPECIES, hour_of_day
@@ -38,7 +39,7 @@ from .bot import summon as summon_bot
 from .bot import tick as tick_bot
 from .sim import State
 from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
-from .ui import (UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, check_rows,
+from .ui import (UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, CREDITS_HOLD_S, check_rows,
                  comfort_controls, shop_rows, title_options)
 from .world import World
 from .lakes import travel_caption, travel_lock_reason
@@ -56,6 +57,7 @@ SOUND_CAPTIONS = {
     "click": "A soft click sounds.",
     "splash": "A splash breaks the quiet.",
 }
+
 
 
 def _save_target(root: Path, override: str | Path | None) -> tuple[Path, bool]:
@@ -160,16 +162,77 @@ class Session:
                 or getattr(keys, "mouse_wheel", 0)):
             self._remember_book_page()
         self._simulate(keys, dt, driving_presses)
+        self._tick_settle(dt)
         self._play_due_scene()
         self._tick_caption(dt)
 
     def _play_due_scene(self) -> None:
-        """A story scene whose moment has come plays as soon as the Skipper is free (V1-34)."""
+        """A story scene whose moment has come plays as soon as the Skipper is free (V1-34).
+        After the ending, the credits roll once; a game quit during them rolls them again."""
         if self.ui.mode != "play" or self.conversation is not None or not self.focused:
             return
         scene_id = due_scene(self.state, self._npc_content)
         if scene_id is not None:
             self._show_conversation(scene_conversation(self.state, self._npc_content, scene_id))
+        elif scene_state(self.state, "credits") == "pending":
+            self.ui.settling = False
+            self.ui.credits_s = 0.0
+            self.ui.mode = "credits"
+
+    def _credits_keys(self, keys, dt: float) -> None:
+        """The credits hold for a few seconds before a key returns to play (V1-35 stages the roll)."""
+        if self.focused:
+            self.ui.credits_s += dt
+        if self.ui.credits_s < CREDITS_HOLD_S:
+            return
+        if keys.pressed or getattr(keys, "mouse_click", None) is not None:
+            self.state.set_scene_status("credits", "done")
+            self.ui.mode = "play"  # play resumes at the landing (05 §3)
+            self.save()
+
+    def _tick_settle(self, dt: float) -> None:
+        """Settle In (02 §13.5): real seconds of stillness add up near the calm reflection; moving
+        pauses them and nothing resets them. Weather and needs don't interrupt."""
+        state, ui = self.state, self.ui
+        active = settle_step_active(state, self._npc_content)
+        spot = active and settle_spot(state, self.world)
+        if not active:
+            ui.settling, ui.settle_prompt = False, ""
+            return
+        from .botidentity import name as bot_name
+        settle = settle_progress(state)
+        if ui.settling and ui.mode == "play" and self.focused:
+            still = spot and abs(state.speed) < 0.1
+            for line in settle_tick(state, self.world, dt, still=still):
+                state.toast(f"{bot_name(state)}: {line}")
+            if settle["cues"] >= 3:
+                ui.settling = False
+        if ui.settling:
+            near = settle_near(state, self.world)
+            ui.settle_prompt = (("Watching together" if near else "Watching together, paused. Come back to the reflection.")
+                                if settle["together"] else
+                                "Settling in. Keep still." if spot else "Settling in, paused. Anchor by the reflection.")
+            ui.settle_prompt += f"  ({settle['cues']} of 3)  {{key}} Stop"
+        else:
+            ui.settle_prompt = "{key}  Settle in" if spot else ""
+
+    def _settling_here(self) -> bool:
+        """Settling in by the reflection, where needs and naps wait (02 §13.5). A settle paused
+        elsewhere holds nothing off."""
+        return self.ui.settling and settle_near(self.state, self.world)
+
+    def _toggle_settle(self) -> bool:
+        """The hail key settles in (or stops) while no cat is in range. Progress is kept."""
+        if not settle_step_active(self.state, self._npc_content):
+            return False
+        if self.ui.settling:
+            self.ui.settling = False
+            return True
+        if not settle_spot(self.state, self.world):
+            return False
+        self.ui.settling = True
+        self.state.toast("Settling in. Measure nothing.")
+        return True
 
     def _show_conversation(self, conversation) -> None:
         self.conversation = conversation
@@ -202,6 +265,9 @@ class Session:
         if self.ui.mode != "play" or not self.focused or self.world.id != "briar":
             return
         if self.state.slip_status(self.world) != "docked":
+            return
+        # The ending retitles the book; its new title is shown once the story and credits are told.
+        if due_scene(self.state, self._npc_content) is not None or scene_state(self.state, "credits") == "pending":
             return
         book = self.state.v2["book"]
         title = book.get("title", "fishypedia")
@@ -290,7 +356,7 @@ class Session:
         mode = self.ui.mode
         state = self.state
         if self.world_running():
-            if comfort.doze_due(state.v2):
+            if comfort.doze_due(state.v2) and not self._settling_here():
                 self._start_catnap(forced=True)
                 state.tick_toasts(dt)
                 return
@@ -341,7 +407,7 @@ class Session:
             self._refresh_npcs()
             if self._speaker_left():
                 self._close_dialogue()
-        if self.world_running():
+        if self.world_running() and not self._settling_here():  # needs never interrupt Settle In (02 §13.5)
             if comfort.doze_due(state.v2):
                 self._start_catnap(forced=True)
             else:
@@ -424,6 +490,8 @@ class Session:
                 self._bot()
         elif mode == "pause":
             self._pause_keys(keys, dt)
+        elif mode == "credits":
+            self._credits_keys(keys, dt)
         elif mode == "settings":
             self._settings_keys(keys, dt)
         elif mode == "help":
@@ -550,6 +618,8 @@ class Session:
             self._open_kitchen()
             return
         if "c" in keys.pressed:
+            if nearby_npc(self.state) is None and self._toggle_settle():
+                return
             self._hail()
             return
         if "space" in keys.pressed:
@@ -647,6 +717,8 @@ class Session:
                 self.save()  # a scene's effects and its claim are written together (06 §3.3)
             if not more:
                 self._close_dialogue()
+                if chat.trip:
+                    self._free_trip(chat.trip)
 
     def _anchor(self):
         if self.state.anchored:
@@ -690,6 +762,20 @@ class Session:
         error = travel_lock_reason(self.state, lake_id)
         if error:
             return error
+        self._travel_to(lake_id)
+        return None
+
+    def _free_trip(self, lake_id: str) -> None:
+        """The trip home after the Star-Whale, offered once and taken from wherever the boat is
+        (02 §13). Deployed lines must come aboard first; the landing's travel still works."""
+        if lake_id == self.world.id:
+            return
+        if self.state.lines:
+            self.state.toast("Bring your lines aboard; the landing can take you home any time.")
+            return
+        self._travel_to(lake_id)
+
+    def _travel_to(self, lake_id: str) -> None:
         caption = travel_caption(self.world.id, lake_id)
         destination = World(lake_id)
         self.world = destination
@@ -698,6 +784,7 @@ class Session:
         self.state._park(destination)
         reset_bot(self.state)
         self.ui.mode = "play"
+        self.ui.settling = False  # Settle In is kept, and taken up again by the reflection
         self.ui.note = ""
         self.state.toast(caption)
         self.save()

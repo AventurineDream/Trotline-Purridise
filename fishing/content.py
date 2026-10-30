@@ -504,7 +504,7 @@ NAMED_PLACES = {
 QUEST_KINDS = {"host", "a", "b", "story"}
 # V1-34 scene ids follow the script (05 §1–3): pro_01–pro_06 (and a branch, pro_05b), the
 # chapter scenes story_c<n>_<name>, and the ending end_01–end_03.
-SCENE_ID = r"pro_\d\d[a-z]?|story_c[1-5]_[a-z]+|end_\d\d"
+SCENE_ID = r"pro_\d\d[a-z]?|story_c[1-5]_[a-z]+|end_\d\d[a-z]?"
 SCENE_KNOTS = {"square", "bow", "sailors_hitch"}  # bot.json's canonical knots; a choice may tie one
 LINE_STEP_FIELDS = {"zone_id", "area_id", "tier_id", "min_tier", "hook_count", "bait_id", "set_window",
                     "in_cold_band"}
@@ -1654,11 +1654,18 @@ class _ContentV2Validator:
                     continue
                 for i, choice in enumerate(choices):
                     choice_where = f"{where}.choices[{i}]"
-                    if not isinstance(choice, dict) or not {"text", "next"} <= set(choice) <= {"text", "next", "knot"}:
-                        self.error(filename, choice_where, "expected text and next, and optionally knot")
+                    if (not isinstance(choice, dict)
+                            or not {"text", "next"} <= set(choice) <= {"text", "next", "knot", "together", "trip"}
+                            or len(set(choice) & {"knot", "together", "trip"}) > 1):
+                        self.error(filename, choice_where, "expected text and next, and optionally one of "
+                                   "knot, together or trip")
                         continue
                     if "knot" in choice:
                         self.enum(filename, choice_where + ".knot", choice["knot"], SCENE_KNOTS)
+                    if "together" in choice and choice["together"] is not True:
+                        self.error(filename, choice_where + ".together", "expected true")
+                    if "trip" in choice:
+                        self.enum(filename, choice_where + ".trip", choice["trip"], refs.lakes)
                     self.bubbles(filename, choice_where + ".text", choice["text"], limit=60, most=1)
                     if choice["next"] is not None and (not isinstance(choice["next"], str)
                                                        or choice["next"] not in scenes):
