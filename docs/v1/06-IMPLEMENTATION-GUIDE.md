@@ -1685,3 +1685,47 @@ The Zero-G Winch is unlocked for sale by the Astral shell, as the Duck shell unl
 - **`test_story`.** Chapter five settles, watches together and draws the whale. Watching together counts only by the reflection: sailing off or going home pauses it, and nothing finishes the step there. It takes the free trip home and plays the ending and the credits. Moving pauses settling and a reload keeps it. An Old Salt nap can't interrupt it. With a line out the free trip isn't taken, and travelling home by the landing plays the ending too.
 - **`test_playthrough` (the acceptance test).** One new game is played from "New morning" to the credits. At the first bubble of every scene, and at the credits, the game is quit and continued. Each scene must be pending with nothing paid, and it must replay from its start. Every story step is claimed exactly once. The ending opens as soon as the free trip arrives at Briar, so the test reads each conversation until a new one opens.
 - **Shots.** `--shots` adds `story-scene-bot.png` (the knot scene), `story-settle-in.png` (the HUD prompt) and `story-credits.png`.
+
+## Implemented story staging, part 1 (V1-35)
+
+V1-35 (#63) stages the story's scenes: their cameras, fades and light. This part builds the staging timeline and stages four moments. The Settle In cues, the Star-Whale and "Draw it" (part 2), and the book, collar and knot vignettes (part 3) follow.
+
+**The timeline (`staging.py`).** A staged scene plays keyframes on a clock that starts with its first bubble. Each key sets a view about an anchor (the boat, or the boat facing a waypoint), a fade to black, a letterbox, and optionally the light's mist and hour. Values ease between keys, and a view of `None` is the Skipper's own.
+- **Hand-back.** When the clock passes the last key, the Skipper's view and HUD return. The credits and the ending hold their last key instead.
+- **Effects stay in the story.** The staging only changes what is drawn. Bubbles, choices, claims and saves are `story.py`'s, so a scene can be read to its end at any point of its staging.
+- **The boat stays put.** A staged camera carries the Skipper's own camera as `Camera.boat`, and both renderers place the hull and the paws with it. A pulled-back view sees the boat where it floats. Unstaged frames set no holder and draw exactly as before.
+- **Light.** `State.stage_light` (not saved) gives `weather.lighting_at` a mist to blend toward fog, and an hour of day.
+
+| Stage | Scene | Anchor | Length | What it does |
+| --- | --- | --- | --- | --- |
+| `pro_01` | the arrival (`05 §1`) | the boat | 4.4 s | Fades in from black on the tiller and the water; the view lifts to the dock, dips once for the bump, and hands back |
+| `story_c4_clear` | the fog lifts (`05 §2.4`) | the boat, facing `crater:survey_marker` | 7.0 s | Faces the marker in full fog; the mist thins to nothing by 5.5 s, then the view hands back |
+| `end_01` (and `end_01b`–`end_03`) | the ending (`05 §3`) | the boat | holds | Eases out to a wide frame of the boat at the landing over 2 s, then pushes in slowly while the radio carries the hosts |
+| `credits` | the credits | the boat | holds | Fades in at dawn (hour 6.4–6.6) behind the boat; the view pulls back and up while the credits rise from below and come to rest |
+
+**Rules.**
+- **Reduced Motion.** The fades and letterbox stay, but the camera never moves: each scene holds its last framing. The light settles at once, and the credits stand at rest.
+- **Skippable on repeat.** A scene left pending in the save replays with its staging. Esc (B) skips that staging to its last frame, and the footer says so. The reading keys still read, and Esc still can't leave the scene. A first showing can't be skipped.
+- **Read early.** If the scene is read before its staging is done, the rest plays out four times faster in play, so the fog thins and the view comes home without a cut. Holding stages end with their conversation.
+- **Help** pauses the staging.
+- **The credits.** They rise 26 pixels a second (on a 720-line frame) and rest after about 20 s. A key dismisses them after their 3-second hold. The "Press any key" hint sits below the roll.
+
+**Playtest note on timing.** I read the scenes at about 3 words a second, which is relaxed reading.
+- **`pro_01`.** Its first bubble (18 words) takes about 6 s, so the 4.4 s arrival is over before a typical first key. The fade is clear by 2.4 s.
+- **`story_c4_clear`.** Its one bubble takes about 5.3 s, and the mist is gone at 5.5 s. A reader who closes it at 1 s sees the remaining 6 s play out in about 1.5 s.
+- **The ending.** It reads in about 34 s across seven bubbles, so its 2-second ease and slow push never rush the text.
+- **The credits.** They take about 20 s to settle, longer than their 3-second hold. A player can leave early, or watch them come to rest.
+
+**Shots.** `python -m fishing --shots <dir> --story [--software]` writes each staged scene as a keyframe sequence, at every key and between keys more than a second apart: `story-<name>-<n>.png`. It adds the prologue under Reduced Motion, `story-contact-sheet.png`, and `story-staging.json` with each frame's time, camera, fade, letterbox and light.
+
+**Calls made where the script is silent.**
+- **The prologue's dawn.** It is the game's own 06:00 weather. The staging doesn't force calm water, so a drizzly first morning stays drizzly.
+- **The marker.** The fog scene faces the survey marker from wherever the boat waited. The marker may be out of sight behind the cinder cone, and the mist lifting off the water is the beat.
+- **The credits at dawn.** They light the dawn whatever the clock says, and the real light returns when they are dismissed.
+
+**Tests (`test_staging`).**
+- The stages run forward from zero, and every staged scene exists.
+- The prologue fades in and hands the view back. The fog lifts in `lighting_at`, and the view faces the marker. The credits hold their dawn and rise.
+- Reduced Motion never moves the camera.
+- In a session: a new game stages the arrival, and a replay can be skipped with Esc but its bubbles can't. A first showing can't be skipped, and Help pauses the staging. A scene read early plays out quickly.
+- An unstaged frame is pixel-identical to before. A pulled-back view still sees the boat's bow on screen.
