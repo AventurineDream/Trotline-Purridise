@@ -1537,9 +1537,9 @@ V1-34 (#62) is the story: a prologue, five chapters, the Settle In finale and th
 
 **Shape.** Each chapter is three steps, *meet → notice → share* (`01 §5`). A step is a `story`-kind quest row with id `story_c<chapter>_s<step>`, and its `journal` reads "Story — …".
 
-- **Starting.** A step starts by itself. It is never offered or declined, once its chapter is the current one (`story.chapter`) and its `requires` are met. The prologue will open chapter one. Until then, no step starts, so existing saves and older suites are unchanged.
+- **Starting.** A step starts by itself. It is never offered or declined, once its chapter is the current one (`story.chapter`) and its `requires` are met. The prologue opens chapter one (part 2, below). A state with no prologue, such as one from `State.new` in a test, starts no step at all.
 - **Finishing a chapter.** Turning in step three completes the chapter: `story.completed_chapters` gains its number, and `story.chapter` moves to the next. Turn-ins of story steps never queue a friend's letter.
-- **Conversation.** A cat's story takes precedence over their own side quest, with one exception: a host's turn-in menu still comes first. Their own errand comes back on the next hail, once the story step is done.
+- **Conversation.** A cat's story takes precedence over their own side quest, with two exceptions. A host's turn-in menu still comes first. The cat's own finished errand is handed in before the story's progress line (part 2).
 - **Rewards.** Quest rewards gain `tools`, applied through `botidentity.grant_tool`. The Reed Anchor, for example, is granted at chapter one's second step.
 
 **Chapters 1–2 as authored (`content_v2/quests.json`).**
@@ -1559,9 +1559,49 @@ V1-34 (#62) is the story: a prologue, five chapters, the Settle In finale and th
 - **Turn-in labels.** Each step's `turn_in_choice` is a line of the step, for example "Let's find the reeds.", rather than the generic label.
 
 **Not built yet.** Each of these is a later part of V1-34.
-- The prologue (`pro_01`–`pro_06`), which opens chapter one and gives the Skipper the book.
 - Chapters 3–5, which need the Settle In interaction (`settle` steps and their cues) and the Flathead and Crater authoring.
-- The collar beats, the knot choice scene and the ending, including the book retitle and credits.
+- The collar's later beats, the knot choice scene and the ending, including the book retitle and credits.
 - Tools lent for chapter three, and a chapter's visible world changes (the Marked Pool barrier and sign, for instance), which belong to V1-35.
 
 **Tests (`test_story`).** A new save's first step starts only once its chapter is open. Chapter one runs from Pip's hail through turn-ins to Grandmother's, and chapter two on Cedar through Doc's, all by real hails and events. A reload mid-chapter keeps the progress and pays nothing twice. A story step has no time limit, story steps appear in the journal, and no friend's letter is queued for a story giver.
+
+## Implemented prologue and story scenes (V1-34, part 2)
+
+This part builds the prologue (`05 §1`) and the scenes the rest of the story is built from.
+
+**Scenes (`story.py`).** A scene is one speaker's bubbles, then the next scene or a choice between scenes. Scenes are authored in `quests.json` `scenes`, with ids such as `pro_01`, `story_c<n>_<name>` and `end_NN`.
+- **State.** A scene is `pending` from its first bubble and `done` once its last bubble is read (`06 §3.3`). A pending scene replays from its start, so a game quit mid-scene reloads into it. Its effects run only when it is done, and every reward is claimed once through the ledger.
+- **Starting.** Scenes start by themselves when their moment comes (`story.due_scene`, checked each frame the Skipper is free to talk on that lake). A hail can also open one (`story.hail_scene`), and hailing a pending scene's speaker replays it.
+- **Reading.** Esc does not leave a scene; it is read through. The session saves as soon as a scene is done.
+- **Validation.** The validator follows every branch. A scene that loops back is rejected, as are an unknown next scene, an unknown speaker, and a scene with both `next` and `choices`. Bubbles keep the `05 §0` limits.
+
+**The prologue.** "New morning" opens at Briar Landing and marks the `prologue` scene pending (`story.begin_prologue`). Its steps are chapter 0 (`story_c0_s<n>`); they start once the arrival scene is read, and each is turned in by a scene, not a hail.
+
+| Step | Objective | Turned in by |
+| --- | --- | --- |
+| `story_c0_s1` Her Old Boat | set a line in `briar:landing_edge` (new `line_set` step type) | `pro_03`, which plays once the line is set |
+| `story_c0_s2` Most of Fishing | Bot scouts anywhere on Briar (`scout_report` gains `lake_id`), then any catch on Briar | `pro_04`, after the first catch |
+| `story_c0_s3` The Old Fish Book | talk to Grandmother | `pro_05` (`pro_05b` if asked) and `pro_06`, opened by that hail |
+
+When `pro_06` is done, the prologue is done and chapter one opens: `story.chapter` becomes 1, and chapter 0 never enters `completed_chapters`.
+
+**Saves.**
+- A save whose prologue is done, finished or migrated with catches, has chapter one open.
+- A v1 save that never caught a fish migrates with the prologue pending, so it plays on Briar.
+- Saves and test states with no prologue state never start it.
+
+**Also in this part.**
+- **Errands before reminders.** A cat's own finished errand is handed in before the story's progress line (review of PR 107). This applies to Grandmother, Pip and Doc.
+- **The wool collar.** The collar is tied when chapter one is turned in, through `botidentity.sync_story_rewards`, not on the next load.
+- **One claim path.** Story steps are claimed through `quests.claim_story_step`, whether a hail or a scene turns them in.
+
+**Calls made where the script is silent.**
+- **Journal text.** Steps 2 and 3 have no `obj:` line in `05 §1`. Their journal text names the keys, like the script's other prologue objectives.
+- **Progress lines.** The steps' progress lines ("Anywhere near the landing will do, dear. The tea will keep.") are written in Grandmother's voice.
+- **Order.** Bot scouts before the first catch counts, as the journal says.
+
+**Tests (`test_prologue`).**
+- A new game is driven through the title's "New morning", with a real line set under the game's own rules at the landing. Every scene is read with the dialogue keys, through to chapter one.
+- Each scene is interrupted at its first bubble, by quitting, and continued in a new session. It replays from its start, and no step is paid twice.
+- The scenes match `05 §1` bubble for bubble. Bad scenes are rejected.
+- `test_story` now starts from a finished prologue. It adds the collar and the errand-before-reminder checks.

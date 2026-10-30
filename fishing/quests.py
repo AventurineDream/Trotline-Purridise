@@ -388,6 +388,10 @@ class QuestManager:
 
     _v2_line_scout = _v2_line_check = _v2_line_scout_check = _v2_line
 
+    def _v2_line_set(self, state, step: dict, data: dict, event: dict) -> bool:
+        """A line set where the step asks, with no check needed (the prologue's first line, V1-34)."""
+        return event.get("type") == "line.set" and self._line_set_matches(step, event)
+
     @staticmethod
     def _hit_pairs(step: dict, data: dict, targets, at, minute) -> bool:
         """Each target, in each listed clock window, needs its own event (`windows`, 02 §12.3)."""
@@ -413,6 +417,9 @@ class QuestManager:
             # Waypoints are story points; Bot's scouting spot must fall within one.
             return self._hit_pairs(step, data, step["waypoint_ids"], lambda ref: lakes.in_place(
                 ref, event.get("lake_id"), event.get("x"), event.get("z")), event.get("game_minute"))
+        if "lake_id" in step:
+            return self._hit_pairs(step, data, [step["lake_id"]], lambda lake: event.get("lake_id") == lake,
+                                   event.get("game_minute"))
         return self._hit_pairs(step, data, [step["zone_id"]], lambda zone: event.get("zone_id") == zone,
                                event.get("game_minute"))
 
@@ -575,7 +582,7 @@ class QuestManager:
 
 
 _STEP_EVENTS = {
-    "line.set": ("line_scout", "line_check", "line_scout_check"),
+    "line.set": ("line_set", "line_scout", "line_check", "line_scout_check"),
     "bot.scout_complete": ("line_scout", "line_scout_check", "scout_report"),
     "line.check": ("line_check", "line_scout_check"),
     "fish.enter_livewell": ("fish_livewell",),
@@ -660,26 +667,48 @@ def count_todays_hail(state, content, quest_id: str, npc_id: str) -> None:
 
 
 # The story (01 §5): each chapter is three steps, meet → notice → share, and the
-# steps are `story`-kind quest rows with ids story_c<chapter>_s<step>.
+# steps are `story`-kind quest rows with ids story_c<chapter>_s<step>. Chapter 0 is the
+# prologue (05 §1), whose steps start once its arrival scene has played (V1-34).
 STORY_STEPS_PER_CHAPTER = 3
 
 
 def story_part(quest_id) -> tuple[int, int] | None:
     """(chapter, step) of a story step's id, or None for any other quest."""
-    match = re.fullmatch(r"story_c([1-5])_s([1-9])", quest_id) if isinstance(quest_id, str) else None
+    match = re.fullmatch(r"story_c([0-5])_s([1-9])", quest_id) if isinstance(quest_id, str) else None
     return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _story(state) -> dict:
+    story = state.v2.get("story") if isinstance(state.v2, dict) else None
+    return story if isinstance(story, dict) else {}
+
+
+def scene_state(state, scene_id: str) -> str | None:
+    """`pending` or `done` (06 §3.3), or None for a scene that has not started."""
+    states = _story(state).get("scene_states")
+    return states.get(scene_id) if isinstance(states, dict) else None
+
+
+def prologue_open(state) -> bool:
+    """A new game's prologue is under way: its steps follow the arrival scene (05 §1)."""
+    return scene_state(state, "prologue") == "pending" and scene_state(state, "pro_02") == "done"
 
 
 def autostart_story(state, content) -> None:
     """Story steps are never offered or declined. A step starts once its chapter is the current
-    one (the prologue opens chapter one) and its `requires` are met."""
-    story = state.v2.get("story") if isinstance(state.v2, dict) else None
-    current = story.get("chapter", 0) if isinstance(story, dict) else 0
+    one and its `requires` are met. The prologue's steps start once it opens; a save whose
+    prologue is done (finished, or skipped by a migrated save) has chapter one open."""
+    story = _story(state)
+    if scene_state(state, "prologue") == "done" and story.get("chapter", 0) == 0:
+        story["chapter"] = 1
+    current = story.get("chapter", 0)
     for quest_id, definition in content.quests.items():
         if definition.get("kind") != "story":
             continue
         part = story_part(quest_id)
         if part is None or type(current) is not int or current < part[0]:
+            continue
+        if part[0] == 0 and not prologue_open(state):
             continue
         progress = state.narrative.quest(quest_id)
         if progress is not None and progress.status == "available":
@@ -687,12 +716,18 @@ def autostart_story(state, content) -> None:
 
 
 def finish_story_step(state, quest_id: str) -> bool:
-    """A chapter's last step, turned in, completes the chapter (chapter_finished reads this)."""
+    """A chapter's last step, turned in, completes the chapter (chapter_finished reads this).
+    The prologue's last step instead marks the prologue done, which opens chapter one."""
     part = story_part(quest_id)
     if part is None or part[1] != STORY_STEPS_PER_CHAPTER:
         return False
     chapter, _step = part
     story = state.v2.setdefault("story", {})
+    if chapter == 0:
+        state.set_scene_status("prologue", "done")
+        if not (type(story.get("chapter")) is int and story["chapter"] >= 1):
+            story["chapter"] = 1
+        return True
     completed = story.setdefault("completed_chapters", [])
     if chapter not in completed:
         completed.append(chapter)
@@ -701,9 +736,25 @@ def finish_story_step(state, quest_id: str) -> bool:
     return True
 
 
-def story_focus(state, content, npc_id: str) -> str | None:
+def claim_story_step(state, content, quest_id: str) -> bool:
+    """Turn in a ready story step once: latch the claim, pay it, finish its chapter and start
+    what follows, in one save (06 §3.3). A hail or a scene calls this; neither queues a letter."""
+    from .botidentity import sync_story_rewards
+    definition = content.quests.get(quest_id)
+    if (definition is None or definition.get("kind") != "story"
+            or not state.narrative.record_reward_claim(quest_id, state.game_minutes)):
+        return False
+    apply_reward(state, definition["reward"])
+    if finish_story_step(state, quest_id):
+        sync_story_rewards(state)  # the chapter's shell and collar beat (V1-17)
+    autostart_story(state, content)
+    return True
+
+
+def story_focus(state, content, npc_id: str, *, progress_lines: bool = True) -> str | None:
     """The story step this cat has to say something about, in order: a ready turn-in to them;
-    a talk step aimed at them that is under way; then any step of theirs under way (its progress)."""
+    a talk step aimed at them that is under way; then any step of theirs under way (its progress),
+    unless `progress_lines` is off."""
     talk = giver = None
     for quest_id, definition in content.quests.items():
         if definition.get("kind") != "story":
@@ -719,7 +770,7 @@ def story_focus(state, content, npc_id: str) -> str | None:
             step, _data = current_step(definition, progress)
             if step is not None and step.get("type") == "talk_to" and step.get("npc_id") == npc_id:
                 talk = quest_id
-        if giver is None and definition.get("giver_id") == npc_id:
+        if giver is None and progress_lines and definition.get("giver_id") == npc_id:
             giver = quest_id
     return talk or giver
 

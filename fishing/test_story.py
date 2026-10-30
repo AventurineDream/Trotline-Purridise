@@ -29,8 +29,8 @@ class Story(unittest.TestCase):
         self.content = load_content()
         self.world = World("briar")
         self.state = State.new(self.world, seed=34)
-        # The prologue (not built yet) opens chapter one; these checks start from that point.
-        self.state.v2["story"]["chapter"] = 1
+        # These checks start where the prologue ends (test_prologue plays it): chapter one open.
+        self.state.set_scene_status("prologue", "done")
         self.open_session()
 
     # --- a session on whatever lake the state is on -------------------------------------
@@ -246,5 +246,31 @@ class Story(unittest.TestCase):
     def test_story_parts_parse_and_the_ledger_knows_them(self):
         from .narrative import is_quest_id
         self.assertEqual(story_part("story_c2_s3"), (2, 3))
+        self.assertEqual(story_part("story_c0_s1"), (0, 1))  # the prologue
         self.assertIsNone(story_part("wc_marigold_a"))
-        self.assertTrue(all(is_quest_id(qid) for qid in STEPS))
+        self.assertTrue(all(is_quest_id(qid) for qid in STEPS + ["story_c0_s3"]))
+
+    def test_the_collar_is_tied_when_chapter_one_ends(self):
+        self.assertEqual(profile(self.state)["collar"]["stage"], "none")
+        self.play_chapter_one()
+        self.assertEqual(profile(self.state)["collar"]["stage"], "received")  # live, not on the next load
+
+    def test_a_cats_finished_errand_is_handed_in_before_the_story_reminder(self):
+        # Review of PR 107: Grandmother's ready errand waited for her story step to finish.
+        self.meet("pip_pebble")
+        self.talk("pip_pebble")
+        self.talk("pip_pebble", "turn_in")
+        for ref in ("briar:reed_edge_1", "briar:reed_edge_2", "briar:reed_edge_3"):
+            self.emit(type="bot.scout_complete", zone_id="briar:reeds", depth_class="middling",
+                      report_delivered=True, **self.at(ref))
+        self.talk("pip_pebble", "turn_in")
+        self.assertEqual(self.status("story_c1_s3"), "active")
+        errand = "q01_tea_leaves_deep_holes"
+        progress = self.state.narrative.quest(errand)
+        progress.status, progress.accepted_game_minute = "ready", 0
+        seen = self.talk("grandmother_whiskers", "turn_in")
+        self.assertIn(f"{errand}:dialogue:ready", seen)
+        self.assertEqual(self.status(errand), "completed")
+        self.assertEqual(self.status("story_c1_s3"), "active")
+        # With the errand handed in, her next hail is the story's reminder again.
+        self.assertIn("story_c1_s3:dialogue:progress", self.talk("grandmother_whiskers"))
