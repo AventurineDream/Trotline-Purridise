@@ -20,10 +20,13 @@ from .sim import State
 from .world import World
 from .test_quests_v2 import centre
 
-STEPS = [f"story_c{c}_s{s}" for c in (1, 2, 3, 4) for s in (1, 2, 3)]
+STEPS = [f"story_c{c}_s{s}" for c in (1, 2, 3, 4, 5) for s in (1, 2, 3)]
 
 
-class Story(unittest.TestCase):
+class StoryPlay(unittest.TestCase):
+    """Drives a save through the story with real hails, events, scenes and travel. It has
+    no checks of its own: the chapters' checks are Story's, and test_playthrough plays it all."""
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -101,12 +104,12 @@ class Story(unittest.TestCase):
         self.session.tick(Keys(pressed={key}), 0.05)
 
     def scene(self, *choices):
-        """The story scene whose moment has come plays at once; read it through. Returns its nodes."""
+        """The story scene whose moment has come plays at once; read it through. Returns its nodes.
+        A scene that comes due as this one ends (the ending, after the trip home) is left open."""
         self.press("x")
         self.assertEqual(self.session.ui.mode, "dialogue", "no scene played")
-        seen, pending = [], list(choices)
-        while self.session.conversation is not None:
-            chat = self.session.conversation
+        seen, pending, chat = [], list(choices), self.session.conversation
+        while self.session.conversation is chat:
             seen.append(chat.node_id)
             node = chat.node(self.content)
             if "choices" in node:
@@ -161,54 +164,6 @@ class Story(unittest.TestCase):
                   weight_lb=1.0, catch_hour=9.0, in_cold_band=False)
         self.assertEqual(self.status("story_c1_s3"), "ready")
         self.talk("grandmother_whiskers", "turn_in")
-
-    def test_chapter_one_waits_for_the_prologue(self):
-        state = State.new(World("briar"), seed=5)  # a save the prologue has not opened
-        autostart_story(state, self.content)
-        self.assertEqual(state.narrative.quest("story_c1_s1").status, "available")
-        state.v2["story"]["chapter"] = 1
-        autostart_story(state, self.content)
-        self.assertEqual(state.narrative.quest("story_c1_s1").status, "active")
-
-    def test_a_chapter_starts_without_an_offer_and_steps_only_on_play(self):
-        autostart_story(self.state, self.content)
-        self.assertEqual(self.status("story_c1_s1"), "active")
-        self.assertEqual(self.status("story_c1_s2"), "available")  # waits for step one's turn-in
-        self.assertEqual(self.status("story_c2_s1"), "available")  # waits for chapter one
-        self.assertTrue(all(self.status(qid) != "declined" for qid in STEPS))
-
-    def test_chapter_one_runs_from_a_new_save_to_its_finish(self):
-        self.play_chapter_one()
-        self.assertTrue(chapter_finished(self.state, 1))
-        self.assertEqual(self.state.v2["story"]["completed_chapters"], [1])
-        self.assertEqual(self.state.v2["story"]["chapter"], 2)
-        self.assertIn("frog", profile(self.state)["shells"])
-        self.assertIn("chart:reeds", self.state.v2["unlocks"])
-        self.assertEqual(self.status("story_c2_s1"), "active")  # chapter two starts at once
-
-    def test_a_reload_mid_chapter_keeps_progress_and_pays_no_reward_twice(self):
-        self.play_chapter_one()
-        tools = list(profile(self.state)["tools"])
-        money = self.state.money
-        self.state.save(self.path)
-        self.state = State.load(self.path, self.world)
-        self.open_session()
-        self.assertEqual(self.status("story_c2_s1"), "active")
-        self.assertEqual(profile(self.state)["tools"], tools)
-        self.assertEqual(self.state.money, money)
-        self.assertEqual(self.state.v2["story"]["completed_chapters"], [1])
-        # Hailing the cat again after the finish opens the cat's own conversation, not the step.
-        self.talk("grandmother_whiskers")
-        self.assertEqual(self.state.v2["story"]["completed_chapters"], [1])
-        self.assertEqual(len(set(self.state.narrative.reward_claims)), len(self.state.narrative.reward_claims))
-
-    def test_a_step_is_never_time_limited(self):
-        for qid in STEPS:
-            row = self.content.quests[qid]
-            steps = row["objective"] if isinstance(row["objective"], list) else [row["objective"]]
-            for step in steps:
-                self.assertFalse({"deadline", "until", "by_minute", "expires"} & set(step), qid)
-            self.assertNotIn("time_limit", row)
 
     def travel(self, lake):
         """Tow to another lake as the game does: docked at the landing, then change_lake."""
@@ -306,6 +261,106 @@ class Story(unittest.TestCase):
         # At the marker, before the reading: Bot chooses his knot with the Skipper.
         self.assertEqual(self.scene(knot), ["scene:story_c4_knot", "scene:story_c4_tied"])
         self.talk("sora", "turn_in")
+
+    def settle_by_the_reflection(self):
+        """Anchor in Nebula open at the calm reflection, where "Settle in" is offered."""
+        self.state.x, self.state.z = centre("nebula:calm_reflection")
+        self.state.speed, self.state.throttle, self.state.throttle_setting = 0.0, 0.0, 0.0
+        self.state.anchored = True
+        self.assertIsNone(nearby_npc(self.state))
+        self.press("x")
+        self.assertIn("Settle in", self.session.ui.settle_prompt)
+
+    def wait(self, seconds, step=5.0):
+        for _ in range(int(seconds / step)):
+            self.session.tick(Keys(), step)
+
+    def play_chapter_five(self, together=True):
+        self.travel("nebula")
+        self.assertEqual(self.scene(), ["scene:story_c5_arrive"])  # the first trip onto the sky
+        self.talk("astra_9", "turn_in")
+        self.assertEqual(self.status("story_c5_s2"), "active")
+        self.settle_by_the_reflection()
+        self.press("c")
+        self.assertTrue(self.session.ui.settling)
+        self.wait(15)  # the first cue, then Astra-9 drifts alongside
+        self.assertEqual(self.state.v2["story"]["settle"]["cues"], 1)
+        self.assertEqual(self.session.conversation.node_id, "scene:story_c5_together")
+        choice = "Watch together" if together else "We'll keep still"
+        index = 1 if together else 2
+        self.press(str(index))
+        self.assertEqual(self.session.ui.mode, "play")
+        self.assertEqual(self.state.v2["story"]["settle"]["together"], together, choice)
+        self.wait(30)
+        self.assertEqual(self.status("story_c5_s2"), "ready")
+        self.assertEqual(self.scene("Draw it", "Go home to Briar Landing"),
+                         ["scene:story_c5_whale", "scene:story_c5_whale:2", "scene:story_c5_drawn"])
+        self.world = self.session.world
+        self.assertEqual(self.world.id, "briar")  # the free trip, from the reflection
+
+    def play_the_ending(self):
+        self.assertEqual(self.scene(), ["scene:end_01", "scene:end_01:2", "scene:end_01:3", "scene:end_01b",
+                                        "scene:end_01b:2", "scene:end_02", "scene:end_02:2", "scene:end_03",
+                                        "scene:end_03:2"])
+        self.press("x")
+        self.assertEqual(self.session.ui.mode, "credits")
+        self.press("return")  # too soon: the credits hold
+        self.assertEqual(self.session.ui.mode, "credits")
+        self.session.tick(Keys(), 3.0)
+        self.press("return")
+        self.assertEqual(self.session.ui.mode, "play")
+
+
+class Story(StoryPlay):
+    def test_chapter_one_waits_for_the_prologue(self):
+        state = State.new(World("briar"), seed=5)  # a save the prologue has not opened
+        autostart_story(state, self.content)
+        self.assertEqual(state.narrative.quest("story_c1_s1").status, "available")
+        state.v2["story"]["chapter"] = 1
+        autostart_story(state, self.content)
+        self.assertEqual(state.narrative.quest("story_c1_s1").status, "active")
+
+    def test_a_chapter_starts_without_an_offer_and_steps_only_on_play(self):
+        autostart_story(self.state, self.content)
+        self.assertEqual(self.status("story_c1_s1"), "active")
+        self.assertEqual(self.status("story_c1_s2"), "available")  # waits for step one's turn-in
+        self.assertEqual(self.status("story_c2_s1"), "available")  # waits for chapter one
+        self.assertTrue(all(self.status(qid) != "declined" for qid in STEPS))
+
+    def test_chapter_one_runs_from_a_new_save_to_its_finish(self):
+        self.play_chapter_one()
+        self.assertTrue(chapter_finished(self.state, 1))
+        self.assertEqual(self.state.v2["story"]["completed_chapters"], [1])
+        self.assertEqual(self.state.v2["story"]["chapter"], 2)
+        self.assertIn("frog", profile(self.state)["shells"])
+        self.assertIn("chart:reeds", self.state.v2["unlocks"])
+        self.assertEqual(self.status("story_c2_s1"), "active")  # chapter two starts at once
+
+    def test_a_reload_mid_chapter_keeps_progress_and_pays_no_reward_twice(self):
+        self.play_chapter_one()
+        tools = list(profile(self.state)["tools"])
+        money = self.state.money
+        self.state.save(self.path)
+        self.state = State.load(self.path, self.world)
+        self.open_session()
+        self.assertEqual(self.status("story_c2_s1"), "active")
+        self.assertEqual(profile(self.state)["tools"], tools)
+        self.assertEqual(self.state.money, money)
+        self.assertEqual(self.state.v2["story"]["completed_chapters"], [1])
+        # Hailing the cat again after the finish opens the cat's own conversation, not the step.
+        self.talk("grandmother_whiskers")
+        self.assertEqual(self.state.v2["story"]["completed_chapters"], [1])
+        self.assertEqual(len(set(self.state.narrative.reward_claims)), len(self.state.narrative.reward_claims))
+
+    def test_a_step_is_never_time_limited(self):
+        story = [qid for qid, row in self.content.quests.items() if row.get("kind") == "story"]
+        self.assertEqual(len(story), 18)  # the prologue's three and chapters 1–5
+        for qid in story:
+            row = self.content.quests[qid]
+            steps = row["objective"] if isinstance(row["objective"], list) else [row["objective"]]
+            for step in steps:
+                self.assertFalse({"deadline", "until", "by_minute", "expires"} & set(step), qid)
+            self.assertNotIn("time_limit", row)
 
     def test_chapters_three_and_four_run_to_the_nebula_route(self):
         self.play_chapter_one()
@@ -407,6 +462,157 @@ class Story(unittest.TestCase):
         self.press("c")
         self.assertIsNone(self.session.conversation)
         self.assertEqual(self.state.v2["story"]["scene_states"]["story_c4_tied"], "done")
+
+    def test_chapter_five_and_the_ending_reach_the_credits(self):
+        self.play_chapter_one()
+        self.play_chapter_two()
+        self.play_chapter_three()
+        self.play_chapter_four()
+        self.play_chapter_five()
+        self.assertEqual(self.status("story_c5_s3"), "active")
+        self.assertIn("astral", profile(self.state)["shells"])
+        # The winch is unlocked for sale by the shell, as the Duck shell unlocks the chime (05 §2.5).
+        self.assertNotIn("zero_g_winch", profile(self.state)["tools"])
+        self.play_the_ending()
+        story = self.state.v2["story"]
+        self.assertEqual(story["completed_chapters"], [1, 2, 3, 4, 5])
+        self.assertEqual(story["chapter"], 6)
+        self.assertEqual(self.state.v2["book"]["title"], "book_of_five_waters")
+        from .botidentity import book_credit
+        self.assertEqual(book_credit(self.state), "the Skipper & " + profile(self.state)["bot_name"])
+        self.assertEqual(profile(self.state)["collar"]["stage"], "favorite")
+        for scene in ("ending", "end_03", "credits"):
+            self.assertEqual(story["scene_states"][scene], "done", scene)
+        self.assertEqual(self.status("story_c5_s3"), "completed")
+        # Play continues at the landing, where the book shows its new title (V1-17's ceremony). Then
+        # free play: no scene left to play, and the cats greet the author.
+        self.press("x")
+        self.assertEqual((self.session.ui.mode, self.session.ui.book_ceremony), ("journal", "book_of_five_waters"))
+        self.press("esc")
+        self.press("x")
+        self.assertEqual(self.session.ui.mode, "play")
+        self.assertIsNone(self.session.conversation)
+        from .dialogue import greeting
+        self.assertEqual(greeting(self.state, self.content, "grandmother_whiskers"),
+                         "There's my author. What did the lake tell you today?")  # after_ch5 (05 §4)
+        self.assertTrue(self.talk("grandmother_whiskers")[0].endswith(":greeting"))
+
+    def test_watching_together_counts_only_by_the_reflection(self):
+        self.play_chapter_one()
+        self.play_chapter_two()
+        self.play_chapter_three()
+        self.play_chapter_four()
+        self.travel("nebula")
+        self.scene()
+        self.talk("astra_9", "turn_in")
+        self.settle_by_the_reflection()
+        self.press("c")
+        self.wait(15)
+        self.press("1")  # watch together
+        settle = self.state.v2["story"]["settle"]
+        seconds = settle["seconds"]
+        # Sailing off across Nebula open, out of the reflection's 200 m: paused.
+        cx, cz = centre("nebula:calm_reflection")
+        far = next((cx + r * math.cos(a / 8 * math.tau), cz + r * math.sin(a / 8 * math.tau))
+                   for r in (260, 320, 400) for a in range(8)
+                   if self.world.navigable(cx + r * math.cos(a / 8 * math.tau), cz + r * math.sin(a / 8 * math.tau))
+                   and self.world.zone_at(cx + r * math.cos(a / 8 * math.tau), cz + r * math.sin(a / 8 * math.tau)) == "open")
+        self.state.anchored, (self.state.x, self.state.z) = False, far
+        self.wait(40)
+        self.assertEqual(settle["seconds"], seconds)
+        self.assertIn("paused", self.session.ui.settle_prompt)
+        from . import comfort  # a settle paused out here holds no nap off
+        comfort.change_mode(self.state.v2, "old_salt")
+        self.state.v2["needs"]["awake_h"] = 99.0
+        self.session.tick(Keys(), 1.0)
+        self.assertEqual(self.session.ui.mode, "catnap")
+        comfort.change_mode(self.state.v2, "cozy")
+        self.state.v2["needs"]["awake_h"] = 0.0
+        self.session.ui.mode = "play"
+        # Home to Briar: the step can't finish there either.
+        self.travel("briar")
+        self.assertFalse(self.session.ui.settling)
+        self.wait(40)
+        self.assertEqual((settle["seconds"], self.status("story_c5_s2")), (seconds, "active"))
+        # Back by the reflection, hands-free again from where it paused.
+        self.travel("nebula")
+        self.settle_by_the_reflection()
+        self.press("c")
+        self.state.anchored, self.state.speed = False, 2.0
+        self.wait(30)
+        self.assertEqual(self.status("story_c5_s2"), "ready")
+
+    def test_moving_pauses_settling_and_never_resets_it(self):
+        self.play_chapter_one()
+        self.play_chapter_two()
+        self.play_chapter_three()
+        self.play_chapter_four()
+        self.travel("nebula")
+        self.scene()
+        self.talk("astra_9", "turn_in")
+        self.settle_by_the_reflection()
+        self.press("c")
+        self.wait(10)
+        seconds = self.state.v2["story"]["settle"]["seconds"]
+        self.assertAlmostEqual(seconds, 10.0, delta=0.1)  # with the frame "Settle in" was chosen on
+        self.state.anchored = False  # drifting off: paused, not reset
+        self.wait(20)
+        self.assertEqual(self.state.v2["story"]["settle"]["seconds"], seconds)
+        self.assertIn("paused", self.session.ui.settle_prompt)
+        # A reload keeps the progress; settling in again goes on from there.
+        self.reload()
+        self.settle_by_the_reflection()
+        self.assertEqual(self.state.v2["story"]["settle"]["seconds"], seconds)
+        self.press("c")
+        self.wait(5)
+        self.assertEqual(self.state.v2["story"]["settle"]["cues"], 1)
+        self.assertEqual(self.session.conversation.node_id, "scene:story_c5_together")
+        self.press("2")  # keep still alone
+        # Needs never interrupt Settle In, even in Old Salt mode.
+        from . import comfort
+        comfort.change_mode(self.state.v2, "old_salt")
+        self.state.v2["needs"]["awake_h"] = 99.0
+        self.wait(30)
+        self.assertEqual(self.session.ui.mode, "dialogue")  # the whale, not a nap
+        self.assertEqual(self.session.conversation.node_id, "scene:story_c5_whale")
+
+    def test_the_credits_offer_a_key_only_once_their_hold_is_over(self):
+        from .platform import Text
+        from .ui import CREDITS_HOLD_S, UI, UIState
+        text = Text()
+        self.addCleanup(text.close)
+        renderer = UI(text, self.world)
+        for shown, offered in ((0.0, False), (CREDITS_HOLD_S, True)):
+            drawn = []
+            renderer._center = lambda frame, s, *args, **kw: drawn.append(s)
+            renderer.draw(np.zeros((720, 1280, 3), np.uint8), self.state, UIState(mode="credits", credits_s=shown))
+            self.assertIn("The Book of Five Waters", drawn)
+            self.assertEqual(any("keep fishing" in line for line in drawn), offered, shown)
+
+    def test_the_free_trip_needs_the_lines_aboard(self):
+        self.play_chapter_one()
+        self.play_chapter_two()
+        self.play_chapter_three()
+        self.play_chapter_four()
+        self.travel("nebula")
+        self.scene()
+        self.talk("astra_9", "turn_in")
+        self.settle_by_the_reflection()
+        self.press("c")
+        self.wait(15)
+        self.press("1")  # watch together
+        self.wait(30)
+        from .sim import SetLine
+        self.state.lines.append(SetLine("std", ["worm"], 0, 0, 10, 0, "open", []))
+        self.scene("Draw it", "Go home to Briar Landing")
+        self.assertEqual(self.session.world.id, "nebula")  # no trip with a line out
+        self.assertEqual(self.status("story_c5_s3"), "active")
+        self.state.lines.clear()
+        self.state._park(self.world)
+        self.assertIsNone(self.session.change_lake("briar"))  # home any other way
+        self.world = self.session.world
+        self.play_the_ending()
+        self.assertEqual(self.state.v2["story"]["chapter"], 6)
 
     def test_a_reading_outside_its_window_does_not_count(self):
         self.play_chapter_one()

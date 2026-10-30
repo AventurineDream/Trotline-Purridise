@@ -1558,10 +1558,7 @@ V1-34 (#62) is the story: a prologue, five chapters, the Settle In finale and th
 - **Trimmed lines.** Chapter 2's `05 §2.2` has four bubbles at the end, and a node holds at most three. Bot's "I am a duck now" line is dropped.
 - **Turn-in labels.** Each step's `turn_in_choice` is a line of the step, for example "Let's find the reeds.", rather than the generic label.
 
-**Not built yet.** Each of these is a later part of V1-34.
-- Chapter 5, which needs the Settle In interaction (`settle` steps and their cues). Chapters 3–4 follow in part 3, below.
-- The ending, including the book retitle and credits.
-- Tools lent for chapter three, and a chapter's visible world changes (the Marked Pool barrier and sign, for instance), which belong to V1-35.
+**Built in later parts.** Chapters 3–4 are part 3, and chapter 5 and the ending are part 4 (below). A chapter's visible world changes, such as the Marked Pool barrier and sign, belong to V1-35.
 
 **Tests (`test_story`).** A new save's first step starts only once its chapter is open. Chapter one runs from Pip's hail through turn-ins to Grandmother's, and chapter two on Cedar through Doc's, all by real hails and events. A reload mid-chapter keeps the progress and pays nothing twice. A story step has no time limit, story steps appear in the journal, and no friend's letter is queued for a story giver.
 
@@ -1647,3 +1644,44 @@ When `pro_06` is done, the prologue is done and chapter one opens: `story.chapte
 - Readings outside their windows, or outside the trench, don't count.
 - Each new scene is interrupted and reloaded. It replays, the knot must be chosen, and every step is paid once.
 - A Bot scene stays open across frames and shows his name. A scene's footer offers no Esc (`test_prologue`).
+
+## Implemented chapter 5, Settle In, the ending and credits (V1-34, part 4)
+
+**Chapter 5 as authored (`05 §2.5`).**
+
+| Step | Cat | Objective | Turned in by |
+| --- | --- | --- | --- |
+| `story_c5_s1` Salutations | Astra-9 | talk to Astra-9 | her hail |
+| `story_c5_s2` Settle In | Astra-9 | `settle` in `nebula:open`, 3 cues | the Star-Whale scenes; pays the Astral shell |
+| `story_c5_s3` The First New Page | Grandmother | "Go home to Briar Landing" | the ending, `end_03` |
+
+The Zero-G Winch is unlocked for sale by the Astral shell, as the Duck shell unlocks the Wave Chime (`05 §2.5` "unlocked"). The Reed Anchor and the Thermocline Scanner are the story's two gifts.
+
+**Scenes.**
+- **Arrival.** `story_c5_arrive` is Bot's first time on the sky, played on arriving at the Lagoon.
+- **Watching together.** `story_c5_together` follows the first cue: Astra-9 asks "May I watch with you?", and the Skipper can watch together or keep still alone.
+- **The whale.** `story_c5_whale` follows the third cue. Its single input is "Draw it", and `story_c5_drawn` follows: "That is a useful note."
+- **The trip home.** The last choice offers the free trip home: "Go home to Briar Landing", or "Stay a while". The trip leaves from wherever the boat is. With a line still out it isn't taken: a toast asks for the lines aboard, and the landing's travel goes home any time. Going home any other way works too, since the ending plays on arriving at Briar while the last step is under way. Nothing happens automatically (`02 §13`).
+
+**Settle In (`02 §13.5`, `story.settle_*`).**
+- **The prompt.** "C  Settle in" is offered while the step is under way and the boat is anchored in Nebula open within 200 m of the marked reflection. The hail key starts and stops it while no cat is in range.
+- **Progress.** Real seconds of stillness add up to 45, with cues at 15, 30 and 45: Bot's three lines. Moving or drifting pauses the progress and never resets it. It is saved in `story.settle`, so it survives a reload too.
+- **Watching together.** It finishes the rest hands-free: the seconds count whether or not the boat keeps still, but only within 200 m of the reflection in Nebula open. Away from it, or on another lake, nothing counts and the step can't finish. Travelling ends settling, and the progress is kept.
+- **No interruptions.** Needs prompts and forced naps never interrupt it while the boat is by the reflection; a settle paused elsewhere holds nothing off. The weather can't, since nothing reads it.
+- **The finish.** The third cue emits `settle.complete`, which finishes the step.
+
+**The ending (`05 §3`).**
+- **`end_01`.** Grandmother asks for the notes, and the hosts answer on Pounce's radio. Their lines are prefixed "Doc Barnaby (radio): …", and the radio carries on in `end_01b`, since a node holds three bubbles.
+- **`end_02`.** When it is done, it retitles the book *The Book of Five Waters* (`promote_title`), and the author line becomes "the Skipper & {BotName}" (`book_credit`).
+- **`end_03`.** When it is done, it marks the `ending` done and makes the knot "Still my favorite". It completes and turns in the last step, so chapter five finishes and `story.chapter` becomes 6. Then the credits roll.
+- **Credits.** The credits are a scene state of their own, pending until dismissed, so a game quit during them rolls them again. They hold for 3 seconds, so a key still pressed from the ending can't dismiss them. V1-35 stages the roll over the boat at dawn.
+- **After the credits.** Play resumes at the landing, where the book shows its new title with V1-17's title ceremony. The ceremony waits while a story scene is due or the credits are pending, so a game reloaded mid-ending plays the rest of the ending first. Then the cats' `after_ch5` greetings follow.
+
+**Calls made where the script is silent or doesn't fit.**
+- **Splits.** Astra-9's long line splits after "calmest." The whale's stage directions are left to V1-35.
+- **Labels.** The trip and "keep still" choice labels are written to fit their prompts.
+
+**Tests.**
+- **`test_story`.** Chapter five settles, watches together and draws the whale. Watching together counts only by the reflection: sailing off or going home pauses it, and nothing finishes the step there. It takes the free trip home and plays the ending and the credits. Moving pauses settling and a reload keeps it. An Old Salt nap can't interrupt it. With a line out the free trip isn't taken, and travelling home by the landing plays the ending too.
+- **`test_playthrough` (the acceptance test).** One new game is played from "New morning" to the credits. At the first bubble of every scene, and at the credits, the game is quit and continued. Each scene must be pending with nothing paid, and it must replay from its start. Every story step is claimed exactly once. The ending opens as soon as the free trip arrives at Briar, so the test reads each conversation until a new one opens.
+- **Shots.** `--shots` adds `story-scene-bot.png` (the knot scene), `story-settle-in.png` (the HUD prompt) and `story-credits.png`.

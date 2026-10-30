@@ -382,6 +382,14 @@ class Row:
     arg: str = ""
 
 
+CREDITS_TITLE = "The Book of Five Waters"
+CREDITS_HOLD_S = 3.0  # the credits can't be dismissed by a key still being pressed from the ending
+CREDITS_LINES = ("Grandmother Whiskers · Pip & Pebble · Doc Barnaby",
+                 "Captain Huckleberry · Sora · Professor Astra-9",
+                 "and everyone who ever tied up at Briar Landing.",
+                 "Thank you for fishing with us.")
+
+
 @dataclass
 class UIState:
     mode: str = "title"
@@ -447,6 +455,10 @@ class UIState:
     conversation: object = None
     dialogue_content: object = None
     dialogue_from: str = "play"
+    # V1-34 Settle In: whether the Skipper is settling, and the HUD's prompt for it.
+    settling: bool = False
+    settle_prompt: str = ""
+    credits_s: float = 0.0  # real seconds the credits have shown
 
 
 def comfort_controls(viewport):
@@ -728,7 +740,25 @@ class UI:
                 self._settings(frame, state, ui)
         elif mode == "help":
             self._help(frame, ui)
+        elif mode == "credits":
+            self._credits(frame, state, ui)
         self._caption(frame, state, ui)
+
+    def _credits(self, frame, state, ui):
+        """The story's end (05 §3). V1-35 stages the roll over the boat at dawn."""
+        from .botidentity import book_credit
+        h, w = frame.shape[:2]
+        frame[:] = (frame.astype(np.float32) * 0.25).astype(frame.dtype)
+        big, small = self._size(frame, "title"), self._size(frame, "small")
+        rows = [(CREDITS_TITLE, big, GOLD), (book_credit(state), small, INK), ("", small, INK)]
+        rows += [(line, small, INK) for line in CREDITS_LINES]
+        hint = (self._controls(ui, "Press any key to keep fishing.", "Press A to keep fishing.")
+                if ui.credits_s >= CREDITS_HOLD_S else "")  # keys do nothing while the credits hold
+        rows += [("", small, INK), (hint, small, DIM)]
+        y = h // 2 - sum(self.cell(size)[1] + 8 for _text, size, _color in rows) // 2
+        for text, size, color in rows:
+            self._center(frame, text, w / 2, y, size, color)
+            y += self.cell(size)[1] + 8
 
     def _dialogue(self, frame, state, ui):
         chat = ui.conversation
@@ -1227,6 +1257,13 @@ class UI:
         if not interactions:
             return
         npc = nearby_npc(state)
+        if npc is None and ui.settle_prompt:
+            # Settle In (V1-34) uses the hail key while no cat is in range.
+            hail = "RB" if ui.input_device == "gamepad" else "C"
+            label = ui.settle_prompt.replace("{key}", hail)
+            px, py = m, h - m - max(map_h, stat_h + lines_h) - 34 - 8
+            self._panel(frame, px, py, self._measure(label, small) + 32, 34)
+            self._text(frame, label, px+16, py+7, small, INK, False, "sans")
         if npc is not None:
             hail = "RB" if ui.input_device == "gamepad" else "C"
             label = f"{hail}  Hail {npc.name}"
@@ -2491,6 +2528,45 @@ def comfort_gallery(destination, *, text=None, world=None, background=None):
         (out / "comfort-benchmark.json").write_text(json.dumps(report, indent=2) + "\n")
         print("comfort shots / benchmark: " + json.dumps(report))
         return report
+    finally:
+        if own_text:
+            text.close()
+
+
+def story_gallery(destination, *, text=None, world=None, background=None):
+    """--shots V1-34 story fixtures: Bot's knot scene, the Settle In prompt and the credits."""
+    from pathlib import Path
+    from .content import load_content
+    from .pngsave import write_png
+    from .sim import State
+    from .story import scene_conversation
+
+    own_text = text is None
+    text = Text() if own_text else text
+    world = World() if world is None else world
+    out = Path(destination)
+    out.mkdir(parents=True, exist_ok=True)
+    content = load_content()
+    state = State.new(world, seed=34)
+    state.tutorial = 4
+    state.x, state.z = world.slip.world(-40.0, 0.0)  # out on the water, no cat in hail range
+    knot = scene_conversation(state, content, "story_c4_knot")
+    panels = (
+        ("scene-bot", UIState(mode="dialogue", conversation=knot, dialogue_content=content)),
+        ("settle-in", UIState(mode="play", settling=True,
+                              settle_prompt="Settling in. Keep still.  (1 of 3)  {key} Stop")),
+        ("credits", UIState(mode="credits", credits_s=3.0)),
+    )
+    renderer = UI(text, world)
+    try:
+        for name, panel in panels:
+            frame = (resize_rgb(background, 1280, 720).copy() if background is not None
+                     else np.full((720, 1280, 3), (48, 79, 87), np.uint8))
+            if panel.mode == "credits":
+                state.set_scene_status("ending", "done")  # the author line as the credits show it
+            state.toasts.clear()
+            renderer.draw(frame, state, panel)
+            write_png(out / f"story-{name}.png", frame)
     finally:
         if own_text:
             text.close()
