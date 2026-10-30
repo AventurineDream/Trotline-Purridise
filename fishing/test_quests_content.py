@@ -123,7 +123,7 @@ class ShippedContent(unittest.TestCase):
                         given_ripples.append(reward["ripple_id"])
         # 44 quests B, 34 quests A and 3 host errands; the story steps arrive with V1-34.
         self.assertEqual(sum(q.get("kind") in ("host", "a", "b") for q in c.quests.values()), 81)
-        self.assertEqual(sum(q.get("kind") == "story" for q in c.quests.values()), 15)  # prologue, ch. 1–4 (V1-34)
+        self.assertEqual(sum(q.get("kind") == "story" for q in c.quests.values()), 18)  # the prologue and chapters 1–5 (V1-34)
         # The new cats give Ripples 11-44 in roster order; each keepsake belongs to its giver.
         self.assertEqual(given_ripples, [f"ripple_{n}" for n in range(11, 45)])
         self.assertEqual(sorted(c.keepsakes), sorted(keepsakes))
