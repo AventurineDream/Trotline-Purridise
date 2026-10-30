@@ -9,6 +9,7 @@ step by step from `02 §12.3`.
 from __future__ import annotations
 
 import math
+import re
 
 from . import lakes
 from .content import BOOK_STAGE_ORDER, LINE_TIER_ORDER
@@ -46,6 +47,7 @@ class QuestManager:
     def handle_event(self, state, event: dict) -> None:
         if not isinstance(event, dict):
             return
+        autostart_story(state, self.content)
         kind = event.get("type")
         for quest_id, definition in self.content.quests.items():
             if "kind" in definition:
@@ -657,6 +659,67 @@ def count_todays_hail(state, content, quest_id: str, npc_id: str) -> None:
     data["days"] = days
 
 
+# The story (01 §5): each chapter is three steps, meet → notice → share, and the
+# steps are `story`-kind quest rows with ids story_c<chapter>_s<step>.
+STORY_STEPS_PER_CHAPTER = 3
+
+
+def story_part(quest_id) -> tuple[int, int] | None:
+    """(chapter, step) of a story step's id, or None for any other quest."""
+    match = re.fullmatch(r"story_c([1-5])_s([1-9])", quest_id) if isinstance(quest_id, str) else None
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def autostart_story(state, content) -> None:
+    """Story steps are never offered or declined. A step starts once its chapter is the current
+    one (the prologue opens chapter one) and its `requires` are met."""
+    story = state.v2.get("story") if isinstance(state.v2, dict) else None
+    current = story.get("chapter", 0) if isinstance(story, dict) else 0
+    for quest_id, definition in content.quests.items():
+        if definition.get("kind") != "story":
+            continue
+        part = story_part(quest_id)
+        if part is None or type(current) is not int or current < part[0]:
+            continue
+        progress = state.narrative.quest(quest_id)
+        if progress is not None and progress.status == "available":
+            accept_quest(state, content, quest_id)
+
+
+def finish_story_step(state, quest_id: str) -> bool:
+    """A chapter's last step, turned in, completes the chapter (chapter_finished reads this)."""
+    part = story_part(quest_id)
+    if part is None or part[1] != STORY_STEPS_PER_CHAPTER:
+        return False
+    chapter, _step = part
+    story = state.v2.setdefault("story", {})
+    completed = story.setdefault("completed_chapters", [])
+    if chapter not in completed:
+        completed.append(chapter)
+    if not (type(story.get("chapter")) is int and story["chapter"] > chapter):
+        story["chapter"] = chapter + 1
+    return True
+
+
+def story_focus(state, content, npc_id: str) -> str | None:
+    """The story step this cat has to say something about: a ready turn-in to them first, then a
+    talk step aimed at them that is under way."""
+    active = None
+    for quest_id, definition in content.quests.items():
+        if definition.get("kind") != "story":
+            continue
+        progress = state.narrative.quests.get(quest_id)
+        if progress is None:
+            continue
+        if progress.status == "ready" and definition.get("giver_id") == npc_id:
+            return quest_id
+        if progress.status == "active" and active is None:
+            step, _data = current_step(definition, progress)
+            if step is not None and step.get("type") == "talk_to" and step.get("npc_id") == npc_id:
+                active = quest_id
+    return active
+
+
 def legendary_recorded(state, legendary_id) -> bool:
     """A legendary's page holds a record. The V3 Guardian sighting counts as its record."""
     from .book import LEGENDARY_IDS
@@ -778,7 +841,7 @@ def accept_quest(state, content, quest_id: str) -> bool:
 
 def apply_reward(state, reward: dict) -> None:
     """Credit every V1.0 reward kind (02 §12.1). The caller has already latched the claim."""
-    from .botidentity import grant_shell
+    from .botidentity import grant_shell, grant_tool
     from .data import BAIT_BY_ID
     v2 = state.v2
     cash = reward.get("cash", 0)
@@ -800,3 +863,5 @@ def apply_reward(state, reward: dict) -> None:
             pantry[item_id] = pantry.get(item_id, 0) + count
     for shell_id in reward.get("shells", ()):
         grant_shell(state, shell_id)
+    for tool_id in reward.get("tools", ()):
+        grant_tool(state, tool_id)

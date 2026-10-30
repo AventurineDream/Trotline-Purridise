@@ -10,7 +10,7 @@ import time
 import numpy as np
 
 from .content import load_content
-from .quests import QuestManager
+from .quests import QuestManager, autostart_story
 from .dialogue import nearby_npc, open_conversation, record_hail
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
@@ -124,6 +124,7 @@ class Session:
         self._input_repeat: dict[str, float] = {}
         self._npc_content = load_content()
         self.quest_manager = QuestManager(self._npc_content)
+        autostart_story(self.state, self._npc_content)  # a story step starts once its chapter is open (V1-34)
         self._attach_quest_manager()
         self.conversation = None
         self.ui.dialogue_content = self._npc_content
