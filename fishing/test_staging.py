@@ -185,3 +185,106 @@ class InTheSession(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Finale(unittest.TestCase):
+    """Settle In's cues on the water, the Star-Whale and the drawing (02 §13.5, 05 §2.5)."""
+
+    def setUp(self):
+        from .lakes import place
+        self.world = World("nebula")
+        self.state = State.new(self.world, seed=35)
+        row = place("nebula:calm_reflection")[1]
+        self.centre = (row["x"], row["z"])
+        self.state.x, self.state.z = self.centre
+        self.state.narrative.quest("story_c5_s2").status = "active"
+
+    def settle(self, seconds):
+        self.state.v2["story"]["settle"] = {"seconds": seconds, "cues": sum(seconds >= c for c in (15, 30, 45)),
+                                            "together": False}
+        from .finale import settle_look
+        return settle_look(self.state)
+
+    def test_each_cue_shows_on_the_water_when_it_is_reached(self):
+        self.assertEqual(self.settle(5.0), {"still": 0.0, "lilies": 0.0, "glow": 0.0})
+        look = self.settle(15.0)
+        self.assertEqual(look["still"], 1.0)  # the stars stop rippling
+        self.assertEqual(look["glow"], 0.0)
+        look = self.settle(30.0)
+        self.assertEqual((look["lilies"], look["glow"]), (1.0, 0.0))  # the lilies have drifted in
+        self.assertEqual(self.settle(45.0)["glow"], 1.0)  # the deep glow has risen
+
+    def test_the_cues_belong_to_the_reflection_and_the_step(self):
+        self.state.x += 300.0  # sailed off
+        self.assertEqual(self.settle(45.0), {"still": 0.0, "lilies": 0.0, "glow": 0.0})
+        self.state.x, self.state.z = self.centre
+        self.state.narrative.quests["story_c5_s2"].status = "ready"  # the whale's scenes
+        self.assertEqual(self.settle(0.0), {"still": 1.0, "lilies": 1.0, "glow": 1.0})
+        self.state.narrative.quests["story_c5_s2"].status = "completed"  # drawn: the Lagoon is itself again
+        self.assertEqual(self.settle(45.0)["still"], 0.0)
+
+    def test_the_first_cue_stills_the_water_in_both_renderers(self):
+        from .caldera import reflection_strength
+        light = lighting_at(self.state.game_minutes, self.state)
+        self.settle(5.0)
+        self.assertEqual(reflection_strength(self.state, light), 0.0)
+        self.settle(20.0)
+        self.assertEqual(reflection_strength(self.state, light), 1.0)
+        crater = State.new(World("crater"), seed=4)
+        self.assertEqual(reflection_strength(crater, light), float(np.clip(
+            light["night"] * (1 - light["cloud_shade"]) * (1 - light["rain"]) * (1 - light["mist"]), 0, 1)))
+
+    def test_lilies_glow_and_whale_are_drawn_on_the_lagoon_only(self):
+        from .finale import faces
+        self.settle(5.0)
+        self.assertEqual(faces(self.state, self.world), [])
+        self.settle(30.0)
+        lilies = faces(self.state, self.world)
+        self.assertEqual(len(lilies), 8 * (8 + 5))  # eight pads, each with a star at its heart
+        self.settle(45.0)
+        with_glow = faces(self.state, self.world)
+        self.assertGreater(len(with_glow), len(lilies))
+        self.state.stage_light = {"whale": 1.0}
+        whale = faces(self.state, self.world)
+        self.assertGreater(len(whale), len(with_glow) + 80)
+        self.assertGreater(max(float(f.pts[:, 1].max()) for f in whale), 2.0)  # risen over the water
+        self.assertTrue(all(f.emissive for f in whale))
+        self.assertEqual(faces(State.new(World("briar"), seed=1), World("briar")), [])
+
+    def test_the_whale_rises_holds_and_the_drawing_is_made_stroke_by_stroke(self):
+        from .finale import SKETCH, sketch_strokes
+        rise = [staging.sample(staging.Clock("story_c5_whale", t=t))["whale"] for t in (0.0, 2.0, 6.5, 9.0, 60.0)]
+        self.assertEqual(rise, sorted(rise))
+        self.assertEqual((rise[0], rise[-1]), (0.0, 1.0))  # held, risen, until it is drawn
+        drawn = staging.Clock("story_c5_drawn", t=3.0)
+        self.assertEqual(staging.sample(drawn)["sketch"], 1.0)
+        self.assertEqual(sketch_strokes(0.0), [])
+        self.assertEqual(sketch_strokes(1.0), [list(s) for s in SKETCH])
+        counts = [sum(len(s) for s in sketch_strokes(k / 10)) for k in range(11)]
+        self.assertEqual(counts, sorted(counts))  # the pencil only adds
+        # Reduced Motion: the whale is simply there, and the drawing complete.
+        self.assertEqual(staging.sample(staging.Clock("story_c5_whale"), reduced=True)["whale"], 1.0)
+        self.assertEqual(staging.sample(staging.Clock("story_c5_drawn"), reduced=True)["sketch"], 1.0)
+
+    def test_the_whale_scene_stages_in_play_and_a_trip_home_leaves_it_behind(self):
+        from .test_story import StoryPlay
+
+        class Play(StoryPlay):
+            def runTest(inner):
+                inner.play_chapter_one(); inner.play_chapter_two(); inner.play_chapter_three(); inner.play_chapter_four()
+                inner.travel("nebula"); inner.scene(); inner.talk("astra_9", "turn_in")
+                inner.settle_by_the_reflection(); inner.press("c"); inner.wait(15); inner.press("1"); inner.wait(30)
+                inner.press("x")
+                session = inner.session
+                inner.assertEqual(session.stage.stage_id, "story_c5_whale")
+                session.tick(Keys(), 3.0)
+                inner.assertGreater(session.state.stage_light["whale"], 0.1)
+                inner.press("c"); inner.press("1")  # read the whale, and draw it
+                inner.assertEqual(session.stage.stage_id, "story_c5_drawn")
+                inner.assertIn("sketch", session.ui.stage_fx)
+                inner.press("1")  # go home to Briar Landing
+                inner.assertEqual(session.world.id, "briar")
+                inner.assertNotEqual(getattr(session.stage, "stage_id", None), "story_c5_drawn")
+        result = unittest.TestResult()
+        Play().run(result)
+        self.assertEqual((result.errors, result.failures), ([], []))

@@ -565,7 +565,7 @@ class SoftwareRenderer:
             # The glassy Lagoon mirrors its stars and aurora.
             from .nebula import sky_add
             reflected = reflected + sky_add(rx, ry, rz, light, self._still_anim(state))
-        if still>0:
+        if still>0 and not world.nebula:  # the Lagoon already mirrors its own stars
             full_sky = sky_color(rx,ry,rz,light)
             qx,qy,qz = (np.floor(axis*200).astype(np.int64) for axis in (rx,ry,rz))
             stars = hash21(qx+qz*13,qy+31)

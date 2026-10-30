@@ -11,6 +11,9 @@ import numpy as np
 
 
 def reflection_strength(state, light):
+    if state.lake_id == 'nebula':
+        from .finale import settle_still
+        return settle_still(state)  # Settle In's first cue: the stars stop rippling (V1-35)
     if state.lake_id != 'crater':
         return 0.0
     return float(np.clip(light['night']*(1-light['cloud_shade'])*(1-light['rain'])*

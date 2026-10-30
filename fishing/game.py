@@ -838,6 +838,7 @@ class Session:
         reset_bot(self.state)
         self.ui.mode = "play"
         self.ui.settling = False  # Settle In is kept, and taken up again by the reflection
+        self.stage = None  # a staging stays on the lake it was staged on (V1-35)
         self.ui.note = ""
         self.state.toast(caption)
         self.save()
