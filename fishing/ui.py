@@ -702,6 +702,9 @@ class UI:
             if comfort.drowsy(state.v2):
                 self._drowsy_edges(frame)
             self._hud(frame, state, ui)
+            if ui.stage_fx and "sketch" in ui.stage_fx:
+                # A "Draw it" scene read early: the drawing finishes while the staging plays out.
+                self._sketch(frame, ui.stage_fx["sketch"])
             self._comfort_status(frame, state)
             self._caption(frame, state, ui)
             self._toasts(frame, state, ui.input_device)

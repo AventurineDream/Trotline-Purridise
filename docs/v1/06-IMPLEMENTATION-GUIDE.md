@@ -1743,13 +1743,14 @@ This part stages the finale (`02 §13.5`, `05 §2.5`): the three Settle In cues 
 | A deep glow rises | 45 s | A glow spreads under the water 22 m ahead, 9 m across |
 
 - **Saved progress.** The cues follow the saved Settle In progress, so a reload shows the same water. They show while the settle step is under way or ready (the whale's scenes), and fade out between 200 m and 260 m from the reflection. Once the whale is drawn the Lagoon is itself again.
-- **Drawn by both renderers.** The lilies, the glow and the whale are world-space emissive faces, added to the Lagoon's ambient motes.
+- **Drawn by both renderers.** The lilies, the glow and the whale are world-space emissive faces, added to the Lagoon's ambient motes. They stay inside `ambient.MAX_FACES` with the motes: discs are fans of quads, and every cue with the whale is at most 89 faces.
 
 **The Star-Whale (`story_c5_whale`).** It rises out of the glow, side-on across the view, over 9 s. It breaches nose-up and arcs to rest 1.6 m over the water. It is starlit blue, with stars along the flank the Skipper sees. The view lifts with it, and it holds, risen, until the Skipper draws it.
 
 **"Draw it" (`story_c5_drawn`).**
 - **The drawing.** The Skipper's drawing appears on a book page beside the dialogue over 3 s, stroke by stroke: the back, the belly, the flukes, the eye, then the stars (`finale.SKETCH`).
 - **The whale sinks.** It stays risen for 24 s, then sinks over 6 s. A scene read early lets that play out in play, four times faster, so the whale sinks unhurried after the Skipper is free to sail.
+- **Staying early.** If the Skipper stays before the drawing is done, the page stays on screen in play until it is finished.
 - **The trip home** leaves the staging behind: `_travel_to` drops it.
 
 **Reduced Motion.** The whale is simply there, risen, and the drawing appears complete. Fades and the letterbox stay.

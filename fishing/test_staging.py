@@ -234,19 +234,31 @@ class Finale(unittest.TestCase):
         self.assertEqual(reflection_strength(crater, light), float(np.clip(
             light["night"] * (1 - light["cloud_shade"]) * (1 - light["rain"]) * (1 - light["mist"]), 0, 1)))
 
+    def test_the_whole_finale_stays_inside_the_ambient_face_budget(self):
+        from . import ambient
+        from .finale import faces
+        self.settle(45.0)
+        self.state.narrative.quests["story_c5_s2"].status = "ready"
+        self.state.stage_light = {"whale": 1.0}  # every cue and the whale at once
+        finale = faces(self.state, self.world)
+        self.assertLessEqual(len(finale), 89)
+        motes = 2 * 25  # the most the 5x5 mote neighbourhood can hold
+        self.assertLessEqual(len(finale) + motes, ambient.MAX_FACES)
+        self.assertLessEqual(len(ambient.faces(self.state, self.world)), ambient.MAX_FACES)
+
     def test_lilies_glow_and_whale_are_drawn_on_the_lagoon_only(self):
         from .finale import faces
         self.settle(5.0)
         self.assertEqual(faces(self.state, self.world), [])
         self.settle(30.0)
         lilies = faces(self.state, self.world)
-        self.assertEqual(len(lilies), 8 * (8 + 5))  # eight pads, each with a star at its heart
+        self.assertEqual(len(lilies), 8 * (2 + 1))  # eight pads, each with a star at its heart
         self.settle(45.0)
         with_glow = faces(self.state, self.world)
         self.assertGreater(len(with_glow), len(lilies))
         self.state.stage_light = {"whale": 1.0}
         whale = faces(self.state, self.world)
-        self.assertGreater(len(whale), len(with_glow) + 80)
+        self.assertGreater(len(whale), len(with_glow) + 50)
         self.assertGreater(max(float(f.pts[:, 1].max()) for f in whale), 2.0)  # risen over the water
         self.assertTrue(all(f.emissive for f in whale))
         self.assertEqual(faces(State.new(World("briar"), seed=1), World("briar")), [])
@@ -285,6 +297,34 @@ class Finale(unittest.TestCase):
                 inner.press("1")  # go home to Briar Landing
                 inner.assertEqual(session.world.id, "briar")
                 inner.assertNotEqual(getattr(session.stage, "stage_id", None), "story_c5_drawn")
+        result = unittest.TestResult()
+        Play().run(result)
+        self.assertEqual((result.errors, result.failures), ([], []))
+
+    def test_staying_before_the_drawing_is_done_keeps_the_page_until_it_is(self):
+        from .platform import Text
+        from .test_story import StoryPlay
+        from .ui import UI
+
+        class Play(StoryPlay):
+            def runTest(inner):
+                inner.play_chapter_one(); inner.play_chapter_two(); inner.play_chapter_three(); inner.play_chapter_four()
+                inner.travel("nebula"); inner.scene(); inner.talk("astra_9", "turn_in")
+                inner.settle_by_the_reflection(); inner.press("c"); inner.wait(15); inner.press("1"); inner.wait(30)
+                inner.press("x"); inner.press("c"); inner.press("1")  # read the whale, and draw it
+                session = inner.session
+                inner.press("2")  # "Stay a while", read at once
+                inner.assertEqual(session.ui.mode, "play")
+                text = Text()
+                inner.addCleanup(text.close)
+                ui, drawn = UI(text, session.world), []
+                ui._sketch = lambda frame, progress: drawn.append(progress)
+                ui.draw(np.zeros((180, 320, 3), np.uint8), session.state, session.ui)
+                inner.assertTrue(drawn and drawn[-1] < 1.0, drawn)  # still being drawn, in play
+                for _ in range(4):
+                    session.tick(Keys(), 0.25)
+                ui.draw(np.zeros((180, 320, 3), np.uint8), session.state, session.ui)
+                inner.assertEqual(drawn[-1], 1.0)  # and finished
         result = unittest.TestResult()
         Play().run(result)
         self.assertEqual((result.errors, result.failures), ([], []))
