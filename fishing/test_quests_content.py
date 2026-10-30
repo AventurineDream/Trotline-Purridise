@@ -122,7 +122,8 @@ class ShippedContent(unittest.TestCase):
                         self.assertEqual(reward["cash"], cash_a)
                         given_ripples.append(reward["ripple_id"])
         # 44 quests B, 34 quests A and 3 host errands; the story steps arrive with V1-34.
-        self.assertEqual(sum("kind" in q for q in c.quests.values()), 81)
+        self.assertEqual(sum(q.get("kind") in ("host", "a", "b") for q in c.quests.values()), 81)
+        self.assertEqual(sum(q.get("kind") == "story" for q in c.quests.values()), 6)  # chapters 1–2 (V1-34)
         # The new cats give Ripples 11-44 in roster order; each keepsake belongs to its giver.
         self.assertEqual(given_ripples, [f"ripple_{n}" for n in range(11, 45)])
         self.assertEqual(sorted(c.keepsakes), sorted(keepsakes))
@@ -594,12 +595,12 @@ class Playthrough(unittest.TestCase):
     def check_every_node_was_shown(self, lake):
         c = self.content
         authored = {nid for nid, node in c.dialogue.items()
-                    if node["quest_id"] in c.quests and "kind" in c.quests[node["quest_id"]]
-                    and c.quests[node["quest_id"]]["lake_id"] == lake}
+                    if node["quest_id"] in c.quests and c.quests[node["quest_id"]].get("kind") in ("host", "a", "b")
+                    and c.quests[node["quest_id"]]["lake_id"] == lake}  # story steps: test_story
         # A quest whose first step is talking to its giver is ready at the next hail, so its
         # (generic) progress line has no moment to be shown: Ember's and Juno's quest B.
         silent = {f"{qid}:dialogue:progress" for qid, quest in c.quests.items()
-                  if quest.get("lake_id") == lake and "kind" in quest
+                  if quest.get("lake_id") == lake and quest.get("kind") in ("host", "a", "b")
                   and (quest["objective"] if isinstance(quest["objective"], list) else [quest["objective"]])[0]
                   == {"type": "talk_to", "npc_id": quest["giver_id"]}}
         self.assertEqual(authored - self.shown, silent)
@@ -825,7 +826,7 @@ class Playthrough(unittest.TestCase):
         loaded = State.load(self.path, self.world)
         money = loaded.money
         for qid, quest in self.content.quests.items():
-            if quest.get("lake_id", self.world.id) == self.world.id and "kind" in quest:
+            if quest.get("lake_id", self.world.id) == self.world.id and quest.get("kind") in ("host", "a", "b"):
                 self.assertEqual(loaded.narrative.quests[qid].status, "completed", qid)
                 self.assertFalse(_claim_and_pay(loaded, self.content, qid))
         self.assertEqual(loaded.money, money)
