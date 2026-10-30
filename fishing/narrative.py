@@ -23,7 +23,7 @@ QUEST_IDS = (
 RIPPLE_BY_QUEST = {qid: f"ripple_{i:02d}" for i, qid in enumerate(QUEST_IDS[2:], 1)}
 # V1.0 quest ids (04): story steps, host errands and water-cat quests A and B. They share
 # this ledger with the V3 quests, so a later build's progress and claims load here too.
-V2_QUEST_ID = re.compile(r"wc_[a-z0-9_]+_[ab]|host_[a-z0-9_]+|story_c[1-5]_s[1-9]")
+V2_QUEST_ID = re.compile(r"wc_[a-z0-9_]+_[ab]|host_[a-z0-9_]+|story_c[0-5]_s[1-9]")
 ACCEPT_CLAIM = ":accept"  # an on-accept gift's claim key: "<quest id>:accept"
 
 

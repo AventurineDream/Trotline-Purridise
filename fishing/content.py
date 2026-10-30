@@ -100,6 +100,7 @@ class NarrativeContent:
     cats: dict[str, dict] = field(default_factory=dict)
     ripples: dict[str, dict] = field(default_factory=dict)    # V1.0 Ripples by id (V1-32)
     keepsakes: dict[str, dict] = field(default_factory=dict)  # keepsakes by id (V1-32)
+    scenes: dict[str, dict] = field(default_factory=dict)     # story scenes by id (V1-34)
 
     def name(self, npc_id: str) -> str:
         row = self.cats.get(npc_id) or self.npcs.get(npc_id) or {}
@@ -125,6 +126,7 @@ class GameplayContent:
     extends: dict[str, dict] = field(default_factory=dict)     # recopied V3 lines (V1-32)
     ripples: dict[str, dict] = field(default_factory=dict)     # ripples.json (V1-32)
     keepsakes: dict[str, dict] = field(default_factory=dict)   # keepsakes.json (V1-32)
+    scenes: dict[str, dict] = field(default_factory=dict)      # quests.json story scenes (V1-34)
 
 
 @dataclass(frozen=True)
@@ -500,15 +502,19 @@ NAMED_PLACES = {
 }
 # V1-31 quests (02 §12.3). Fields are closed per type, so a misspelt condition is an error.
 QUEST_KINDS = {"host", "a", "b", "story"}
+# V1-34 scene ids follow the script (05 §1–3): pro_01–pro_06 (and a branch, pro_05b), the
+# chapter scenes story_c<n>_<name>, and the ending end_01–end_03.
+SCENE_ID = r"pro_\d\d[a-z]?|story_c[1-5]_[a-z]+|end_\d\d"
 LINE_STEP_FIELDS = {"zone_id", "area_id", "tier_id", "min_tier", "hook_count", "bait_id", "set_window",
                     "in_cold_band"}
 STEP_FIELDS = {
     # Bot's 140 m launch range and line_scout_check's report-before-check are the types' own rules.
+    "line_set": LINE_STEP_FIELDS,
     "line_scout": LINE_STEP_FIELDS,
     "line_check": LINE_STEP_FIELDS | {"active_soak_game_minutes"},
     "line_scout_check": LINE_STEP_FIELDS | {"active_soak_game_minutes"},
     "anchor_idle": {"zone_id", "continuous_game_minutes"},
-    "scout_report": {"zone_id", "waypoint_ids", "windows"},
+    "scout_report": {"zone_id", "waypoint_ids", "lake_id", "windows"},
     "fish_livewell": {"zone_id", "bait_id", "species_id", "entry_window"},
     "travel_distance": {"zone_id", "distance_m", "propulsion"},
     "visit_zones": {"zone_ids", "waypoint_ids", "windows"},
@@ -637,7 +643,7 @@ class _ContentV2Validator:
     def error(self, filename, where, message):
         self.errors.append(f"{filename}:{where}: {message}")
 
-    def root(self, docs, filename, required):
+    def root(self, docs, filename, required, optional=()):
         if filename in self.unavailable_files:
             return {}
         raw = docs.get(filename)
@@ -646,7 +652,7 @@ class _ContentV2Validator:
             return {}
         for key in sorted(set(required) - raw.keys()):
             self.error(filename, "root", f"missing required field {key!r}")
-        for key in sorted(raw.keys() - set(required)):
+        for key in sorted(raw.keys() - set(required) - set(optional)):
             self.error(filename, "root", f"unknown field {key!r}")
         if type(raw.get("schema_version")) is not int or raw.get("schema_version") != 2:
             self.error(filename, "schema_version", "expected 2")
@@ -1435,11 +1441,11 @@ class _ContentV2Validator:
             places=places, species=species, legendaries=legendaries, baits=baits, dishes=dishes,
             pantry=pantry, shells=shells, tools=tools, roster=roster)
         refs.ripples, refs.keepsakes = self.keepsakes_and_ripples(docs, roster)
-        quests, quest_cats, extends = self.quests(docs, refs)
+        quests, quest_cats, extends, scenes = self.quests(docs, refs)
         if self.errors:
             raise ContentError("\n".join(self.errors))
         return GameplayContent(species, baits, boats, lakes, zones, pantry, dishes, legendaries, roster,
-                               places, quests, quest_cats, extends, refs.ripples, refs.keepsakes)
+                               places, quests, quest_cats, extends, refs.ripples, refs.keepsakes, scenes)
 
     def roster(self, docs, lakes, boats):
         """The 52 cats (51 rows; Pip & Pebble share one): role, lake, boat and appearance."""
@@ -1590,15 +1596,18 @@ class _ContentV2Validator:
     def quests(self, docs, refs):
         """V1-31: quests.json rows (steps, requires, rewards, lines) and each cat's greetings and letters."""
         filename = "quests.json"
-        self.root(docs, filename, {"schema_version", "quests", "cats", "extends"})
+        self.root(docs, filename, {"schema_version", "quests", "cats", "extends"}, {"scenes"})
         rows = self.table(docs, filename, "quests", {"id", "kind", "giver_id", "lake_id", "title", "objective",
                                                      "journal", "reward"},
                           {"requires", "cross_lake", "on_accept", "lines"})
         cats = self.table(docs, filename, "cats", {"id", "greetings"}, {"letters", "story"})
         extends = self.table(docs, filename, "extends", {"id", "extends", "lines"})
+        raw = docs.get(filename)
+        scenes = (self.table(docs, filename, "scenes", {"id", "speaker_id", "lake_id", "lines"}, {"next", "choices"})
+                  if isinstance(raw, dict) and "scenes" in raw else {})
         if filename in self.unavailable_files or self.unavailable_files & _QUEST_REFERENCE_FILES:
             # An unreadable file is reported once; checking rows against its ids would cascade.
-            return rows, cats, extends
+            return rows, cats, extends, scenes
         given = {"ripples": {}, "keepsakes": {}}
         quest_ids = set(QUEST_IDS) | set(rows)
         for qid, row, where in self.rows(filename, "quests"):
@@ -1618,7 +1627,56 @@ class _ContentV2Validator:
                     self.bubbles(filename, f"{where}.lines.{stage}", text, most=1)
                     if isinstance(text, list):
                         self.error(filename, f"{where}.lines.{stage}", "a recopied V3 node holds one text")
-        return rows, cats, extends
+        self.scenes(filename, scenes, refs)
+        return rows, cats, extends, scenes
+
+    def scenes(self, filename, scenes, refs):
+        """V1-34: story scenes. A scene is one speaker's bubbles, then the next scene or a choice of them;
+        a scene's state is pending or done (06 §3.3), so it must end and never loop."""
+        for sid, row, where in self.rows(filename, "scenes"):
+            if isinstance(sid, str) and not re.fullmatch(SCENE_ID, sid):
+                self.error(filename, where + ".id", "expected pro_NN[b], story_c<n>_<name> or end_NN")
+            speaker = row.get("speaker_id")
+            if speaker != "bot" and speaker not in refs.roster:
+                self.error(filename, where + ".speaker_id", f"unknown value/reference {speaker!r}")
+            self.enum(filename, where + ".lake_id", row.get("lake_id"), refs.lakes)
+            self.bubbles(filename, where + ".lines", row.get("lines"))
+            if "next" in row and "choices" in row:
+                self.error(filename, where, "expected next or choices, not both")
+            if "next" in row and row["next"] is not None and (not isinstance(row["next"], str)
+                                                               or row["next"] not in scenes):
+                self.error(filename, where + ".next", f"unknown scene {row['next']!r}")
+            if "choices" in row:
+                choices = row["choices"]
+                if not isinstance(choices, list) or not 1 <= len(choices) <= 3:
+                    self.error(filename, where + ".choices", "expected one to three choices")
+                    continue
+                for i, choice in enumerate(choices):
+                    choice_where = f"{where}.choices[{i}]"
+                    if not isinstance(choice, dict) or set(choice) != {"text", "next"}:
+                        self.error(filename, choice_where, "expected text and next")
+                        continue
+                    self.bubbles(filename, choice_where + ".text", choice["text"], limit=60, most=1)
+                    if choice["next"] is not None and (not isinstance(choice["next"], str)
+                                                       or choice["next"] not in scenes):
+                        self.error(filename, choice_where + ".next", f"unknown scene {choice['next']!r}")
+        for sid in scenes:
+            # Follow every branch; a scene reached again on its own path would never finish.
+            stack = [(sid, (sid,))]
+            while stack:
+                current, path = stack.pop()
+                row = scenes.get(current, {})
+                choices = row.get("choices") if isinstance(row.get("choices"), list) else []
+                targets = ([row.get("next")] if "choices" not in row
+                           else [c.get("next") for c in choices if isinstance(c, dict)])
+                for target in targets:
+                    if not isinstance(target, str) or target not in scenes:
+                        continue  # reported above; a malformed scene is not followed
+                    if target in path:
+                        self.error(filename, f"scenes({sid})", f"loops back to {target!r}")
+                        stack = []
+                        break
+                    stack.append((target, path + (target,)))
 
     def keepsakes_and_ripples(self, docs, roster):
         """V1-32: ripples.json (Ripples 11-44) and keepsakes.json (ks_<cat>), which rewards name."""
@@ -1664,7 +1722,8 @@ class _ContentV2Validator:
             listed = cat.get("quests")
             if not isinstance(listed, list) or qid not in listed:
                 self.error(filename, where + ".id", f"not one of {giver}'s roster quests")
-        if kind == "story" and isinstance(qid, str) and not re.fullmatch(r"story_c[1-5]_s[1-9]", qid):
+        if kind == "story" and isinstance(qid, str) and not re.fullmatch(r"story_c[0-5]_s[1-9]", qid):
+            # Chapter 0 is the prologue (V1-34).
             self.error(filename, where + ".id", "expected story_c<chapter>_s<step>")
         objective = row.get("objective")
         steps = objective if isinstance(objective, list) else [objective]
@@ -1795,7 +1854,7 @@ class _ContentV2Validator:
         for key in ("in_cold_band", "any", "distinct"):
             literal_true(key)
 
-        if kind in ("line_scout", "line_check", "line_scout_check"):
+        if kind in ("line_set", "line_scout", "line_check", "line_scout_check"):
             if not {"zone_id", "area_id"} & step.keys():
                 self.error(filename, where, "expected zone_id or area_id")
             one_of("tier_id", "min_tier", required=False)
@@ -1813,7 +1872,7 @@ class _ContentV2Validator:
             needs("zone_id", "continuous_game_minutes")
             positive("continuous_game_minutes", maximum=1440)
         elif kind == "scout_report":
-            one_of("zone_id", "waypoint_ids")
+            one_of("zone_id", "waypoint_ids", "lake_id")
         elif kind == "fish_livewell":
             needs("zone_id", "species_id")
             if "species_id" in step:
@@ -2456,6 +2515,7 @@ def merge_quests_v2(content: NarrativeContent, gameplay: GameplayContent) -> Nar
     content.cats = cats
     content.ripples = deepcopy(gameplay.ripples)
     content.keepsakes = deepcopy(gameplay.keepsakes)
+    content.scenes = deepcopy(gameplay.scenes)
     for qid, row in gameplay.quests.items():
         quest = deepcopy(row)
         if "lines" in row:

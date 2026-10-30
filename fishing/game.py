@@ -12,6 +12,7 @@ import numpy as np
 from .content import load_content
 from .quests import QuestManager, autostart_story
 from .dialogue import nearby_npc, open_conversation, record_hail
+from .story import begin_prologue, due_scene, scene_conversation
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
 from .data import BAITS, BAIT_BY_ID, SPECIES, hour_of_day
@@ -159,7 +160,22 @@ class Session:
                 or getattr(keys, "mouse_wheel", 0)):
             self._remember_book_page()
         self._simulate(keys, dt, driving_presses)
+        self._play_due_scene()
         self._tick_caption(dt)
+
+    def _play_due_scene(self) -> None:
+        """A story scene whose moment has come plays as soon as the Skipper is free (V1-34)."""
+        if self.ui.mode != "play" or self.conversation is not None or not self.focused:
+            return
+        scene_id = due_scene(self.state, self._npc_content)
+        if scene_id is not None:
+            self._show_conversation(scene_conversation(self.state, self._npc_content, scene_id))
+
+    def _show_conversation(self, conversation) -> None:
+        self.conversation = conversation
+        self.ui.conversation = conversation
+        self.ui.dialogue_from = self.ui.mode
+        self.ui.mode = "dialogue"
 
     def _remember_book_page(self):
         """Opening a page records its rumor; drawing the book never saves it."""
@@ -471,10 +487,13 @@ class Session:
         if choosing_mode:
             selected = comfort.MODES[self.ui.new_mode_i]
             previous = deepcopy(self.state.v2["settings"])
+            if self.world.id != "briar":
+                self.world = World("briar")  # a new game opens at Briar Landing (05 §1)
             state = State.new(self.world)
             state.v2["settings"] = previous
             comfort.change_mode(state.v2, selected)
             state.v2["profile"]["collar"]["visible"] = previous.get("collar_visible", True)
+            begin_prologue(state)
             self.state = state
             self._attach_quest_manager()
             self._title_catchup_pending = False
@@ -582,10 +601,7 @@ class Session:
             if not cookout_chat:
                 self.state.toast(f"{npc.name} waves hello.")
             return
-        self.conversation = conversation
-        self.ui.conversation = self.conversation
-        self.ui.dialogue_from = self.ui.mode
-        self.ui.mode = "dialogue"
+        self._show_conversation(conversation)
 
     def _close_dialogue(self):
         self.conversation = None
@@ -593,13 +609,14 @@ class Session:
         self.ui.mode = self.ui.dialogue_from
 
     def _dialogue_keys(self, keys, dt):
-        if "esc" in keys.pressed:
+        chat = self.conversation
+        if "esc" in keys.pressed and not (chat is not None and chat.in_scene(self._npc_content)):
+            # A story scene is read through; closing the game mid-scene replays it (V1-34).
             self._close_dialogue()
             return
         if "h" in keys.pressed:
             self._open_help("dialogue")
             return
-        chat = self.conversation
         if chat is None:
             self._close_dialogue()
             return
@@ -616,8 +633,13 @@ class Session:
                 chat.selected = i
                 select = True
                 break
-        if select and not chat.advance(self.state, self._npc_content):
-            self._close_dialogue()
+        if select:
+            more = chat.advance(self.state, self._npc_content)
+            if chat.finished_scene:
+                chat.finished_scene = False
+                self.save()  # a scene's effects and its claim are written together (06 §3.3)
+            if not more:
+                self._close_dialogue()
 
     def _anchor(self):
         if self.state.anchored:
