@@ -2067,6 +2067,199 @@
         "done": "Mind the trailer hitch on the way north, Skipper.",
         "return": "The Marked Pool is yours to fish now. Tell Huckleberry I sent you."
       }
+    },
+    {
+      "id": "story_c3_s1",
+      "kind": "story",
+      "giver_id": "captain_huckleberry",
+      "lake_id": "flathead",
+      "title": "Huckleberry's Note",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "captain_huckleberry"
+      },
+      "journal": "Story — Talk to Captain Huckleberry at Flathead Alpine.",
+      "reward": {
+        "tools": [
+          "thermo_scanner"
+        ]
+      },
+      "requires": {
+        "chapter_complete": 2
+      },
+      "lines": {
+        "offer": "Ho-ho! The Skipper! Doc said you'd come.",
+        "ready": [
+          "Ho-ho! The Skipper! Doc said you'd come. Warm your paws by the stove, I've got a story—",
+          "—it's about my note. \"Lake trout, forty feet, every day, guaranteed.\" Thirty winters it worked. This summer? Nothing!",
+          "Either the fish have moved or I've got old. Bet you a pie it's the fish."
+        ],
+        "turn_in_choice": "Let's find out.",
+        "done": "Bot: I can listen to the water's temperature with this borrowed scanner. Two readings would tell us more than one.",
+        "return": "Two readings, Skipper! Morning and afternoon, down in the trench."
+      }
+    },
+    {
+      "id": "story_c3_s2",
+      "kind": "story",
+      "giver_id": "captain_huckleberry",
+      "lake_id": "flathead",
+      "title": "Two Readings",
+      "objective": {
+        "type": "scout_report",
+        "zone_id": "flathead:deep",
+        "windows": [
+          [
+            360,
+            600
+          ],
+          [
+            840,
+            1080
+          ]
+        ]
+      },
+      "journal": "Have Bot report in the Glacial trench once in the morning (06:00–10:00) and once in the afternoon (14:00–18:00).",
+      "reward": {},
+      "requires": {
+        "quest": "story_c3_s1"
+      },
+      "lines": {
+        "offer": "Two readings, Skipper. Morning and afternoon.",
+        "progress": "Morning and afternoon, down in the Glacial trench. Bot knows what to listen for.",
+        "done": "Ho-ho! Two readings!"
+      }
+    },
+    {
+      "id": "story_c3_s3",
+      "kind": "story",
+      "giver_id": "captain_huckleberry",
+      "lake_id": "flathead",
+      "title": "The Cold Layer",
+      "objective": {
+        "type": "catch_species",
+        "tag": "cold",
+        "in_cold_band": true,
+        "lake_id": "flathead"
+      },
+      "journal": "Catch any cold-water fish from a line set inside the cold layer.",
+      "reward": {
+        "shells": [
+          "sub"
+        ],
+        "tools": [
+          "thermo_scanner"
+        ],
+        "unlocks": [
+          "travel:crater"
+        ]
+      },
+      "requires": {
+        "quest": "story_c3_s2"
+      },
+      "lines": {
+        "offer": "Set a line where the cold is, Skipper.",
+        "progress": "Where the cold is, that's where they'll be. Set a line in it and see!",
+        "ready": [
+          "You — it — the cold moves?! Ho-ho-HO! Thirty years! I was right and wrong! That's the best kind of story!",
+          "Here, write it beside mine. Don't cross mine out. Let folks see how we learned it.",
+          "Bot: My collar. The wind is very strong here. It is holding on by one loop."
+        ],
+        "turn_in_choice": "I'll write it in.",
+        "done": "Keep the scanner, it's yours. Sora at the Caldera's been asking about cold water too. She's quiet, but she'll like you.",
+        "return": "The cold moves, Skipper! I tell everyone. Twice, usually."
+      }
+    },
+    {
+      "id": "story_c4_s1",
+      "kind": "story",
+      "giver_id": "sora",
+      "lake_id": "crater",
+      "title": "One Question First",
+      "objective": {
+        "type": "talk_to",
+        "npc_id": "sora"
+      },
+      "journal": "Story — Talk to Sora at Crater Caldera.",
+      "reward": {},
+      "requires": {
+        "chapter_complete": 3
+      },
+      "lines": {
+        "offer": "Skipper. Bot. Welcome.",
+        "ready": [
+          "Skipper. Bot. Welcome. One question first: do you like waiting?",
+          "My survey marker is out there. The fog sits on it every morning. My chart has a hole exactly where the marker is."
+        ],
+        "turn_in_choice": "I like waiting.",
+        "done": "The forecast says the fog will lift. Choose a safe cove and wait for it. Then we read the marker together.",
+        "return": "Choose a safe cove, Skipper, and wait for the fog to lift."
+      }
+    },
+    {
+      "id": "story_c4_s2",
+      "kind": "story",
+      "giver_id": "sora",
+      "lake_id": "crater",
+      "title": "The Fog Marker",
+      "objective": {
+        "type": "wait_weather",
+        "weather": "fog",
+        "then_weather": "clear",
+        "area_ids": [
+          "crater:safe_cove_1",
+          "crater:safe_cove_2",
+          "crater:safe_cove_3"
+        ],
+        "minutes": 20
+      },
+      "journal": "Wait in one of the three marked coves until the fog clears. Anchored time adds up; drifting does not reset it.",
+      "reward": {},
+      "requires": {
+        "quest": "story_c4_s1"
+      },
+      "lines": {
+        "offer": "Choose a safe cove and wait for the fog to lift.",
+        "progress": "Anchor in a marked cove when the fog comes, and wait. It leaves when it's ready.",
+        "done": "The fog has lifted."
+      }
+    },
+    {
+      "id": "story_c4_s3",
+      "kind": "story",
+      "giver_id": "sora",
+      "lake_id": "crater",
+      "title": "The Reading",
+      "objective": {
+        "type": "scout_report",
+        "waypoint_ids": [
+          "crater:survey_marker"
+        ]
+      },
+      "journal": "Have Bot scout the survey marker.",
+      "reward": {
+        "unlocks": [
+          "travel:nebula"
+        ]
+      },
+      "requires": {
+        "quest": "story_c4_s2"
+      },
+      "lines": {
+        "offer": "Have Bot scout the survey marker.",
+        "progress": "The marker is clear now. Have Bot read it, then bring the reading here.",
+        "ready": [
+          "The reading is… odd. The marker isn't measuring the water. It's measuring the reflection.",
+          "On the clearest nights the caldera holds the whole sky. This says the reflection there is deep enough to sail into.",
+          "I've checked it eleven times."
+        ],
+        "turn_in_choice": "Bot would like to check it.",
+        "done": [
+          "Bot: I would like to check it a twelfth time. Then go.",
+          "Of course you would. Professor Astra-9 lives there. Tell her I said her units are wrong."
+        ],
+        "return": "Tell Astra-9 her units are wrong. She'll be delighted."
+      }
     }
   ],
   "cats": [
@@ -2538,6 +2731,58 @@
       "lines": [
         "Bot: There is a pencil in the spine. It is very short.",
         "Then write small, dear. Pip and Pebble were asking for you out on the flats. They have a map with a hole in it."
+      ],
+      "next": null
+    },
+    {
+      "id": "story_c3_cold",
+      "speaker_id": "bot",
+      "lake_id": "flathead",
+      "lines": [
+        "The fish are not at forty feet. They are wherever the cold is. The cold moves."
+      ],
+      "next": null
+    },
+    {
+      "id": "story_c4_clear",
+      "speaker_id": "bot",
+      "lake_id": "crater",
+      "lines": [
+        "The marker is visible. It is a brass ring on a post. It is pointing up."
+      ],
+      "next": null
+    },
+    {
+      "id": "story_c4_knot",
+      "speaker_id": "bot",
+      "lake_id": "crater",
+      "lines": [
+        "Skipper. My collar again. Will you help me tie it? I would like to choose the knot."
+      ],
+      "choices": [
+        {
+          "text": "Square knot",
+          "next": "story_c4_tied",
+          "knot": "square"
+        },
+        {
+          "text": "Bow",
+          "next": "story_c4_tied",
+          "knot": "bow"
+        },
+        {
+          "text": "Sailor's hitch",
+          "next": "story_c4_tied",
+          "knot": "sailors_hitch"
+        }
+      ]
+    },
+    {
+      "id": "story_c4_tied",
+      "speaker_id": "bot",
+      "lake_id": "crater",
+      "lines": [
+        "This one. I can loosen it myself when it is cold, and tighten it when it is windy. It adjusts."
       ],
       "next": null
     }
