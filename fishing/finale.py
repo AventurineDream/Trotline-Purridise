@@ -8,8 +8,8 @@ each one where the Skipper keeps still.
 - At 45 s a deep glow has risen under the water ahead.
 The Star-Whale then rises out of that glow, as far as the staging's `whale` value says.
 
-All of it is world-space faces drawn by both renderers with the Lagoon's ambient motes, and it
-follows the saved Settle In progress, so a reload shows the same water. Away from the calm
+All of it is world-space faces drawn by both renderers with the Lagoon's ambient motes, inside
+`ambient.MAX_FACES` with them (at most 89 of its own), and it follows the saved Settle In progress, so a reload shows the same water. Away from the calm
 reflection it fades out, and once the whale is drawn the Lagoon is itself again.
 """
 
@@ -77,11 +77,13 @@ def _frame(state):
 
 
 def _disc(out, cx, cz, y, radius, color, emissive, segments=12):
+    """A flat polygon on the water, as few quads as it takes: a fan of quads from one corner,
+    (segments - 2) / 2 of them, so the finale stays inside the ambient face budget."""
     ring = [(cx + math.cos(i / segments * math.tau) * radius, y, cz + math.sin(i / segments * math.tau) * radius)
             for i in range(segments)]
-    centre = (cx, y, cz)
-    for a, b in zip(ring, ring[1:] + ring[:1]):
-        out.append(Face(np.array([centre, a, b, b], np.float32), np.array([0, 1, 0], np.float32),
+    for i in range(1, segments - 1, 2):
+        quad = [ring[0], ring[i], ring[i + 1], ring[min(i + 2, segments - 1)]]
+        out.append(Face(np.array(quad, np.float32), np.array([0, 1, 0], np.float32),
                         np.asarray(color, np.float32), "world", emissive))
 
 
@@ -94,8 +96,8 @@ def _lilies(out, state, amount: float, t: float):
         angle = i / LILIES * math.tau + 0.37 * i + t * 0.02
         wobble = 1.0 + 0.18 * math.sin(i * 2.3)
         lx, lz = x + math.cos(angle) * radius * wobble, z + math.sin(angle) * radius * wobble
-        _disc(out, lx, lz, 0.04, size, (0.62, 0.46, 0.86), 0.6, segments=8)
-        _disc(out, lx, lz, 0.07, size * 0.28, (1.0, 0.94, 0.70), 1.0, segments=5)  # the star at its heart
+        _disc(out, lx, lz, 0.04, size, (0.62, 0.46, 0.86), 0.6, segments=6)
+        _disc(out, lx, lz, 0.07, size * 0.28, (1.0, 0.94, 0.70), 1.0, segments=4)  # the star at its heart
 
 
 def glow_centre(state) -> tuple[float, float]:
@@ -105,8 +107,8 @@ def glow_centre(state) -> tuple[float, float]:
 
 def _glow(out, state, amount: float):
     cx, cz = glow_centre(state)
-    _disc(out, cx, cz, 0.02, GLOW_RADIUS * amount, (0.30, 0.70, 0.85), 0.7, segments=16)
-    _disc(out, cx, cz, 0.03, GLOW_RADIUS * 0.45 * amount, (0.75, 0.97, 1.0), 1.0, segments=12)
+    _disc(out, cx, cz, 0.02, GLOW_RADIUS * amount, (0.30, 0.70, 0.85), 0.7, segments=12)
+    _disc(out, cx, cz, 0.03, GLOW_RADIUS * 0.45 * amount, (0.75, 0.97, 1.0), 1.0, segments=8)
 
 
 def _whale_radius(u: float) -> float:
@@ -121,7 +123,7 @@ def _whale(out, state, rise: float):
     lift = _smooth(rise)
     y0 = -5.0 + 6.6 * lift
     tilt = 0.45 * math.sin(math.pi * min(1.0, rise * 1.3))  # nose up as it breaches, level at rest
-    rings, sides = 10, 8
+    rings, sides = 8, 6
     body = (0.36, 0.48, 0.94)  # starlight blue, glowing in the Lagoon's dark
 
     def point(u, a):
@@ -145,8 +147,8 @@ def _whale(out, state, rise: float):
         back = (tail[0] - rx * 1.2, tail[1], tail[2] - rz * 1.2)
         out.append(Face(np.array([back, tail, tip, tip], np.float32), np.array([0, 1, 0], np.float32),
                         np.asarray(body, np.float32), "world", 0.8))
-    for k in range(11):  # stars on the flank the Skipper sees, a little proud of the skin
-        u = 0.10 + k * 0.07
+    for k in range(7):  # stars on the flank the Skipper sees, a little proud of the skin
+        u = 0.12 + k * 0.11
         a = math.pi * (0.62 + 0.14 * (k % 3))
         px, py, pz = point(u, a)
         px, pz = px - fx * 0.12, pz - fz * 0.12
