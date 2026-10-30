@@ -1643,7 +1643,8 @@ class _ContentV2Validator:
             self.bubbles(filename, where + ".lines", row.get("lines"))
             if "next" in row and "choices" in row:
                 self.error(filename, where, "expected next or choices, not both")
-            if "next" in row and row["next"] is not None and row["next"] not in scenes:
+            if "next" in row and row["next"] is not None and (not isinstance(row["next"], str)
+                                                               or row["next"] not in scenes):
                 self.error(filename, where + ".next", f"unknown scene {row['next']!r}")
             if "choices" in row:
                 choices = row["choices"]
@@ -1656,7 +1657,8 @@ class _ContentV2Validator:
                         self.error(filename, choice_where, "expected text and next")
                         continue
                     self.bubbles(filename, choice_where + ".text", choice["text"], limit=60, most=1)
-                    if choice["next"] is not None and choice["next"] not in scenes:
+                    if choice["next"] is not None and (not isinstance(choice["next"], str)
+                                                       or choice["next"] not in scenes):
                         self.error(filename, choice_where + ".next", f"unknown scene {choice['next']!r}")
         for sid in scenes:
             # Follow every branch; a scene reached again on its own path would never finish.
@@ -1664,11 +1666,12 @@ class _ContentV2Validator:
             while stack:
                 current, path = stack.pop()
                 row = scenes.get(current, {})
+                choices = row.get("choices") if isinstance(row.get("choices"), list) else []
                 targets = ([row.get("next")] if "choices" not in row
-                           else [c.get("next") for c in row["choices"] if isinstance(c, dict)])
+                           else [c.get("next") for c in choices if isinstance(c, dict)])
                 for target in targets:
-                    if target is None or target not in scenes:
-                        continue
+                    if not isinstance(target, str) or target not in scenes:
+                        continue  # reported above; a malformed scene is not followed
                     if target in path:
                         self.error(filename, f"scenes({sid})", f"loops back to {target!r}")
                         stack = []

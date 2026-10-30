@@ -5,6 +5,7 @@ line is set with the game's own line-setting rules at the landing, and every sce
 read with the dialogue keys. Each scene is interrupted at its first bubble and reloaded.
 The scene must replay from its start, and no step may be paid twice.
 """
+from copy import deepcopy
 import math
 from pathlib import Path
 import re
@@ -20,7 +21,7 @@ from .lakes import in_place
 from .quests import scene_state
 from .savepaths import load_game_save
 from .sim import State
-from .story import due_scene, hail_scene
+from .story import due_scene, hail_scene, resume, scene_conversation
 from .world import World
 
 SCRIPT = Path(__file__).resolve().parents[1] / "docs" / "v1" / "05-SCRIPT.md"
@@ -288,6 +289,34 @@ class Prologue(unittest.TestCase):
         self.state.lake_id = "briar"
         self.assertEqual(due_scene(self.state, self.content), "pro_03")
 
+    # --- the scene engine (Codex review of PR 108) ---------------------------------------------
+    def authored(self, *scenes):
+        content = deepcopy(self.content)
+        content.scenes = {row["id"]: {"speaker_id": GRAN, "lake_id": "briar", **row} for row in scenes}
+        return content
+
+    def test_a_chained_scene_speaks_in_its_own_voice(self):
+        content = self.authored({"id": "pro_07", "lines": ["Pip will tell you."], "next": "pro_08"},
+                                {"id": "pro_08", "speaker_id": "pip_pebble", "lines": ["Hi!"], "next": None})
+        state = State.new(World("briar"), seed=8)
+        chat = scene_conversation(state, content, "pro_07")
+        self.assertEqual(chat.npc_id, GRAN)
+        self.assertTrue(chat.advance(state, content))
+        self.assertEqual((chat.node_id, chat.npc_id), ("scene:pro_08", "pip_pebble"))  # name and portrait
+
+    def test_a_choice_that_ends_the_scene_is_not_resumed_into_the_other(self):
+        content = self.authored({"id": "pro_07", "lines": ["Shall I go on?"],
+                                 "choices": [{"text": "Not now.", "next": None},
+                                             {"text": "Go on.", "next": "pro_08"}]},
+                                {"id": "pro_08", "lines": ["Well then."], "next": None})
+        for index, expected in ((0, None), (1, "pro_08")):
+            state = State.new(World("briar"), seed=9)
+            chat = scene_conversation(state, content, "pro_07")
+            chat.selected = index
+            chat.advance(state, content)
+            self.assertEqual(scene_state(state, "pro_07"), "done")
+            self.assertEqual(resume(state, content, "pro_07"), expected, index)
+
     # --- saves --------------------------------------------------------------------------
     def test_saves_without_a_new_game_never_start_the_prologue(self):
         # Older saves and test states have no prologue state; nothing plays or starts.
@@ -356,6 +385,10 @@ class SceneValidation(unittest.TestCase):
             "one to 3 bubbles": [{**self.scene("pro_01"), "lines": ["a", "b", "c", "d"]}],
             "longer than 60": [self.scene("pro_01", choices=[{"text": "a" * 61, "next": None}])],
             "unknown placeholder": [{**self.scene("pro_01"), "lines": ["Hi, {Name}."]}],
+            # Malformed values are reported, never raised while following the scene graph.
+            "one to three choices": [self.scene("pro_01", choices=None)],
+            "unknown scene ['pro_02']": [self.scene("pro_01", next=["pro_02"]), self.scene("pro_02")],
+            "unknown scene {'a': 1}": [self.scene("pro_01", choices=[{"text": "Yes.", "next": {"a": 1}}])],
         }
         for expected, scenes in cases.items():
             with self.subTest(expected):

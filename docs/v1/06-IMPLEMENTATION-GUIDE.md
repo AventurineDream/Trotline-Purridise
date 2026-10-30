@@ -1573,6 +1573,7 @@ This part builds the prologue (`05 §1`) and the scenes the rest of the story is
 - **State.** A scene is `pending` from its first bubble and `done` once its last bubble is read (`06 §3.3`). A pending scene replays from its start, so a game quit mid-scene reloads into it. Its effects run only when it is done, and every reward is claimed once through the ledger.
 - **Starting.** Scenes start by themselves when their moment comes (`story.due_scene`, checked each frame the Skipper is free to talk on that lake). A hail can also open one (`story.hail_scene`), and hailing a pending scene's speaker replays it.
 - **Reading.** Esc does not leave a scene; it is read through. The session saves as soon as a scene is done.
+- **Chains.** A chained scene speaks in its own voice: the panel's name and portrait follow its speaker. Resuming follows only the branch the Skipper took, so a choice with no next scene ends the chain.
 - **Validation.** The validator follows every branch. A scene that loops back is rejected, as are an unknown next scene, an unknown speaker, and a scene with both `next` and `choices`. Bubbles keep the `05 §0` limits.
 
 **The prologue.** "New morning" opens at Briar Landing and marks the `prologue` scene pending (`story.begin_prologue`). Its steps are chapter 0 (`story_c0_s<n>`); they start once the arrival scene is read, and each is turned in by a scene, not a hail.

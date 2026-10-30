@@ -434,7 +434,10 @@ class Conversation:
         if target is None:
             return False
         self.node_id = target
-        self.quest_id = self.node(content).get('quest_id') or self.quest_id
+        entered = self.node(content)
+        self.quest_id = entered.get('quest_id') or self.quest_id
+        if entered.get('scene'):
+            self.npc_id = entered['speaker_id']  # a chained scene speaks in its own voice (V1-34)
         self.selected = 0
-        enter_node(state, self.node(content))
+        enter_node(state, entered)
         return True
