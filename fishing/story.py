@@ -41,17 +41,20 @@ def _targets(row: dict) -> list:
 
 
 def resume(state, content, scene_id: str | None) -> str | None:
-    """The first scene of this chain that is not done. After a choice, the branch already
-    taken is followed, else the first branch."""
+    """The first scene of this chain that is not done. After a choice, only the branch the
+    Skipper took is followed. Taking a choice starts its next scene in the same step, so a done
+    scene with no branch started ended the chain there (a choice with no next scene)."""
     seen = set()
     while scene_id is not None and scene_id not in seen and scene_id in content.scenes:
         seen.add(scene_id)
         if scene_state(state, scene_id) != "done":
             return scene_id
-        targets = _targets(content.scenes[scene_id])
-        taken = ([t for t in targets if scene_state(state, t) == "pending"]
-                 or [t for t in targets if scene_state(state, t) == "done"] or targets)
-        scene_id = taken[0] if taken else None
+        row = content.scenes[scene_id]
+        targets = _targets(row)
+        if "choices" in row:
+            targets = ([t for t in targets if scene_state(state, t) == "pending"]
+                       or [t for t in targets if scene_state(state, t) == "done"])
+        scene_id = targets[0] if targets else None
     return None
 
 
