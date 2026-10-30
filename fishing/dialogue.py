@@ -394,6 +394,8 @@ class Conversation:
     nodes: dict = field(default_factory=dict)
     # Set when a story scene is done, so the session saves its effects at once (06 §3.3).
     finished_scene: bool = False
+    # A free trip the Skipper accepted in a scene, which the session takes once it closes (02 §13).
+    trip: str | None = None
 
     def in_scene(self, content) -> bool:
         """A story scene is on screen; it can't be left half-read (V1-34)."""
@@ -430,6 +432,11 @@ class Conversation:
             elif action == 'scene' and choice.get('knot'):
                 from .botidentity import choose_knot
                 choose_knot(state, choice['knot'], toast=False)  # the scene says it (05 §2.4)
+            elif action == 'scene' and choice.get('together'):
+                from .story import settle_progress
+                settle_progress(state)['together'] = True  # Astra-9 watches too (02 §13.5)
+            elif action == 'scene' and choice.get('trip'):
+                self.trip = choice['trip']
             target = choice['target']
         else:
             target = node['next']

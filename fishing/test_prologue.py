@@ -405,7 +405,11 @@ class SceneValidation(unittest.TestCase):
             "unknown scene ['pro_02']": [self.scene("pro_01", next=["pro_02"]), self.scene("pro_02")],
             "unknown scene {'a': 1}": [self.scene("pro_01", choices=[{"text": "Yes.", "next": {"a": 1}}])],
             "unknown value/reference 'granny'": [self.scene("story_c4_knot", choices=[{"text": "Granny", "next": None, "knot": "granny"}])],
-            "optionally knot": [self.scene("story_c4_knot", choices=[{"text": "Bow", "next": None, "colour": "red"}])],
+            "optionally one of knot, together or trip": [self.scene("story_c4_knot", choices=[{"text": "Bow", "next": None, "colour": "red"}])],
+            "one of knot, together or trip": [self.scene("story_c5_drawn", choices=[
+                {"text": "Home", "next": None, "trip": "briar", "together": True}])],
+            "expected true": [self.scene("story_c5_together", choices=[{"text": "Watch", "next": None, "together": False}])],
+            "unknown value/reference 'mars'": [self.scene("story_c5_drawn", choices=[{"text": "Go", "next": None, "trip": "mars"}])],
         }
         for expected, scenes in cases.items():
             with self.subTest(expected):
