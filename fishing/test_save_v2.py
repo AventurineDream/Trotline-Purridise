@@ -133,7 +133,8 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(defaults["story"]["chapter"], 0)
         self.assertEqual(defaults["story"]["steps"], {})
         self.assertEqual(defaults["story"]["pending_rewards"], [])
-        self.assertEqual(defaults["story"]["scene_states"], {})
+        # A v1 save that never caught a fish gets the prologue; one with catches skips it (V1-34).
+        self.assertEqual(defaults["story"]["scene_states"], {"prologue": "pending"})
         self.assertEqual(defaults["legendaries"], {})
         self.assertEqual(defaults["npcs"], {"letters": [], "talk_days": {}})
         self.assertEqual(defaults["keepsakes"], [])

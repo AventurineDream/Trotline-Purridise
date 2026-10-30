@@ -227,6 +227,10 @@ class QuestData(Worlds):
                   cross_lake=["cedar"]),
             quest("host_flathead", "host", "captain_huckleberry", "flathead",
                   {"type": "cook_dish", "any": True}),
+            quest("story_c0_s1", "story", "grandmother_whiskers", "briar",
+                  [{"type": "line_set", "zone_id": "briar:open", "tier_id": "std", "hook_count": 12,
+                    "bait_id": "worm", "set_window": [360, 720], "in_cold_band": True},
+                   {"type": "scout_report", "lake_id": "briar"}]),
         ]
         rows[4]["objective"][3]["zone_id"] = "cedar:rocks"
         cats = [{"id": "marigold", "greetings": {"stranger": "Hello!", "friend": ["Hi again!", "Swim?"],
@@ -242,7 +246,8 @@ class QuestData(Worlds):
         # Every field of 02 §12.3 appears at least once, apart from alternatives exercised below.
         alternatives = {("catch_species", "species_id"), ("catch_species", "species_ids"), ("catch_species", "tag"),
                         ("catch_species", "any"), ("catch_species", "distinct"), ("book_stage", "species_ids"),
-                        ("scout_report", "zone_id"), ("visit_zones", "waypoint_ids"), ("visit_sequence", "zone_ids"),
+                        ("scout_report", "zone_id"), ("scout_report", "lake_id"), ("line_set", "area_id"),
+                        ("line_set", "min_tier"), ("visit_zones", "waypoint_ids"), ("visit_sequence", "zone_ids"),
                         ("wait_weather", "zone_id"), ("wait_weather", "zone_ids"), ("wait_weather", "lake_id"),
                         ("cook_dish", "any"), ("line_scout", "area_id"), ("line_scout", "tier_id"),
                         ("line_scout", "hook_count"), ("line_check", "zone_id"), ("line_check", "min_tier"),
@@ -256,7 +261,7 @@ class QuestData(Worlds):
 
     def test_validator_rejects_unlisted_fields(self):
         examples = {
-            "line_scout": {"zone_id": "briar:deep"}, "line_check": {"zone_id": "briar:deep",
+            "line_set": {"area_id": "briar:landing_edge"}, "line_scout": {"zone_id": "briar:deep"}, "line_check": {"zone_id": "briar:deep",
                                                                     "active_soak_game_minutes": 60},
             "line_scout_check": {"zone_id": "briar:deep", "active_soak_game_minutes": 60},
             "anchor_idle": {"zone_id": "briar:deep", "continuous_game_minutes": 30},

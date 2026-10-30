@@ -292,6 +292,7 @@ def default_v2(state=None) -> dict:
 
 
 def merge_v2_defaults(state, saved_v2: object) -> dict:
+    migrating = saved_v2 is None  # a v1 save gaining its v2 data (06 §3.3)
     if saved_v2 is None:
         saved_v2 = {}
     if not isinstance(saved_v2, dict):
@@ -300,6 +301,10 @@ def merge_v2_defaults(state, saved_v2: object) -> dict:
         saved_v2 = {}
     defaults = default_v2(state)
     normalized = _normalize_known_v2(defaults, saved_v2, "v2")
+    scene_states = normalized["story"]["scene_states"]
+    if migrating and "prologue" not in scene_states:
+        # A save with catches skips the prologue; one that never caught a fish gets it (V1-34).
+        scene_states["prologue"] = "pending"
 
     # Mode and collar visibility predate this settings page in the v2 save
     # envelope. Keep those existing fields and the settings controls in sync
