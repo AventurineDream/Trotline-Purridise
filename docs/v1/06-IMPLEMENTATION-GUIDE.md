@@ -1666,8 +1666,8 @@ The Zero-G Winch is unlocked for sale by the Astral shell, as the Duck shell unl
 **Settle In (`02 §13.5`, `story.settle_*`).**
 - **The prompt.** "C  Settle in" is offered while the step is under way and the boat is anchored in Nebula open within 200 m of the marked reflection. The hail key starts and stops it while no cat is in range.
 - **Progress.** Real seconds of stillness add up to 45, with cues at 15, 30 and 45: Bot's three lines. Moving or drifting pauses the progress and never resets it. It is saved in `story.settle`, so it survives a reload too.
-- **Watching together.** It finishes the rest hands-free: the seconds count whether or not the boat keeps still.
-- **No interruptions.** Needs prompts and forced naps never interrupt it. The weather can't, since nothing reads it.
+- **Watching together.** It finishes the rest hands-free: the seconds count whether or not the boat keeps still, but only within 200 m of the reflection in Nebula open. Away from it, or on another lake, nothing counts and the step can't finish. Travelling ends settling, and the progress is kept.
+- **No interruptions.** Needs prompts and forced naps never interrupt it while the boat is by the reflection; a settle paused elsewhere holds nothing off. The weather can't, since nothing reads it.
 - **The finish.** The third cue emits `settle.complete`, which finishes the step.
 
 **The ending (`05 §3`).**
@@ -1682,6 +1682,6 @@ The Zero-G Winch is unlocked for sale by the Astral shell, as the Duck shell unl
 - **Labels.** The trip and "keep still" choice labels are written to fit their prompts.
 
 **Tests.**
-- **`test_story`.** Chapter five settles, watches together and draws the whale. It takes the free trip home and plays the ending and the credits. Moving pauses settling and a reload keeps it. An Old Salt nap can't interrupt it. With a line out the free trip isn't taken, and travelling home by the landing plays the ending too.
+- **`test_story`.** Chapter five settles, watches together and draws the whale. Watching together counts only by the reflection: sailing off or going home pauses it, and nothing finishes the step there. It takes the free trip home and plays the ending and the credits. Moving pauses settling and a reload keeps it. An Old Salt nap can't interrupt it. With a line out the free trip isn't taken, and travelling home by the landing plays the ending too.
 - **`test_playthrough` (the acceptance test).** One new game is played from "New morning" to the credits. At the first bubble of every scene, and at the credits, the game is quit and continued. Each scene must be pending with nothing paid, and it must replay from its start. Every story step is claimed exactly once. The ending opens as soon as the free trip arrives at Briar, so the test reads each conversation until a new one opens.
 - **Shots.** `--shots` adds `story-scene-bot.png` (the knot scene), `story-settle-in.png` (the HUD prompt) and `story-credits.png`.

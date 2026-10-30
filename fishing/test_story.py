@@ -497,6 +497,51 @@ class Story(StoryPlay):
                          "There's my author. What did the lake tell you today?")  # after_ch5 (05 §4)
         self.assertTrue(self.talk("grandmother_whiskers")[0].endswith(":greeting"))
 
+    def test_watching_together_counts_only_by_the_reflection(self):
+        self.play_chapter_one()
+        self.play_chapter_two()
+        self.play_chapter_three()
+        self.play_chapter_four()
+        self.travel("nebula")
+        self.scene()
+        self.talk("astra_9", "turn_in")
+        self.settle_by_the_reflection()
+        self.press("c")
+        self.wait(15)
+        self.press("1")  # watch together
+        settle = self.state.v2["story"]["settle"]
+        seconds = settle["seconds"]
+        # Sailing off across Nebula open, out of the reflection's 200 m: paused.
+        cx, cz = centre("nebula:calm_reflection")
+        far = next((cx + r * math.cos(a / 8 * math.tau), cz + r * math.sin(a / 8 * math.tau))
+                   for r in (260, 320, 400) for a in range(8)
+                   if self.world.navigable(cx + r * math.cos(a / 8 * math.tau), cz + r * math.sin(a / 8 * math.tau))
+                   and self.world.zone_at(cx + r * math.cos(a / 8 * math.tau), cz + r * math.sin(a / 8 * math.tau)) == "open")
+        self.state.anchored, (self.state.x, self.state.z) = False, far
+        self.wait(40)
+        self.assertEqual(settle["seconds"], seconds)
+        self.assertIn("paused", self.session.ui.settle_prompt)
+        from . import comfort  # a settle paused out here holds no nap off
+        comfort.change_mode(self.state.v2, "old_salt")
+        self.state.v2["needs"]["awake_h"] = 99.0
+        self.session.tick(Keys(), 1.0)
+        self.assertEqual(self.session.ui.mode, "catnap")
+        comfort.change_mode(self.state.v2, "cozy")
+        self.state.v2["needs"]["awake_h"] = 0.0
+        self.session.ui.mode = "play"
+        # Home to Briar: the step can't finish there either.
+        self.travel("briar")
+        self.assertFalse(self.session.ui.settling)
+        self.wait(40)
+        self.assertEqual((settle["seconds"], self.status("story_c5_s2")), (seconds, "active"))
+        # Back by the reflection, hands-free again from where it paused.
+        self.travel("nebula")
+        self.settle_by_the_reflection()
+        self.press("c")
+        self.state.anchored, self.state.speed = False, 2.0
+        self.wait(30)
+        self.assertEqual(self.status("story_c5_s2"), "ready")
+
     def test_moving_pauses_settling_and_never_resets_it(self):
         self.play_chapter_one()
         self.play_chapter_two()

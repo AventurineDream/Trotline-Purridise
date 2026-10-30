@@ -194,17 +194,21 @@ def settle_progress(state) -> dict:
     return settle
 
 
-def settle_spot(state, world) -> bool:
-    """"Settle in" is offered: the settle step is under way and the boat is anchored in Nebula
-    open, within 200 m of the marked reflection."""
+def settle_near(state, world) -> bool:
+    """The boat is in Nebula open, within 200 m of the marked reflection: where Settle In counts."""
     from .lakes import place
-    if world.id != "nebula" or not state.anchored or world.zone_at(state.x, state.z) != "open":
+    if world.id != "nebula" or world.zone_at(state.x, state.z) != "open":
         return False
     found = place(SETTLE_AREA)
     if found is None:
         return False
     row = found[1]
     return math.hypot(state.x - row["x"], state.z - row["z"]) <= SETTLE_RADIUS_M
+
+
+def settle_spot(state, world) -> bool:
+    """"Settle in" is offered: the boat is anchored near the marked reflection."""
+    return state.anchored and settle_near(state, world)
 
 
 def settle_step_active(state, content) -> bool:
@@ -217,10 +221,13 @@ def settle_step_active(state, content) -> bool:
 
 
 def settle_tick(state, world, dt: float, *, still: bool) -> list[str]:
-    """Add real seconds while the Skipper keeps still (or Astra-9 watches too); return Bot's
-    cue lines reached. At the third cue the interaction finishes and emits settle.complete."""
+    """Add real seconds while the Skipper keeps still by the reflection (or Astra-9 watches too,
+    anywhere near it); return Bot's cue lines reached. At the third cue the interaction finishes
+    and emits settle.complete. Away from the reflection nothing counts or finishes."""
     settle = settle_progress(state)
     lines = []
+    if not settle_near(state, world):
+        return lines
     if (still or settle["together"]) and settle["cues"] < len(SETTLE_CUES):
         settle["seconds"] = min(SETTLE_CUES[-1], settle["seconds"] + max(0.0, dt))
         while settle["cues"] < len(SETTLE_CUES) and settle["seconds"] >= SETTLE_CUES[settle["cues"]]:
