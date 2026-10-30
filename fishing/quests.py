@@ -702,9 +702,9 @@ def finish_story_step(state, quest_id: str) -> bool:
 
 
 def story_focus(state, content, npc_id: str) -> str | None:
-    """The story step this cat has to say something about: a ready turn-in to them first, then a
-    talk step aimed at them that is under way."""
-    active = None
+    """The story step this cat has to say something about, in order: a ready turn-in to them;
+    a talk step aimed at them that is under way; then any step of theirs under way (its progress)."""
+    talk = giver = None
     for quest_id, definition in content.quests.items():
         if definition.get("kind") != "story":
             continue
@@ -713,11 +713,15 @@ def story_focus(state, content, npc_id: str) -> str | None:
             continue
         if progress.status == "ready" and definition.get("giver_id") == npc_id:
             return quest_id
-        if progress.status == "active" and active is None:
+        if progress.status != "active":
+            continue
+        if talk is None:
             step, _data = current_step(definition, progress)
             if step is not None and step.get("type") == "talk_to" and step.get("npc_id") == npc_id:
-                active = quest_id
-    return active
+                talk = quest_id
+        if giver is None and definition.get("giver_id") == npc_id:
+            giver = quest_id
+    return talk or giver
 
 
 def legendary_recorded(state, legendary_id) -> bool:
