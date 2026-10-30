@@ -12,7 +12,7 @@ import numpy as np
 from .content import load_content
 from .quests import QuestManager, autostart_story, scene_state
 from .dialogue import nearby_npc, open_conversation, record_hail
-from .story import (begin_prologue, due_scene, scene_conversation, settle_progress, settle_spot,
+from .story import (begin_prologue, due_scene, scene_conversation, settle_near, settle_progress, settle_spot,
                     settle_step_active, settle_tick)
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
@@ -208,11 +208,18 @@ class Session:
             if settle["cues"] >= 3:
                 ui.settling = False
         if ui.settling:
-            ui.settle_prompt = ("Watching together" if settle["together"] else
+            near = settle_near(state, self.world)
+            ui.settle_prompt = (("Watching together" if near else "Watching together, paused. Come back to the reflection.")
+                                if settle["together"] else
                                 "Settling in. Keep still." if spot else "Settling in, paused. Anchor by the reflection.")
             ui.settle_prompt += f"  ({settle['cues']} of 3)  {{key}} Stop"
         else:
             ui.settle_prompt = "{key}  Settle in" if spot else ""
+
+    def _settling_here(self) -> bool:
+        """Settling in by the reflection, where needs and naps wait (02 §13.5). A settle paused
+        elsewhere holds nothing off."""
+        return self.ui.settling and settle_near(self.state, self.world)
 
     def _toggle_settle(self) -> bool:
         """The hail key settles in (or stops) while no cat is in range. Progress is kept."""
@@ -349,7 +356,7 @@ class Session:
         mode = self.ui.mode
         state = self.state
         if self.world_running():
-            if comfort.doze_due(state.v2) and not self.ui.settling:
+            if comfort.doze_due(state.v2) and not self._settling_here():
                 self._start_catnap(forced=True)
                 state.tick_toasts(dt)
                 return
@@ -400,7 +407,7 @@ class Session:
             self._refresh_npcs()
             if self._speaker_left():
                 self._close_dialogue()
-        if self.world_running() and not self.ui.settling:  # needs never interrupt Settle In (02 §13.5)
+        if self.world_running() and not self._settling_here():  # needs never interrupt Settle In (02 §13.5)
             if comfort.doze_due(state.v2):
                 self._start_catnap(forced=True)
             else:
@@ -777,6 +784,7 @@ class Session:
         self.state._park(destination)
         reset_bot(self.state)
         self.ui.mode = "play"
+        self.ui.settling = False  # Settle In is kept, and taken up again by the reflection
         self.ui.note = ""
         self.state.toast(caption)
         self.save()
