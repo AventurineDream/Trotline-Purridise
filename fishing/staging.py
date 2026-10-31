@@ -72,6 +72,14 @@ STAGES = {
         Key(2.0, (2.5, 1.9, 0.8, -0.18, -0.10), bars=1.0),
         Key(12.0, (1.6, 1.7, 0.5, -0.12, -0.08), bars=1.0),
     ), hold=True),
+    # 05 §2.5: Bot's first time on the sky. After the reflection has deepened into starlight
+    # (V1-27's crossing), the view lifts slowly to the stars, holds, and hands back.
+    "story_c5_arrive": Stage("boat", (
+        Key(0.0, (0.0, EYE, 0.0, 0.0, -0.02), bars=1.0),
+        Key(3.2, (0.0, EYE, 0.0, 0.0, 0.40), bars=1.0),
+        Key(6.0, (0.0, EYE, 0.0, 0.08, 0.36), bars=1.0),
+        Key(7.5, None, bars=0.0),
+    )),
     # 05 §2.5: the Star-Whale rises out of the deep glow ahead, and the view lifts with it. It
     # holds, risen, until the Skipper draws it.
     "story_c5_whale": Stage("boat", (

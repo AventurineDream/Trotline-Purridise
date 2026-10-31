@@ -328,3 +328,133 @@ class Finale(unittest.TestCase):
         result = unittest.TestResult()
         Play().run(result)
         self.assertEqual((result.errors, result.failures), ([], []))
+
+
+class Vignettes(unittest.TestCase):
+    """The story's small moments beside the dialogue: the book, the collar, the knot."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.content = load_content()
+        cls.world = World("briar")
+
+    def node(self, chat):
+        return chat.node(self.content)
+
+    def test_each_moment_has_its_card(self):
+        from .dialogue import Conversation
+        from .story import scene_conversation
+        from .vignettes import vignette_for
+        state = State.new(self.world, seed=2)
+        for scene in ("pro_05", "pro_05b", "pro_06"):
+            chat = scene_conversation(state, self.content, scene)
+            self.assertEqual(vignette_for(self.node(chat), chat, state), ("book", None), scene)
+        knit = Conversation("grandmother_whiskers", "story_c1_s3", "story_c1_s3:dialogue:done")
+        self.assertEqual(vignette_for(self.node(knit), knit, state), ("knit", None))
+        slip = Conversation("captain_huckleberry", "story_c3_s3", "story_c3_s3:dialogue:ready:3")
+        self.assertEqual(vignette_for(self.node(slip), slip, state), ("slip", None))
+        knot = scene_conversation(state, self.content, "story_c4_knot")
+        for index, expected in enumerate(("square", "bow", "sailors_hitch")):
+            knot.selected = index
+            self.assertEqual(vignette_for(self.node(knot), knot, state), ("knot", expected))
+        other = Conversation("captain_huckleberry", "story_c3_s3", "story_c3_s3:dialogue:ready")
+        self.assertIsNone(vignette_for(self.node(other), other, state))
+
+    def test_the_collar_is_knitted_on_and_reduced_motion_shows_it_done(self):
+        from .vignettes import bot_card, bot_image
+        state = State.new(self.world, seed=2)
+        bare, collared = bot_card("tin", "none", None, 64), bot_card("tin", "received", None, 64)
+        self.assertFalse(np.array_equal(bare, collared))
+        self.assertTrue(np.array_equal(bot_image("knit", None, 0.0, state, 64, reduced=False), bare))
+        self.assertTrue(np.array_equal(bot_image("knit", None, 99.0, state, 64, reduced=False), collared))
+        self.assertTrue(np.array_equal(bot_image("knit", None, 0.0, state, 64, reduced=True), collared))
+        changed = [int((bot_image("knit", None, t, state, 64, reduced=False) != bare).any(axis=2).sum())
+                   for t in (0.0, 0.6, 1.2, 1.8, 2.5)]
+        self.assertEqual(changed, sorted(changed))  # stitch by stitch, never unravelling
+        knots = {k: bot_card("tin", "retied", k, 64) for k in ("square", "bow", "sailors_hitch")}
+        self.assertFalse(np.array_equal(knots["square"], knots["bow"]))
+        self.assertFalse(np.array_equal(knots["bow"], knots["sailors_hitch"]))
+
+    def test_the_wind_takes_the_loose_collar_not_bot(self):
+        from .vignettes import bot_image
+        state = State.new(self.world, seed=2)
+        still = bot_image("slip", None, 0.0, state, 128, reduced=False)
+        gust = bot_image("slip", None, 0.5, state, 128, reduced=False)  # sin(1.55): a full gust
+        changed = int((still != gust).any(axis=2).sum())
+        self.assertGreater(changed, 0)
+        self.assertLess(changed, 128 * 128 * 0.02)  # only the collar's tail moves; the view is still
+        self.assertTrue(np.array_equal(bot_image("slip", None, 0.5, state, 128, reduced=True), still))
+
+    def test_a_hidden_collar_gets_no_card(self):
+        from .dialogue import Conversation
+        from .story import scene_conversation
+        from .vignettes import vignette_for
+        state = State.new(self.world, seed=2)
+        state.v2["settings"]["collar_visible"] = False
+        for chat in (Conversation("grandmother_whiskers", "story_c1_s3", "story_c1_s3:dialogue:done"),
+                     Conversation("captain_huckleberry", "story_c3_s3", "story_c3_s3:dialogue:ready:3"),
+                     scene_conversation(state, self.content, "story_c4_knot")):
+            self.assertIsNone(vignette_for(self.node(chat), chat, state), chat.node_id)
+        book = scene_conversation(state, self.content, "pro_05")
+        self.assertEqual(vignette_for(self.node(book), book, state), ("book", None))  # the book is no collar
+
+    def test_the_knot_card_follows_the_highlight_in_play(self):
+        from .test_story import StoryPlay
+
+        class Play(StoryPlay):
+            def runTest(inner):
+                inner.play_chapter_one(); inner.play_chapter_two(); inner.play_chapter_three()
+                inner.travel("crater")
+                inner.state.narrative.quest("story_c4_s1")
+                inner.state.narrative.quests["story_c4_s3"].status = "ready"
+                inner.press("x")
+                session = inner.session
+                inner.assertEqual(session.conversation.node_id, "scene:story_c4_knot")
+                inner.assertEqual((session.ui.vignette["kind"], session.ui.vignette["detail"]), ("knot", "square"))
+                session.tick(Keys(), 0.5)
+                inner.press("down")
+                inner.assertEqual(session.ui.vignette["detail"], "bow")
+                inner.assertGreater(session.ui.vignette["t"], 0.0)  # the same card, not restarted
+                inner.press("2")
+                inner.assertEqual(session.conversation.node_id, "scene:story_c4_tied")
+                inner.assertEqual(session.ui.vignette["detail"], "bow")  # the one chosen
+                inner.press("c")
+                inner.assertIsNone(session.ui.vignette)
+        result = unittest.TestResult()
+        Play().run(result)
+        self.assertEqual((result.errors, result.failures), ([], []))
+
+    def test_the_card_fits_between_the_hud_and_the_dialogue_or_stays_out(self):
+        from .platform import Text
+        from .story import scene_conversation
+        from .ui import UI, UIState
+        text = Text()
+        self.addCleanup(text.close)
+        ui = UI(text, self.world)
+        state = State.new(self.world, seed=2)
+        chat = scene_conversation(state, self.content, "story_c4_knot")
+        card = {"kind": "knot", "detail": "bow", "t": 0.0}
+        drawn = []
+        original = ui._vignette
+        ui._vignette = lambda *args: drawn.append((args[-1], original(*args)))
+        for (w, h), size in (((1280, 720), 0), ((1280, 720), 1), ((1280, 720), 2), ((960, 540), 2), ((480, 270), 2)):
+            state.v2["settings"]["text_size"] = size
+            drawn.clear()
+            ui.draw(np.zeros((h, w, 3), np.uint8), state, UIState(mode="dialogue", conversation=chat,
+                                                                 dialogue_content=self.content, vignette=card))
+            panel_top, rect = drawn[-1]
+            if rect is None:
+                self.assertLess(panel_top - 20 - int(h * 0.27 * 1.15), 64, (w, h, size))  # no room: left out
+                continue
+            x, y, side = rect
+            self.assertLessEqual(y + side + 8, panel_top, (w, h, size))  # above the dialogue panel
+            self.assertGreaterEqual(y, int(h * 0.27 * 0.9), (w, h, size))  # below the HUD's top panels
+        self.assertIsNone(drawn[-1][1])  # 480x270 at the largest text: the bubbles carry it
+
+    def test_the_first_trip_onto_the_sky_looks_up(self):
+        clock = staging.Clock("story_c5_arrive", t=3.2)
+        state = State.new(World("nebula"), seed=1)
+        own = (state.x, 1.22, state.z, state.yaw, -0.05)
+        self.assertGreater(staging.camera_pose(clock, state, own)[4], 0.3)
+        clock.t = staging.STAGES["story_c5_arrive"].duration
+        self.assertIsNone(staging.camera_pose(clock, state, own))  # handed back

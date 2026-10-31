@@ -151,6 +151,9 @@ def _propeller(b, pivot, trim):
 
 
 def _collar(b, neck, style):
+    # A loose collar's tail can sway in the wind: 'loose@-1.00' to 'loose@1.00' (V1-35).
+    style, _, sway = style.partition('@')
+    sway = float(sway or 0.)
     if style == 'none': return
     x,y,z,rx,rz = neck
     b.torus((x,y,z),(rx,rz),.013,WOOL,segments=20,sides=4)
@@ -161,9 +164,9 @@ def _collar(b, neck, style):
               (x+(rx+.008)*math.cos(a+.05),y+.009,z+(rz+.008)*math.sin(a+.05)),.0035,(.88,.39,.39),4)
     front = z+rz+.012
     if style in ('loop','loose'):
-        end = (x+.07,y-.095,front+.025) if style == 'loose' else (x+.028,y-.043,front)
+        end = (x+.07+.035*sway,y-.095+.012*abs(sway),front+.025) if style == 'loose' else (x+.028,y-.043,front)
         b.rod((x,y,front),end,.010,WOOL)
-        if style == 'loose': b.rod(end,(x+.105,y-.065,front+.04),.009,WOOL)
+        if style == 'loose': b.rod(end,(x+.105+.07*sway,y-.065+.02*abs(sway),front+.04),.009,WOOL)
         return
     if style == 'bow':
         for side in (-1,1):
@@ -275,8 +278,10 @@ def local_mesh(shell_id='tin', style='none'):
 
 
 def faces(origin, right, up, forward, *, shell='tin', stage='none', knot=None,
-          collar_visible=True, scale=1., anim=0., scouting=False, reduced_motion=False):
+          collar_visible=True, scale=1., anim=0., scouting=False, reduced_motion=False, sway=0.):
     style = 'none' if not collar_visible or stage=='none' else 'loose' if stage=='loose' else knot if knot in ('square','bow','sailors_hitch') else 'loop'
+    if style == 'loose' and sway:
+        style = f'loose@{max(-1., min(1., sway)):.2f}'
     mesh = local_mesh(shell,style)
     points, normals = mesh.points, mesh.normals
     if scouting and not reduced_motion and mesh.joints:
