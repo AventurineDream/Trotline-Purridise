@@ -1770,3 +1770,39 @@ This part stages the finale (`02 §13.5`, `05 §2.5`): the three Settle In cues 
 - The lilies, glow and whale are drawn on the Lagoon only. The whale rises and holds, and the drawing only adds strokes.
 - Reduced Motion shows the whale and the drawing whole.
 - Played through: the whale scene stages its rise, "Draw it" shows the drawing, and the trip home leaves the staging behind.
+
+## Implemented the story's small moments, part 3 (V1-35)
+
+This part finishes #63: the book on the counter, the collar's beats, the knot choice, and Bot's first trip onto the sky.
+
+**Moment cards (`vignettes.py`).** A small card stands beside the dialogue while its bubble is on screen. It says nothing the bubbles don't, and goes when they do. It is drawn after the dialogue panel, fitted between the HUD's top panels and that panel's top at every text size. Where there's no room, as at 480×270 with the largest text, it is left out, and the bubbles carry the moment.
+
+| Moment | Bubble | The card |
+| --- | --- | --- |
+| The book on the counter | `pro_05`–`pro_06` | The landing's old fish book on the counter, the short pencil in its spine |
+| Grandmother knitting the collar | chapter one's turn-in, "It is warm." | Bot in his shell, the wool collar knitted on stitch by stitch over 2.5 s |
+| The collar slipping | chapter three, "It is holding on by one loop." | The collar loose, its tail swaying in the mountain wind while Bot stays put (`botmesh` sways a loose collar's tail) |
+| The knot choice | `story_c4_knot`, then `story_c4_tied` | Bot wearing whichever knot is highlighted; it follows the selection, then shows the knot chosen |
+
+- **Bot's real mesh.** He is drawn with his own mesh, shell and collar, through `botshots.preview`, which now takes the collar's stage. Each card is cached.
+- **Reduced Motion.** Each moment shows finished and still: the collar knitted, and no sway.
+- **A hidden collar stays hidden.** With the collar hidden in Settings, its moments get no card. The book still has one.
+
+**The deepening reflection.** The crossing into the Lagoon is V1-27's starlight transition: the last lake image tips into starlight, and the Lagoon loads under the full starfield. Bot's first time on the sky (`story_c5_arrive`) is now staged after it. The view lifts slowly to the stars over 3.2 s, holds, and hands back at 7.5 s.
+
+**Shots.** `--shots <dir> --story` adds:
+- `story-book-on-the-counter-0.png`;
+- `story-collar-knitting-0..2.png` (0, 1.2 and 2.5 s);
+- `story-collar-slip-0..1.png`, on Flathead;
+- `story-knot-choice-0..2.png`, one for each highlighted knot;
+- `story-sky-arrival-*.png`.
+
+With parts 1 and 2, every staged moment of #63 is captured as a keyframe sequence.
+
+**Tests (`test_staging`, `Vignettes`).**
+- Each moment has its card.
+- The collar is knitted on, never unravelling, and Reduced Motion shows it done. The three knots look different.
+- In play, the knot card follows the highlight without restarting, shows the knot chosen, and goes with the scene.
+- The card fits between the HUD and the dialogue at three text sizes and two frame sizes, and stays out where it can't.
+- The wind moves only the collar's tail, and a hidden collar gets no card.
+- The first trip onto the sky looks up, then hands back.

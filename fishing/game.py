@@ -199,10 +199,28 @@ class Session:
         elif self.focused:
             self.stage.t += dt
         reduced = bool(self.state.v2.get("settings", {}).get("reduced_motion", False))
+        self._tick_vignette(dt)
         self.ui.stage_fx = staging.sample(self.stage, reduced=reduced)
         self.ui.stage_skip = self.stage_skippable()
         self.ui.credits_rise = staging.credits_rise(self.stage, reduced=reduced)
         self.state.stage_light = staging.light_overrides(self.stage, reduced=reduced)
+
+    def _tick_vignette(self, dt: float) -> None:
+        """The card beside a story moment's bubble: the book, the collar, the knot (V1-35)."""
+        from .vignettes import vignette_for
+        found = None
+        if self.ui.mode == "dialogue" and self.conversation is not None:
+            found = vignette_for(self.conversation.node(self._npc_content), self.conversation, self.state)
+        current = self.ui.vignette
+        if found is None:
+            if self.ui.mode != "help":
+                self.ui.vignette = None
+        elif current is None or current["kind"] != found[0]:
+            self.ui.vignette = {"kind": found[0], "detail": found[1], "t": 0.0}
+        else:
+            current["detail"] = found[1]  # the highlighted knot follows the selection
+            if self.focused:
+                current["t"] += dt
 
     def stage_skippable(self) -> bool:
         """A scene replayed from the save can skip the rest of its staging (V1-35)."""
