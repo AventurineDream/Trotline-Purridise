@@ -462,6 +462,7 @@ class UIState:
     # V1-35 staging: the fade and letterbox over a story scene, and how far the credits have risen.
     stage_fx: dict | None = None
     stage_skip: bool = False  # a replayed scene's staging can be skipped with Esc (B)
+    vignette: dict | None = None  # the story moment's card: {"kind", "detail", "t"} (V1-35)
     credits_rise: float = math.inf
 
 
@@ -727,6 +728,8 @@ class UI:
                     self._sketch(frame, ui.stage_fx["sketch"])
             else:
                 self._hud(frame, state, ui, interactions=False)
+            if ui.vignette:
+                self._vignette(frame, state, ui.vignette)
             self._dialogue(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
         elif mode == "shop":
@@ -777,6 +780,24 @@ class UI:
         if ui.credits_s >= CREDITS_HOLD_S:  # keys do nothing while the credits hold
             hint = self._controls(ui, "Press any key to keep fishing.", "Press A to keep fishing.")
             self._center(frame, hint, w / 2, int(h * 0.82), small, DIM)
+
+    def _vignette(self, frame, state, vignette: dict):
+        """A story moment's card beside the dialogue: the book, or Bot's collar (V1-35)."""
+        from .vignettes import bot_image, draw_book
+        h, w = frame.shape[:2]
+        side = int(min(h * 0.32, w * 0.30))
+        x, y = w - side - int(w * 0.04), int(h * 0.27)  # between the HUD's panels and the dialogue
+        self._panel(frame, x - 8, y - 8, side + 16, side + 16, 0.9)
+        if vignette["kind"] == "book":
+            draw_book(self, frame, x, y, side, side)
+            return
+        reduced = bool(state.v2.get("settings", {}).get("reduced_motion", False))
+        size = max(64, side // 8 * 8)
+        image = bot_image(vignette["kind"], vignette.get("detail"), vignette["t"], state, size, reduced=reduced)
+        if image.shape[0] != side:
+            from .imageops import resize_rgb
+            image = resize_rgb(image, side, side)
+        frame[y:y + side, x:x + side] = image
 
     def _sketch(self, frame, progress: float):
         """The Skipper's drawing of the Star-Whale on a page of the book, stroke by stroke (V1-35)."""

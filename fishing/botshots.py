@@ -29,7 +29,7 @@ def _floor():
 
 
 def preview(shell, *, collar=True, knot='bow', night=False, angle=0., size=256,
-            anim=0., scouting=False, emission=True):
+            anim=0., scouting=False, emission=True, stage='retied'):
     """Use the actual software mesh/raster path without loading another lake."""
     renderer=SoftwareRenderer.__new__(SoftwareRenderer)
     renderer.w=renderer.h=size
@@ -45,7 +45,7 @@ def preview(shell, *, collar=True, knot='bow', night=False, angle=0., size=256,
     floor=_floor()
     faces=[botmesh.Face(floor.points[i],floor.normals[i],floor.colors[i],emissive=0.) for i in range(len(floor.points))]
     renderer._faces(camera,faces,light,boat=False)
-    faces=botmesh.faces((0,0,0),(1,0,0),(0,1,0),(0,0,1),shell=shell,stage='retied',knot=knot,
+    faces=botmesh.faces((0,0,0),(1,0,0),(0,1,0),(0,0,1),shell=shell,stage=stage,knot=knot,
                         collar_visible=collar,anim=anim,scouting=scouting)
     if not emission:
         from dataclasses import replace
