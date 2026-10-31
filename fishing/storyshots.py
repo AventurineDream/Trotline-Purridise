@@ -64,8 +64,13 @@ def _setups():
         # Anchored at the calm reflection, the whale step read through to its last cue.
         _at_reflection(state, settled=45.0, status="ready")
 
+    def arrival(state, world):
+        state._park(world)
+        state.game_minutes = 2 * 1440 + 960  # the Lagoon's Deep band
+
     return (("prologue-arrival", "briar", "pro_01", landing),
             ("fog-lifting", "crater", "story_c4_clear", marker),
+            ("sky-arrival", "nebula", "story_c5_arrive", arrival),
             ("star-whale", "nebula", "story_c5_whale", lagoon),
             ("draw-it", "nebula", "story_c5_drawn", lagoon),
             ("ending", "briar", "end_01", ending),
@@ -98,6 +103,50 @@ def _frame(renderer, ui, state, content, scene_id, clock, *, reduced):
     record = {"t": round(clock.t, 2), "camera": [round(float(v), 3) for v in (cam.x, cam.y, cam.z, cam.yaw, cam.pitch)],
               **{key: round(float(value), 3) for key, value in (fx or {}).items()}}
     return frame, record
+
+
+# The story's small moments (`vignettes.py`): lake, speaker, quest or scene, node, and the
+# times (or knot highlights) to draw.
+VIGNETTES = {
+    "book-on-the-counter": ("briar", "grandmother_whiskers", None, "scene:pro_05", (0.0,)),
+    "collar-knitting": ("briar", "grandmother_whiskers", "story_c1_s3", "story_c1_s3:dialogue:done", (0.0, 1.2, 2.5)),
+    "knot-choice": ("crater", "bot", None, "scene:story_c4_knot", (0, 1, 2)),
+    "collar-slip": ("flathead", "captain_huckleberry", "story_c3_s3", "story_c3_s3:dialogue:ready:3", (0.0, 0.5)),
+}
+
+
+def _vignette(renderer, ui, world, content, out, thumbs, name, npc, quest, node_id, steps) -> dict:
+    from .dialogue import Conversation
+    from .vignettes import vignette_for
+    frames = []
+    for i, step in enumerate(steps):
+        state = State.new(world, seed=35)
+        state.toasts.clear()
+        state.tutorial = 4
+        state.anim = 14.0
+        state._park(world)
+        state.game_minutes = 1440 + 300
+        if node_id.startswith("scene:"):
+            chat = scene_conversation(state, content, node_id.split(":", 1)[1])
+        else:
+            chat = Conversation(npc, quest, node_id)
+        t = 0.0
+        if name == "knot-choice":
+            chat.selected = step
+        else:
+            t = step
+        kind, detail = vignette_for(chat.node(content), chat, state)
+        cam = renderer.camera_for(state)
+        frame = resize_rgb(renderer.render(state, cam), W, H)
+        panel = UIState(mode="dialogue", has_save=True, conversation=chat, dialogue_content=content,
+                        vignette={"kind": kind, "detail": detail, "t": t})
+        ui.draw(frame, state, panel, cam)
+        write_png(out / f"story-{name}-{i}.png", frame)
+        frames.append({"node": node_id, "kind": kind, "detail": detail, "t": t})
+        thumb = resize_rgb(frame, 320, 180)
+        ui._text(thumb, f"{name} {detail or t}", 6, 4, 11, (255, 236, 180))
+        thumbs.append(thumb)
+    return {"lake": world.id, "frames": frames}
 
 
 def _settle_cues(renderer, ui, world, out, thumbs) -> dict:
@@ -165,6 +214,15 @@ def shots(dest, *, software: bool = False) -> dict:
                 report[name + suffix] = {"scene": scene_id, "lake": lake, "frames": frames}
             if lake == "nebula" and "settle-in" not in report:
                 report["settle-in"] = _settle_cues(renderer, ui, world, out, thumbs)
+            for name, spec in VIGNETTES.items():
+                if spec[0] == lake and name not in report:
+                    report[name] = _vignette(renderer, ui, world, content, out, thumbs, name, *spec[1:])
+        if "collar-slip" not in report:  # Flathead has no staged scene; its moment is drawn on its own
+            renderer.close()
+            world = World("flathead")
+            renderer = Renderer(world, 640, 360, software=software)
+            report["collar-slip"] = _vignette(renderer, UI(text, world), world, content, out, thumbs,
+                                              "collar-slip", *VIGNETTES["collar-slip"][1:])
         columns = 5
         rows = math.ceil(len(thumbs) / columns)
         sheet = np.zeros((rows * 180, columns * 320, 3), np.uint8)

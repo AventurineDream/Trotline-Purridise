@@ -328,3 +328,83 @@ class Finale(unittest.TestCase):
         result = unittest.TestResult()
         Play().run(result)
         self.assertEqual((result.errors, result.failures), ([], []))
+
+
+class Vignettes(unittest.TestCase):
+    """The story's small moments beside the dialogue: the book, the collar, the knot."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.content = load_content()
+        cls.world = World("briar")
+
+    def node(self, chat):
+        return chat.node(self.content)
+
+    def test_each_moment_has_its_card(self):
+        from .dialogue import Conversation
+        from .story import scene_conversation
+        from .vignettes import vignette_for
+        state = State.new(self.world, seed=2)
+        for scene in ("pro_05", "pro_05b", "pro_06"):
+            chat = scene_conversation(state, self.content, scene)
+            self.assertEqual(vignette_for(self.node(chat), chat, state), ("book", None), scene)
+        knit = Conversation("grandmother_whiskers", "story_c1_s3", "story_c1_s3:dialogue:done")
+        self.assertEqual(vignette_for(self.node(knit), knit, state), ("knit", None))
+        slip = Conversation("captain_huckleberry", "story_c3_s3", "story_c3_s3:dialogue:ready:3")
+        self.assertEqual(vignette_for(self.node(slip), slip, state), ("slip", None))
+        knot = scene_conversation(state, self.content, "story_c4_knot")
+        for index, expected in enumerate(("square", "bow", "sailors_hitch")):
+            knot.selected = index
+            self.assertEqual(vignette_for(self.node(knot), knot, state), ("knot", expected))
+        other = Conversation("captain_huckleberry", "story_c3_s3", "story_c3_s3:dialogue:ready")
+        self.assertIsNone(vignette_for(self.node(other), other, state))
+
+    def test_the_collar_is_knitted_on_and_reduced_motion_shows_it_done(self):
+        from .vignettes import bot_card, bot_image
+        state = State.new(self.world, seed=2)
+        bare, collared = bot_card("tin", "none", None, 64), bot_card("tin", "received", None, 64)
+        self.assertFalse(np.array_equal(bare, collared))
+        self.assertTrue(np.array_equal(bot_image("knit", None, 0.0, state, 64, reduced=False), bare))
+        self.assertTrue(np.array_equal(bot_image("knit", None, 99.0, state, 64, reduced=False), collared))
+        self.assertTrue(np.array_equal(bot_image("knit", None, 0.0, state, 64, reduced=True), collared))
+        changed = [int((bot_image("knit", None, t, state, 64, reduced=False) != bare).any(axis=2).sum())
+                   for t in (0.0, 0.6, 1.2, 1.8, 2.5)]
+        self.assertEqual(changed, sorted(changed))  # stitch by stitch, never unravelling
+        knots = {k: bot_card("tin", "retied", k, 64) for k in ("square", "bow", "sailors_hitch")}
+        self.assertFalse(np.array_equal(knots["square"], knots["bow"]))
+        self.assertFalse(np.array_equal(knots["bow"], knots["sailors_hitch"]))
+
+    def test_the_knot_card_follows_the_highlight_in_play(self):
+        from .test_story import StoryPlay
+
+        class Play(StoryPlay):
+            def runTest(inner):
+                inner.play_chapter_one(); inner.play_chapter_two(); inner.play_chapter_three()
+                inner.travel("crater")
+                inner.state.narrative.quest("story_c4_s1")
+                inner.state.narrative.quests["story_c4_s3"].status = "ready"
+                inner.press("x")
+                session = inner.session
+                inner.assertEqual(session.conversation.node_id, "scene:story_c4_knot")
+                inner.assertEqual((session.ui.vignette["kind"], session.ui.vignette["detail"]), ("knot", "square"))
+                session.tick(Keys(), 0.5)
+                inner.press("down")
+                inner.assertEqual(session.ui.vignette["detail"], "bow")
+                inner.assertGreater(session.ui.vignette["t"], 0.0)  # the same card, not restarted
+                inner.press("2")
+                inner.assertEqual(session.conversation.node_id, "scene:story_c4_tied")
+                inner.assertEqual(session.ui.vignette["detail"], "bow")  # the one chosen
+                inner.press("c")
+                inner.assertIsNone(session.ui.vignette)
+        result = unittest.TestResult()
+        Play().run(result)
+        self.assertEqual((result.errors, result.failures), ([], []))
+
+    def test_the_first_trip_onto_the_sky_looks_up(self):
+        clock = staging.Clock("story_c5_arrive", t=3.2)
+        state = State.new(World("nebula"), seed=1)
+        own = (state.x, 1.22, state.z, state.yaw, -0.05)
+        self.assertGreater(staging.camera_pose(clock, state, own)[4], 0.3)
+        clock.t = staging.STAGES["story_c5_arrive"].duration
+        self.assertIsNone(staging.camera_pose(clock, state, own))  # handed back
