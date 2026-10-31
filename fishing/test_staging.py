@@ -375,6 +375,29 @@ class Vignettes(unittest.TestCase):
         self.assertFalse(np.array_equal(knots["square"], knots["bow"]))
         self.assertFalse(np.array_equal(knots["bow"], knots["sailors_hitch"]))
 
+    def test_the_wind_takes_the_loose_collar_not_bot(self):
+        from .vignettes import bot_image
+        state = State.new(self.world, seed=2)
+        still = bot_image("slip", None, 0.0, state, 128, reduced=False)
+        gust = bot_image("slip", None, 0.5, state, 128, reduced=False)  # sin(1.55): a full gust
+        changed = int((still != gust).any(axis=2).sum())
+        self.assertGreater(changed, 0)
+        self.assertLess(changed, 128 * 128 * 0.02)  # only the collar's tail moves; the view is still
+        self.assertTrue(np.array_equal(bot_image("slip", None, 0.5, state, 128, reduced=True), still))
+
+    def test_a_hidden_collar_gets_no_card(self):
+        from .dialogue import Conversation
+        from .story import scene_conversation
+        from .vignettes import vignette_for
+        state = State.new(self.world, seed=2)
+        state.v2["settings"]["collar_visible"] = False
+        for chat in (Conversation("grandmother_whiskers", "story_c1_s3", "story_c1_s3:dialogue:done"),
+                     Conversation("captain_huckleberry", "story_c3_s3", "story_c3_s3:dialogue:ready:3"),
+                     scene_conversation(state, self.content, "story_c4_knot")):
+            self.assertIsNone(vignette_for(self.node(chat), chat, state), chat.node_id)
+        book = scene_conversation(state, self.content, "pro_05")
+        self.assertEqual(vignette_for(self.node(book), book, state), ("book", None))  # the book is no collar
+
     def test_the_knot_card_follows_the_highlight_in_play(self):
         from .test_story import StoryPlay
 

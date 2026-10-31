@@ -5,13 +5,14 @@
 - **Grandmother knitting the collar** (chapter one's turn-in, "It is warm."): Bot, with the
   wool collar knitted on stitch by stitch.
 - **The collar slipping** (chapter three, "It is holding on by one loop."): the collar loose,
-  swaying in the mountain wind.
+  its tail swaying in the mountain wind.
 - **The knot choice** (`story_c4_knot`): Bot wearing whichever knot is highlighted, and then
   the one chosen ("It adjusts.").
 
 Bot is drawn with his own mesh and shell (`botshots.preview`). The card is part of the
 dialogue: it says nothing the bubbles don't, and it goes when they do. Reduced Motion shows
-each moment finished and still.
+each moment finished and still, and a collar hidden in Settings stays hidden: its moments get
+no card.
 """
 
 from __future__ import annotations
@@ -29,6 +30,8 @@ def vignette_for(node: dict, chat, state) -> tuple[str, str | None] | None:
     node_id, scene = node.get("id", ""), node.get("scene")
     if scene in ("pro_05", "pro_05b", "pro_06"):
         return "book", None
+    if not collar_shown(state):
+        return None  # the collar is hidden in Settings: its moments are the bubbles alone
     if node_id.startswith("story_c1_s3:dialogue:done"):
         return "knit", None
     if node_id == "story_c3_s3:dialogue:ready:3":
@@ -42,12 +45,21 @@ def vignette_for(node: dict, chat, state) -> tuple[str, str | None] | None:
     return None
 
 
+def collar_shown(state) -> bool:
+    """The player's collar visibility, as Bot himself is drawn (`bot.faces`)."""
+    v2 = state.v2 if isinstance(state.v2, dict) else {}
+    settings = v2.get("settings", {}) if isinstance(v2.get("settings"), dict) else {}
+    collar = v2.get("profile", {}).get("collar", {}) if isinstance(v2.get("profile"), dict) else {}
+    return bool(settings.get("collar_visible", collar.get("visible", True) if isinstance(collar, dict) else True))
+
+
 @lru_cache(maxsize=24)
-def bot_card(shell: str, stage: str, knot: str | None, size: int, angle: float = 0.6):
-    """Bot in his shell, with this collar, on a small lit floor (read-only, cached)."""
+def bot_card(shell: str, stage: str, knot: str | None, size: int, sway: float = 0.0):
+    """Bot in his shell, with this collar, on a small lit floor (read-only, cached). The view
+    never moves; a loose collar's tail can sway (-1..1)."""
     from .botshots import preview
-    card = preview(shell, collar=stage != "none", knot=knot if stage == "retied" else None, angle=angle,
-                   size=size, stage=stage if stage != "none" else "received")
+    card = preview(shell, collar=stage != "none", knot=knot if stage == "retied" else None, angle=0.6,
+                   size=size, stage=stage if stage != "none" else "received", sway=sway)
     card.setflags(write=False)
     return card
 
@@ -66,8 +78,10 @@ def bot_image(kind: str, detail: str | None, t: float, state, size: int, *, redu
         image[:, :cut] = collared[:, :cut]
         return image
     if kind == "slip":
-        sway = 0.0 if reduced else 0.12 * np.sin(t * 3.1)  # the mountain wind
-        return bot_card(shell, "loose", None, size, round(0.6 + float(sway), 2))
+        # The mountain wind takes the loose tail; Bot himself stays put. Quarter steps keep the
+        # cache small.
+        sway = 0.0 if reduced else round(float(np.sin(t * 3.1)) * 4) / 4
+        return bot_card(shell, "loose", None, size, sway)
     return bot_card(shell, "retied", detail if detail in ("square", "bow", "sailors_hitch") else "bow", size)
 
 
