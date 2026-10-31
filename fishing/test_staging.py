@@ -401,6 +401,33 @@ class Vignettes(unittest.TestCase):
         Play().run(result)
         self.assertEqual((result.errors, result.failures), ([], []))
 
+    def test_the_card_fits_between_the_hud_and_the_dialogue_or_stays_out(self):
+        from .platform import Text
+        from .story import scene_conversation
+        from .ui import UI, UIState
+        text = Text()
+        self.addCleanup(text.close)
+        ui = UI(text, self.world)
+        state = State.new(self.world, seed=2)
+        chat = scene_conversation(state, self.content, "story_c4_knot")
+        card = {"kind": "knot", "detail": "bow", "t": 0.0}
+        drawn = []
+        original = ui._vignette
+        ui._vignette = lambda *args: drawn.append((args[-1], original(*args)))
+        for (w, h), size in (((1280, 720), 0), ((1280, 720), 1), ((1280, 720), 2), ((960, 540), 2), ((480, 270), 2)):
+            state.v2["settings"]["text_size"] = size
+            drawn.clear()
+            ui.draw(np.zeros((h, w, 3), np.uint8), state, UIState(mode="dialogue", conversation=chat,
+                                                                 dialogue_content=self.content, vignette=card))
+            panel_top, rect = drawn[-1]
+            if rect is None:
+                self.assertLess(panel_top - 20 - int(h * 0.27 * 1.15), 64, (w, h, size))  # no room: left out
+                continue
+            x, y, side = rect
+            self.assertLessEqual(y + side + 8, panel_top, (w, h, size))  # above the dialogue panel
+            self.assertGreaterEqual(y, int(h * 0.27 * 0.9), (w, h, size))  # below the HUD's top panels
+        self.assertIsNone(drawn[-1][1])  # 480x270 at the largest text: the bubbles carry it
+
     def test_the_first_trip_onto_the_sky_looks_up(self):
         clock = staging.Clock("story_c5_arrive", t=3.2)
         state = State.new(World("nebula"), seed=1)

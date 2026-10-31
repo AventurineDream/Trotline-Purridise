@@ -728,9 +728,9 @@ class UI:
                     self._sketch(frame, ui.stage_fx["sketch"])
             else:
                 self._hud(frame, state, ui, interactions=False)
-            if ui.vignette:
-                self._vignette(frame, state, ui.vignette)
-            self._dialogue(frame, state, ui)
+            panel_top = self._dialogue(frame, state, ui)
+            if ui.vignette and panel_top is not None:
+                self._vignette(frame, state, ui.vignette, panel_top)
             self._toasts(frame, state, ui.input_device)
         elif mode == "shop":
             self._shop(frame, state, ui)
@@ -781,16 +781,21 @@ class UI:
             hint = self._controls(ui, "Press any key to keep fishing.", "Press A to keep fishing.")
             self._center(frame, hint, w / 2, int(h * 0.82), small, DIM)
 
-    def _vignette(self, frame, state, vignette: dict):
-        """A story moment's card beside the dialogue: the book, or Bot's collar (V1-35)."""
+    def _vignette(self, frame, state, vignette: dict, panel_top: int):
+        """A story moment's card beside the dialogue: the book, or Bot's collar (V1-35). It fits
+        between the HUD's panels and the dialogue panel, and is left out where there is no room:
+        the bubbles carry the moment."""
         from .vignettes import bot_image, draw_book
         h, w = frame.shape[:2]
-        side = int(min(h * 0.32, w * 0.30))
-        x, y = w - side - int(w * 0.04), int(h * 0.27)  # between the HUD's panels and the dialogue
+        y = int(h * 0.27 * getattr(self, "_text_scale", 1.0))  # below the HUD's top panels
+        side = min(int(min(h * 0.32, w * 0.30)), panel_top - 20 - y)
+        if side < 64:
+            return None
+        x = w - side - int(w * 0.04)
         self._panel(frame, x - 8, y - 8, side + 16, side + 16, 0.9)
         if vignette["kind"] == "book":
             draw_book(self, frame, x, y, side, side)
-            return
+            return x, y, side
         reduced = bool(state.v2.get("settings", {}).get("reduced_motion", False))
         size = max(64, side // 8 * 8)
         image = bot_image(vignette["kind"], vignette.get("detail"), vignette["t"], state, size, reduced=reduced)
@@ -798,6 +803,7 @@ class UI:
             from .imageops import resize_rgb
             image = resize_rgb(image, side, side)
         frame[y:y + side, x:x + side] = image
+        return x, y, side
 
     def _sketch(self, frame, progress: float):
         """The Skipper's drawing of the Star-Whale on a page of the book, stroke by stroke (V1-35)."""
@@ -873,6 +879,7 @@ class UI:
         top = y+margin+(ch+3)*2
         for i, (line, color) in enumerate(zip(rows+footer, colors+[DIM]*len(footer))):
             self._text(frame, line, x+margin+inset, top+i*(ch+3), size, color, False)
+        return y
 
     @staticmethod
     def _haul_sway(ui: UIState, reduced_motion: bool) -> float:

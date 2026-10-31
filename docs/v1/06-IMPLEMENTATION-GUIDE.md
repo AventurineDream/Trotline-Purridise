@@ -1775,7 +1775,7 @@ This part stages the finale (`02 §13.5`, `05 §2.5`): the three Settle In cues 
 
 This part finishes #63: the book on the counter, the collar's beats, the knot choice, and Bot's first trip onto the sky.
 
-**Moment cards (`vignettes.py`).** A small card stands beside the dialogue while its bubble is on screen. It sits between the HUD's panels and the dialogue panel, says nothing the bubbles don't, and goes when they do.
+**Moment cards (`vignettes.py`).** A small card stands beside the dialogue while its bubble is on screen. It says nothing the bubbles don't, and goes when they do. It is drawn after the dialogue panel, fitted between the HUD's top panels and that panel's top at every text size. Where there's no room, as at 480×270 with the largest text, it is left out, and the bubbles carry the moment.
 
 | Moment | Bubble | The card |
 | --- | --- | --- |
@@ -1802,4 +1802,5 @@ With parts 1 and 2, every staged moment of #63 is captured as a keyframe sequenc
 - Each moment has its card.
 - The collar is knitted on, never unravelling, and Reduced Motion shows it done. The three knots look different.
 - In play, the knot card follows the highlight without restarting, shows the knot chosen, and goes with the scene.
+- The card fits between the HUD and the dialogue at three text sizes and two frame sizes, and stays out where it can't.
 - The first trip onto the sky looks up, then hands back.
