@@ -29,9 +29,8 @@ def maybe_start_sighting(state, world, mode: str) -> bool:
     state.guardian_sighting_started_at = None
     state.guardian_sighting_last_anim = float(state.anim)
     # The sighting is the Guardian's record, for a quest that asks to witness it (V1-32).
-    state.emit_quest_event({"type": "legendary.witnessed", "species_id": "whiskered_guardian",
-                            "lake_id": world.id, "zone_id": f"{world.id}:deep",
-                            "game_minute": state.game_minutes})
+    from .legendary import record_witnessed
+    record_witnessed(state, "whiskered_guardian", world)
     return True
 
 

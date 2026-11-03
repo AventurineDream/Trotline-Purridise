@@ -493,7 +493,8 @@ def shop_rows(state, tab: int) -> list[Row]:
             bool(saleable), "sell_all",
         ))
         for i, catch in enumerate(state.well):
-            name = SPECIES_BY_ID[catch.species].name
+            sp = SPECIES_BY_ID.get(catch.species)
+            name = sp.name if sp is not None else catch.species.replace("_", " ").title()
             if catch.shiny:
                 name = "✦ " + name
             q = quality_name(catch.quality)
@@ -638,7 +639,8 @@ def check_rows(state, line_index: int) -> list[Row]:
             rows.append(Row(f"{i + 1:2d}  {section_label}  {label}", "", "", False, "hook", str(i)))
         else:
             catch = hook.catch
-            name = SPECIES_BY_ID[catch.species].name
+            sp = SPECIES_BY_ID.get(catch.species)
+            name = sp.name if sp is not None else catch.species.replace("_", " ").title()
             if catch.shiny:
                 name = "✦ " + name
             q = quality_name(catch.quality)
@@ -1023,7 +1025,9 @@ class UI:
         title = f"HAULING  {index + 1:02d} / {len(line.hooks):02d}"
         self._text(frame, title, int(w * 0.055), int(h * 0.06), head, INK)
         if hook.catch is not None:
-            result = f"{SPECIES_BY_ID[hook.catch.species].name} on the line"
+            sp = SPECIES_BY_ID.get(hook.catch.species)
+            hook_sp_name = sp.name if sp is not None else hook.catch.species.replace("_", " ").title()
+            result = f"{hook_sp_name} on the line"
             result_color = GOLD
         elif hook.baited:
             result, result_color = "Bait still on", GOOD
@@ -1085,9 +1089,10 @@ class UI:
                 ribbon, ribbon_color = "CATCH", INK
         self._center(frame, ribbon, image_x + image_w - 78, image_y + 13,
                      small, ribbon_color)
-        species = SPECIES_BY_ID[catch.species]
+        sp = SPECIES_BY_ID.get(catch.species)
+        sp_name = sp.name if sp is not None else catch.species.replace("_", " ").title()
         quality = quality_name(catch.quality)
-        detail = f"{weight_string(catch.weight)}  ·  {species.name}  ·  {quality}"
+        detail = f"{weight_string(catch.weight)}  ·  {sp_name}  ·  {quality}"
         self._center(frame, detail, w / 2, image_y + image_h + 12, body, INK)
         if catch.shiny:
             self._center(frame, "SHINY CATCH", w / 2, image_y + image_h + 12 + self.cell(body)[1],
@@ -2040,7 +2045,8 @@ class UI:
                 if i >= len(rows):
                     break
                 catch = rows[i]
-                name = SPECIES_BY_ID[catch.species].name
+                sp = SPECIES_BY_ID.get(catch.species)
+                name = sp.name if sp is not None else catch.species.replace("_", " ").title()
                 if catch.shiny:
                     name = "✦ " + name
                 q = quality_name(catch.quality)

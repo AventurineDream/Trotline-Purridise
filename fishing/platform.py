@@ -150,8 +150,13 @@ class SDL_AudioSpec(ctypes.Structure):
 
 
 def _load(name: str):
-    return ctypes.CDLL(name)
-
+    try:
+        return ctypes.CDLL(name)
+    except OSError:
+        local_path = Path.home() / ".local" / "lib" / name
+        if local_path.exists():
+            return ctypes.CDLL(str(local_path))
+        raise
 
 def find_font(family="mono") -> str:
     import os
