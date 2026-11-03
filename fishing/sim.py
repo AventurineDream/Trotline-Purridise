@@ -929,7 +929,8 @@ class State:
                         continue
                     if announce and not hook.catch.noted_tired and hook.catch.age >= 9.0:
                         hook.catch.noted_tired = True
-                        name = SPECIES_BY_ID[hook.catch.species].name.lower()
+                        species_info = SPECIES_BY_ID.get(hook.catch.species)
+                        name = species_info.name.lower() if species_info is not None else hook.catch.species.replace("_", " ")
                         place = self._world.zone_name(line.zone) if self._world is not None else line.zone
                         self._tired.append(f"A {name} on the {place.lower()} line is getting tired.")
                     continue
