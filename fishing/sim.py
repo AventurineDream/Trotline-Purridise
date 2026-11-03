@@ -929,7 +929,8 @@ class State:
                         continue
                     if announce and not hook.catch.noted_tired and hook.catch.age >= 9.0:
                         hook.catch.noted_tired = True
-                        name = SPECIES_BY_ID[hook.catch.species].name.lower()
+                        species_info = SPECIES_BY_ID.get(hook.catch.species)
+                        name = species_info.name.lower() if species_info is not None else hook.catch.species.replace("_", " ")
                         place = self._world.zone_name(line.zone) if self._world is not None else line.zone
                         self._tired.append(f"A {name} on the {place.lower()} line is getting tired.")
                     continue
@@ -1219,7 +1220,8 @@ class State:
         hook.baited = False
         if not announce:
             return
-        name = SPECIES_BY_ID[catch.species].name
+        species_info = SPECIES_BY_ID.get(catch.species)
+        name = species_info.name if species_info is not None else catch.species.replace("_", " ").title()
         if reason == "protected":
             self.toast(f"This is a {name}. They are protected here, so back it goes. The book still counts it.")
         elif reason == "legendary":
@@ -1230,6 +1232,7 @@ class State:
     def prepare_catch_dispositions(self, line_index: int) -> bool:
         """Default pending catches to Keep and preselect one small release if needed."""
         line = self.lines[line_index]
+        self.check_legendary_hook(line)
         newly_pending: list[Catch] = []
         for hook in line.hooks:
             catch = hook.catch
@@ -1598,6 +1601,7 @@ class State:
     def take_hook(self, line_index: int, hook_index: int,
                   disposition: str | None = None) -> str | None:
         line = self.lines[line_index]
+        self.check_legendary_hook(line)
         hook = line.hooks[hook_index]
         if hook.catch is None:
             return "Nothing on that hook."
@@ -2038,11 +2042,16 @@ class State:
         """Persist an idempotency key for one new v2 reward kind."""
         if kind not in V2_REWARD_KINDS or not isinstance(key, str) or not key.strip():
             return False
+
         claims = self.v2["reward_claims"][kind]
         if key in claims:
             return False
         claims.append(key)
         return True
+    def check_legendary_hook(self, line: SetLine) -> Catch | None:
+        """Evaluate and hook an eligible legendary on line checks / hauls."""
+        from . import legendary
+        return legendary.check_legendary_hook(self, line, self._world)
 
     def set_book_title(self, title: str) -> bool:
         """Advance the book title from story progress or collection completion."""
