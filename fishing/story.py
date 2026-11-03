@@ -158,6 +158,9 @@ def finish_scene(state, content, scene_id: str) -> bool:
     if scene_state(state, scene_id) == "done":
         return False
     state.set_scene_status(scene_id, "done")
+    if scene_id == "story_c5_whale":
+        from .legendary import record_witnessed
+        record_witnessed(state, "star_whale")
     if scene_id == "end_02":
         state.set_book_title("book_of_five_waters")  # the spine re-stitched (05 §3)
     completes = _COMPLETES.get(scene_id)
