@@ -575,15 +575,11 @@ class BookView:
         self.footer(f"Page {page + 1}/{len(pages)} · Enter turns")
 
     def watch(self):
-        from . import calendar
+        from . import legendary
         sid = LEGENDARY_IDS[self.ui.book_watch_i % len(LEGENDARY_IDS)]
-        page = legendary_page(sid, self.state.v2, remember=False)
-        values = ["Recorded" if page["verified"] else "A lead from " + page["teller"],
-                  page["story"], *(_note_text(clue) for clue in page["clues"])]
-        start, end = calendar.next_legendary_window(calendar.forecast_seed(self.state), sid, self.state.game_minutes)
-        values.append("Next weather opportunity: " + calendar.day_name(start) + " "
-                      + calendar.clock_string(start) + "–" + calendar.clock_string(end)
-                      + ". Story, equipment, bait and location requirements still apply.")
+        world = getattr(self.u, "world", getattr(self.state, "_world", None))
+        card = legendary.watch_card(self.state, sid, world=world)
+        values = card.lines()
         index, count = self.paginated("Watch cards · " + sid.replace("_", " ").title(), values)
         self.footer(f"Watch {self.ui.book_watch_i + 1}/{len(LEGENDARY_IDS)} · Page {index}/{count}")
 

@@ -1806,3 +1806,29 @@ With parts 1 and 2, every staged moment of #63 is captured as a keyframe sequenc
 - The card fits between the HUD and the dialogue at three text sizes and two frame sizes, and stays out where it can't.
 - The wind moves only the collar's tail, and a hidden collar gets no card.
 - The first trip onto the sky looks up, then hands back.
+
+## Implemented legendary system (V1-36)
+
+V1-36 (#64) implements the legendary system: requirement evaluation, watch cards, guaranteed hooks, records, forced release, weekly repeats, the Spillway Monster's day-one exception, and integration with the Whiskered Guardian.
+
+**`legendary.py` and requirement evaluation.**
+- Evaluates requirements for all 12 legendaries (`03 §3`): lake, location (named area or habitat zones), clock window, weather (including Cedar's 6-hour rain condition), recipe or ordinary bait, and bespoke gates (spotlight, heavy line tier, story chapters 1/2/4/5, thermocline cold band, Huckleberry's Whopper story on 3 distinct days, Mist's poem, and Zero-G Winch).
+- `watch_card(state, legendary_id)` produces the watch card showing the clue teller and location, authored story, live ✓/✗ status for every requirement, and the next eligible window from `calendar.next_legendary_window`.
+- `legendaries.json` rows in `content_v2` hold the typed `kind` (`caught` vs `witnessed`), nominal `weight_lb`, `teller`, and `requirements` structure, validated by `content.py`.
+
+**Guaranteed hook and forced release.**
+- When a line meeting every requirement soaks through an eligible window, checking or hauling it guarantees hooking the legendary on the first haul.
+- Split-bait lines select the hook in the matching bait section.
+- Catches are marked `legendary=True` and `disposition="release"`.
+- Forced release returns the legendary fish to the water, preventing livewell entry while permanently latching its observation record and idempotent `legendary_record` reward claim.
+- Legendaries repeat once per in-game week (`calendar.WEEK_MINUTES`), adding a new weight record and nothing else.
+
+**Spillway Monster and Whiskered Guardian.**
+- The Spillway Monster needs only a heavy line in Cedar Creek's Marked Pool with cut shad at night (20:00–04:00). It is catchable on a fresh day-one save without chapter gates.
+- The Whiskered Guardian is integrated as a witnessed legendary: its existing sunset sighting rule at Cedar deep with 8 ripples records into `v2["legendaries"]` and emits `legendary.witnessed`.
+
+**Tests (`test_legendary.py`).**
+- Unit tests per legendary verifying that meeting all requirements inside the window hooks it on the first haul, and missing any one requirement does not.
+- Watch card live state agreement across time and condition changes.
+- Fresh-save day-one catchability of the Spillway Monster with a heavy line.
+- Forced release prevention of livewell entry, and weekly repeat rollover.

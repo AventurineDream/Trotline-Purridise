@@ -2153,7 +2153,9 @@ class _ContentV2Validator:
         """The twelve legendaries' bespoke looks and underwater idles (V1-28)."""
         filename = "legendaries.json"
         self.root(docs, filename, {"schema_version", "legendaries"})
-        rows = self.table(docs, filename, "legendaries", {"id", "name", "lake", "look", "idle"})
+        rows = self.table(docs, filename, "legendaries",
+                          {"id", "name", "lake", "look", "idle"},
+                          {"kind", "weight_lb", "teller", "requirements"})
         if filename in self.unavailable_files:
             return rows
         if len(rows) != 12:
@@ -2162,6 +2164,12 @@ class _ContentV2Validator:
             self.error(filename, "legendaries", "expected the same IDs as calendar.json legendary_windows")
         for lid, row, where in self.rows(filename, "legendaries"):
             self.text(filename, where + ".name", row.get("name"))
+            if "kind" in row:
+                self.enum(filename, where + ".kind", row["kind"], {"caught", "witnessed"})
+            if "weight_lb" in row and row["weight_lb"] is not None:
+                self.number(filename, where + ".weight_lb", row["weight_lb"], minimum=1.0)
+            if "teller" in row:
+                self.text(filename, where + ".teller", row["teller"])
             if lid in species:
                 self.error(filename, where, "a legendary must not reuse a standard species ID")
             lake = (windows or {}).get(lid, {}).get("lake")
