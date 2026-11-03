@@ -218,9 +218,8 @@ LEGENDARY_DATA: dict[str, dict[str, Any]] = {
         "end_hour": 4,
         "weathers": ("clear",),
         "bait": None,
-        "gate_type": "chapter",
-        "gate_value": 5,
-        "gate_desc": "Chapter 5 complete",
+        "gate_type": "star_whale",
+        "gate_desc": "Chapter 5 complete & settled by the calm reflection",
     },
 }
 
@@ -429,18 +428,20 @@ def _check_gate(data: dict, state: Any, line: Any = None, world: Any = None) -> 
     if gate_type == "whopper_story":
         if getattr(state, "whopper_story_heard", False):
             return True, desc
-        v2 = getattr(state, "v2", None) or {}
-        npcs = v2.get("npcs", {}) if isinstance(v2, dict) else {}
-        talk = npcs.get("talk_days", {}).get("captain_huckleberry", []) if isinstance(npcs, dict) else []
-        ripples = getattr(state.narrative, "ripples", []) if hasattr(state, "narrative") else []
-        v2_ripples = v2.get("ripples_v2", []) if isinstance(v2, dict) else []
-        met = (
-            len(talk) >= 3
-            or quest_status(state, "wc_bjorn_a") == "completed"
-            or 23 in ripples
-            or "ripple_23" in v2_ripples
-        )
-        return met, desc
+        from .dialogue import story_heard
+        return story_heard(state, "captain_huckleberry") >= 3, desc
+    if gate_type == "star_whale":
+        desc = "Chapter 5 complete & settled by the calm reflection"
+        if not chapter_finished(state, 5):
+            return False, desc
+        if getattr(state, "settled", False):
+            return True, desc
+        from .story import settle_near
+        wrld = world or getattr(state, "_world", None)
+        if wrld is not None:
+            is_settled = bool(state.anchored and abs(state.speed) < 0.1 and settle_near(state, wrld))
+            return is_settled, desc
+        return bool(state.anchored and abs(state.speed) < 0.1), desc
     if gate_type == "mist_poem":
         if getattr(state, "mist_poem_heard", False):
             return True, desc
@@ -556,20 +557,52 @@ def watch_card(state: Any, legendary_id: str, line: Any = None,
     verified = bool(page and page.get("verified"))
     if legendary_id == "whiskered_guardian" and getattr(state.narrative, "guardian_seen", False):
         verified = True
+    if legendary_id == "star_whale":
+        from .story import scene_state
+        if scene_state(state, "story_c5_whale") == "done":
+            verified = True
 
     eval_result = evaluate_requirements(state, legendary_id, line=line, world=world)
     reqs: list[RequirementStatus] = eval_result["requirements"]
 
     clues = page.get("clues", []) if page else []
-    clue_set = set(clues) if isinstance(clues, list) else set()
-    all_revealed = verified or "all" in clue_set or "teller" in clue_set or not clues
+    revealed_categories: set[str] = set()
+    all_revealed = verified
+
+    if isinstance(clues, (list, tuple)):
+        for clue in clues:
+            if isinstance(clue, str):
+                if clue in ("all", "revealed"):
+                    all_revealed = True
+                elif clue in ("teller",):
+                    revealed_categories.add("teller")
+                elif clue in ("location", "area", "zone"):
+                    revealed_categories.add("location")
+                elif clue in ("window", "time", "band", "hour"):
+                    revealed_categories.add("window")
+                elif clue in ("weather",):
+                    revealed_categories.add("weather")
+                elif clue in ("bait",):
+                    revealed_categories.add("bait")
+                elif clue in ("gate",):
+                    revealed_categories.add("gate")
+            elif isinstance(clue, dict):
+                if any(k in clue for k in ("zone", "area", "lake")):
+                    revealed_categories.add("location")
+                if any(k in clue for k in ("band", "window", "time", "hour")):
+                    revealed_categories.add("window")
+                if "weather" in clue:
+                    revealed_categories.add("weather")
+                if "bait" in clue:
+                    revealed_categories.add("bait")
+                if "gate" in clue:
+                    revealed_categories.add("gate")
 
     for req in reqs:
-        if all_revealed or req.category in clue_set:
+        if all_revealed or req.category in revealed_categories or (req.category == "lake" and "location" in revealed_categories):
             req.revealed = True
         else:
             req.revealed = False
-
     # Next eligible window from weather planner
     seed = calendar.forecast_seed(state)
     try:
@@ -641,20 +674,30 @@ def check_legendary_hook(state: Any, line: Any, world: Any = None) -> Any | None
             disposition="release",
         )
 
+        # Prefer an unoccupied hook with matching bait, then any unoccupied hook.
+        # Only if all hooks are already occupied does it replace an existing catch.
         target_hook = None
-        for h in line.hooks:
-            if h.catch is not None:
-                target_hook = h
-                break
-        if target_hook is None:
-            req_bait = data["bait"]
+        req_bait = data["bait"]
+        empty_hooks = [h for h in line.hooks if h.catch is None]
+        if empty_hooks:
+            for idx, h in enumerate(line.hooks):
+                if h.catch is None and line.bait_for_hook(idx) == req_bait:
+                    target_hook = h
+                    break
+            if target_hook is None:
+                for idx, h in enumerate(line.hooks):
+                    if h.catch is None and h.baited:
+                        target_hook = h
+                        break
+            if target_hook is None:
+                target_hook = empty_hooks[0]
+        elif line.hooks:
             for idx, h in enumerate(line.hooks):
                 if line.bait_for_hook(idx) == req_bait:
                     target_hook = h
                     break
-        if target_hook is None and line.hooks:
-            target_hook = line.hooks[0]
-
+            if target_hook is None:
+                target_hook = line.hooks[0]
         if target_hook is not None:
             target_hook.catch = catch
             target_hook.baited = False

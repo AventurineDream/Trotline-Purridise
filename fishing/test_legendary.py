@@ -256,7 +256,7 @@ class LegendarySystemTests(unittest.TestCase):
         state = self._state("flathead")
         state.game_minutes = _minutes(23.0)
         state.weather = "snow_mist"
-        state.v2.setdefault("npcs", {})["talk_days"] = {"captain_huckleberry": [1, 2, 3]}
+        state.v2.setdefault("npcs", {})["stories"] = {"captain_huckleberry": {"heard": 3}}
         line = _line("std", "roe", "rocks")
 
         catch = legendary.check_legendary_hook(state, line)
@@ -264,11 +264,11 @@ class LegendarySystemTests(unittest.TestCase):
         self.assertEqual(catch.species, "huckleberrys_whopper")
         self.assertAlmostEqual(catch.weight, 18.0, delta=2.0)
 
-        # Missing Whopper story (only 1 day)
+        # Missing Whopper story (heard 1 part only)
         s_bad = self._state("flathead")
         s_bad.game_minutes = _minutes(23.0)
         s_bad.weather = "snow_mist"
-        s_bad.v2.setdefault("npcs", {})["talk_days"] = {"captain_huckleberry": [1]}
+        s_bad.v2.setdefault("npcs", {})["stories"] = {"captain_huckleberry": {"heard": 1}}
         self.assertIsNone(legendary.check_legendary_hook(s_bad, _line("std", "roe", "rocks")))
 
         # Missing weather (clear)
@@ -452,9 +452,19 @@ class LegendarySystemTests(unittest.TestCase):
         state.weather = "clear"
         state.zone = "open"
         state.v2.setdefault("story", {})["completed_chapters"] = [1, 2, 3, 4, 5]
+        state.settled = True
 
         eval_res = legendary.evaluate_requirements(state, "star_whale")
         self.assertTrue(eval_res["met"])
+
+        # Missing settled
+        s_bad = self._state("nebula")
+        s_bad.game_minutes = _minutes(22.0)
+        s_bad.weather = "clear"
+        s_bad.zone = "open"
+        s_bad.v2.setdefault("story", {})["completed_chapters"] = [1, 2, 3, 4, 5]
+        s_bad.settled = False
+        self.assertFalse(legendary.evaluate_requirements(s_bad, "star_whale")["met"])
 
         # Missing chapter 5
         s_bad = self._state("nebula")
@@ -483,6 +493,7 @@ class LegendarySystemTests(unittest.TestCase):
         # Change state to meet window and gate:
         state.light = True
         state.game_minutes = _minutes(21.0)
+        state.v2.setdefault("legendaries", {})["old_lantern"] = {"clues": ["all"]}
         card_updated = legendary.watch_card(state, "old_lantern")
         self.assertTrue(card_updated.states["window"])
         self.assertTrue(card_updated.states["gate"])
@@ -573,6 +584,71 @@ class LegendarySystemTests(unittest.TestCase):
         self.assertIsNone(line.hooks[0].catch)
         self.assertEqual(line.hooks[1].catch, catch)
         self.assertIsNone(line.hooks[2].catch)
+
+    def test_preserve_occupied_catches_when_assigning_legendary(self):
+        state = self._state("briar")
+        state.light = True
+        state.game_minutes = _minutes(21.0)
+        lx, lz = -435.789 + 80.0, 107.381
+        existing_fish = Catch("bluegill", 0.8, 1.0, 0.0, "landing_edge", "worm", 21.0)
+        line = SetLine("std", ["worm", "lantern_liver"], lx - 5, lz, lx + 5, lz, "landing_edge",
+                       [Hook(False, existing_fish), Hook(True)])
+
+        catch = legendary.check_legendary_hook(state, line, self.briar)
+        self.assertIsNotNone(catch)
+        self.assertEqual(catch.species, "old_lantern")
+        # Hook 0 still has the existing regular fish intact
+        self.assertEqual(line.hooks[0].catch, existing_fish)
+        # Hook 1 received the legendary
+        self.assertEqual(line.hooks[1].catch, catch)
+
+    def test_tired_catch_notification_with_legendary(self):
+        state = self._state("briar")
+        lx, lz = -435.789 + 80.0, 107.381
+        leg_catch = Catch("old_lantern", 38.0, 1.0, 9.1, "landing_edge", "lantern_liver", 21.0,
+                          legendary=True)
+        line = SetLine("std", "lantern_liver", lx - 5, lz, lx + 5, lz, "landing_edge",
+                       [Hook(False, leg_catch)])
+        state.lines = [line]
+        # Simulation aging across one minute with announce=True must not raise KeyError
+        state._one_span(1.0 / 60.0, announce=True)
+        self.assertTrue(any("old lantern" in msg.lower() for msg in state._tired))
+
+    def test_watch_card_dict_clues_and_progressive_reveal(self):
+        state = self._state("briar")
+        state.v2.setdefault("legendaries", {})["old_lantern"] = {"clues": []}
+
+        card_hidden = legendary.watch_card(state, "old_lantern")
+        self.assertFalse(card_hidden.verified)
+        # Without clues, requirements are hidden
+        for req in card_hidden.requirements:
+            self.assertFalse(req.revealed)
+        self.assertTrue(any("[?] Location: Clue not yet revealed" in line for line in card_hidden.lines()))
+
+        # Dict clues (like book_gallery fixture) normalize without TypeError
+        state.v2["legendaries"]["old_lantern"]["clues"] = [
+            {"zone": "landing", "band": "night", "bait": "shad"}
+        ]
+        card_revealed = legendary.watch_card(state, "old_lantern")
+        req_by_cat = {r.category: r for r in card_revealed.requirements}
+        self.assertTrue(req_by_cat["location"].revealed)
+        self.assertTrue(req_by_cat["window"].revealed)
+        self.assertTrue(req_by_cat["bait"].revealed)
+        self.assertFalse(req_by_cat["gate"].revealed)
+
+    def test_star_whale_recorded_on_finale_scene(self):
+        from .content import load_content_v2
+        from .story import finish_scene
+        state = self._state("nebula")
+        content = load_content_v2()
+        state.narrative.quests["story_c5_s2"] = type("Progress", (), {"status": "ready"})()
+
+        self.assertTrue(finish_scene(state, content, "story_c5_whale"))
+        records = state.v2.get("legendaries", {}).get("star_whale", {}).get("records", [])
+        self.assertTrue(records)
+        self.assertIn("star_whale", state.v2["reward_claims"]["legendary_record"])
+        card = legendary.watch_card(state, "star_whale")
+        self.assertTrue(card.verified)
 
 
 if __name__ == "__main__":
