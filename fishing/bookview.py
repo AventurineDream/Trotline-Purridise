@@ -144,11 +144,23 @@ def collection_rows(state, content, shelf):
         return rows
     if shelf == 1:
         return [_v2_reward_row(content, row, "keepsake_id", "Keepsake") for row in state.v2.get("keepsakes", [])]
+    return [row[2:] for row in trophy_items(state)]
+
+
+def trophy_items(state):
+    """The Trophy shelf, in order: (kind, id, title, label, description). A legendary caught on a
+    line earns a replica (02 §5.5); a witnessed one keeps its record and has none."""
+    from .legendary import LEGENDARY_DATA
     rows = []
     for lid, page in state.v2.get("legendaries", {}).items():
         records = page.get("records", []) if isinstance(page, dict) else []
-        if records:
-            rows.append((lid.replace("_", " ").title(), "Legendary replica", "A record in the book; a fish returned to the water."))
+        if not isinstance(records, list) or not records:
+            continue
+        name = LEGENDARY_DATA.get(lid, {}).get("name", lid.replace("_", " ").title())
+        if all(isinstance(r, dict) and r.get("witnessed") for r in records):
+            rows.append(("witnessed", lid, name, "Legendary sighting", "Seen and recorded in the book. Nothing to mount but the memory."))
+        else:
+            rows.append(("legendary", lid, name, "Legendary replica", "A record in the book; a fish returned to the water."))
     book = state.v2.get("book", {})
     shinies = {sid for sid in BOOK_SPECIES_IDS
                if shiny_tracker(book, state.journal, sid)["shiny"]}
@@ -157,9 +169,22 @@ def collection_rows(state, content, shelf):
         sp = SPECIES_BY_ID.get(sid)
         count = shiny_tracker(book, state.journal, sid)["shiny"]
         note = f"{count} shiny catches recorded. " if count else ""
-        rows.append(("✦ " + (sp.name if sp else sid.replace("_", " ").title()), "Shiny",
+        rows.append(("shiny", sid, "✦ " + (sp.name if sp else sid.replace("_", " ").title()), "Shiny",
                      note + "A sparkling catch, remembered here. A replica can mount on a trophy rail."))
     return rows
+
+
+def rail_status(state, kind, item_id):
+    """What F does for this trophy on the boat the Skipper is in, as the page says it."""
+    from .boat import BOATS
+    if kind == "witnessed":
+        return ""
+    model = BOATS.get(state.boat_id)
+    if model is None or "trophy_rail" not in model.traits:
+        return f"The {model.name if model else 'boat'} has no trophy rail. It stays here on the page."
+    if (kind, item_id) in state.rail_trophies():
+        return f"On the {model.name}'s rail. F takes it down."
+    return f"F hangs it on the {model.name}'s rail."
 
 
 def _v2_reward_row(content, reward_id, key, kind):
@@ -530,14 +555,40 @@ class BookView:
     def shelf(self):
         names = ("Ripples", "Keepsakes", "Trophies")
         rows = collection_rows(self.state, self.u.narrative_content, self.ui.book_shelf)
+        width = None
         if rows:
             self.ui.book_collection_i %= len(rows)
             title, kind, description = rows[self.ui.book_collection_i]
             values = (title, f"{kind} · {self.ui.book_collection_i+1}/{len(rows)}", description)
+            if self.ui.book_shelf == 2:
+                item = trophy_items(self.state)[self.ui.book_collection_i]
+                status = rail_status(self.state, item[0], item[1])
+                values += (status,) if status else ()
+                width = self.trophy(item[0], item[1])
         else:
             values = ("A little room for the memories still to come.",)
-        index, count = self.paginated("The keepsake shelf · " + names[self.ui.book_shelf], values)
+        index, count = self.paginated("The keepsake shelf · " + names[self.ui.book_shelf], values, width)
         self.footer(f"Page {index}/{count} · Turn / shelf")
+
+    def trophy(self, kind, item_id):
+        """The replica's picture beside the shelf's text and, when something hangs on this
+        boat's rail, the rail itself (V1-37). Returns the width left for the text."""
+        if self.compact or kind == "witnessed":
+            return None
+        from .replica import picture, rail_view
+        pw = min(int(self.w * 0.40), 340)
+        top = self.y + self.u.cell(self.head)[1] + 8
+        ph = int(pw * 0.62)
+        if top + ph > self.bottom:
+            return None
+        x = self.x + self.w - pw
+        self.u._blit_rgb(self.frame, picture(kind, item_id, pw, ph), x, top)
+        if self.state.rail_trophies():
+            view = rail_view(self.state, 240)
+            side = min(pw, self.bottom - (top + ph + 12))
+            if view is not None and side >= 96:
+                self.u._blit_rgb(self.frame, resize_rgb(view, side, side), x + (pw - side) // 2, top + ph + 12)
+        return self.w - pw - 24
 
     def story_pages(self):
         """Lay out every quest field before choosing a visible page."""

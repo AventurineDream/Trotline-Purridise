@@ -1310,17 +1310,66 @@ class State:
             return "This boat needs a trophy rail. Your shinies remain on the book's Trophy page."
         if not shiny_tracker(self.v2["book"], self.journal, species_id)["shiny"]:
             return "Catch a shiny of that species first."
+        return self._mount_on_rail(boat_id, "shiny_trophies", species_id)
+
+    def mount_legendary_replica(self, legendary_id: str, *, boat_id: str | None = None) -> str | None:
+        """Hang a recorded legendary's trophy replica on a trophy rail (V1-37, 02 §5.5).
+
+        Like a shiny's, it is cosmetic: the legendary's book page and records are untouched.
+        """
+        from .book import legendary_page
+        boat_id = self.boat_id if boat_id is None else boat_id
+        if boat_id not in self.owned_boats or boat_id not in BOATS:
+            return "You do not own that boat."
+        if "trophy_rail" not in BOATS[boat_id].traits:
+            return "This boat needs a trophy rail. Your replicas remain on the book's Trophy page."
+        page = legendary_page(legendary_id, self.v2, remember=False)
+        if not page or not page["records"] or all(r.get("witnessed") for r in page["records"]):
+            return "Record that legendary on a line first."
+        return self._mount_on_rail(boat_id, "legendary_replicas", legendary_id)
+
+    def rail_trophies(self, boat_id: str | None = None) -> list[tuple[str, str]]:
+        """What hangs on a boat's trophy rail, in order: ("shiny" | "legendary", id)."""
+        boat_id = self.boat_id if boat_id is None else boat_id
+        extras = self.v2.get("boat_extras") if isinstance(self.v2, dict) else None
+        fittings = extras.get(boat_id) if isinstance(extras, dict) else None
+        if not isinstance(fittings, dict):
+            return []
+        out = []
+        for key, kind in (("legendary_replicas", "legendary"), ("shiny_trophies", "shiny")):
+            items = fittings.get(key)
+            out.extend((kind, item) for item in (items if isinstance(items, list) else ())
+                       if isinstance(item, str))
+        return out
+
+    def unmount_trophy(self, kind: str, item_id: str, *, boat_id: str | None = None) -> bool:
+        """Take a replica down from a boat's rail. The book keeps everything."""
+        boat_id = self.boat_id if boat_id is None else boat_id
+        key = "legendary_replicas" if kind == "legendary" else "shiny_trophies"
+        extras = self.v2.get("boat_extras") if isinstance(self.v2, dict) else None
+        fittings = extras.get(boat_id) if isinstance(extras, dict) else None
+        items = fittings.get(key) if isinstance(fittings, dict) else None
+        if not isinstance(items, list) or item_id not in items:
+            return False
+        items.remove(item_id)
+        return True
+
+    def _mount_on_rail(self, boat_id: str, key: str, item_id: str) -> str | None:
+        from .replica import RAIL_SLOTS
         extras = self.v2.setdefault("boat_extras", {})
         if not isinstance(extras, dict):
             extras = self.v2["boat_extras"] = {}
         fittings = extras.setdefault(boat_id, {})
         if not isinstance(fittings, dict):
             fittings = extras[boat_id] = {}
-        trophies = fittings.setdefault("shiny_trophies", [])
+        trophies = fittings.setdefault(key, [])
         if not isinstance(trophies, list):
-            trophies = fittings["shiny_trophies"] = []
-        if species_id not in trophies:
-            trophies.append(species_id)
+            trophies = fittings[key] = []
+        if item_id in trophies:
+            return None
+        if len(self.rail_trophies(boat_id)) >= RAIL_SLOTS:
+            return f"The rail holds {RAIL_SLOTS}. Take one down first."
+        trophies.append(item_id)
         return None
 
     def _hull_ok(self, x, z, world: World, *, yaw=None) -> bool:
