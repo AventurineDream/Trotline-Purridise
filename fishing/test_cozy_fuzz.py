@@ -3,17 +3,20 @@ Ripples or keepsakes away (06 §9, 02 §2.2).
 
 The actions drive public State methods only, with no rendering. Money may fall only through
 a purchase that succeeded, which must also show up in `spent`. Owned things may only be added.
+The run starts from a save that already holds every protected category, so each check has
+something to protect. A guard asserts that, so a refactor can't make the test vacuous silently.
 """
 import json
 import math
 import random
-import time
 import unittest
 
 from . import comfort
 from .book import BOOK_STAGES
 from .boat import BOATS
-from .data import BAIT_BY_ID, LINE_TIERS, PAINT
+from .content import load_content_v2
+from .data import BAIT_BY_ID, LAKE_SPECIES_IDS, LINE_TIERS, PAINT
+from .narrative import RIPPLE_BY_QUEST
 from .sim import State
 from .world import World
 
@@ -22,6 +25,14 @@ SEED = 39
 # Purchases return None on success and only then move money with `spent`.
 PURCHASES = {"buy_bait", "buy_line", "buy_motor", "buy_well", "buy_box", "buy_finder", "buy_light",
              "buy_paint", "buy_boat", "refuel", "buy_rowboat_trolling_motor", "charge_rowboat_battery"}
+# Owned at the start, beyond the starter Jon. Each is a real BOATS id.
+SEEDED_BOATS = ("dory", "log_raft", "pontoon")
+# Book counts at the start, by briar species: stage 0 (rumor) through "mastered". The
+# near-threshold counts (2 and 9) let one hooked fish raise a stage during the run.
+SEEDED_COUNTS = (12, 5, 3, 2, 9, 0)
+# Story chapters finished at the start, so later boats are for sale at the landing.
+SEEDED_CHAPTERS = [1, 2, 3, 4, 5]
+SEEDED_MONEY = 5000.0
 
 
 def _stage_threshold(count: int) -> int:
@@ -31,6 +42,7 @@ def _stage_threshold(count: int) -> int:
 
 def _snapshot(state: State) -> dict:
     counts = {sid: int(record.get("count", 0)) for sid, record in state.journal.items()}
+    ripples = set(state.narrative.ripples) | {("v2", rid) for rid in state.v2.get("ripples_v2", [])}
     return {
         "money": state.money,
         "spent": state.spent,
@@ -38,9 +50,58 @@ def _snapshot(state: State) -> dict:
         "lines": len(state.held) + len(state.lines),
         "counts": counts,
         "stages": {sid: _stage_threshold(count) for sid, count in counts.items()},
-        "ripples": set(state.narrative.ripples),
+        "ripples": ripples,
         "keepsakes": {json.dumps(row, sort_keys=True) for row in state.v2.get("keepsakes", [])},
     }
+
+
+def _violations(before: dict, after: dict, name: str, result) -> list:
+    """Every way one action broke an invariant, as readable strings (empty when it is clean)."""
+    problems = []
+    if after["money"] < before["money"] - 1e-9:
+        drop = round(before["money"] - after["money"], 2)
+        if name not in PURCHASES:
+            problems.append(f"{name} took ${drop} without a purchase")
+        elif result is not None:
+            problems.append(f"{name} took ${drop} but reported {result!r}")
+        elif abs((after["spent"] - before["spent"]) - drop) > 0.01:
+            problems.append(f"{name} took ${drop} without the same amount in spent")
+    for boat in sorted(before["boats"] - after["boats"]):
+        problems.append(f"{name} removed owned boat {boat}")
+    if after["lines"] < before["lines"]:
+        problems.append(f"{name} removed a line ({before['lines']} -> {after['lines']})")
+    for rid in sorted(map(str, before["ripples"] - after["ripples"])):
+        problems.append(f"{name} removed Ripple {rid}")
+    for kid in sorted(before["keepsakes"] - after["keepsakes"]):
+        problems.append(f"{name} removed keepsake {kid}")
+    for sid, count in before["counts"].items():
+        if after["counts"].get(sid, 0) < count:
+            problems.append(f"{name} lowered the count of {sid} ({count} -> {after['counts'][sid]})")
+        if after["stages"].get(sid, 0) < before["stages"][sid]:
+            problems.append(f"{name} lowered the book stage of {sid}")
+    return problems
+
+
+def _seeded_state(world: World) -> State:
+    """A Cozy save holding every protected category, written the way the game writes it."""
+    state = State.new(world, seed=SEED)
+    state.money = SEEDED_MONEY
+    state.x, state.z, state.yaw, state.anchored = 300.0, 30.0, math.pi / 2, False
+    content = load_content_v2()
+    # Owned boats, recorded as buy_boat records a purchase.
+    for boat_id in SEEDED_BOATS:
+        state.owned_boats.append(boat_id)
+        state.fuel_tanks[boat_id] = BOATS[boat_id].tank
+    state.v2["story"]["completed_chapters"] = list(SEEDED_CHAPTERS)
+    # Ripples: the V3 list by quest, and the v2 ledger that apply_reward writes.
+    state.narrative.ripples = list(RIPPLE_BY_QUEST.values())[:3]
+    state.v2["ripples_v2"] = sorted(content.ripples)[:2]
+    # Keepsakes are id strings, as apply_reward appends them.
+    state.v2["keepsakes"] = sorted(content.keepsakes)[:2]
+    # Book counts across the stages, on species this lake's landing sells fish for.
+    for sid, count in zip(LAKE_SPECIES_IDS["briar"], SEEDED_COUNTS):
+        state.journal[sid]["count"] = count
+    return state
 
 
 class _Driver:
@@ -149,7 +210,19 @@ class _Driver:
             return "refuel", state.refuel
         if roll < 0.75:
             boat = self._pick(self.boats)
-            return "buy_boat", lambda: state.buy_boat(boat, self.world)
+
+            def change_boat():
+                # Boats change only at the landing: lower the sail, coast to a stop, then tow in
+                # (free in Cozy).
+                if state.sail_raised:
+                    state.toggle_sail()
+                for _ in range(60):
+                    state.drive(0.5, 0.0, 0.0, self.world, idle=True, player_controlled=True)
+                    if abs(state.speed) <= 0.5 and abs(state.throttle_setting) <= 0.02:
+                        break
+                state.tow_to_landing(self.world)
+                return state.buy_boat(boat, self.world)
+            return "buy_boat", change_boat
         options = (("buy_motor", state.buy_motor), ("buy_well", state.buy_well),
                    ("buy_box", state.buy_box), ("buy_finder", state.buy_finder),
                    ("buy_light", state.buy_light),
@@ -172,40 +245,83 @@ class _Driver:
         return "cycle_scale", state.cycle_scale
 
 
+def _snap(**changes) -> dict:
+    """A hand-made snapshot: one clean baseline, changed where a test says so."""
+    base = {"money": 100.0, "spent": 0.0, "boats": {"jon", "dory"}, "lines": 2,
+            "counts": {"bluegill": 5}, "stages": {"bluegill": 5},
+            "ripples": {"ripple_01"}, "keepsakes": {"\"reed knot\""}}
+    base.update(changes)
+    return base
+
+
+class ViolationChecker(unittest.TestCase):
+    """The per-step checker must be able to fail: each protected thing removed is reported."""
+
+    def test_a_clean_step_reports_nothing(self):
+        before = _snap()
+        self.assertEqual(_violations(before, _snap(), "advance", None), [])
+        self.assertEqual(_violations(before, _snap(boats={"jon", "dory", "sail"}), "buy_boat", None), [])
+
+    def test_a_removed_boat_is_reported(self):
+        self.assertIn("removed owned boat dory",
+                      " ".join(_violations(_snap(), _snap(boats={"jon"}), "buy_boat", None)))
+
+    def test_a_removed_line_is_reported(self):
+        self.assertIn("removed a line", " ".join(_violations(_snap(), _snap(lines=1), "pull_line", None)))
+
+    def test_a_removed_ripple_is_reported(self):
+        self.assertIn("removed Ripple ripple_01",
+                      " ".join(_violations(_snap(), _snap(ripples=set()), "toggle_sail", None)))
+
+    def test_a_removed_keepsake_is_reported(self):
+        self.assertIn("removed keepsake",
+                      " ".join(_violations(_snap(), _snap(keepsakes=set()), "toggle_sail", None)))
+
+    def test_a_lowered_book_stage_is_reported(self):
+        after = _snap(counts={"bluegill": 5}, stages={"bluegill": 3})
+        self.assertIn("lowered the book stage of bluegill",
+                      " ".join(_violations(_snap(), after, "take_hook", None)))
+
+    def test_money_falling_outside_a_purchase_is_reported(self):
+        self.assertIn("took $10.0 without a purchase",
+                      " ".join(_violations(_snap(), _snap(money=90.0), "advance", None)))
+
+    def test_money_falling_for_a_purchase_that_failed_is_reported(self):
+        self.assertTrue(_violations(_snap(), _snap(money=90.0, spent=10.0), "buy_bait", "Need $5."))
+
+    def test_a_successful_purchase_that_moves_money_is_allowed(self):
+        self.assertEqual(_violations(_snap(), _snap(money=90.0, spent=10.0), "buy_bait", None), [])
+
+
 class CozyInvariants(unittest.TestCase):
     def test_ten_thousand_random_cozy_actions_never_take_anything_away(self):
         world = World("briar")
-        state = State.new(world, seed=SEED)
+        state = _seeded_state(world)
         self.assertEqual(comfort.mode(state.v2), "cozy")
-        # A purse and an open-water spot, so fishing happens within the run.
-        state.money = 300.0
-        state.x, state.z, state.yaw, state.anchored = 300.0, 30.0, math.pi / 2, False
+        # The guard: every protected category is non-empty before the first action.
+        start = _snapshot(state)
+        self.assertGreaterEqual(len(start["boats"]), 3)
+        self.assertGreaterEqual(len(start["ripples"]), 1)
+        self.assertGreaterEqual(len(start["keepsakes"]), 1)
+        self.assertTrue(any(stage > 0 for stage in start["stages"].values()))
         driver = _Driver(state, world, random.Random(SEED))
-        started = time.perf_counter()
         ran = {}
+        boats_bought = stage_rises = 0
         for step in range(ACTIONS):
             name, action = driver.next_action()
             before = _snapshot(state)
             result = action()
             after = _snapshot(state)
             ran[name] = ran.get(name, 0) + 1
-            context = f"step {step} action {name} result {result!r}"
-            if after["money"] < before["money"] - 1e-9:
-                # Only a successful purchase may reduce money, and it must be the amount spent.
-                self.assertIn(name, PURCHASES, context)
-                self.assertIsNone(result, context)
-                self.assertAlmostEqual(after["spent"] - before["spent"], before["money"] - after["money"],
-                                       places=2, msg=context)
-            self.assertLessEqual(before["boats"], after["boats"], context)
-            self.assertLessEqual(before["lines"], after["lines"], context)
-            self.assertLessEqual(before["ripples"], after["ripples"], context)
-            self.assertLessEqual(before["keepsakes"], after["keepsakes"], context)
-            for sid, count in before["counts"].items():
-                self.assertGreaterEqual(after["counts"][sid], count, context)
-                self.assertLessEqual(before["stages"][sid], after["stages"][sid], context)
-        elapsed = time.perf_counter() - started
-        self.assertLess(elapsed, 60.0, f"fuzz took {elapsed:.1f}s")
+            problems = _violations(before, after, name, result)
+            self.assertEqual(problems, [], f"step {step} action {name} result {result!r}")
+            if name == "buy_boat" and result is None and after["boats"] > before["boats"]:
+                boats_bought += 1
+            stage_rises += sum(after["stages"][sid] > before["stages"][sid] for sid in before["stages"])
         self.assertGreaterEqual(sum(ran.values()), ACTIONS)
+        # The run must grow things, or it proves less than it claims.
+        self.assertGreaterEqual(boats_bought, 1, "no boat was bought during the run")
+        self.assertGreaterEqual(stage_rises, 1, "no book stage rose during the run")
         # Every action family must actually run, or the fuzz proves less than it claims.
         for name in ("advance", "take_hook", "try_set", "sell_all", "buy_bait", "buy_boat", "refuel",
                      "catnap", "toggle_sail", "take_all"):

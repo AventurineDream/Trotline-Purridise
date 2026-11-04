@@ -2001,7 +2001,7 @@ Each item is in `coverage` and `coverage_expected`. A missing item raises `Asser
 - money falls only through a successful purchase, and the amount appears in `spent`;
 - owned boats, set lines (held plus deployed), book stages, Ripples and keepsakes are only ever added.
 
-It runs in about 13 seconds.
+The run starts from a seeded Cozy save, so each protected category is non-empty from the first action: four owned boats (Jon, Dory, Log Raft, Pontoon), three V3 Ripples and two v2 Ripples from the registries, two keepsakes, book counts across the stages (including two near a threshold), 5,000 in cash, and chapters one to five finished so later boats are for sale. A guard asserts this before the first action. The run also has to buy at least one boat and raise at least one book stage. A separate test feeds the checker hand-made snapshots that remove each protected thing, and asserts each is reported. The run takes about 15 seconds.
 
 **Determinism** (`test_determinism.py`). For one seed, the NPC schedule over three days, the Bot's name, a 240-roll shiny sequence and a week of hourly weather plans match across a save and reload (through `load_game_save`) and across lake switches. A different seed gives a different plan.
 
