@@ -6,3 +6,7 @@ __pycache__/
 saves/
 shots/
 *.pyc
+# Release build outputs (scripts/build_package.py)
+/build/
+/dist/
+/*.spec
