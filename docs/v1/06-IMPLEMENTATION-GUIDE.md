@@ -1874,3 +1874,53 @@ This part covers #65's encounter scene, the book's photo frame, the Zero-G Winch
 - `presented` survives a save.
 - The winch hums its own hum.
 - Drawn frames show the fish surfacing beside the boat and moving, Reduced Motion holding it, the page at three frame sizes, and the photo on the legendary's book page only once there is a record.
+
+## Implemented trophy replicas and the Star-Whale's return, part 2 (V1-37)
+
+This part finishes #65: the trophy replica model, and the Star-Whale's return after the finale.
+
+**Trophy replicas (`replica.py`).** A legendary caught on a line earns a trophy replica (02 §5.5), as a shiny does (02 §8). A witnessed legendary keeps its record and has none: the Trophy shelf lists it as a "Legendary sighting".
+- **The model.** A varnished plaque, the fish carved in relief on it, and a brass plate under it, in about 30 faces:
+  - the carving is the fish's side-on silhouette from its haul mesh, in 8 columns, in its own top, flank and belly colours (or its shiny palette);
+  - the plaque is 22 × 13 cm.
+
+  A rail holds `RAIL_SLOTS` = 4 replicas along its metre, shinies and legendaries together, facing the cockpit (`boatfamilies._trophy_rail`). Both renderers draw them with the boat. A saved id this build doesn't know is skipped.
+- **Every boat with the trait has its rail.** The party barge and the houseboat had the `trophy_rail` trait but no rail; the pontoon family now draws it.
+- **Mounting.** `State.mount_legendary_replica` matches `State.mount_shiny_trophy`:
+  - the boat must be owned and have a rail, and the legendary must have a record from a line;
+  - mounting is idempotent and never touches the book;
+  - both share the four slots, and a full rail says so;
+  - `State.rail_trophies` and `State.unmount_trophy` read and clear the rail;
+  - mounts are saved in `boat_extras[boat]` (`legendary_replicas`, `shiny_trophies`).
+- **The Trophy page.**
+  - The shelf shows the selected trophy's replica picture (`replica.picture`) and what F will do: "F hangs it on the Deep-V Bass Skiff's rail", "On the … rail. F takes it down", or "The … has no trophy rail."
+  - The helm view never shows the rail, which is aft. So while anything hangs on it, the page also shows a close view of the boat's rail (`replica.rail_view`, the CPU boat raster, last four cached).
+
+**The Star-Whale's return (`whale.py`).** After the finale, the Star-Whale can be seen again (02 §7.2):
+- **When.** V1-36's `star_whale` requirements must all hold: a clear Nebula night in its window, chapter five finished, and the Skipper anchored and still by the calm reflection. It must also not have been seen this game week. Once they hold, `WAIT_S` = 15 s of real stillness brings it up, and moving resets the wait.
+- **The rise.** It is staged by `staging.PLAY_STAGES["whale_return"]`, a stage outside any scene. The whale rises on `story_c5_whale`'s curve and is fully up at 8.5 s. It holds until 12.5 s, then sinks as after "Draw it", and the stage ends at 18 s. The view lifts with it under a letterbox and the HUD steps aside. Its glow rises with it (`finale.faces`).
+- **The record.** A witnessed record is written once the whale has fully risen with the Skipper still there, once a week (`legendary.record_witnessed`), with "The Star-Whale came back. The book has it." Moving off before then lets it sink quickly, unrecorded.
+- **Skipping and pausing.** Every return repeats the finale, so Esc (B) skips it and records it, instead of opening the pause menu. Menus, the book and story scenes pause it.
+- **Reduced Motion.** It is risen and still throughout, and the view holds.
+
+**Shots.** `--shots <dir> --legendary` adds:
+- `legendary-replicas.png`, the ten replicas;
+- `legendary-rail-<boat>.png` for the Deep-V Bass Skiff, the party barge and the Nebula Cruiser, each with three legendaries and a shiny hung;
+- `legendary-trophy-page.png`;
+- `legendary-whale-return-0..5.png` at 0, 1.5, 6.0, 8.5, 12.5 and 15 s, plus two Reduced Motion frames;
+- the rails and the whale's frames in `legendary-encounters.json`.
+
+**Tests (`test_replica.py`, `test_whale.py`).**
+- The carved outline runs snout to tail.
+- One replica is a small plaque facing the cockpit.
+- Pictures are cached and read-only.
+- Mounting needs a caught record and a rail, keeps the book, holds four, takes one down, and survives a save.
+- Replicas are drawn and unknown ids skipped. Every boat with the trait draws its rail.
+- The Trophy shelf and its rows agree, F hangs and takes down, and a boat without a rail says so.
+- The whale rises, holds and sinks, and holds still under Reduced Motion.
+- In play, the whale:
+  - comes to a still Skipper after 15 s and is recorded once a week;
+  - doesn't come before the finale, out of its window, or unless the Skipper is still;
+  - sinks unrecorded if the Skipper leaves;
+  - is skipped and recorded by Esc;
+  - lifts the view.

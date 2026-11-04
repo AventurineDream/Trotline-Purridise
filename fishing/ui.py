@@ -411,6 +411,7 @@ class UIState:
     haul_phase_timer: float = 0.0
     haul_badge_enabled: bool = True
     haul_counts_before: dict = field(default_factory=dict)
+    whale_return: bool = False          # the Star-Whale is coming back in play (V1-37)
     haul_legendary: str = ""            # the legendary whose scene the haul is presenting (V1-37)
     haul_encounter_only: bool = False   # an instant haul stopped for a legendary's first scene
     journal_i: int = 0
@@ -700,6 +701,16 @@ class UI:
             draw_sighting(frame, state, camera)
         if mode == "title":
             self._title(frame, state, ui)
+            self._caption(frame, state, ui)
+            self._toasts(frame, state, ui.input_device)
+            return
+        if mode == "play" and ui.whale_return:
+            # The Star-Whale comes back (V1-37): the HUD steps aside under a letterbox.
+            from .staging import overlay
+            overlay(frame, ui.stage_fx)
+            h, w = frame.shape[:2]
+            self._center(frame, self._controls(ui, "Esc skip", "B skip"), w / 2, int(h * 0.95),
+                         self._size(frame, "small"), DIM)
             self._caption(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
             return
