@@ -11,13 +11,15 @@ import numpy as np
 
 
 def reflection_strength(state, light):
+    # A legendary's scene stills any lake while it surfaces (V1-37).
+    encounter = float(getattr(state, 'encounter_still', 0.0) or 0.0)
     if state.lake_id == 'nebula':
         from .finale import settle_still
-        return settle_still(state)  # Settle In's first cue: the stars stop rippling (V1-35)
+        return max(settle_still(state), encounter)  # Settle In's first cue: the stars stop rippling (V1-35)
     if state.lake_id != 'crater':
-        return 0.0
-    return float(np.clip(light['night']*(1-light['cloud_shade'])*(1-light['rain'])*
-                         (1-light.get('mist',0)),0,1))
+        return encounter
+    return max(encounter, float(np.clip(light['night']*(1-light['cloud_shade'])*(1-light['rain'])*
+                                        (1-light.get('mist',0)),0,1)))
 
 
 def caldera_props(world, prop_type):

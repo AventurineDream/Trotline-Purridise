@@ -57,6 +57,10 @@ def main(argv: list[str] | None = None) -> int:
             from .storyshots import shots as story_shots
             story_shots(dest, software="--software" in argv)
             return 0
+        if "--legendary" in argv:
+            from .legendshots import shots as legendary_shots
+            legendary_shots(dest, software="--software" in argv)
+            return 0
         if "--caldera" in argv:
             from .calderashots import shots as caldera_shots
             caldera_shots(dest, software="--software" in argv)
