@@ -570,6 +570,8 @@ class SoftwareRenderer:
             qx,qy,qz = (np.floor(axis*200).astype(np.int64) for axis in (rx,ry,rz))
             stars = hash21(qx+qz*13,qy+31)
             bright = np.clip((stars-.9965)/.0035,0,1)*(ry>.08)
+            if state.lake_id != "crater":  # a legendary's glassy water mirrors no stars by day (V1-37)
+                bright = bright*light["night"]
             full_sky += bright[:,None]*np.array([.85,.88,1.0],np.float32)
             reflected = reflected*(1-still) + full_sky*still
         fres = 0.05 + 0.24 * np.power(1.0 - np.clip(-dy, 0.0, 1.0), 3.0)

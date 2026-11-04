@@ -565,6 +565,8 @@ class State:
     hauling: bool = field(default=False, repr=False, compare=False)
     # A story scene's staged light (V1-35): {"mist": 0..1, "hour": h}. Not saved.
     stage_light: dict | None = field(default=None, repr=False, compare=False)
+    # A legendary's scene stills the lake under the haul (V1-37), 0..1. Not saved.
+    encounter_still: float = field(default=0.0, repr=False, compare=False)
     # Brief visual only; guardian_seen is the persisted encounter latch.
     guardian_sighting_pending: bool = field(default=False, repr=False, compare=False)
     guardian_sighting_started_at: float | None = field(default=None, repr=False, compare=False)
