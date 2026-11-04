@@ -552,8 +552,8 @@ with an LRU; the `--benchmark` run logs per-subsystem estimates
 - **PR body:** link the ticket, list acceptance criteria with ✓, attach
   `--shots` output for visual work, and paste the benchmark summary for anything
   that renders or allocates.
-- **Review and merge:** follow `docs/PR-REVIEW-POLICY.md`; Codex and Claude must
-  each give a clear review of the current pull request head before merging.
+- **Review and merge:** follow `docs/PR-REVIEW-POLICY.md`; Claude must give a
+  clear review of the current pull request head before merging.
 - **Definition of Done:** acceptance criteria met; CI green; docs updated; no new
   warnings in `--selftest`; benchmark under budget when relevant; saves migrate.
 
