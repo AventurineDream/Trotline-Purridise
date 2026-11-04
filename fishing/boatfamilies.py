@@ -451,15 +451,36 @@ def _utility(m, hull, state, c):
     if model.id == "coastal_craft":
         _canopy(m, hull, -0.3, 0.9, (0.20, 0.30, 0.38), 1.75)
     if "trophy_rail" in model.traits:
-        _trophy_rail(m, hull)
+        _trophy_rail(m, hull, state)
 
 
-def _trophy_rail(m, hull):
+def rail_centre(model) -> tuple[float, float, float] | None:
+    """The middle of a generated boat's trophy rail, eye-local (V1-37), or None without one."""
+    if model.handcrafted or "trophy_rail" not in model.traits:
+        return None
+    hull = _Hull(model, SPECS[model.id])
+    z0 = model.stern + 0.4
+    w0, g0 = hull.at(z0)
+    return -w0 * 0.8, g0 + 0.12, z0 + 0.5
+
+
+def _trophy_rail(m, hull, state=None):
     z0, z1 = hull.model.stern + 0.4, hull.model.stern + 1.4
     w0, g0 = hull.at(z0)
     m.tube((-w0 * 0.8, g0 + 0.12, z0), (-w0 * 0.8, g0 + 0.12, z1), 0.018, (0.86, 0.76, 0.42), 4)
     for z in (z0, z1):
         m.tube((-w0 * 0.8, g0, z), (-w0 * 0.8, g0 + 0.12, z), 0.014, (0.86, 0.76, 0.42), 4)
+    # The replicas hung on it (V1-37): shinies and legendaries, facing the cockpit.
+    trophies = state.rail_trophies() if hasattr(state, "rail_trophies") else []
+    if not trophies:
+        return
+    from .fishmesh import _species_rows
+    from .replica import PLAQUE, RAIL_SLOTS, rail_faces
+    known = [(kind, item) for kind, item in trophies if item in _species_rows()][:RAIL_SLOTS]
+    for i, (kind, item) in enumerate(known):
+        z = z0 + (i + 0.5) * (z1 - z0) / RAIL_SLOTS
+        rail_faces(m, kind, item, (-w0 * 0.8 + 0.02, g0 + 0.12 - PLAQUE[1] / 2 - 0.02, z),
+                   (0.0, 0.0, 1.0), (1.0, 0.0, 0.0))
 
 
 def _runabout(m, hull, state, c):
@@ -479,7 +500,7 @@ def _runabout(m, hull, state, c):
         m.box((0, hull.deck_y() + 0.30, model.stern + 0.55), (model.half_beam * 1.3, 0.24, 0.8), c.hull)
         _wheel(m, state, (0.0, hull.gunwale(0.45) - 0.05, 0.25))
         if "trophy_rail" in model.traits:
-            _trophy_rail(m, hull)
+            _trophy_rail(m, hull, state)
     elif model.id == "fiberglass_cruiser":
         _cabin(m, hull, 1.15, model.bow - 0.7, c.hull, (0.86, 0.86, 0.82), 0.62, 0.80)
         _windshield(m, hull, 1.05, height=0.42)
@@ -506,7 +527,7 @@ def _sail_trawler(m, hull, state, c):
                (math.sin(state.steer * 0.35) * 0.9, hull.gunwale(0.0) + 0.02, model.stern + 1.0), 0.022, c.deck, 4)
         _sail(m, hull, state)
         if "trophy_rail" in model.traits:
-            _trophy_rail(m, hull)
+            _trophy_rail(m, hull, state)
     else:
         # A stern wheelhouse behind the open helm, a stack, and fender bumpers along the sheer.
         _cabin(m, hull, model.stern + 0.45, -0.25, (0.86, 0.80, 0.64), (0.32, 0.20, 0.14), 1.55, 0.86)
@@ -539,6 +560,8 @@ def _pontoon(m, hull, state, c):
         _cabin(m, hull, model.stern + 0.5, -0.6, (0.86, 0.80, 0.66), (0.42, 0.26, 0.18), 2.0, 0.86)
         m.box((0.35, floor + 0.55, 0.85), (0.5, 1.1, 0.4), (0.74, 0.66, 0.52))
         _wheel(m, state, (0.35, floor + 1.15, 0.55), 0.20)
+    if "trophy_rail" in model.traits:
+        _trophy_rail(m, hull, state)
     _lamp(m, hull, state)
 
 
@@ -575,7 +598,7 @@ def _cosmic(m, hull, state, c):
             m.box((0, top + 0.18, mast_z), (0.20, 0.36, 0.20), (0.86, 0.92, 1.0), STAR)
             _canopy(m, hull, -2.6, -0.8, (0.30, 0.22, 0.46), 2.0)
         if "trophy_rail" in model.traits:
-            _trophy_rail(m, hull)
+            _trophy_rail(m, hull, state)
     _stars(m, hull, 26 if model.id == "celestial_flagship" else 18, seed=len(model.id))
     _lamp(m, hull, state)
 
