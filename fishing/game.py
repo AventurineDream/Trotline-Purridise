@@ -33,6 +33,7 @@ from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_
 from .book import take_dream_clue
 from . import comfort
 from . import encounter
+from . import soundscape
 from . import kitchen
 from .bookview import (BOOK_TABS, ENTRY_IDS, book_controls, book_layout, contains,
                        move_selection, tracker_species, turn_page)
@@ -51,16 +52,7 @@ MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
 NAVIGATION_KEYS = set(MENU_DIRECTIONS) | set(MENU_DIRECTIONS.values())
 DRIVING_KEYS = {"w", "s", "a", "d", "up", "down", "left", "right"}
 PAUSE_N = 5
-SOUND_CAPTIONS = {
-    "bite": "Fish on the line.",
-    "bot": "Bot's chime sounds.",
-    "sell": "Sale complete.",
-    "error": "That action is unavailable.",
-    "click": "A soft click sounds.",
-    "splash": "A splash breaks the quiet.",
-    "hum": "The line hums.",
-    "hum_winch": "The winch hums, steady.",
-}
+from .soundscape import CAPTIONS as SOUND_CAPTIONS  # every sound's caption (V1-38)
 
 
 
@@ -139,6 +131,9 @@ class Session:
         self._refresh_npcs()
         self.stage = None  # the story staging under way (V1-35)
         self.whale_clock = None  # the Star-Whale's return under way (V1-37)
+        self.cues: list[str] = []  # sounds this tick beyond `sound` (V1-38)
+        self._heard_hour = None
+        self._heard_days: dict = {}
         self.whale_wait = 0.0
         self._whale_recorded = False
         self._replays = self._saved_pending()
@@ -149,8 +144,13 @@ class Session:
         states = story.get("scene_states", {}) if isinstance(story, dict) else {}
         return {sid for sid, st in states.items() if st == "pending"} if isinstance(states, dict) else set()
 
+    def cue(self, kind: str) -> None:
+        """Play a sound this tick on its own bus, alongside `sound` (V1-38)."""
+        self.cues.append(kind)
+
     def tick(self, keys, dt: float) -> None:
         self.sound = None
+        self.cues = []
         self.ui.input_device = getattr(keys, "device", self.ui.input_device)
         settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
         keys = session_input(keys, settings.get("key_bindings"), self._input_repeat)
@@ -181,6 +181,7 @@ class Session:
         self._play_due_scene()
         self._tick_whale(dt)
         self._tick_stage(dt)
+        self._tick_soundscape()
         self._tick_caption(dt)
 
     def _tick_stage(self, dt: float) -> None:
@@ -203,6 +204,8 @@ class Session:
             self.stage = None
         elif self.stage is None or self.stage.stage_id != stage_id:
             self.stage = staging.Clock(stage_id, repeat=scene in self._replays)
+            # A staged story moment brings the lake's motif; the Star-Whale, its song (V1-38).
+            self.cue("whale_song" if stage_id == "story_c5_whale" else soundscape.motif_for(self.state.lake_id))
         elif self.focused:
             self.stage.t += dt
         reduced = bool(self.state.v2.get("settings", {}).get("reduced_motion", False))
@@ -216,6 +219,32 @@ class Session:
         # A legendary's scene stills the lake under the haul (V1-37).
         self.state.encounter_still = encounter.water_still(self.ui, reduced=reduced)
 
+    def _tick_soundscape(self) -> None:
+        """The lake's music and calendar cues (V1-38): its motif at dawn and dusk, a Lake Day's
+        bell and the cookout's triangle, each once a day."""
+        state = self.state
+        hour = hour_of_day(state.game_minutes)
+        previous, self._heard_hour = self._heard_hour, hour
+        if self.ui.mode != "play" or previous is None:
+            return
+        for mark in (6.0, 19.0):  # dawn, dusk
+            if previous < mark <= hour or (previous > hour and (mark > previous or mark <= hour)):
+                self.cue(soundscape.motif_for(state.lake_id))
+        day = calendar.day_number(state.game_minutes)
+        if calendar.lake_day(state.lake_id, state.game_minutes) is not None and self._heard_days.get("lake_day") != (state.lake_id, day):
+            self._heard_days["lake_day"] = (state.lake_id, day)
+            self.cue("lake_day")
+        if calendar.cookout_active(state.game_minutes) and self._heard_days.get("cookout") != (state.lake_id, day):
+            self._heard_days["cookout"] = (state.lake_id, day)
+            self.cue("cookout")
+
+    def hear_ambient(self, kind: str) -> None:
+        """An ambient call the mixer played: captioned when nothing else is (V1-38)."""
+        settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
+        if settings.get("captions", True) and self.ui.caption_timer <= 0:
+            self.ui.caption = soundscape.caption(kind, self.state)
+            self.ui.caption_timer = 2.4
+
     def _tick_whale(self, dt: float) -> None:
         """The Star-Whale comes back to a Skipper settled by the reflection on a clear night,
         after the finale (V1-37, `whale.py`)."""
@@ -227,6 +256,7 @@ class Session:
             self.whale_wait = self.whale_wait + dt if whale.can_return(self.state, self.world) else 0.0
             if self.whale_wait >= whale.WAIT_S:
                 self.whale_clock = staging.Clock("whale_return", repeat=True)
+                self.cue("whale_song")
                 self.whale_wait, self._whale_recorded = 0.0, False
             return
         still = whale.settled(self.state, self.world)
@@ -398,12 +428,10 @@ class Session:
             self.ui.caption = ""
             self.ui.caption_timer = 0.0
             return
-        if self.sound:
-            if self.sound == "bot":
-                from .bot import chime_caption
-                self.ui.caption = chime_caption(self.state)
-            else:
-                self.ui.caption = SOUND_CAPTIONS.get(self.sound, f"Sound cue: {self.sound}.")
+        heard = [kind for kind in (self.sound, *getattr(self, "cues", ())) if kind]
+        if heard:
+            # The SFX sound wins a shared tick; a cue's caption otherwise (V1-38).
+            self.ui.caption = soundscape.caption(heard[0], self.state)
             self.ui.caption_timer = 2.4
         elif self.ui.caption_timer > 0:
             self.ui.caption_timer = max(0.0, self.ui.caption_timer - max(0.0, float(dt)))
@@ -780,6 +808,7 @@ class Session:
         npc = nearby_npc(self.state)
         if npc is None:
             return
+        self.cue("horn")  # the hail horn (V1-38)
         # The hail is an event first, so a talk_to step can make its quest ready.
         first = record_hail(self.state, self.world, npc)
         cookout_chat = calendar.chat(self.state, self.world, npc.id, self._npc_content)
@@ -1135,6 +1164,8 @@ class Session:
         self.ui.haul_phase_timer = min(encounter.SCENE_S, t0 + step)
         if encounter.hum_due(t0, self.ui.haul_phase_timer):
             self.sound = "hum_winch" if encounter.variant(self.state) == "winch" else "hum"
+        if t0 < encounter.NAME[0] <= self.ui.haul_phase_timer:
+            self.cue("legendary")  # its chord rises with its name (V1-38)
         if self.ui.haul_phase_timer + 1e-9 >= encounter.SCENE_S:
             self._finish_encounter(hook)
 
@@ -1823,6 +1854,8 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
             if session.sound:
                 from .bot import sound_kind
                 audio.blip(sound_kind(session.state, session.sound))
+            for kind in session.cues:  # music and calendar cues on their own buses (V1-38)
+                audio.blip(kind)
             if session.quit:
                 break
             if renderer.world is not session.world:
@@ -1854,7 +1887,10 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
                          motorized=electric or (boat.fuelled and session.state.boat_id!="rowboat"),
                          rowing=(boat.power in ("paddle", "oars") and not electric
                                  and abs(session.state.throttle)>0.01),
-                         volumes=session.state.v2.get("settings", {}).get("volumes", {}))
+                         volumes=session.state.v2.get("settings", {}).get("volumes", {}),
+                         finale=scene_state(session.state, "story_c5_whale") == "done")
+            for kind in audio.take_played():
+                session.hear_ambient(kind)
             if session.ui.mode != "title" or session.ui.has_save:
                 save_acc += dt
                 if save_acc >= 45.0:

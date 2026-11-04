@@ -141,10 +141,12 @@ class AlpineChecks(unittest.TestCase):
         audio._cue=cues.append
         audio._span=lambda base,spread: base
         audio._schedule()
-        self.assertEqual(cues,['loon'])
+        # Loons by day and the larch wind (V1-38 adds it as a call), never gulls or frogs.
+        self.assertEqual(cues,['larch_wind','loon'])
         audio._hour,audio.time = 23,50
         audio._schedule()
-        self.assertEqual(cues,['loon'])
+        self.assertEqual(cues,['larch_wind','loon','larch_wind','ice_tick'])  # ice ticks on cold hours
+        self.assertFalse({'gull','frog'} & set(cues))
 
     def test_environment_validator_collects_bad_shapes_allocations_and_ranges(self):
         bad = deepcopy(CONTENT_V2_RAW)
