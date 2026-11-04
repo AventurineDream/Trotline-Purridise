@@ -14,6 +14,7 @@ import tempfile
 from typing import Callable, Sequence, Type
 
 from .book import BOOK_STAGES, book_stage, seed_stage_claims
+from .bundle import bundled_library
 from .gamepad import KEY_NAMES, default_key_bindings
 from .comfort import DEFAULT_NEEDS, normalize_needs
 
@@ -69,6 +70,12 @@ def parse_save_option(argv: Sequence[str]) -> tuple[list[str], Path | None]:
 
 
 def _sdl_library():
+    bundled = bundled_library("libSDL2-2.0.so.0")
+    if bundled is not None:
+        try:
+            return ctypes.CDLL(str(bundled))
+        except OSError:
+            pass
     candidates = [ctypes.util.find_library("SDL2"), "libSDL2-2.0.so.0",
                   "SDL2.dll", "/Library/Frameworks/SDL2.framework/SDL2"]
     seen = set()

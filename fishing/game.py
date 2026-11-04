@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import math
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
+import sys
 import time
 
 import numpy as np
 
+from .bundle import is_frozen
 from .content import load_content
 from .quests import QuestManager, autostart_story, scene_state
 from .dialogue import nearby_npc, open_conversation, record_hail
@@ -1813,15 +1816,44 @@ def _window_size(display_w: int, display_h: int) -> tuple[int, int]:
     return width, width * 9 // 16
 
 
-def run(*,software=False, save_path: str | Path | None = None) -> None:
-    root = Path(__file__).resolve().parents[1]
+def app_root() -> Path:
+    """The folder that holds the install-era saves/ folder (the executable's, in a build)."""
+    if is_frozen():
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[1]
+
+
+@dataclass(frozen=True)
+class OpenedSave:
+    world: World
+    state: State
+    has_save: bool
+    path: Path
+    legacy_path: Path | None
+    # The install-era save was the source: the platform folder had no save yet.
+    started_from_legacy: bool
+    used_local_fallback: bool
+
+
+def open_save(save_path: str | Path | None = None) -> OpenedSave:
+    """Pick the save file, migrate the install-era save, or recover. run() and --check-save use this."""
+    root = app_root()
     legacy_path = root / LEGACY_SAVE if save_path is None else None
-    save_path, used_local_fallback = _save_target(root, save_path)
+    target, used_local_fallback = _save_target(root, save_path)
+    started_from_legacy = (legacy_path is not None and legacy_path.is_file()
+                           and not target.is_file())
     world, state, has_save = load_game_save(
-        save_path, State, World, legacy_path=legacy_path)
-    if used_local_fallback:
+        target, State, World, legacy_path=legacy_path)
+    return OpenedSave(world, state, has_save, target, legacy_path,
+                      started_from_legacy, used_local_fallback)
+
+
+def run(*,software=False, save_path: str | Path | None = None) -> None:
+    opened = open_save(save_path)
+    world, state, has_save = opened.world, opened.state, opened.has_save
+    if opened.used_local_fallback:
         state.toast("Platform save folder unavailable; using the local save folder.")
-    session = Session(world, save_path, state, has_save)
+    session = Session(world, opened.path, state, has_save)
 
     dw, dh = Platform.display_size()
     width, height = _window_size(dw, dh)

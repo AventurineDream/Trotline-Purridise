@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .bundle import bundled_library, is_frozen, platform_library_name
 from .gamepad import (
     Gamepad, SDL_ControllerAxisEvent, SDL_ControllerButtonEvent,
     SDL_ControllerDeviceEvent, SDL_CONTROLLERDEVICEADDED,
@@ -150,17 +151,44 @@ class SDL_AudioSpec(ctypes.Structure):
 
 
 def _load(name: str):
+    """Load an SDL library. A PyInstaller build tries its own copy first."""
+    bundled = bundled_library(name)
+    if bundled is not None:
+        try:
+            return ctypes.CDLL(str(bundled))
+        except OSError:
+            pass
     try:
         return ctypes.CDLL(name)
-    except OSError:
+    except OSError as error:
+        own_name = platform_library_name(name)
+        if own_name != name:
+            try:
+                return ctypes.CDLL(own_name)
+            except OSError:
+                pass
         local_path = Path.home() / ".local" / "lib" / name
         if local_path.exists():
             return ctypes.CDLL(str(local_path))
-        raise
+        # A source clone on Windows or macOS keeps its SDL libraries beside the game.
+        beside = Path(__file__).resolve().parents[1] / own_name
+        if beside.is_file():
+            return ctypes.CDLL(str(beside))
+        raise error
+
+
+# Fonts a build carries (scripts/build_package.py), tried before the system's when frozen.
+BUNDLED_FONTS = {
+    "sans": ("LiberationSans-Regular.ttf", "DejaVuSans.ttf"),
+    "serif": ("LiberationSerif-Regular.ttf", "DejaVuSerif.ttf"),
+    "mono": ("LiberationMono-Regular.ttf", "DejaVuSansMono.ttf", "DejaVuSans.ttf"),
+}
+
 
 def find_font(family="mono") -> str:
     import os
-    bundled_dyslexia = Path(__file__).with_name("assets") / "fonts" / "AtkinsonHyperlegible-Regular.ttf"
+    fonts = Path(__file__).with_name("assets") / "fonts"
+    bundled_dyslexia = fonts / "AtkinsonHyperlegible-Regular.ttf"
     preferred = {
         "dyslexia": (str(bundled_dyslexia),),
         "sans": ("/usr/share/fonts/noto/NotoSans-Regular.ttf",
@@ -169,6 +197,9 @@ def find_font(family="mono") -> str:
         "serif": ("/usr/share/fonts/liberation/LiberationSerif-Regular.ttf",
                   "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"),
     }.get(family, ())
+    if is_frozen():
+        packaged = tuple(str(fonts / name) for name in BUNDLED_FONTS.get(family, ()))
+        preferred = packaged + preferred
     for path in preferred + FONT_CANDIDATES:
         if os.path.exists(path):
             return path
