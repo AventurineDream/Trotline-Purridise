@@ -67,6 +67,10 @@ jobs:
     # A bare Ubuntu image has no Python, which is the point of this job. Paths stay under
     # the workspace: in a container job, runner.temp names the host path, not the mount.
     container: ubuntu:24.04
+    # A container job runs `sh -e` by default, which has no pipefail; the image has bash.
+    defaults:
+      run:
+        shell: bash
     env:
       SDL_VIDEODRIVER: dummy
       SDL_AUDIODRIVER: dummy
