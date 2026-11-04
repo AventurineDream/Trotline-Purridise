@@ -1976,3 +1976,35 @@ An incomplete report fails the benchmark. The JSON gains an `audio` section: sou
   - the hail sounds the horn;
   - a legendary's chord comes after its hum;
   - a staged story moment brings the motif.
+
+## Implemented verification (V1-39)
+
+V1-39 (#67) widens the `--benchmark` checks and adds two fast suites (06 §7–§9).
+
+**Benchmark coverage** (`python3 -m fishing --benchmark 1200 --software`, `verify.py`). A 1,200-frame run covers:
+- all five lakes, each in its own block of frames with its renderer rebuilt, and every one of the 24 boats on every lake (120 lake-boat pairs);
+- all 156 fish cards (144 species and 12 legendaries), with their haul meshes;
+- all 52 cat models (51 roster rows, Pip & Pebble's twin counted);
+- every shop tab and every book tab;
+- every weather state the forecasts reach (8), forced at the start of each lake's block;
+- one legendary encounter haul scene in its encounter phase (Old Lantern).
+
+Each item is in `coverage` and `coverage_expected`. A missing item raises `AssertionError`, and coverage is enforced only at 1,200 frames or more.
+
+**Memory** (`memory_mb`). Each §7 row is estimated in MB beside its budget, using NumPy `nbytes` and `sys.getsizeof` walks, plus the renderer's own bounds for cat actors. The run fails if any estimate exceeds its budget. These are estimates, not allocator measurements. Process RSS stays in `peak_rss_mb`.
+
+**Frame time.** The JSON adds `full_frame_p50_ms` beside `full_frame_p95_ms`. Neither fails against the GPU targets in §8; the software renderer is far slower, so these numbers are for comparison.
+
+**Catchability** (`catchability`). The best real-map witness for each species, from `specieschecks.validate_catchability`: lake, zone, rate, default rate, ratio, and the minimum ratio.
+
+**Cozy invariant fuzz** (`test_cozy_fuzz.py`). 10,000 seeded random actions in Cozy, through public `State` methods without rendering. After every action:
+- money falls only through a successful purchase, and the amount appears in `spent`;
+- owned boats, set lines (held plus deployed), book stages, Ripples and keepsakes are only ever added.
+
+The run starts from a seeded Cozy save, so each protected category is non-empty from the first action: four owned boats (Jon, Dory, Log Raft, Pontoon), three V3 Ripples and two v2 Ripples from the registries, two keepsakes, book counts across the stages (including two near a threshold), 5,000 in cash, and chapters one to five finished so later boats are for sale. A guard asserts this before the first action. The run also has to buy at least one boat and raise at least one book stage. A separate test feeds the checker hand-made snapshots that remove each protected thing, and asserts each is reported. The run takes about 15 seconds.
+
+**Determinism** (`test_determinism.py`). For one seed, the NPC schedule over three days, the Bot's name, a 240-roll shiny sequence and a week of hourly weather plans match across a save and reload (through `load_game_save`) and across lake switches. A different seed gives a different plan.
+
+**Running it.** `python3 -m unittest discover` runs both new suites. CI's `gameplay-tests` job runs that suite, then the narrative tests, then the software self-test, all inside its 15-minute limit.
+
+**Self-test coverage.** `--selftest` ends with `verify.coverage_checks`, the same scope list as the benchmark, without its frame loop. It renders one frame on each of the five lakes, and each lake must be non-flat. It builds all 156 fish cards and their haul meshes, and all 52 roster cat models. It draws every shop tab, help page and book tab once, and the Old Lantern encounter scene once. It checks from the forecast alone that the eight weather states are reached, and that the map has 24 boats. Any miss raises `AssertionError`. The pass takes about 25 seconds on the software renderer, and prints one `coverage ok` line with the counts.
