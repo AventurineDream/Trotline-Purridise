@@ -2008,3 +2008,18 @@ The run starts from a seeded Cozy save, so each protected category is non-empty 
 **Running it.** `python3 -m unittest discover` runs both new suites. CI's `gameplay-tests` job runs that suite, then the narrative tests, then the software self-test, all inside its 15-minute limit.
 
 **Self-test coverage.** `--selftest` ends with `verify.coverage_checks`, the same scope list as the benchmark, without its frame loop. It renders one frame on each of the five lakes, and each lake must be non-flat. It builds all 156 fish cards and their haul meshes, and all 52 roster cat models. It draws every shop tab, help page and book tab once, and the Old Lantern encounter scene once. It checks from the forecast alone that the eight weather states are reached, and that the map has 24 boats. Any miss raises `AssertionError`. The pass takes about 25 seconds on the software renderer, and prints one `coverage ok` line with the counts.
+
+## Implemented release packaging (V1-40)
+
+V1-40 (#68) makes the offline release (02 §20). The package runs without Python, and saves stay in the platform user-data folder.
+
+- **Build.** `python3 scripts/build_package.py` writes a PyInstaller onedir bundle, `dist/trotline-purridise/`, and an archive, `dist/trotline-purridise-<platform>-<arch>.tar.gz` (`.zip` on Windows). The script bundles SDL2 and SDL2_ttf, DejaVu and Liberation fonts with their licenses, and `fishing/assets` and `fishing/shaders`. It finds SDL with ldconfig on Linux, or from `--sdl-dir` or `TROTLINE_SDL_DIR`. Fonts come from the system or from `--font-dir`. Nothing binary is committed. PyInstaller is pinned in `requirements-build.txt`, with patchelf, which gives the Linux bundle its `$ORIGIN` RUNPATH.
+- **Frozen loading** (`bundle.py`). Outside a build, these helpers change nothing.
+  - `platform._load` tries the bundle's SDL copy first, then the system name. On Windows and macOS it also tries the platform's file name, then a copy beside the clone.
+  - `find_font` tries the bundled fonts first when frozen.
+  - `game.app_root()` is the executable's folder in a build, so `saves/briar.json` beside it is migrated.
+- **Save resolution.** `game.open_save()` holds the root, legacy path, `_save_target` and `load_game_save` steps. `run()` and `--check-save` both call it.
+- **`--check-save`.** Migrates or recovers with no window, then prints one line: `save=… version=2 money=$… boats=… migrated=yes|no backup=…`. It exits 0, or 1 with a message. `test_check_save.py` covers migration, a second run, a newer save and the frozen root.
+- **Setup.** `scripts/setup.sh` checks Python 3.10+, creates `.venv`, installs the requirements, checks that SDL2, SDL2_ttf and a Linux font load through the game's own loaders, and runs `--selftest --software`. `scripts/setup.ps1` does the same on Windows, with the DLL download links.
+- **CI** (`.github/workflows/package.yml`, separate from `gameplay-tests`). `package-linux` builds the archive. `package-smoke` runs in a bare `ubuntu:24.04` container with no Python. It installs five apt libraries (`libdrm2`, `libxcb1`, three `libwayland`), runs `--selftest --software`, and checks that a v1 fixture migrates on a fresh `XDG_DATA_HOME`. `package-windows` and `package-macos` run only from `workflow_dispatch`.
+- **Checks.** Here: the self-test passes from the bundle in a cleared environment; the smoke sequence passes in a bare `ubuntu:24.04` container, and fails without the apt libraries. Not checked here: Windows, macOS, a real window, OpenGL and audio. The checklist (`docs/RELEASE-CHECKLIST.md`) lists the manual release checks.

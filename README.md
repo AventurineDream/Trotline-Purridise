@@ -87,7 +87,9 @@ SDL2 and SDL2_ttf have to be on the system. The launcher installs NumPy and Mode
 ./play.sh
 ```
 
-That makes a `.venv` if you don't have one, installs the dependencies, and starts the game. A save is written to `saves/briar.json` (autosave about every 45 seconds, and on quit).
+That makes a `.venv` if you don't have one, installs the dependencies, and starts the game. A save is written to your platform's user-data folder (autosave about every 45 seconds, and on quit). An older `saves/briar.json` is migrated there on first launch, with a backup.
+
+To set up a fresh clone and check it first, run `sh scripts/setup.sh` (on Windows, `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1`). For an offline package that runs without Python, see the [release checklist](docs/RELEASE-CHECKLIST.md): `python3 scripts/build_package.py` builds it.
 
 ```sh
 ./play.sh --selftest          # gameplay and graphics regressions. No window.

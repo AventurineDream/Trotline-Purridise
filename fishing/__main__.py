@@ -13,7 +13,7 @@ import numpy as np
 from .botidentity import grant_tool
 from .camera import self_check
 from .data import SPECIES_BY_ID, dollars
-from .game import Keys, Session
+from .game import Keys, Session, open_save
 from .imageops import resize_rgb
 from .pngsave import write_png
 from .render import Renderer
@@ -34,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if "--selftest" in argv:
         return selftest(software="--software" in argv)
+    if "--check-save" in argv:
+        return check_save(save_path)
     if "--benchmark" in argv:
         from .verify import benchmark
         i = argv.index("--benchmark")
@@ -94,6 +96,33 @@ def main(argv: list[str] | None = None) -> int:
     except UnsupportedSaveVersionError as exc:
         print(exc, file=sys.stderr)
         return 1
+    return 0
+
+
+def check_save(save_path: Path | None = None) -> int:
+    """Migrate or recover the save without a window, then print one status line.
+
+    Exit 0 when the save is ready (or there is none yet), 1 with a message on failure.
+    """
+    import json
+    from .savepaths import backup_candidates
+    try:
+        opened = open_save(save_path)
+        backup = None
+        if opened.started_from_legacy and opened.has_save and opened.legacy_path is not None:
+            # The install-era file is never changed, so its bytes identify its backup.
+            legacy_bytes = opened.legacy_path.read_bytes()
+            backup = next((path for path in backup_candidates(opened.path)
+                           if path.read_bytes() == legacy_bytes), None)
+        version = (json.loads(opened.path.read_text(encoding="utf-8")).get("version")
+                   if opened.has_save else "none")
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"check-save failed: {exc}", file=sys.stderr)
+        return 1
+    state = opened.state
+    boats = ",".join(state.owned_boats) or "none"
+    print(f"save={opened.path} version={version} money=${state.money:.2f} boats={boats} "
+          f"migrated={'yes' if backup else 'no'} backup={backup or 'none'}")
     return 0
 
 
