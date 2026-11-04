@@ -296,14 +296,15 @@ class BookView:
         for index, line in enumerate(lines):
             self.text(line, x, top + index * self.line, width)
 
-    def paginated(self, title, values):
+    def paginated(self, title, values, width=None):
+        width = self.w if width is None else width
         top = self.text(title, self.x, self.y, self.w,
                         self.small if self.compact else self.head) + 4
-        pages = self.text_pages(values, self.w, top)
+        pages = self.text_pages(values, width, top)
         self.ui.book_detail_pages = len(pages)
         index = self.ui.book_detail_page % len(pages)
         self.ui.book_detail_page = index
-        self.draw_lines(pages[index], self.x, top, self.w)
+        self.draw_lines(pages[index], self.x, top, width)
         return index + 1, len(pages)
 
     def art(self, sid, count, rect):
@@ -513,7 +514,17 @@ class BookView:
                           if record.get("eligibility") else "A memory of the fish, safely returned.")
         if not page["records"]:
             values.append("No first-hand record yet.")
-        index, count = self.paginated(sid.replace("_", " ").title(), values)
+        width = None
+        if page["records"] and not self.compact:
+            # The photo from the latest record, in its print border (V1-37).
+            from .encounterview import photo_caption, photo_frame
+            photo_w = min(int(self.w * 0.40), 340)
+            top = self.y + self.u.cell(self.head)[1] + 8
+            if top + photo_w * 0.8 < self.bottom:
+                photo_frame(self.u, self.frame, sid, self.x + self.w - photo_w, top, photo_w,
+                            photo_caption(sid, page["records"][-1]))
+                width = self.w - photo_w - 24
+        index, count = self.paginated(sid.replace("_", " ").title(), values, width)
         self.footer(f"Page {index}/{count} · Enter turns")
 
     def shelf(self):

@@ -1832,3 +1832,45 @@ V1-36 (#64) implements the legendary system: requirement evaluation, watch cards
 - Watch card live state agreement across time and condition changes.
 - Fresh-save day-one catchability of the Spillway Monster with a heavy line.
 - Forced release prevention of livewell entry, and weekly repeat rollover.
+
+## Implemented legendary encounters, part 1 (V1-37)
+
+This part covers #65's encounter scene, the book's photo frame, the Zero-G Winch variant and the Fire-Lizard's beat. Part 2 adds the trophy replica model and the Star-Whale's return.
+
+**The scene (`encounter.py`, drawn by `encounterview.py`).** When the hook carrying a legendary reaches the top of the haul, the haul slows into a calm scene of 5.0 s (02 §7.2's 4–6 s) instead of the fish card:
+
+| Beat | Seconds | What changes |
+| --- | --- | --- |
+| The water stills | 0–1.2 | The haul's ripples settle and the lake turns glassy below the line, lit as the hour is. Both renderers read the stillness through `caldera.reflection_strength` (`State.encounter_still`, not saved), as Settle In does. |
+| The line hums | 0.8–2.8 | The line trembles as a standing wave. The hum sounds once (`audio`'s `hum`) and is captioned "The line hums." |
+| It surfaces | 1.6–3.8 | The fish comes up beside the boat in its slow idle (`fishmesh.legendary_idle`) and its glow, if its look has one. |
+| Its name | 3.6–4.4 | The name comes up over the letterbox. |
+
+- **The book page.** The scene is followed by a page that holds for 3 s or until a key: the photo in its print border, the weight and the record number, the teller's story, and "Released back to the water. The book keeps the record." Bot stays silent during the scene and says his line with the release (05 §5.4).
+- **The photo (`encounter.photo`).** It is drawn from the legendary, not captured from the screen, so nothing new is saved. It shows a strip of far shore over the lake's water, the fish at the surface with the rings it left and its glow, and the gunwale with the Skipper's paw, toned like an old print. The legendary's page in the book shows it beside the records, captioned with the lake and the hour of the latest one.
+- **The idle.** The fish is rasterized once per legendary, seen a little from above (about 100 ms, cached for four). Its idle is `fishmesh.idle_mesh`'s motion applied as a per-column warp, so a frame costs no more than a blit: the body wave runs from snout to tail and grows toward it, seen through the view's tilt, and the whole fish bobs at half the wave's rate.
+- **Skipping.** The first time each legendary is met, nothing skips or hurries the scene: Esc, other keys and holding E are ignored. When the scene ends, the page saves `presented: true` on the legendary's book page. After that, Esc (B) or any key but E skips to the book page, and holding E plays the scene three times as fast. An Instant haul goes straight to the summary, except for a legendary's first scene, which still plays before the summary.
+- **Zero-G Winch (02 §9).** With the winch owned, every legendary haul plays the winch variant. The winch drum, with its luminous rims, takes the line straight up without a sway. Its hum is steady and higher, captioned "The winch hums, steady." The fish floats clear of the water over a teal glow. The Nebula Weaver needs the winch, so it always plays this way.
+- **The Caldera Fire-Lizard (01 §7).** It is not a fish. A warm glow comes up through the cold spring with it, steam lifts off its back, and its page is stamped "NOT A FISH!" with "Not a fish at all. The book is delighted."
+- **Reduced Motion.** Every beat shows finished: the water glassy and the fish surfaced in its resting pose from the first frame. The line doesn't tremble, so its hum shows as marks beside it. The scene still lasts its 5 s.
+- **Renderers.** In the software renderer, glassy water mirrors stars only by night, scaled by the light's `night`. Crater's clear-night mirror is unchanged.
+
+**Shots.** `--shots <dir> --legendary [--software]` draws each of the ten caught legendaries on its own lake, at the start of its next real eligible window (its own hour and weather). It writes:
+- `legendary-<id>-0..4.png` at 0, 1.0, 2.2, 3.2 and 4.6 s;
+- `legendary-<id>-page.png`, the book page;
+- `legendary-old_lantern-winch-*.png` and `legendary-old_lantern-reduced-0.png`;
+- `legendary-book-page.png`, the legendary's page in the book;
+- a contact sheet, and `legendary-encounters.json`: each frame's beats, the scene's length, the variant, the stamp, and whether the scene can be skipped the first time and after.
+
+**Tests (`test_encounter.py`).**
+- The scene lasts 4–6 s, and every beat ends inside it.
+- Ten legendaries are caught, and each has its sprite and photo.
+- The idle sways the tail more than the snout, and Reduced Motion holds the pose with every beat finished.
+- The stillness reaches `reflection_strength` on every lake.
+- In the haul, a first encounter runs in real time with Esc and E ignored. It hums once, with its caption, then shows its page for 3 s.
+- A seen encounter skips and hurries.
+- The lake stills and returns.
+- An Instant haul still shows a first encounter.
+- `presented` survives a save.
+- The winch hums its own hum.
+- Drawn frames show the fish surfacing beside the boat and moving, Reduced Motion holding it, the page at three frame sizes, and the photo on the legendary's book page only once there is a record.

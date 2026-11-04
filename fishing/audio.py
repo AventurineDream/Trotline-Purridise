@@ -200,6 +200,18 @@ class Audio:
             wave = np.sin(2 * np.pi * 188 * t) * np.exp(-t * 12)
             wave += np.sin(2 * np.pi * 92 * t) * np.exp(-t * 36) * 0.55
             gain = 0.22
+        elif kind in ("hum", "hum_winch"):
+            # A legendary on the line (V1-37): a low hum that swells and fades. By hand it wavers;
+            # the Zero-G Winch's is steady and a little higher.
+            n = int(SR * 2.0)
+            t = np.arange(n, dtype=np.float32) / SR
+            winch = kind == "hum_winch"
+            base = 131.0 if winch else 110.0
+            waver = 0.0 if winch else 0.35 * np.sin(2 * np.pi * 5.5 * t)
+            phase = 2 * np.pi * base * t + waver
+            wave = np.sin(phase) * 0.7 + np.sin(2 * phase) * 0.22 + np.sin(3 * phase) * 0.08
+            wave *= np.sin(np.pi * t / 2.0) ** 2
+            gain = 0.22
         elif kind == "error":
             n = int(SR * 0.12)
             t = np.arange(n, dtype=np.float32) / SR
