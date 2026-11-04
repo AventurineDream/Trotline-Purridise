@@ -15,7 +15,7 @@ AUDIO_S16LSB = 0x8010
 
 
 class Audio:
-    def __init__(self):
+    def __init__(self, open_device: bool = True):
         self.ok = False
         self.dev = 0
         self.sdl = None
@@ -39,6 +39,11 @@ class Audio:
         self._sailing = False
         self._motorized = True
         self._rowing = False
+        self._extra_at = 12.0
+        self._finale = False
+        self._played: list[str] = []
+        if not open_device:  # headless: schedule and mix only (tests, the benchmark)
+            return
         try:
             self.sdl = _load("libSDL2-2.0.so.0")
             s = self.sdl
@@ -126,9 +131,14 @@ class Audio:
         buf *= 0.9 / (np.max(np.abs(buf)) + 1e-6)
         return buf.astype(np.float32)
 
-    def blip(self, kind: str, *, bus="sfx"):
+    def blip(self, kind: str, *, bus=None):
         if not self.ok:
             return
+        from .soundscape import bus as bus_of
+        bus = bus or bus_of(kind)
+        if bus == "music":
+            # One motif at a time: a new one replaces any still playing (V1-38).
+            self.shots = [shot for shot in self.shots if shot[2] != "music"]
         self.shots.append((self._tone(kind), 0, bus if bus in self._volumes else "sfx"))
 
     def _cue(self, kind: str):
@@ -136,6 +146,23 @@ class Audio:
         if len(self.shots) >= 4:
             return
         self.shots.append((self._tone(kind), 0, "ambience"))
+        self._played.append(kind)
+
+    def take_played(self) -> list[str]:
+        """The ambient calls scheduled since the last look, for their captions (V1-38)."""
+        played, self._played = self._played, []
+        return played
+
+    def reset_schedule(self, lake_id: str, hour: float, *, finale: bool = False, rain: float = 0.0):
+        """Start a lake's calls afresh at this hour (the benchmark's coverage check)."""
+        self._lake_id, self._hour, self._finale, self._rain = lake_id, float(hour), bool(finale), float(rain)
+        self._bird_at = self._frog_at = self._extra_at = self.time
+        self.shots.clear()
+
+    def buffer_bytes(self) -> int:
+        """Resident synthesis buffers: the beds and whatever one-shots are queued."""
+        beds = sum(getattr(self, name).nbytes for name in ("_water", "_wind", "_crickets") if hasattr(self, name))
+        return beds + sum(samples.nbytes for samples, _cursor, _bus in self.shots)
 
     def set_volumes(self, volumes=None, **levels):
         """Set the four saved mixer buses, clamping malformed values safely."""
@@ -152,95 +179,8 @@ class Audio:
             self._volumes[name] = max(0.0, min(1.0, value))
 
     def _tone(self, kind: str) -> np.ndarray:
-        from .botchimes import CHIMES, synthesize
-        if kind in CHIMES:
-            return synthesize(kind)
-        if kind == "bite":
-            n = int(SR * 0.32)
-            t = np.arange(n, dtype=np.float32) / SR
-            rng = np.random.default_rng(7)
-            splash = rng.uniform(-1, 1, n).astype(np.float32)
-            acc = 0.0
-            for i, v in enumerate(splash):
-                acc += (float(v) - acc) * 0.42
-                splash[i] = acc
-            splash *= np.exp(-t * 26)
-            pluck = np.sin(2 * np.pi * (690 - 420 * t) * t) * np.exp(-t * 6.2)
-            wave = splash * 0.9 + pluck * 0.75
-            gain = 0.42
-        elif kind == "loon":
-            n = int(SR * 0.72)
-            t = np.arange(n, dtype=np.float32) / SR
-            trem = 0.62 + 0.38 * np.sin(2 * np.pi * 6.2 * t)
-            first = (t < 0.24) * np.exp(-np.clip(t - 0.02, 0, None) * 3.4)
-            second = (t >= 0.30) * (t < 0.70) * np.exp(-np.clip(t - 0.32, 0, None) * 2.6)
-            wave = np.sin(2 * np.pi * (540 - 35 * t) * t) * first
-            wave += np.sin(2 * np.pi * (410 - 22 * t) * t) * second
-            wave *= trem
-            gain = 0.20
-        elif kind == "twinkle":
-            # Three soft rising bell partials: the Lagoon's starlight.
-            n = int(SR * 0.9)
-            t = np.arange(n, dtype=np.float32) / SR
-            wave = np.zeros(n, np.float32)
-            for i, freq in enumerate((1568.0, 2093.0, 2637.0)):
-                onset = np.clip(t - i * 0.11, 0, None)
-                wave += np.sin(2 * np.pi * freq * onset) * np.exp(-onset * 4.5) * (t >= i * 0.11)
-            gain = 0.07
-        elif kind == "gull":
-            n = int(SR * 0.46)
-            t = np.arange(n, dtype=np.float32) / SR
-            cry = np.sin(2 * np.pi * (940 - 180 * t) * t) * np.exp(-t * 3.2) * (t < 0.28)
-            cry += np.sin(2 * np.pi * (760 - 140 * t) * t) * np.exp(-np.clip(t - 0.18, 0, None) * 3.6) * (t >= 0.16)
-            wave = cry
-            gain = 0.16
-        elif kind == "frog":
-            n = int(SR * 0.22)
-            t = np.arange(n, dtype=np.float32) / SR
-            wave = np.sin(2 * np.pi * 188 * t) * np.exp(-t * 12)
-            wave += np.sin(2 * np.pi * 92 * t) * np.exp(-t * 36) * 0.55
-            gain = 0.22
-        elif kind in ("hum", "hum_winch"):
-            # A legendary on the line (V1-37): a low hum that swells and fades. By hand it wavers;
-            # the Zero-G Winch's is steady and a little higher.
-            n = int(SR * 2.0)
-            t = np.arange(n, dtype=np.float32) / SR
-            winch = kind == "hum_winch"
-            base = 131.0 if winch else 110.0
-            waver = 0.0 if winch else 0.35 * np.sin(2 * np.pi * 5.5 * t)
-            phase = 2 * np.pi * base * t + waver
-            wave = np.sin(phase) * 0.7 + np.sin(2 * phase) * 0.22 + np.sin(3 * phase) * 0.08
-            wave *= np.sin(np.pi * t / 2.0) ** 2
-            gain = 0.22
-        elif kind == "error":
-            n = int(SR * 0.12)
-            t = np.arange(n, dtype=np.float32) / SR
-            wave = np.sin(2 * np.pi * 140 * t) * np.exp(-t * 18)
-            gain = 0.35
-        elif kind == "splash":
-            n = int(SR * 0.12)
-            t = np.arange(n, dtype=np.float32) / SR
-            rng = np.random.default_rng(int(self.time * 1000) & 0xFFFF or 1)
-            wave = rng.uniform(-1, 1, n).astype(np.float32) * np.exp(-t * 10)
-            gain = 0.35
-        elif kind == "sell":
-            n = int(SR * 0.12)
-            t = np.arange(n, dtype=np.float32) / SR
-            wave = np.sin(2 * np.pi * 660 * t) * (t < 0.06) + np.sin(2 * np.pi * 880 * t) * (t >= 0.06)
-            wave *= np.exp(-t * 18)
-            gain = 0.35
-        elif kind == "bot":
-            n = int(SR * 0.16)
-            t = np.arange(n, dtype=np.float32) / SR
-            wave = np.sin(2 * np.pi * 880 * t) * (t < 0.05) + np.sin(2 * np.pi * 1320 * t) * (t >= 0.07)
-            wave *= np.exp(-t * 10)
-            gain = 0.35
-        else:
-            n = int(SR * 0.12)
-            t = np.arange(n, dtype=np.float32) / SR
-            wave = np.sin(2 * np.pi * 740 * t) * np.exp(-t * 18)
-            gain = 0.35
-        return (wave * gain * 32767).astype(np.int16)
+        from .soundscape import tone
+        return tone(kind)
 
     def _span(self, base: float, spread: float) -> float:
         h = math.sin(self.time * 12.9898 + self._bird_at) * 43758.5453
@@ -248,14 +188,44 @@ class Audio:
 
     def _schedule(self):
         hour = self._hour
-        alpine = getattr(self, "_lake_id", "briar") == "flathead"
+        lake = getattr(self, "_lake_id", "briar")
+        alpine = lake == "flathead"
         rain = self._rain
-        if getattr(self, "_lake_id", "briar") == "nebula":
-            # No birds or frogs beyond the reflection; only star twinkles.
+        night = hour < 5.1 or hour > 20.6
+        extra_at = getattr(self, "_extra_at", 12.0)
+        if lake == "nebula":
+            # No birds or frogs beyond the reflection: star twinkles, a soft choir, and on
+            # nights after the finale the whale's song (V1-38).
             if self.time >= self._bird_at:
                 self._cue("twinkle")
                 self._bird_at = self.time + self._span(9.0, 14.0)
+            if self.time >= self._frog_at:
+                self._cue("choir")
+                self._frog_at = self.time + self._span(30.0, 15.0)
+            if getattr(self, "_finale", False) and night and self.time >= extra_at:
+                self._cue("whale_song")
+                self._extra_at = self.time + self._span(70.0, 30.0)
             return
+        if lake == "crater":
+            # A deep hush: springs bubbling, and ravens by day (V1-38).
+            if self.time >= self._frog_at:
+                self._cue("spring")
+                self._frog_at = self.time + self._span(6.0, 5.0)
+            if self.time >= self._bird_at:
+                if 7.0 <= hour <= 19.0 and rain < 0.8:
+                    self._cue("raven")
+                    self._bird_at = self.time + self._span(25.0, 15.0)
+                else:
+                    self._bird_at = self.time + 6.0
+            return
+        if alpine:
+            # Wind through the larches, and ice ticking at the shore on cold hours (V1-38).
+            if self.time >= extra_at:
+                self._cue("larch_wind")
+                self._extra_at = self.time + self._span(30.0, 20.0)
+            if (hour < 9.0 or hour > 20.0) and self.time >= self._frog_at:
+                self._cue("ice_tick")
+                self._frog_at = self.time + self._span(8.0, 8.0)
         edge = (5.3 <= hour <= 8.3) or (17.5 <= hour <= 20.9)
         day = 8.3 < hour < 17.5
         night = hour < 5.1 or hour > 20.6
@@ -274,12 +244,18 @@ class Audio:
 
     def update(self, dt: float, throttle: float, speed: float, muted: bool,
                *, hour: float = 12.0, rain: float = 0.0, sailing: bool = False,
-               motorized: bool = True, rowing: bool = False, volumes=None, lake_id="briar"):
+               motorized: bool = True, rowing: bool = False, volumes=None, lake_id="briar",
+               finale: bool = False):
         # hour, rain, and sailing stay keyword-only. The window smoke test
         # still calls this with the four positional arguments.
         self._lake_id = lake_id
+        self._finale = bool(finale)
         if volumes is not None:
             self.set_volumes(volumes)
+        if muted:
+            # M mutes everything: music, ambience and SFX, and nothing waits to play after.
+            self.shots.clear()
+            self._played.clear()
         if not self.ok:
             return
         self.time += max(0.0, float(dt))
@@ -325,7 +301,9 @@ class Audio:
             motor = np.sin(2 * np.pi * cadence * 8.0) * (0.035 * drive) * stroke
         else:
             motor = np.zeros_like(water)
-        ambience = water * 0.22
+        from .soundscape import BED_LEVEL
+        bed = BED_LEVEL.get(getattr(self, "_lake_id", "briar"), 1.0)  # Crater's hush (V1-38)
+        ambience = water * 0.22 * bed
         sfx = motor.copy()
         music = np.zeros_like(water)
         # One-shots stay centered. Wind and crickets sit a little wider.
@@ -344,6 +322,7 @@ class Audio:
         gust = 0.028 + 0.12 * self._rain + (0.075 if self._sailing else 0.0) + 0.05 * drive
         if getattr(self, "_lake_id", "briar") == "flathead":
             gust += .018
+        gust *= bed
         pan = 0.22 * math.sin(self.time * 0.31)
         ambience_left = ambience + wind * gust * (1.0 - pan)
         ambience_right = ambience + wind * gust * (1.0 + pan)
@@ -356,7 +335,7 @@ class Audio:
             hum = (np.sin(2 * np.pi * 110.0 * hum_t) + 0.6 * np.sin(2 * np.pi * 164.8 * hum_t)) * 0.012 * swell
             ambience_left += hum
             ambience_right += hum
-        if lake not in ("flathead", "nebula") and (self._hour < 5.1 or self._hour > 20.6):
+        if lake not in ("flathead", "nebula", "crater") and (self._hour < 5.1 or self._hour > 20.6):
             bugs, self._cricket_at = self._slice(self._crickets, self._cricket_at, frames)
             level = 0.055 * (1.0 - min(1.0, self._rain) * 0.65)
             ambience_left += bugs * level * 0.85

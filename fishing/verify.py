@@ -264,6 +264,11 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
         if frames>=1200 and not coverage_complete:
             counts = {name:len(values) for name,values in coverage.items()}
             raise AssertionError(f"incomplete benchmark coverage: {counts}")
+        # Every sound, every lake's ambience, captions and the audio budget (V1-38).
+        from .soundscape import coverage_report
+        audio = coverage_report()
+        if not audio["complete"] or not audio["within_budget"]:
+            raise AssertionError(f"incomplete audio coverage: {audio}")
         report = {
             "frames":frames,"backend":renderer.backend,
             "render_size":[renderer.w,renderer.h],"window_size":[1440,810],
@@ -280,13 +285,19 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             "memory_samples":samples,
             "coverage":{name:sorted(values) for name,values in coverage.items()},
             "coverage_complete":coverage_complete,
+            "audio":{"sounds":len(audio["kinds"]),
+                     "lakes":{lake:row["ambience"] for lake,row in audio["lakes"].items()},
+                     "buffer_mb":round(audio["bytes"]/1024**2,2),
+                     "budget_mb":round(audio["budget_bytes"]/1024**2,2),
+                     "complete":audio["complete"]},
             "checks":["fixed anchored depth","matching camera projections","eleven UI modes, including dialogue",
                       "both lakes with repeated renderer release and rebuild",f"all {len(BOATS)} boats and raised sails",
                       f"eight shop tabs, four help pages, {len(SPECIES)} fish and 12 quest journal entries",
                       "twelve dialogue givers and four saved quest statuses","changing fuel and battery gauges",
                       "clear, fair, night, drizzle and 12x midnight fades","five heavy lines and fifteen buoys",
                       "all paint colors","changing look and steering","bounded text cache",
-                      "each lake's cats resident within 14 actors and 150 MiB"],
+                      "each lake's cats resident within 14 actors and 150 MiB",
+                      "every sound captioned and heard, five lakes' ambience, audio within 150 MiB"],
         }
         path = Path(dest)
         path.parent.mkdir(parents=True,exist_ok=True)
