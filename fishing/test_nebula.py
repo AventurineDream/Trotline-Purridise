@@ -329,7 +329,8 @@ class NebulaLife(unittest.TestCase):
         audio._schedule()
         audio._hour, audio.time = 23, 50
         audio._schedule()
-        self.assertEqual(cues, ["twinkle", "twinkle"])
+        # Twinkles and the choir (V1-38); no birds or frogs, and no whale song before the finale.
+        self.assertEqual(cues, ["twinkle", "choir", "twinkle", "choir"])
         mixes = {}
         for lake in ("nebula", "flathead", "briar"):
             sound = Audio()

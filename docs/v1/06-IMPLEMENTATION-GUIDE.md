@@ -1924,3 +1924,55 @@ This part finishes #65: the trophy replica model, and the Star-Whale's return af
   - sinks unrecorded if the Skipper leaves;
   - is skipped and recorded by Esc;
   - lifts the view.
+
+## Implemented audio (V1-38)
+
+V1-38 (#66) gives each lake its own voice and every sound a caption (02 §18).
+
+**`soundscape.py`.** Every sound the game makes is synthesized here, so the tests and the benchmark can hear it without an audio device. `audio.Audio` only schedules, mixes and queues it. Each sound is synthesized once and cached (`tone`, 48 entries, read-only).
+
+| Group | Sounds |
+| --- | --- |
+| SFX | bite, Bot's chime, sale, error, click, splash, the line's hum and the winch's hum (V1-37), **the hail horn**, **the Lake Day bell**, **the cookout triangle**, **a legendary's chord**, **the Star-Whale's song** |
+| Ambience | Briar and Cedar: loon, gull, frog. **Flathead:** larch wind, loon, ice tick. **Crater:** bubbling spring, raven. **The Lagoon:** twinkle, choir, whale song |
+| Music | one motif per lake, 8–13 s: Briar plucked in D, Cedar wooden in G, Flathead a flute in E minor, Crater a marimba in A minor, the Lagoon glass bells in C lydian |
+
+- **Captions.** Every sound has one (`CAPTIONS`), and Bot's shell chimes keep the shell's own. A sound's caption shows when Captions is on. Ambient calls are captioned only when no other caption is showing, so they never cover a bite.
+- **Buses.** Each sound plays on one of V1-06's mixer buses: music, ambience or SFX, all under master. Music plays one motif at a time; a new one replaces the last.
+- **Lake ambience** (`Audio._schedule`):
+  - **Flathead:** wind gusts through the larches every 30–50 s, loons at the day's edges and by day, and ice ticking at the shore before 09:00 and after 20:00.
+  - **Crater:** a deep hush. Its water and wind beds play at 55% with no crickets; springs bubble every 6–11 s, and ravens call between 07:00 and 19:00.
+  - **The Lagoon:** star twinkles, a soft choir every 30–45 s, and on nights after the finale a low whale song every 70–100 s.
+  - **Briar and Cedar** are unchanged.
+- **Music** (`Session._tick_soundscape`). Silence is the default. The lake's motif plays at dawn (06:00) and dusk (19:00) and when a staged story scene begins. The Star-Whale's scenes play its song instead.
+- **Cues.**
+  - The hail horn sounds when the Skipper hails a cat.
+  - The Lake Day bell rings once a day on a lake's special day, and the cookout triangle once during the Sunday cookout.
+  - A legendary's chord rises as its name comes up (V1-37's scene, after the hum).
+  - The whale song plays as the Star-Whale rises, in the finale or on its return.
+- **Mute.** M pauses the device and drops everything queued on every bus, so nothing plays when sound comes back.
+- **Memory.** Every sound, plus each lake's beds and queue, comes to about 6.7 MB, against the 150 MB audio budget (06 §7).
+
+**Benchmark.** `--benchmark` runs `soundscape.coverage_report()`:
+- every sound synthesizes, is heard (non-zero peak), and has a caption and a bus;
+- each lake's calls over four simulated minutes at five hours match `AMBIENCE`;
+- each lake's beds mix;
+- the total stays inside the budget.
+
+An incomplete report fails the benchmark. The JSON gains an `audio` section: sound count, each lake's calls, buffer MB and budget.
+
+**Tests (`test_audio.py`).**
+- Every sound has a caption and a bus.
+- Every sound the game plays (scanned from `game.py` and `bot.py`) is known and captioned.
+- Every sound synthesizes once and is heard, and each lake has its own motif.
+- Each lake calls with its own voice; ice only on cold hours, ravens by day, and the whale only after the finale and by night.
+- The Caldera is hushed.
+- The coverage report is complete and inside the budget.
+- M mutes everything, with nothing left to play after.
+- Music plays on its own bus, one motif at a time.
+- In the session:
+  - dawn and dusk bring the motif once each;
+  - a Lake Day and the cookout ring once;
+  - the hail sounds the horn;
+  - a legendary's chord comes after its hum;
+  - a staged story moment brings the motif.
