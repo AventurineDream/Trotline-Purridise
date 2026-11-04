@@ -411,6 +411,8 @@ class UIState:
     haul_phase_timer: float = 0.0
     haul_badge_enabled: bool = True
     haul_counts_before: dict = field(default_factory=dict)
+    haul_legendary: str = ""            # the legendary whose scene the haul is presenting (V1-37)
+    haul_encounter_only: bool = False   # an instant haul stopped for a legendary's first scene
     journal_i: int = 0
     book_week_i: int = 0
     journal_page: int = 0
@@ -963,33 +965,59 @@ class UI:
         reduced = bool(settings.get("reduced_motion", False))
         speed = settings.get("haul_speed", "normal")
         cadence = haul_cadence(state) * ui.haul_picnic_factor
-        progress = (1.0 if ui.haul_phase == "surface" else
+        # A legendary's hook slows into its calm scene, then its book page (V1-37).
+        from . import encounter, encounterview
+        legend = encounter.is_legendary(hook.catch)
+        scene = legend and ui.haul_phase == "encounter"
+        beats = (encounter.look(ui.haul_phase_timer, reduced=reduced) if scene else
+                 encounter.look(encounter.SCENE_S, reduced=True) if legend and ui.haul_phase == "card" else None)
+        winched = legend and encounter.variant(state) == "winch"
+        progress = (1.0 if ui.haul_phase == "surface" or beats is not None else
                     min(1.0, max(0.0, ui.haul_timer / cadence)))
         water_y = int(h * 0.61)
         cx = w * 0.5
-        sway = self._haul_sway(ui, reduced) * w
+        # The Zero-G Winch draws a legendary in without a sway (02 §9).
+        sway = 0.0 if winched else self._haul_sway(ui, reduced) * w
+        still = beats["still"] if beats else 0.0
 
         self._fill(frame, 0, 0, w, h, (6, 14, 16), 0.30)
         self._fill(frame, 0, water_y, w, h - water_y, (34, 84, 85), 0.26)
+        if still > 0.0:
+            # Looking over the side at the stilled lake: its water fills the view below the line.
+            encounterview.still_water(self, frame, state, water_y, still)
         self._fill(frame, 0, water_y, w, max(1, int(h * 0.008)), (171, 190, 165), 0.24)
         ripple_phase = 0.0 if reduced else (ui.haul_timer * 3.7) % math.tau
         ripple_size = 28 if reduced else int(28 + 12 * (0.5 + 0.5 * math.sin(ripple_phase)))
-        self._haul_ring(frame, cx + sway, water_y + 8, ripple_size * 1.8,
-                        max(7, ripple_size * 0.34), (204, 220, 194), 0.52, 2.0)
-        self._haul_ring(frame, cx + sway, water_y + 9, ripple_size,
-                        max(5, ripple_size * 0.23), (221, 232, 201), 0.43, 1.5)
+        if still < 1.0:  # the ripples settle as the water stills
+            self._haul_ring(frame, cx + sway, water_y + 8, ripple_size * 1.8,
+                            max(7, ripple_size * 0.34), (204, 220, 194), 0.52 * (1.0 - still), 2.0)
+            self._haul_ring(frame, cx + sway, water_y + 9, ripple_size,
+                            max(5, ripple_size * 0.23), (221, 232, 201), 0.43 * (1.0 - still), 1.5)
+        if still > 0.0:  # glassy water: long, flat highlights
+            for k, (y_frac, span) in enumerate(((0.03, 0.70), (0.09, 0.52), (0.17, 0.36))):
+                yy = water_y + int(h * y_frac)
+                self._haul_segment(frame, w * (0.5 - span / 2), yy, w * (0.5 + span / 2), yy,
+                                   (214, 228, 214), 1 + (k == 0), 0.20 * still)
 
         hook_y = water_y - int(progress * h * 0.18) - 8
         hand_y = int(h * 0.85)
         left_hand, right_hand = w * 0.20, w * 0.80
-        self._haul_segment(frame, left_hand, hand_y, cx - 5 + sway, hook_y,
-                           (62, 52, 42), 6, 0.9)
-        self._haul_segment(frame, right_hand, hand_y, cx + 5 + sway, hook_y,
-                           (62, 52, 42), 6, 0.9)
-        self._haul_segment(frame, left_hand, hand_y - 1, cx - 5 + sway, hook_y,
-                           (229, 211, 169), 2, 0.95)
-        self._haul_segment(frame, right_hand, hand_y - 1, cx + 5 + sway, hook_y,
-                           (229, 211, 169), 2, 0.95)
+        tremble = beats["tremble"] if scene else 0.0
+        if winched:
+            # The winch at the gunwale takes the line straight up; the Skipper's paws rest.
+            drum_x, drum_y = encounterview.winch(self, frame, cx, h)
+            encounterview.hum_line(self, frame, drum_x, drum_y, cx + sway, hook_y,
+                                   (229, 211, 169), 2, 0.95, tremble * 0.35, ui.haul_phase_timer)
+            if scene:
+                encounterview.hum_marks(self, frame, drum_x, drum_y, cx + sway, hook_y, beats["hum"])
+        else:
+            for hand_x, side in ((left_hand, -5), (right_hand, 5)):
+                encounterview.hum_line(self, frame, hand_x, hand_y, cx + side + sway, hook_y,
+                                       (62, 52, 42), 6, 0.9, tremble, ui.haul_phase_timer)
+                encounterview.hum_line(self, frame, hand_x, hand_y - 1, cx + side + sway, hook_y,
+                                       (229, 211, 169), 2, 0.95, tremble, ui.haul_phase_timer)
+            if scene:
+                encounterview.hum_marks(self, frame, right_hand, hand_y, cx + 5 + sway, hook_y, beats["hum"])
 
         # Paws stay planted while the line and hook move above them.
         paw_y = int(h * 0.87)
@@ -1012,19 +1040,35 @@ class UI:
                            cx + 15 + sway, hook_y + h * 0.05,
                            (232, 217, 179), 3, 0.98)
 
-        if hook.catch is not None and (ui.haul_phase == "surface" or progress >= 0.70):
+        if beats is not None:
+            # It surfaces beside the boat, not on the hook (02 §7.2).
+            encounterview.fish(self, frame, state, hook.catch.species, beats,
+                               ui.haul_phase_timer if scene else encounter.SCENE_S,
+                               reduced=reduced, winched=winched, water_y=water_y)
+        elif hook.catch is not None and not legend and (ui.haul_phase == "surface" or progress >= 0.70):
             sprite = _haul_mesh_sprite(hook.catch.species, state.lake_id, hook.catch.shiny)
             lift = int(h * (0.015 + 0.075 * progress))
             self._blit(frame, sprite, int(cx - sprite.shape[1] / 2),
                        water_y - lift - sprite.shape[0] // 2)
-        if not reduced and (ui.haul_phase == "surface" or progress >= 0.82):
+        if not reduced and not legend and (ui.haul_phase == "surface" or progress >= 0.82):
             self._haul_splashes(frame, cx + sway, water_y + 2,
                                 (ui.haul_index * 0.77 + ui.haul_timer) % math.tau)
 
         head, body, small = (self._size(frame, key) for key in ("head", "body", "small"))
+        if scene:
+            # The scene is calm: no count, no speed and no prompts, only the letterbox and its name.
+            from .staging import overlay
+            overlay(frame, {"bars": beats["bars"]})
+            encounterview.name(self, frame, hook.catch.species, beats)
+            if encounter.presented(state.v2, hook.catch.species):
+                skip = self._controls(ui, "Esc skip   Hold E hurries", "B skip   Hold A hurries")
+                self._center(frame, skip, w / 2, int(h * 0.95), small, DIM)
+            return
         title = f"HAULING  {index + 1:02d} / {len(line.hooks):02d}"
         self._text(frame, title, int(w * 0.055), int(h * 0.06), head, INK)
-        if hook.catch is not None:
+        if legend:
+            result, result_color = "The line goes heavy.", GOLD  # its name waits for the scene
+        elif hook.catch is not None:
             sp = SPECIES_BY_ID.get(hook.catch.species)
             hook_sp_name = sp.name if sp is not None else hook.catch.species.replace("_", " ").title()
             result = f"{hook_sp_name} on the line"
@@ -1041,7 +1085,10 @@ class UI:
                               "Hold A 3×   A skips a card   B summary")
         self._center(frame, foot, w / 2, int(h * 0.95), small, INK)
         if ui.haul_phase == "card" and hook.catch is not None:
-            self._haul_card(frame, state, ui, hook.catch, body, small)
+            if legend:
+                encounterview.card(self, frame, state, ui, hook.catch)
+            else:
+                self._haul_card(frame, state, ui, hook.catch, body, small)
 
     def _haul_card(self, frame, state, ui: UIState, catch, body, small):
         h, w = frame.shape[:2]

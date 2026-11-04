@@ -32,6 +32,7 @@ from .haul import haul_cadence
 from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_rumor
 from .book import take_dream_clue
 from . import comfort
+from . import encounter
 from . import kitchen
 from .bookview import (BOOK_TABS, ENTRY_IDS, book_controls, book_layout, contains,
                        move_selection, tracker_species, turn_page)
@@ -57,6 +58,8 @@ SOUND_CAPTIONS = {
     "error": "That action is unavailable.",
     "click": "A soft click sounds.",
     "splash": "A splash breaks the quiet.",
+    "hum": "The line hums.",
+    "hum_winch": "The winch hums, steady.",
 }
 
 
@@ -204,6 +207,8 @@ class Session:
         self.ui.stage_skip = self.stage_skippable()
         self.ui.credits_rise = staging.credits_rise(self.stage, reduced=reduced)
         self.state.stage_light = staging.light_overrides(self.stage, reduced=reduced)
+        # A legendary's scene stills the lake under the haul (V1-37).
+        self.state.encounter_still = encounter.water_still(self.ui, reduced=reduced)
 
     def _tick_vignette(self, dt: float) -> None:
         """The card beside a story moment's bubble: the book, the collar, the knot (V1-35)."""
@@ -904,6 +909,8 @@ class Session:
             self.ui.haul_phase = "rise"
             self.ui.haul_phase_timer = 0.0
             self.ui.haul_badge_enabled = True
+            self.ui.haul_legendary = ""
+            self.ui.haul_encounter_only = False
             self.ui.note = ""
             if self.state.prepare_catch_dispositions(nearest):
                 self.ui.note = "The livewell is full. I picked the smallest to swim home. You can change that."
@@ -946,6 +953,14 @@ class Session:
             settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
             if settings.get("haul_speed") == "instant":
                 self._start_haul_perk(line)
+                first = next((i for i, hook in enumerate(line.hooks) if encounter.is_legendary(hook.catch)
+                              and not encounter.presented(self.state.v2, hook.catch.species)), None)
+                if first is not None:
+                    # Instant hauls skip to the summary, but a legendary's first scene still plays (02 §7.2).
+                    self.ui.haul_index = first
+                    self.ui.haul_encounter_only = True
+                    self._begin_encounter(line.hooks[first])
+                    return
                 self.ui.mode = "check"
             return
         self.state.toast("Nothing here to check.")
@@ -970,17 +985,22 @@ class Session:
         if not line.hooks:
             self.ui.mode = "check"
             return
+        if self.ui.haul_phase == "encounter" and self.ui.haul_index < len(line.hooks):
+            self._encounter_keys(keys, dt, line.hooks[self.ui.haul_index])
+            return
         if "esc" in keys.pressed:
             self._start_haul_perk(line)
             self.ui.mode = "check"
             self.ui.check_i = 0
+            self.ui.haul_legendary = ""
+            self.ui.haul_encounter_only = False
             return
 
         settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
         speed = settings.get("haul_speed", "normal")
         if speed not in {"normal", "quick", "instant"}:
             speed = "normal"
-        if speed == "instant":
+        if speed == "instant" and not self.ui.haul_encounter_only:
             self._start_haul_perk(line)
             self.ui.mode = "check"
             self.ui.check_i = 0
@@ -993,8 +1013,12 @@ class Session:
             self.ui.check_i = 0
             return
         if self.ui.haul_phase == "card" and keys.pressed - {"e"}:
-            self._next_haul_hook()
-            return
+            # A legendary's page stands a moment first, so keys pressed through its scene don't
+            # turn it unread.
+            if not (encounter.is_legendary(line.hooks[self.ui.haul_index].catch)
+                    and self.ui.haul_phase_timer < encounter.PAGE_SETTLE_S):
+                self._next_haul_hook()
+                return
 
         remaining = step
         for _ in range(len(line.hooks) * 3 + 4):
@@ -1005,12 +1029,16 @@ class Session:
                 self.ui.check_i = 0
                 return
             hook = line.hooks[self.ui.haul_index]
+            if self.ui.haul_phase == "encounter":
+                return  # the scene keeps its own clock (`_encounter_keys`)
             if self.ui.haul_phase == "card":
-                needed = max(0.0, 1.2 - self.ui.haul_phase_timer)
+                # A legendary's book page holds longer than a fish card.
+                hold = encounter.PHOTO_S if encounter.is_legendary(hook.catch) else 1.2
+                needed = max(0.0, hold - self.ui.haul_phase_timer)
                 used = min(remaining, needed)
                 self.ui.haul_phase_timer += used
                 remaining -= used
-                if self.ui.haul_phase_timer + 1e-9 >= 1.2:
+                if self.ui.haul_phase_timer + 1e-9 >= hold:
                     self._next_haul_hook()
                     continue
                 return
@@ -1034,6 +1062,9 @@ class Session:
             if self.ui.haul_timer + 1e-9 < cadence:
                 return
             self._start_haul_perk(line)
+            if encounter.is_legendary(hook.catch):
+                self._begin_encounter(hook)
+                return
             if hook.catch is not None:
                 self.ui.haul_phase = "surface"
                 self.ui.haul_timer = cadence
@@ -1041,11 +1072,53 @@ class Session:
             else:
                 self._next_haul_hook()
 
+    def _begin_encounter(self, hook) -> None:
+        """The haul slows into the legendary's calm scene (V1-37, 02 §7.2)."""
+        self.ui.mode = "haul"
+        self.ui.haul_phase = "encounter"
+        self.ui.haul_phase_timer = 0.0
+        self.ui.haul_timer = haul_cadence(self.state) * self.ui.haul_picnic_factor
+        self.ui.haul_legendary = hook.catch.species
+
+    def _encounter_keys(self, keys, dt: float, hook) -> None:
+        """The scene runs on its own clock. Seen once, it can be skipped (Esc / B, or any key
+        but E) or hurried (hold E); the first time nothing does either."""
+        if not encounter.is_legendary(hook.catch):
+            self._next_haul_hook()
+            return
+        legendary_id = hook.catch.species
+        repeat = encounter.presented(self.state.v2, legendary_id)
+        if repeat and keys.pressed - {"e"}:
+            self._finish_encounter(hook)
+            return
+        t0 = self.ui.haul_phase_timer
+        step = max(0.0, float(dt)) * (3.0 if repeat and "e" in keys.held else 1.0)
+        self.ui.haul_phase_timer = min(encounter.SCENE_S, t0 + step)
+        if encounter.hum_due(t0, self.ui.haul_phase_timer):
+            self.sound = "hum_winch" if encounter.variant(self.state) == "winch" else "hum"
+        if self.ui.haul_phase_timer + 1e-9 >= encounter.SCENE_S:
+            self._finish_encounter(hook)
+
+    def _finish_encounter(self, hook) -> None:
+        """The scene is over: the book page, with the photo and the release, comes up."""
+        encounter.mark_presented(self.state.v2, hook.catch.species)
+        self.ui.haul_phase = "card"
+        self.ui.haul_phase_timer = 0.0
+        self.ui.haul_badge_enabled = not hook.catch.haul_seen
+        hook.catch.haul_seen = True
+
     def _next_haul_hook(self) -> None:
         self.ui.haul_index += 1
         self.ui.haul_timer = 0.0
         self.ui.haul_phase = "rise"
         self.ui.haul_phase_timer = 0.0
+        self.ui.haul_legendary = ""
+        if self.ui.haul_encounter_only:
+            # An instant haul played its legendary's first scene; the summary follows.
+            self.ui.haul_encounter_only = False
+            self.ui.mode = "check"
+            self.ui.check_i = 0
+            return
         if self.ui.check_line >= len(self.state.lines) or (
                 self.ui.check_line < 0
                 or self.ui.haul_index >= len(self.state.lines[self.ui.check_line].hooks)):
