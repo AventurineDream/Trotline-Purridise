@@ -168,9 +168,11 @@ def faces(state, world) -> list:
     t = 0.0 if reduced else float(state.anim)
     if look["lilies"] > 0.0:
         _lilies(out, state, look["lilies"], t)
-    if look["glow"] > 0.0:
-        _glow(out, state, look["glow"])
     staged = getattr(state, "stage_light", None) or {}
+    # A returning whale (V1-37) brings its own glow up with it.
+    glow = max(look["glow"], min(1.0, float(staged.get("whale", 0.0)) * 3.0))
+    if glow > 0.0:
+        _glow(out, state, glow)
     if staged.get("whale", 0.0) > 0.0:
         _whale(out, state, float(staged["whale"]))
     return out

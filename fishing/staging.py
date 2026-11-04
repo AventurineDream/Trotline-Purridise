@@ -103,6 +103,20 @@ STAGES = {
         Key(24.0, (12.0, 6.0, 3.0, -0.26, -0.30), bars=1.0, hour=6.6),
     ), hold=True),
 }
+# Staged moments in play, outside any scene (V1-37).
+PLAY_STAGES = {
+    # The Star-Whale comes back after the finale (`whale.py`): it rises on the curve of
+    # "story_c5_whale", holds, then sinks as after "Draw it", and the view lifts with it.
+    "whale_return": Stage("boat", (
+        Key(0.0, None, bars=0.0, whale=0.0),
+        Key(1.5, (0.0, EYE, 0.0, 0.0, -0.04), bars=1.0, whale=0.05),
+        Key(6.0, (0.0, EYE - 0.1, 0.0, 0.0, 0.10), bars=1.0, whale=0.85),
+        Key(8.5, (0.0, EYE - 0.1, 0.0, 0.0, 0.07), bars=1.0, whale=1.0),
+        Key(12.5, (0.0, EYE - 0.1, 0.0, 0.0, 0.07), bars=1.0, whale=1.0),
+        Key(15.0, None, bars=0.0, whale=0.6),
+        Key(18.0, None, bars=0.0, whale=0.0),
+    )),
+}
 # The ending's later scenes keep its framing; their stage is the one they continue.
 CONTINUES = {"end_01b": "end_01", "end_02": "end_01", "end_03": "end_01"}
 CREDITS_SPEED = 26.0  # pixels a second the credits rise at 720 lines, before Reduced Motion
@@ -118,7 +132,7 @@ class Clock:
 
     @property
     def stage(self) -> Stage:
-        return STAGES[self.stage_id]
+        return STAGES[self.stage_id] if self.stage_id in STAGES else PLAY_STAGES[self.stage_id]
 
     @property
     def over(self) -> bool:

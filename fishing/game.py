@@ -138,6 +138,9 @@ class Session:
         self._npc_key = None
         self._refresh_npcs()
         self.stage = None  # the story staging under way (V1-35)
+        self.whale_clock = None  # the Star-Whale's return under way (V1-37)
+        self.whale_wait = 0.0
+        self._whale_recorded = False
         self._replays = self._saved_pending()
 
     def _saved_pending(self) -> set:
@@ -176,6 +179,7 @@ class Session:
         self._simulate(keys, dt, driving_presses)
         self._tick_settle(dt)
         self._play_due_scene()
+        self._tick_whale(dt)
         self._tick_stage(dt)
         self._tick_caption(dt)
 
@@ -203,12 +207,44 @@ class Session:
             self.stage.t += dt
         reduced = bool(self.state.v2.get("settings", {}).get("reduced_motion", False))
         self._tick_vignette(dt)
-        self.ui.stage_fx = staging.sample(self.stage, reduced=reduced)
+        active = self.stage if self.stage is not None else self.whale_clock  # a scene's staging comes first
+        self.ui.stage_fx = staging.sample(active, reduced=reduced)
         self.ui.stage_skip = self.stage_skippable()
         self.ui.credits_rise = staging.credits_rise(self.stage, reduced=reduced)
-        self.state.stage_light = staging.light_overrides(self.stage, reduced=reduced)
+        self.state.stage_light = staging.light_overrides(active, reduced=reduced)
+        self.ui.whale_return = self.stage is None and self.whale_clock is not None
         # A legendary's scene stills the lake under the haul (V1-37).
         self.state.encounter_still = encounter.water_still(self.ui, reduced=reduced)
+
+    def _tick_whale(self, dt: float) -> None:
+        """The Star-Whale comes back to a Skipper settled by the reflection on a clear night,
+        after the finale (V1-37, `whale.py`)."""
+        from . import whale
+        if self.ui.mode != "play" or not self.focused or self.stage is not None:
+            return  # menus, scenes and the book pause it
+        clock = self.whale_clock
+        if clock is None:
+            self.whale_wait = self.whale_wait + dt if whale.can_return(self.state, self.world) else 0.0
+            if self.whale_wait >= whale.WAIT_S:
+                self.whale_clock = staging.Clock("whale_return", repeat=True)
+                self.whale_wait, self._whale_recorded = 0.0, False
+            return
+        still = whale.settled(self.state, self.world)
+        before = clock.t
+        clock.t += dt * (1.0 if still else staging.RELEASE)  # moving off lets it sink early
+        if not self._whale_recorded and before < whale.RISEN_S <= clock.t and still:
+            self._whale_recorded = whale.record(self.state, self.world) or True
+            self.save()
+        if clock.over:
+            self.whale_clock = None
+
+    def _skip_whale(self) -> None:
+        """Esc (B) skips a returning whale to its end; it has been seen, so it is recorded."""
+        from . import whale
+        if not self._whale_recorded and whale.settled(self.state, self.world):
+            self._whale_recorded = whale.record(self.state, self.world) or True
+            self.save()
+        self.whale_clock = None
 
     def _tick_vignette(self, dt: float) -> None:
         """The card beside a story moment's bubble: the book, the collar, the knot (V1-35)."""
@@ -677,6 +713,9 @@ class Session:
         return True
 
     def _play_keys(self, keys):
+        if "esc" in keys.pressed and self.whale_clock is not None:
+            self._skip_whale()
+            return
         if "esc" in keys.pressed:
             self.ui.mode = "pause"
             self.ui.pause_i = 0
@@ -1533,10 +1572,33 @@ class Session:
     def _toggle_book_tracker(self):
         sid = tracker_species(self.state, self.ui)
         if sid is None:
+            if self.ui.journal_page == 2 and self.ui.book_shelf == 2:
+                self._toggle_rail_trophy()
             return
         target = None if self.state.v2["book"].get("tracked") == sid else sid
         if self.state.set_shiny_tracker(target) is None:
             self.save()
+
+    def _toggle_rail_trophy(self):
+        """F on the Trophy shelf hangs the replica on this boat's rail, or takes it down (V1-37)."""
+        from .bookview import trophy_items
+        items = trophy_items(self.state)
+        if not items:
+            return
+        kind, item_id = items[self.ui.book_collection_i % len(items)][:2]
+        if kind == "witnessed":
+            return
+        if (kind, item_id) in self.state.rail_trophies():
+            self.state.unmount_trophy(kind, item_id)
+            self.state.toast("Taken down. The book keeps it.")
+        else:
+            mount = self.state.mount_legendary_replica if kind == "legendary" else self.state.mount_shiny_trophy
+            refused = mount(item_id)
+            if refused:
+                self.state.toast(refused)
+                return
+            self.state.toast("Hung on the rail.")
+        self.save()
 
     def _pause_keys(self, keys, dt):
         if keys.pressed & {"k", "b"}:
@@ -1867,7 +1929,8 @@ def _camera(renderer: Renderer, session: Session):
     state = session.state
     if session.ui.mode != "title":
         reduced = bool(state.v2.get("settings", {}).get("reduced_motion", False))
-        return staging.staged_camera(renderer, state, session.stage, reduced=reduced)  # V1-35
+        clock = session.stage if session.stage is not None else session.whale_clock  # V1-35, V1-37
+        return staging.staged_camera(renderer, state, clock, reduced=reduced)
     settings = state.v2.get("settings", {}) if isinstance(state.v2, dict) else {}
     reduced_motion = bool(settings.get("reduced_motion", False))
     yaw = state.yaw if reduced_motion else state.yaw + math.sin(state.anim * 0.12) * 0.55
