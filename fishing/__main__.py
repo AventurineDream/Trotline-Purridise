@@ -136,6 +136,8 @@ def selftest(*,software=False) -> int:
     renderer.close()
     from .expansionchecks import expansion_checks
     expansion_checks(world,software=software)
+    from .verify import coverage_checks
+    coverage_checks(software=software)
     print("selftest ok")
     return 0
 

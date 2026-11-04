@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import math
 import resource
+import sys
 import time
 import tempfile
+import types
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +25,7 @@ from .narrative import QUEST_IDS
 from .bookview import BOOK_TABS
 from .boat import BOATS, ROWBOAT_BATTERY_KWH
 from .world import World
+from . import calendar
 
 MEMORY_LIMIT_BYTES = 3_000_000_000
 
@@ -116,14 +119,281 @@ def _stress_lines():
     return lines
 
 
+# The lakes in visiting order. One renderer is resident at a time (06 §0.4), so each
+# lake is a block of frames, and every boat gets a slice of its block.
+LAKE_ORDER = ("briar", "cedar", "flathead", "crater", "nebula")
+LEGENDARY_SCENE = "old_lantern"  # the legendary encounter the benchmark draws (V1-37)
+WEATHER_SPAN_HOURS = 168 * 12  # twelve forecast weeks; each lake reaches its weathers well inside this
+
+# 06 §7 budgets in MB, one per table row the benchmark estimates.
+MEMORY_BUDGET_MB = {
+    "terrain_zones_depth": 350,
+    "foliage": 250,
+    "render_targets": 300,
+    "cat_actors": 150,
+    "fish_meshes_and_cards": 120,
+    "boats": 80,
+    "audio": 150,
+    "ui_text_cache": 150,
+    "content_and_state": 100,
+}
+MAX_NPC_BOATS = 14  # the actor cap: resident cats, each with a boat (06 §7)
+
+
+def _slots(obj):
+    names = []
+    for klass in type(obj).__mro__:
+        slots = getattr(klass, "__slots__", ())
+        names.extend((slots,) if isinstance(slots, str) else slots)
+    return names
+
+
+def _deep_bytes(roots, skip=()) -> int:
+    """Estimate the bytes reachable from `roots`.
+
+    NumPy arrays count `nbytes`; everything else counts `sys.getsizeof`. Each object is
+    counted once, so shared content is not double counted. Modules, classes, functions and
+    the `skip` objects (the lake and the renderer, measured separately) are left out.
+    """
+    import functools
+    leave_out = (type, types.ModuleType, types.FunctionType, types.BuiltinFunctionType,
+                 types.MethodType, type(functools.lru_cache(lambda: 0)))
+    seen = {id(obj) for obj in skip}
+    stack, total = list(roots), 0
+    while stack:
+        obj = stack.pop()
+        if id(obj) in seen or isinstance(obj, leave_out):
+            continue
+        seen.add(id(obj))
+        if isinstance(obj, np.ndarray):
+            total += obj.nbytes
+            continue
+        total += sys.getsizeof(obj)
+        if isinstance(obj, dict):
+            stack.extend(obj.keys())
+            stack.extend(obj.values())
+        elif isinstance(obj, (list, tuple, set, frozenset)):
+            stack.extend(obj)
+        else:
+            attrs = getattr(obj, "__dict__", None)
+            if attrs is not None:
+                stack.append(attrs)
+            stack.extend(getattr(obj, name) for name in _slots(obj) if hasattr(obj, name))
+    return total
+
+
+def _weather_minutes(seed, lake_id):
+    """(weather, game minute) for each weather state this lake's forecast can show.
+
+    The minute is the middle of the first planned hour with that weather. Mid-hour stays
+    outside the 60-minute blend at each hour boundary, so the frame shows that weather alone.
+    """
+    first = {}
+    for hour in range(WEATHER_SPAN_HOURS):
+        minute = hour * 60 + 30
+        first.setdefault(calendar.planned_weather(seed, lake_id, minute), minute)
+    return sorted(first.items())
+
+
+def _memory_report(renderer, world, state, text, mesh_bytes, audio_bytes) -> dict:
+    """Per-subsystem MB estimates for the 06 §7 table, each beside its budget.
+
+    These are estimates, not allocator measurements: NumPy `nbytes`, `sys.getsizeof`
+    walks, and the renderer's own bounds. Process RSS is reported separately.
+    """
+    from .boatmesh import boat_faces
+    from .content import load_content, load_content_v2
+    from .fishmesh import cache_bytes as card_cache_bytes
+    from .forest import H as ATLAS_H, W as ATLAS_W
+    mb = 1024 ** 2
+    # Terrain: every array the lake holds (height grid, map images, zone and depth grids).
+    terrain = _deep_bytes([world], skip=(renderer,))
+    # Foliage: GL keeps one RGBA atlas layer per tree or prop sprite; the CPU renderer keeps
+    # its sprite sheets and the prop positions. Both are read from the renderer.
+    foliage = sum(sprite.nbytes for sprite in getattr(renderer, "sprites", {}).values())
+    foliage += len(getattr(renderer, "layers", {})) * ATLAS_W * ATLAS_H * 4
+    foliage += getattr(getattr(renderer, "prop_positions", None), "nbytes", 0)
+    # Render targets at the 1440x810, 4x MSAA target size: colour and depth per sample
+    # (4 + 4 bytes), a full-size RGBA16F post target (8 bytes), and a half-size reflection
+    # target (4 bytes). The CPU renderer also keeps its colour, depth and bayer arrays.
+    targets = 1440 * 810 * 4 * (4 + 4) + 1440 * 810 * 8 + 720 * 405 * 4
+    targets += sum(getattr(renderer, name).nbytes for name in ("col", "z", "bayer") if hasattr(renderer, name))
+    # Cat actors: the renderer's own bound (resident actors, mesh cache, portraits, GPU slots).
+    actors = renderer.actor_memory()["total_bytes_bound"]
+    # Fish: cached card and thumbnail pixels, plus the haul meshes built for the card pass
+    # (the largest measured mesh times the number cached, an upper-side estimate).
+    fish = card_cache_bytes() + mesh_bytes
+    # Boats: one boat's face arrays, largest over all 24 boats, for the player and 14 NPC boats.
+    current = state.boat_id
+    per_boat = 0
+    try:
+        for boat_id in BOATS:
+            state.boat_id = boat_id
+            per_boat = max(per_boat, _deep_bytes(boat_faces(state)))
+    finally:
+        state.boat_id = current
+    boats = (1 + MAX_NPC_BOATS) * per_boat
+    # Audio: every sound's buffer and each lake's bed, from the soundscape coverage report.
+    audio = audio_bytes
+    # UI text: the bounded text cache the UI draws from.
+    ui_text = text.cache_bytes
+    # Content and state: the save state and both loaded content sets, each object once.
+    content = _deep_bytes([state, load_content(), load_content_v2()], skip=(world, renderer, text))
+    estimates = {"terrain_zones_depth": terrain, "foliage": foliage, "render_targets": targets,
+                 "cat_actors": actors, "fish_meshes_and_cards": fish, "boats": boats,
+                 "audio": audio, "ui_text_cache": ui_text, "content_and_state": content}
+    report = {name: {"estimate_mb": round(value / mb, 2), "budget_mb": MEMORY_BUDGET_MB[name]}
+              for name, value in estimates.items()}
+    return report
+
+
+def _catchability_section(witnesses) -> dict:
+    """Per-species catchability from the real-map witnesses (specieschecks, 02 §4)."""
+    best = {}
+    for row in witnesses:
+        if row["species"] not in best or row["ratio"] > best[row["species"]]["ratio"]:
+            best[row["species"]] = {key: row[key] for key in ("lake", "zone", "rate", "default_rate", "ratio")}
+    return {"species": {sid: best[sid] for sid in sorted(best)}, "species_count": len(best),
+            "witnesses": len(witnesses), "min_ratio": round(min(row["ratio"] for row in best.values()), 4)}
+
+
+COVERAGE_SEED = 24  # the save seed the benchmark and the coverage pass both use
+
+
+def scope_fish_ids() -> tuple:
+    """Every fish card the benchmark and the coverage pass paint: 144 species, then 12 legendaries."""
+    from .fishmesh import legendary_ids
+    return (*(row.id for row in SPECIES), *legendary_ids())
+
+
+def scope_cat_ids() -> tuple:
+    """Each roster row, once. A twin row is one actor with two cats (see `cat_models`)."""
+    from .actors import roster
+    return tuple(roster())
+
+
+def scope_cat_models() -> int:
+    """Cat models in the roster, twins included (52 in the current content)."""
+    from .actors import roster
+    return sum(1 + ("twin" in row["appearance"]) for row in roster().values())
+
+
+def _weather_states_reached(seed=COVERAGE_SEED) -> set:
+    """The weather states the forecast reaches on any lake, with no rendering."""
+    return {weather for lake_id in LAKE_ORDER for weather, _minute in _weather_minutes(seed, lake_id)}
+
+
+def coverage_checks(*, software=False) -> dict:
+    """The self-test's coverage pass: the benchmark's scope list, without the frame loop (V1-39).
+
+    Lakes render one frame each. Every fish card and every roster cat model is built.
+    Every shop tab, help page and book tab is drawn once, and the legendary haul scene is
+    drawn once. The weather list is checked from the forecast alone. Raises on any miss.
+    """
+    from .content import WEATHER_STATES
+    from .fishmesh import fish_card, haul_mesh
+    from .catmesh import cat_mesh
+    from .legendshots import _draw as draw_scene, _panel as scene_panel, _staged
+    from .platform import Text
+    if len(BOATS) != 24:
+        raise AssertionError(f"expected 24 boats, found {len(BOATS)}")
+    text = Text()
+    counts = {"lakes": 0, "fish_cards": 0, "cat_models": 0, "shop_tabs": 0,
+              "help_pages": 0, "book_tabs": 0, "weather_states": 0, "legendary_scenes": 0}
+    try:
+        for lake_id in LAKE_ORDER:
+            world = World(lake_id)
+            renderer = Renderer(world, software=software)
+            try:
+                state = State.new(world, seed=COVERAGE_SEED)
+                low = renderer.render(state)
+                if float(low.std()) < 8:
+                    raise AssertionError(f"{lake_id} frame is flat")
+                counts["lakes"] += 1
+                if lake_id != LAKE_ORDER[0]:
+                    continue
+                # Shop, help and book tabs, drawn the way the benchmark selects them.
+                ui = UI(text, world)
+                panels = [UIState(mode="shop", has_save=True, shop_tab=tab, shop_i=0)
+                          for tab in range(len(SHOP_TABS))]
+                panels += [UIState(mode="help", has_save=True, help_page=page) for page in range(HELP_N)]
+                panels += [UIState(mode="journal", has_save=True, journal_page=page, journal_i=0,
+                                   book_entry_i=0, journal_quest_i=0) for page in range(len(BOOK_TABS))]
+                for panel in panels:
+                    frame = resize_rgb(low, 1440, 810)
+                    ui.draw(frame, state, panel)
+                    if frame.shape != (810, 1440, 3):
+                        raise AssertionError(f"{panel.mode} frame has shape {frame.shape}")
+                    if panel.mode == "shop":
+                        counts["shop_tabs"] += 1
+                    elif panel.mode == "help":
+                        counts["help_pages"] += 1
+                    else:
+                        counts["book_tabs"] += 1
+                # The legendary encounter's haul scene, in its encounter phase.
+                scene_state = _staged(world, LEGENDARY_SCENE)
+                scene_ui = UI(text, world)
+                scene_ui.fish_card_renderer = getattr(renderer, "fish_card", None)
+                scene = draw_scene(renderer, scene_ui, scene_state, scene_panel(LEGENDARY_SCENE, "encounter", 2.2))
+                if float(scene.std()) < 8:
+                    raise AssertionError(f"{LEGENDARY_SCENE} scene is flat")
+                counts["legendary_scenes"] += 1
+            finally:
+                renderer.close()
+        for sid in scope_fish_ids():
+            if fish_card(sid).size == 0:
+                raise AssertionError(f"fish card {sid} is empty")
+            # The haul mesh is cheap enough for every fish (about 9 s for all 156).
+            if haul_mesh(sid).triangle_count == 0:
+                raise AssertionError(f"fish {sid} has an empty haul mesh")
+            counts["fish_cards"] += 1
+        for npc_id in scope_cat_ids():
+            counts["cat_models"] += len(cat_mesh(npc_id).cats)
+        if counts["cat_models"] != scope_cat_models():
+            raise AssertionError(f"{counts['cat_models']} cat models, expected {scope_cat_models()}")
+        reached = _weather_states_reached(COVERAGE_SEED)
+        if reached != set(WEATHER_STATES):
+            raise AssertionError(f"weather states reached {sorted(reached)}, "
+                                 f"missing {sorted(set(WEATHER_STATES) - reached)}")
+        counts["weather_states"] = len(reached)
+        expected = scope_counts()
+        for name, value in expected.items():
+            if counts[name] != value:
+                raise AssertionError(f"coverage {name}: {counts[name]} of {value}")
+        print(f"coverage ok  {counts['lakes']} lakes, {len(BOATS)} boats, {counts['fish_cards']} fish cards, "
+              f"{counts['cat_models']} cat models, {counts['shop_tabs']} shop tabs, {counts['help_pages']} help pages, "
+              f"{counts['book_tabs']} book tabs, {counts['weather_states']} weather states, "
+              f"{counts['legendary_scenes']} legendary scene")
+        return counts
+    finally:
+        text.close()
+
+
+def scope_counts() -> dict:
+    """The expected count of each coverage item, shared by the benchmark and the self-test."""
+    from .content import WEATHER_STATES
+    return {"lakes": len(LAKE_ORDER), "fish_cards": len(scope_fish_ids()),
+            "cat_models": scope_cat_models(), "shop_tabs": len(SHOP_TABS), "help_pages": HELP_N,
+            "book_tabs": len(BOOK_TABS), "weather_states": len(WEATHER_STATES),
+            "legendary_scenes": 1}
+
+
 def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
     if frames<60:
         raise ValueError("Use at least 60 frames for a meaningful benchmark")
-    world = World()
+    from .content import WEATHER_STATES
+    from .actors import roster
+    from .catmesh import cat_mesh
+    from .fishmesh import fish_card, haul_mesh, legendary_ids
+    from .specieschecks import validate_catchability
+    from .legendshots import _draw as draw_scene, _panel as scene_panel, _staged
+    world = World(LAKE_ORDER[0])
     renderer = Renderer(world,1440,810,software=software)
     text = Text()
     ui = UI(text,world)
     state = State.new(world,seed=24)
+    # Pin the forecast to the save seed, so the weather each frame shows is fixed for the run.
+    state.v2.setdefault("calendar", {})["seed"] = calendar.forecast_seed(state)
     # The lake's cats are present, so actors and portraits count in time and memory.
     from .content import load_content
     from .npcs import active_npcs
@@ -146,12 +416,38 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
         frame_ms,render_ms,samples = [],[],[]
         mode_ms = {mode:[] for mode in modes}
         mode_frames = {mode:0 for mode in modes}
-        lake_boat_ms = {f"{lake}/{boat}":[] for lake in ("briar","cedar") for boat in BOATS}
+        boat_order = tuple(BOATS)
+        lake_boat_ms = {f"{lake}/{boat}":[] for lake in LAKE_ORDER for boat in boat_order}
+        weather_plan = {lake: _weather_minutes(calendar.forecast_seed(state), lake) for lake in LAKE_ORDER}
+        cats = roster()
+        cat_models = sum(1 + ("twin" in row["appearance"]) for row in cats.values())
         coverage = {name:set() for name in ("modes", "lake_boat_pairs", "shop_tabs",
                                            "help_pages", "fish_journal", "quest_journal", "book_tabs",
-                                           "dialogue_givers", "dialogue_statuses")}
+                                           "dialogue_givers", "dialogue_statuses", "fish_cards",
+                                           "cat_models", "weather_states", "legendary_scenes")}
+
+        # Every fish card, legendaries included, painted once outside the frame loop.
+        # The haul mesh for each is built too, so the fish memory estimate has real meshes.
+        mesh_bytes = 0
+        for species_id in scope_fish_ids():
+            fish_card(species_id)
+            mesh_bytes = max(mesh_bytes, haul_mesh(species_id).nbytes)
+            coverage["fish_cards"].add(species_id)
+        # Every roster cat's model, twins included (each roster row is one actor).
+        for npc_id in cats:
+            mesh = cat_mesh(npc_id)
+            for index in range(len(mesh.cats)):
+                coverage["cat_models"].add(f"{npc_id}/{index}")
+        # The legendary encounter's haul scene, in its encounter phase, on its own lake.
+        scene_state = _staged(world, LEGENDARY_SCENE)
+        scene_ui = UI(text, world)
+        scene_ui.fish_card_renderer = getattr(renderer, "fish_card", None)
+        draw_scene(renderer, scene_ui, scene_state, scene_panel(LEGENDARY_SCENE, "encounter", 2.2))
+        coverage["legendary_scenes"].add(LEGENDARY_SCENE)
+
         for i in range(frames):
-            lake_id = ("briar","cedar")[(i//300)%2]
+            block = max(1, frames // len(LAKE_ORDER))
+            lake_id = LAKE_ORDER[min(len(LAKE_ORDER) - 1, i // block)]
             if world.id!=lake_id:
                 renderer.close()
                 world = World(lake_id)
@@ -167,11 +463,11 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                 state.x,state.z,state.yaw = spot[1],spot[2],locations[(i//60)%len(locations)][2]
             else:
                 state.x,state.z,state.yaw = locations[(i//60)%len(locations)]
-            # Each lake gets two 300-frame blocks of twelve 25-frame boats, so all
-            # 24 boats visit both lakes within 1200 frames.
-            state.boat_id = tuple(BOATS)[((i%300)//25 + 12*((i//600)%2)) % len(BOATS)]
+            # Each lake block gives every boat its own slice, so all 24 boats visit all five lakes.
+            slot = i % block
+            state.boat_id = boat_order[slot * len(boat_order) // block]
             # Exercise oars, powered travel and the depleted-battery fallback.
-            rowboat_variant = (i//8)%3  # all three within the rowboat's 25-frame slot
+            rowboat_variant = (i//8)%3  # all three within the rowboat's slice
             state.rowboat_trolling_motor = rowboat_variant!=0
             state.rowboat_battery_kwh = (ROWBOAT_BATTERY_KWH*(0.1+0.8*((i%100)/100))
                                          if rowboat_variant==1 else 0.0)
@@ -183,6 +479,9 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             # Advance lighting at 12x within each block, including rain onset
             # and the midnight crossfade, while keeping every allocation cap.
             state.game_minutes = minutes[(i//90)%len(minutes)] + (i%90)*12/30
+            # The first frames of each lake block show each weather that lake's forecast reaches.
+            if slot < len(weather_plan[lake_id]):
+                state.game_minutes = weather_plan[lake_id][slot][1]
             state.speed = 1.8
             state.anchored = False
             panel.mode = mode_cycle[(i//20)%len(mode_cycle)]
@@ -216,13 +515,14 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                 end = start+forward*32
                 line.x0,line.z0,line.x1,line.z1 = *start,*end
             if i%60==0:
-                for slot,paints in PAINT.items():
-                    state.look_paint[slot] = paints[(i//60)%len(paints)][0]
+                for slot_name,paints in PAINT.items():
+                    state.look_paint[slot_name] = paints[(i//60)%len(paints)][0]
             low = renderer.render(state)
             big = resize_rgb(low,1440,810)
             ui.draw(big,state,panel)
             coverage["modes"].add(panel.mode)
             coverage["lake_boat_pairs"].add(f"{world.id}/{state.boat_id}")
+            coverage["weather_states"].add(calendar.weather_at(state))
             if panel.mode=="shop":
                 coverage["shop_tabs"].add(panel.shop_tab)
             elif panel.mode=="help":
@@ -259,7 +559,9 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                              "shop_tabs":len(SHOP_TABS), "help_pages":HELP_N,
                              "fish_journal":len(SPECIES), "quest_journal":len(QUEST_IDS),
                              "book_tabs":len(BOOK_TABS),
-                             "dialogue_givers":len(QUEST_IDS), "dialogue_statuses":4}
+                             "dialogue_givers":len(QUEST_IDS), "dialogue_statuses":4,
+                             "fish_cards":len(scope_fish_ids()), "cat_models":cat_models,
+                             "weather_states":len(WEATHER_STATES), "legendary_scenes":1}
         coverage_complete = all(len(coverage[name])==count for name,count in expected_coverage.items())
         if frames>=1200 and not coverage_complete:
             counts = {name:len(values) for name,values in coverage.items()}
@@ -269,12 +571,21 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
         audio = coverage_report()
         if not audio["complete"] or not audio["within_budget"]:
             raise AssertionError(f"incomplete audio coverage: {audio}")
+        memory = _memory_report(renderer, world, state, text, mesh_bytes, audio["bytes"])
+        over_budget = {name: row for name, row in memory.items()
+                       if isinstance(row, dict) and "budget_mb" in row and row["estimate_mb"] > row["budget_mb"]}
+        if over_budget:
+            raise AssertionError(f"memory estimates over the 06 §7 budget: {over_budget}")
+        catchability = _catchability_section(validate_catchability())
+        if catchability["species_count"] != len(SPECIES):
+            raise AssertionError(f"catchability covers {catchability['species_count']} species")
         report = {
             "frames":frames,"backend":renderer.backend,
             "render_size":[renderer.w,renderer.h],"window_size":[1440,810],
             "antialias_samples":getattr(renderer,"samples",1),
             "render_median_ms":round(float(np.median(render_ms)),2),
             "full_frame_median_ms":round(float(np.median(frame_ms)),2),
+            "full_frame_p50_ms":round(float(np.percentile(frame_ms,50)),2),
             "full_frame_p95_ms":round(float(np.percentile(frame_ms,95)),2),
             "mode_median_ms":{mode:round(float(np.median(values)),2) for mode,values in mode_ms.items() if values},
             "lake_boat_median_ms":{mode:round(float(np.median(values)),2) for mode,values in lake_boat_ms.items() if values},
@@ -282,27 +593,37 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             "ram_limit_bytes":MEMORY_LIMIT_BYTES,
             "text_cache_limit_bytes":text.cache_limit,
             "cat_actor_memory":{**renderer.actor_memory(),"peak_total_bytes_bound":actor_peak},
+            "memory_mb":memory,
             "memory_samples":samples,
-            "coverage":{name:sorted(values) for name,values in coverage.items()},
-            "coverage_complete":coverage_complete,
             "audio":{"sounds":len(audio["kinds"]),
                      "lakes":{lake:row["ambience"] for lake,row in audio["lakes"].items()},
                      "buffer_mb":round(audio["bytes"]/1024**2,2),
                      "budget_mb":round(audio["budget_bytes"]/1024**2,2),
                      "complete":audio["complete"]},
+            "catchability":catchability,
+            "coverage":{name:sorted(values) for name,values in coverage.items()},
+            "coverage_expected":expected_coverage,
+            "coverage_complete":coverage_complete,
             "checks":["fixed anchored depth","matching camera projections","eleven UI modes, including dialogue",
-                      "both lakes with repeated renderer release and rebuild",f"all {len(BOATS)} boats and raised sails",
+                      f"all {len(LAKE_ORDER)} lakes with repeated renderer release and rebuild",
+                      f"all {len(BOATS)} boats on every lake, and raised sails",
                       f"eight shop tabs, four help pages, {len(SPECIES)} fish and 12 quest journal entries",
                       "twelve dialogue givers and four saved quest statuses","changing fuel and battery gauges",
-                      "clear, fair, night, drizzle and 12x midnight fades","five heavy lines and fifteen buoys",
+                      f"every forecast weather state ({len(WEATHER_STATES)}), with 12x midnight fades",
+                      "five heavy lines and fifteen buoys",
                       "all paint colors","changing look and steering","bounded text cache",
                       "each lake's cats resident within 14 actors and 150 MiB",
-                      "every sound captioned and heard, five lakes' ambience, audio within 150 MiB"],
+                      f"{len(legendary_ids())} legendary and {len(SPECIES)} species fish cards, with haul meshes",
+                      f"all {cat_models} roster cat models, twins included",
+                      f"legendary encounter haul scene ({LEGENDARY_SCENE})",
+                      "per-subsystem memory against the 06 section 7 budgets",
+                      "every sound captioned and heard, five lakes' ambience, audio within 150 MiB",
+                      "catchability witnesses for every species"],
         }
         path = Path(dest)
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text(json.dumps(report,indent=2)+"\n")
-        print(json.dumps({k:v for k,v in report.items() if k not in ("memory_samples","checks")},indent=2))
+        print(json.dumps({k:v for k,v in report.items() if k not in ("memory_samples","checks","catchability","coverage","coverage_expected")},indent=2))
         return 0
     finally:
         renderer.close()
