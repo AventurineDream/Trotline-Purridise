@@ -83,6 +83,12 @@ def main(argv: list[str] | None = None) -> int:
             from .speciesgallery import gallery
             gallery(dest, software="--software" in argv)
             return 0
+        if "--beauty" in argv:
+            from .beautyshots import shots as beauty_shots
+            selected = next((arg.split("=", 1)[1].split(",") for arg in argv
+                             if arg.startswith("--lakes=")), None)
+            beauty_shots(dest, software="--software" in argv, lakes=selected)
+            return 0
         if "--lake-framework" in argv:
             from .lakeshots import shots as lake_shots
             selected = next((arg.split("=", 1)[1].split(",") for arg in argv
