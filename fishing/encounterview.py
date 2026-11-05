@@ -17,7 +17,7 @@ from .imageops import resize_rgb
 PAPER = (232, 224, 200)
 PAPER_INK = (36, 58, 53)
 FADED = (82, 102, 91)
-OCHRE = (137, 91, 36)
+OCHRE = (124, 82, 32)
 RUST = (150, 62, 38)
 LEATHER = (40, 64, 59)
 PRINT_BORDER = (246, 241, 226)
@@ -170,7 +170,7 @@ def name(u, frame, legendary_id: str, beats: dict):
     if beats["name"] < 0.5:
         return
     title = LEGENDARY_DATA[legendary_id]["name"].upper()
-    u._center(frame, title, w / 2, int(h * 0.14), u._size(frame, "head"), (218, 187, 124))
+    u._backed(frame, title, w / 2, int(h * 0.14), u._size(frame, "head"), (218, 187, 124), family="sans", center=True)
 
 
 def photo_frame(u, frame, legendary_id: str, x: int, y: int, width: int, caption: str = "") -> int:
