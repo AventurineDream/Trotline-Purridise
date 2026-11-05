@@ -25,3 +25,27 @@ def write_png(path, rgb: np.ndarray) -> None:
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(png)
+
+
+def read_png(path) -> np.ndarray:
+    """Read back a PNG that write_png wrote: 8-bit RGB, unfiltered rows."""
+    data = Path(path).read_bytes()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError(f"{path} is not a PNG")
+    pos, idat, size = 8, b"", None
+    while pos < len(data):
+        length, tag = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + length]
+        if tag == b"IHDR":
+            width, height, depth, colour, _c, _f, _i = struct.unpack(">IIBBBBB", body)
+            if depth != 8 or colour != 2:
+                raise ValueError(f"{path} is not 8-bit RGB")
+            size = (height, width)
+        elif tag == b"IDAT":
+            idat += body
+        pos += 12 + length
+    height, width = size
+    rows = np.frombuffer(zlib.decompress(idat), np.uint8).reshape(height, 1 + width * 3)
+    if rows[:, 0].any():
+        raise ValueError(f"{path} uses PNG row filters this reader doesn't decode")
+    return rows[:, 1:].reshape(height, width, 3).copy()

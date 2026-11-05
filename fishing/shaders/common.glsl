@@ -193,8 +193,16 @@ vec3 haze(vec3 c, vec3 p) {
     return mix(c,horizon,clamp(fog,0.0,0.92));
 }
 float lamp(vec3 p) {
+    // The bow light: a soft-edged cone, bright near the boat and fading by inverse square
+    // so the landing 25 m off is lit, not washed out (V1-42).
     vec2 delta = p.xz-boat_pos;
     float dist = length(delta);
-    float cone = smoothstep(0.91,0.995,dot(normalize(delta+0.0001),boat_forward));
-    return cone*pow(max(0.0,1.0-dist/62.0),2.0)*spotlight*night;
+    float cone = smoothstep(0.80,0.985,dot(normalize(delta+0.0001),boat_forward));
+    float fall = (1.0-smoothstep(30.0,62.0,dist))/(1.0+dist*dist/256.0);
+    return cone*fall*spotlight*night;
+}
+float lamp_facing(vec3 p, vec3 n) {
+    // Faces turned toward the bow light take more of it.
+    vec3 to_lamp = normalize(vec3(boat_pos.x,1.2,boat_pos.y)-p);
+    return 0.35+0.65*max(dot(n,to_lamp),0.0);
 }
