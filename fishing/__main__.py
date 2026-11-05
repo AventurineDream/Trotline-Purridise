@@ -44,6 +44,9 @@ def main(argv: list[str] | None = None) -> int:
     if "--smoke" in argv:
         from .verify import window_smoke
         return window_smoke()
+    if "--pacing" in argv:
+        from .pacingreport import main as pacing_report
+        return pacing_report(argv)
     if "--chart" in argv:
         i = argv.index("--chart")
         dest = argv[i + 1] if i + 1 < len(argv) else str(ROOT / "shots" / "chart.png")

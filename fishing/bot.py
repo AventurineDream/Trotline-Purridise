@@ -69,6 +69,7 @@ def summon(state, world) -> str | None:
     if state.bot_hooks < 0:
         state.bot_hooks = state.hooked_total
     where = "the nearest line" if state.lines else "open water"
+    state._bot_called_bite = False
     state.toast(f"Bot shoves off toward {where}.")
     return "bot"
 
@@ -81,7 +82,11 @@ def tick(state, world, dt: float) -> str | None:
         return None
     sound = None
     if state.hooked_total > state.bot_hooks and state.bot_phase == "out":
-        state.toast("Bot: Fish on. I'm staying with it.")
+        # He says it for the trip's first bite; after that his chime is enough, and the bite
+        # notice already names the fish (V1-44: one line a bite, not two).
+        if not getattr(state, "_bot_called_bite", False):
+            state.toast("Bot: Fish on. I'm staying with it.")
+            state._bot_called_bite = True
         sound = "bot"
     state.bot_hooks = state.hooked_total
     if state.bot_phase == "back":
