@@ -49,10 +49,18 @@ SCAN = {
 }
 _SCAN_NAMES = {code: name for name, code in SCAN.items()}
 
+# Monospace faces first: the HUD and help pages are measured and laid out for a
+# monospace "mono" family. The proportional DejaVuSans entries come last, as a
+# final fallback only, so a machine with no mono font still starts.
 FONT_CANDIDATES = (
     "/usr/share/fonts/liberation/LiberationMono-Regular.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+    "/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf",
+    "/usr/share/fonts/TTF/LiberationMono-Regular.ttf",
     "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf",
     "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/TTF/DejaVuSans.ttf",
 )
