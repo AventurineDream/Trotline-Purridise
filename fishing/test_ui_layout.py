@@ -9,8 +9,8 @@ import numpy as np
 from .platform import Text, find_font
 from .sim import State
 from .ui import (
-    DIM, SPECIES, UI, UIState, _GAMEPAD_HELP_CONTROLS, _HELP, _help_title,
-    _prompt_for_device, _toast_for_device,
+    DIM, HELP_N, SPECIES, UI, UIState, _GAMEPAD_HELP_CONTROLS, _help_title,
+    _prompt_for_device, _toast_for_device, help_pages,
 )
 from .world import World
 
@@ -156,7 +156,7 @@ class GuideLayoutChecks(unittest.TestCase):
             ("keyboard controls scrolled", UIState(
                 mode="settings", settings_page="keys", key_binding_i=29)),
         ]
-        for page in range(len(_HELP)):
+        for page in range(HELP_N):
             cases.append((f"help page {page + 1}", UIState(mode="help", help_page=page)))
 
         for name, screen in cases:
@@ -273,7 +273,7 @@ class GuideLayoutChecks(unittest.TestCase):
         ui._text, ui._panel = text, panel
         for width, height in ((480, 270), (640, 360), (960, 540), (1280, 720), (1920, 1080)):
             for device in ("keyboard", "gamepad"):
-                for page, (title, original_lines) in enumerate(_HELP):
+                for page, (title, original_lines) in enumerate(help_pages()):
                     lines = original_lines
                     if device == "gamepad":
                         lines = tuple(_GAMEPAD_HELP_CONTROLS.get(line, line)
@@ -289,7 +289,10 @@ class GuideLayoutChecks(unittest.TestCase):
                         self.assertGreaterEqual(py, 0)
                         self.assertLessEqual(px + pw, width)
                         self.assertLessEqual(py + ph, height)
-                        self.assertEqual([r[0] for r in records[2:-1]], [line for line in lines if line])
+                        # A table row is a tuple of cells; each cell is drawn as its own label.
+                        cells = [cell for line in lines
+                                 for cell in (line if isinstance(line, tuple) else (line,)) if cell]
+                        self.assertEqual([r[0] for r in records[2:-1]], cells)
                         self.assertEqual(records[0][0], _help_title(title))
                         self.assertIn('Esc closes' if device == 'keyboard' else 'B closes', records[-1][0])
                         for label, x, y, tw, th, size in records:
