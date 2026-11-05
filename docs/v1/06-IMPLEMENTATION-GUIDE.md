@@ -2043,3 +2043,24 @@ V1-41 (#69) writes help for every system in 02 and adds glyph tables built from 
 - `HELP_N` is the same for every set of bindings.
 
 `test_ui_layout.py` now iterates `help_pages()` and `range(HELP_N)` where it used `_HELP` and a fixed count, so its layout checks cover the generated pages too.
+
+## Implemented second-pass graphics (V1-42)
+
+V1-42 (#70) reviewed every lake as key art and fixed what the review found.
+
+**Review frames** (`python3 -m fishing --shots <dir> --beauty [--software] [--lakes=...]`, `beautyshots.py`). For each lake, two views (the slip's opening view, and back toward the landing) at dawn, noon, dusk and night in calm weather, plus the lake's signature weather: Briar mist, Cedar drizzle, Flathead snow mist, Crater fog, the Lagoon's aurora. The forecasts band weather by hour, so each moment tries a few mid-hour clock times. Briar's dawn is always misty, so its mist frame is its dawn. Frames are the scene alone at 1280x720. `contact.png` is a labelled grid, and `beauty.json` records each frame's minute, weather and backend. `side_by_side(before, after, dest)` builds a before/after sheet, and `pngsave.read_png` reads the frames back.
+
+**Fixes:**
+- **The bow light** (`common.glsl` `lamp`, `mesh.frag`, software water and banks). It lit everything in a hard-edged cone with a flat tan wash, added after shading, so the landing at night turned into a beige block. It now has a soft cone edge and an inverse-square falloff. It lights a surface in its own colour, more where the surface faces the bow.
+- **Night readability** (`weather.lighting_at`, `mesh.frag`). The night horizon and night cloud horizon are a moonlit blue (fog takes the same colour), so the shoreline keeps an edge against the sky. The night ambient floor rises a little.
+- **The caldera walls** (`mesh.frag`, software terrain). Crater's colour came from horizontal-plane noise, so its cliffs showed flat grey columns. Steep faces now read as layered tuff and basalt in irregular horizontal strata, with joints.
+- **The Skipper's reflection** (`skipper.SILHOUETTE`). Near-black read as a hole in the water, or a dark creature standing on it. It is now the dusk-brown coat in shadow.
+- **Software water.** The broad sun sheen (from 44 degrees off) and a 7 m band of shore foam added at 72%, which also covered the slip, blew the water out to white around a docked boat. The sheen is now tight and gentle. The foam is the GL water's thin lap line, and none in the slip.
+
+**Tests** (`test_beauty.py`):
+- PNG round trip, and every lake has its times of day and signature weather;
+- the reflection's tone and the night horizon;
+- software water by the slip is not blown out (Briar noon, Crater dawn);
+- software caldera walls vary more down than across (strata, not columns).
+
+**Budget.** The 1,200-frame software benchmark is unchanged in time and memory, and its coverage stays complete.

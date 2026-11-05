@@ -97,8 +97,10 @@ def frame_light(hour: float, weather: str, conditions: dict | None = None) -> di
     gold *= float(np.clip((float(sun[1]) + 0.10) / 0.15, 0.0, 1.0))
     zenith = _lerp(np.array([0.31, 0.53, 0.72], np.float32),
                    np.array([0.014, 0.024, 0.050], np.float32), night)
+    # A moonlit band low in the night sky, so the dark shoreline still has an edge to
+    # read against. Fog takes this colour too (V1-42).
     horizon = _lerp(np.array([0.77, 0.84, 0.86], np.float32),
-                    np.array([0.04, 0.055, 0.085], np.float32), night)
+                    np.array([0.075, 0.095, 0.14], np.float32), night)
     zenith = _lerp(zenith, np.array([0.32, 0.36, 0.58], np.float32), gold * 0.4)
     horizon = _lerp(horizon, np.array([0.95, 0.67, 0.43], np.float32), gold)
     # Cloudy skies have night colors too; a midnight weather change should
@@ -106,7 +108,7 @@ def frame_light(hour: float, weather: str, conditions: dict | None = None) -> di
     cloud_zenith = _lerp(np.array([0.40, 0.44, 0.48], np.float32),
                          np.array([0.018, 0.029, 0.045], np.float32), night)
     cloud_horizon = _lerp(np.array([0.55, 0.58, 0.60], np.float32),
-                          np.array([0.045, 0.060, 0.080], np.float32), night)
+                          np.array([0.070, 0.088, 0.120], np.float32), night)
     zenith = _lerp(zenith, cloud_zenith, conditions["overcast"])
     horizon = _lerp(horizon, cloud_horizon, conditions["overcast"])
     sun_i *= conditions["transmission"]

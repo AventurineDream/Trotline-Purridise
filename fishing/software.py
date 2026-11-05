@@ -582,8 +582,11 @@ class SoftwareRenderer:
         sun = light["sun"]
         sdot = np.clip(rx * sun[0] + ry * sun[1] + rz * sun[2], 0.0, 1.0)
         glitter = (np.sin(ph1 * 1.7) + np.sin(ph2 * 1.4)) > 0.35
-        spec = (sdot ** 28) * glitter.astype(np.float32) * light["sun_i"] * 0.85
-        spec = spec + np.clip((sdot - 0.72) / 0.28, 0.0, 1.0) ** 2 * light["sun_i"] * 0.55
+        # A tight glitter path and a gentle sheen near the sun's reflection. The old broad
+        # sheen (from 44 degrees off) blew whole stretches of water out to white whenever
+        # the sun sat low ahead (V1-42).
+        spec = (sdot ** 48) * glitter.astype(np.float32) * light["sun_i"] * 0.70
+        spec = spec + np.clip((sdot - 0.88) / 0.12, 0.0, 1.0) ** 2 * light["sun_i"] * 0.28
         moon = light["moon"]
         mdot = np.clip(rx * moon[0] + ry * moon[1] + rz * moon[2], 0.0, 1.0)
         spec = spec + (mdot ** 40) * light["moon_i"] * 0.8
@@ -591,9 +594,14 @@ class SoftwareRenderer:
         colr = colr + spec[:, None] * np.array([1.0, 0.96, 0.86], np.float32)
 
         sdv = np.asarray(self.world.shore_sd(hx, hz), dtype=np.float32).reshape(-1)
-        foam = np.exp(-(sdv ** 2) / 6.0) * (sdv < 2.2) * (sdv > -7.0)
-        fn = 0.55 + 0.45 * np.sin(hx * 1.7 + anim * 2.1) * np.sin(hz * 1.25 - anim * 1.4)
-        colr = colr + (foam * np.clip(fn, 0, 1))[:, None] * np.array([0.72, 0.76, 0.70], np.float32)
+        slip = self.world.slip.contains(hx, hz)
+        # A thin lap line at the bank, as the GL water draws it, and none in the slip. The
+        # old band was 7 m wide, added at 72%, so the water round a docked boat swirled
+        # white (V1-42).
+        foam = np.exp(-((sdv + 0.2) ** 2) * 3.0) * ~slip
+        fn = 0.5 + 0.5 * np.sin(hx * 1.7 + anim * 2.1) * np.sin(hz * 1.25 - anim * 1.4)
+        lap = (foam * np.clip(fn, 0, 1) * 0.16)[:, None]
+        colr = colr * (1.0 - lap) + np.array([0.57, 0.59, 0.47], np.float32) * lap
 
         cell = np.float32(3.6)
         cell_x = np.floor(hx / cell)
@@ -604,7 +612,6 @@ class SoftwareRenderer:
         r2 = fx * fx + fz * fz
         # Keep the slip and the water at your feet clear. Pads belong in the cove
         # and along skinny shore, and a pad a few meters ahead fills the frame.
-        slip = self.world.slip.contains(hx, hz)
         dockx, dockz = self.world.dock
         near_dock = np.hypot(hx - dockx, hz - dockz) < 60.0
         pad = (dist > 24.0) & (~slip) & (~near_dock) & (r2 < 0.11) & (
@@ -645,10 +652,12 @@ class SoftwareRenderer:
             relz = hz - cam.z
             dd = np.hypot(relx, relz) + 1e-3
             along = (relx * fx + relz * fz) / dd
-            cone = np.clip((along - 0.94) / 0.06, 0.0, 1.0)
-            fall = np.clip(1.0 - dd / 52.0, 0.0, 1.0) ** 2
+            # A soft-edged pool that fades by inverse square, matching the GL bow light (V1-42).
+            cone = np.clip((along - 0.80) / 0.185, 0.0, 1.0)
+            cone = cone * cone * (3.0 - 2.0 * cone)
+            fall = np.clip((62.0 - dd) / 32.0, 0.0, 1.0) / (1.0 + dd * dd / 256.0)
             spot = cone * fall * light["night"]
-            colr = colr + spot[:, None] * np.array([1.0, 0.90, 0.68], np.float32) * 0.70
+            colr = colr + spot[:, None] * np.array([1.0, 0.90, 0.68], np.float32) * 0.45
         self.col.reshape(-1, 3)[idx] = np.clip(colr, 0.0, 1.0)
         self.z.reshape(-1)[idx] = dist
 
@@ -791,6 +800,14 @@ class SoftwareRenderer:
             ash = np.array([.42,.43,.46],np.float32)
             basalt = np.array([.16,.18,.23],np.float32)
             colr = ash*(1-nse[:,None]) + basalt*nse[:,None]
+            # Caldera walls in horizontal strata: 1.6 m bands that shift every 40 m along
+            # the rim, so a cliff reads as layered rock, not grey columns (V1-42).
+            steep = (1.0 - np.clip((ny / ln - 0.45) / 0.40, 0.0, 1.0))[:, None]
+            band = hash21(np.floor(h / 1.6).astype(np.int64),
+                          np.floor((hx - hz) / 40.0).astype(np.int64))[:, None]
+            rock = (np.array([.27,.25,.26],np.float32)*(1-band)
+                    + np.array([.53,.49,.45],np.float32)*band)
+            colr = colr*(1-steep) + rock*steep
             cx,cz,rx,rz,_height = world.environment['islands'][0]
             island = (hx-cx)**2/rx**2 + (hz-cz)**2/rz**2 < 1.3
             colr = np.where(island[:,None],np.array([.07,.08,.12],np.float32)*(1+nse[:,None]*.45),colr)
@@ -820,7 +837,8 @@ class SoftwareRenderer:
             dd = np.hypot(relx, relz) + 1e-3
             along = (relx * fx + relz * fz) / dd
             cone = np.clip((along - 0.78) / 0.20, 0.0, 1.0)
-            fall = np.clip(1.0 - dd / 48.0, 0.0, 1.0) ** 2
+            cone = cone * cone * (3.0 - 2.0 * cone)
+            fall = np.clip((62.0 - dd) / 32.0, 0.0, 1.0) / (1.0 + dd * dd / 256.0)
             colr = colr + (cone * fall * light["night"])[:, None] * np.array([0.45, 0.38, 0.24], np.float32)
         fog_density = (1.0 - light["rain"]) / 480.0 + light["rain"] / 220.0 + light.get("mist", 0.0) / 250.0
         if world.caldera:
