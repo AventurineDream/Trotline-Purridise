@@ -180,8 +180,10 @@ class ContentV2Checks(unittest.TestCase):
         validate_content_v2(content)
         defaulted_values = _species_values(defaulted)
         overridden_values = _species_values(overridden)
-        self.assertEqual((defaulted_values["rate"], defaulted_values["trophy"]), (0.03, 0.04))
-        self.assertEqual((overridden_values["rate"], overridden_values["trophy"]), (0.005, 0.2))
+        tiers = {row["tier"]: row for row in CONTENT_V2_RAW["species.json"]["tier_defaults"]}
+        self.assertEqual((defaulted_values["rate"], defaulted_values["trophy"]),
+                         (tiers["C"]["rate"], tiers["C"]["trophy"]))
+        self.assertEqual((overridden_values["rate"], overridden_values["trophy"]), (tiers["R"]["rate"], 0.2))
 
         no_default = deepcopy(CONTENT_V2_RAW)
         no_default["species.json"]["species"][0].pop("rate")

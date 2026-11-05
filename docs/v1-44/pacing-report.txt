@@ -1,0 +1,64 @@
+python -m fishing --pacing (V1-44)
+
+Pacing report (V1-44): the attentive player against 02 §1 and §15
+
+[met ] First catch: median 103 s, worst 133 s (target under 180 s)
+
+Income per game day (net of bait), 02 §15.1:
+  [met ] start briar     $   81.4  band $60–120  (9.0 fish, 2.0 rounds, 18.8 real min a day)
+  [met ] ch2   cedar     $  168.4  band $150–300  (15.0 fish, 2.0 rounds, 22.0 real min a day)
+  [met ] ch3   flathead  $  415.2  band $300–500  (37.3 fish, 2.0 rounds, 22.8 real min a day)
+  [met ] ch4   crater    $  596.5  band $450–750  (61.0 fish, 3.0 rounds, 27.1 real min a day)
+  [met ] post  nebula    $  828.2  band $700–1100  (58.3 fish, 3.0 rounds, 28.1 real min a day)
+
+Chapters, real minutes, 02 §1:
+  [met ] chapter 1 briar       91.4  target 56–94  (3 game days, 10/16 cat quests)
+  [met ] chapter 2 cedar      118.4  target 90–150  (5 game days, 11/19 cat quests)
+  [met ] chapter 3 flathead   130.5  target 112–188  (5 game days, 12/19 cat quests)
+  [met ] chapter 4 crater     149.0  target 112–188  (6 game days, 14/17 cat quests)
+  [met ] chapter 5 nebula     102.9  target 68–112  (4 game days, 11/19 cat quests)
+  [met ] whole story 9.87 h  target 9.75–12 h (02 §1 says 10–12 h, but its chapter figures add up to 9.75 h)
+
+[met ] Book: all 144 verified at 46.9 h (target 40–60 h)
+      1.5 h  chapter 1     identified  11  verified   1  mastered   1
+      3.5 h  chapter 2     identified  17  verified   7  mastered   6
+      5.7 h  chapter 3     identified  40  verified  23  mastered  15
+      8.2 h  chapter 4     identified  63  verified  41  mastered  28
+      9.9 h  chapter 5     identified  90  verified  60  mastered  35
+     15.0 h  book hunting  identified 130  verified 106  mastered  61
+     20.1 h  book hunting  identified 138  verified 121  mastered  87
+     25.3 h  book hunting  identified 139  verified 125  mastered  95
+     30.4 h  book hunting  identified 141  verified 132  mastered 101
+     35.5 h  book hunting  identified 143  verified 136  mastered 107
+     40.7 h  book hunting  identified 143  verified 139  mastered 112
+     45.8 h  book hunting  identified 144  verified 141  mastered 115
+     46.9 h  end           identified 144  verified 144  mastered 115
+
+Legendaries, real hours from a new game to their first window:
+    old_lantern            briar     0.95 h
+    lily_queen             briar     1.87 h
+    spillway_monster       cedar     5.89 h
+    channel_leviathan      cedar     3.74 h
+    whiskered_guardian     cedar     2.28 h
+    glacial_phantom        flathead  4.47 h
+    old_silverhead         flathead  3.95 h
+    huckleberrys_whopper   flathead  5.62 h
+    obsidian_gar           crater    8.31 h
+    caldera_fire_lizard    crater    7.19 h
+    nebula_weaver          nebula    8.5 h
+    star_whale             nebula    9.87 h
+
+Guardrails, 02 §15.3:
+  [met ] prem line for story_c2_s3: $145 = 0.86 days of ch2 income (at most 2)
+  [met ] tier 1 log_raft         $   300 = 3.33 days of the start midpoint (3.69 of simulated income)
+  [met ] tier 2 dory             $   480 = 5.33 days of the start midpoint (5.9 of simulated income)
+  [met ] tier 3 river_runner     $   900 = 4.0 days of the ch2 midpoint (5.34 of simulated income)
+  [met ] tier 4 marsh_runner     $  1200 = 5.33 days of the ch2 midpoint (7.13 of simulated income)
+  [met ] tier 5 lake_taxi        $  2000 = 5.0 days of the ch3 midpoint (4.82 of simulated income)
+  [met ] tier 6 small_sloop      $  2200 = 5.5 days of the ch3 midpoint (5.3 of simulated income)
+  [met ] tier 7 party_barge      $  3400 = 5.67 days of the ch4 midpoint (5.7 of simulated income)
+  [met ] tier 8 steam_barge      $  5000 = 5.56 days of the post midpoint (6.04 of simulated income)
+  [met ] No objective names a boat or a trait. Briar's reeds, the one trait-gated water, open with the Reed Anchor the story gives free in chapter 1, or any shallow hull (the $300 log raft).
+
+[met ] First game day, seed 11: 1.73 toasts and 0.38 Bot lines a real minute (at most 2.0 and 0.5)
+[met ] First game day, seed 12: 1.8 toasts and 0.38 Bot lines a real minute (at most 2.0 and 0.5)

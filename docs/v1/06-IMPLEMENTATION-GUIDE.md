@@ -2132,3 +2132,34 @@ A neighbouring hook never covers a fish or a cross.
   - the livewell focus band.
 - `test_ui_layout.PanelFitChecks`: text inside its panel at every size and on both devices, and toasts clear of the HUD.
 - `test_copy.py`: the copy rules above.
+
+## Implemented second-pass pacing and economy (V1-44)
+
+V1-44 (#72) built a headless pacing simulator, an attentive player, and tuned the `03` numbers until its report met the `02 §1` and `§15` targets. `python3 -m fishing --pacing [--json=path]` prints the report. `docs/v1-44/pacing-report.txt` is the run this PR was tuned against.
+
+**The attentive player** is a written-down model, and each assumption sits at the top of its module.
+- **Gear by stage** (`pacing.STAGES`). Briar starts with two standard lines on the 6 hp. Cedar adds a premium line, the 9.9 hp and the 80 lb well. Flathead adds two premium lines and the 15 hp. Crater adds a heavy line. After the story comes a Deep-V skiff with six lines.
+- **Where they fish** (`pacing.spots`). They know which zones pay and which bait each wants, but set each line at a typical place in a different zone (the median of sampled places), favouring water near the landing.
+- **The day** (`pacing.fish_days`). The clock runs one game minute a real second while driving, and hauls and menus freeze it. A round of the lines takes as long as the drive, and the next starts after a two-hour soak. The last round starts before 22:00. Waits run at 6x and the night at 12x.
+- **Chapters** (`pacingstory.run_chapter`), day by day on the real cat schedule:
+  - the story steps, each cat's first quest, the V3 quests and the host's errand;
+  - second quests only when they come up while the player is still there;
+  - up to three cat quests a day;
+  - each day planned as one tour from the landing, with the rest of the waking day on the lines;
+  - five minutes a day for the book, the shop and the chart.
+- **The book** (`pacingstory.book_curve`). The story's fishing comes first. After it, the player aims two lines a day at the species still short of verified and keeps the rest earning.
+- **Legendaries** (`pacingstory.legendary_report`). Each one's eligibility is the latest of its gates on the chapter timeline, then its next calendar window.
+
+**Tuning** (`03` updated alongside):
+- **Lake prices.** Flathead goes from 1.3× to 1.55×, Crater from 1.5× to 2.9× (most of a Crater line's catch is small fish), and Nebula from 1.8× to 1.45×. Only those lakes' own species changed, and Briar and Cedar are untouched.
+- **Rare tiers.** Rare goes from 0.005 to 0.0018 and Very rare from 0.0015 to 0.0006, so the book takes about 50 h. Common, Uncommon and the existing 36 species are unchanged.
+- **The first bite** (`State.first_bite_nudge`, `sim.FIRST_BITE_BOOST`). In a new game's prologue, until the first fish is hooked, bites come eight times as fast, so the first catch lands well inside 3 minutes. It reads the saved `hooked_total` and the prologue's state, so it never comes back. Migrated saves and states with no prologue fish exactly as before.
+- **Bot's barks.** "Fish on. I'm staying with it." now comes on the first bite of each trip out, not every bite. His chime still sounds for every bite, and the bite notice names the fish. "Rebaited 1 hook" is now singular.
+
+**Spec note.** `02 §1`'s chapter figures (≈75, 120, 150, 150 and 90 minutes) add up to 9.75 h, below its own 10–12 h story total. The report gives each chapter its figure ±25% and the story 9.75–12 h, and flags the mismatch for the spec's owner.
+
+**Tests** (`test_pacing.py`):
+- the whole report: first catch, income bands, chapters and story, the book, legendary eligibility, guardrails and prompt density (several minutes, computed once);
+- the first-bite nudge;
+- Bot's one call a trip;
+- the singular rebait.

@@ -15,8 +15,12 @@ Use these unless a row overrides them. `rate` and `trophy` have the same meaning
 | --- | --- | --- | --- | --- |
 | Common | C | 0.030 | 0.04 | Any cat of that lake |
 | Uncommon | U | 0.012 | 0.04 | A named water-cat |
-| Rare | R | 0.005 | 0.05 | A named water-cat or host |
-| Very rare | V | 0.0015 | 0.05 | A host |
+| Rare | R | 0.0018 | 0.05 | A named water-cat or host |
+| Very rare | V | 0.0006 | 0.05 | A host |
+
+V1-44 lowered Rare from 0.005 and Very rare from 0.0015 so that verifying the whole book takes
+an attentive player about 50 h (`02 §1`; `python -m fishing --pacing` measures it). Common
+and Uncommon, and the existing 36 species' own rates, are unchanged.
 
 **Columns:** *Time* ∈ dawn/day/dusk/night (existing `pref_time`). *Baits*: primary
 (match 1.0) / secondary (match 0.6). Every other bait gets 0.05 (existing fallback).
@@ -86,131 +90,131 @@ warmouth 0.8, chain_pickerel 0.8, bluegill 0.6, bowfin 0.6, others 0.07.
 
 ### 1.4 Flathead Alpine Lake (34, all real species, fictionalized habits)
 
-Lake price note: Flathead fish run about 1.3× warm-water prices.
+Lake price note: Flathead fish run about 1.55× warm-water prices (V1-44 raised them from 1.3× so an attentive player's day lands in `02 §15.1`'s band; see `python -m fishing --pacing`).
 
 | id | Name | Folk name | T | Time | Baits | Depth m | Zones | lb | $/lb | Food | Tags | Shiny |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lake_trout | Lake trout | Deep Mackinaw | C | dawn | minnow/roe | 8–40 | deep, open | 2–30 | 4.20 | trout | cold | starry |
+| lake_trout | Lake trout | Deep Mackinaw | C | dawn | minnow/roe | 8–40 | deep, open | 2–30 | 5.04 | trout | cold | starry |
 | bull_trout | Bull trout | Old Bull | R | dawn | minnow/roe | 6–30 | inlet, deep | 2–18 | — | trout | cold, protected | glow |
-| westslope_cutthroat | Westslope cutthroat trout | Red-Throat | C | day | worm/roe | 1–10 | inlet, rocks, flats | 0.5–4 | 4.60 | trout | cold | rose |
-| rainbow_trout | Rainbow trout | Sky-Side | C | day | worm/dough | 1–12 | inlet, lilies, open | 0.5–8 | 4.40 | trout | surface | golden |
-| brook_trout | Brook trout | Speckle | U | dawn | worm/roe | 0.5–6 | inlet, flats | 0.3–3 | 5.20 | trout | shy | rose |
-| brown_trout | Brown trout | Butter-Belly | U | dusk | minnow/craw | 2–15 | rocks, cypress | 1–14 | 4.80 | trout | shy | golden |
-| kokanee | Kokanee salmon | Silver Bullet | C | dawn | roe/dough | 6–25 | open, deep | 0.5–3 | 4.10 | trout | cold | rose |
-| lake_whitefish | Lake whitefish | Snow-Belly | C | day | worm/roe | 8–30 | deep, flats | 1–8 | 3.20 | fillet | cold | glow |
-| mountain_whitefish | Mountain whitefish | Pebble-Nose | C | day | worm/craw | 1–8 | inlet, rocks | 0.5–3 | 2.90 | fillet | — | starry |
-| pygmy_whitefish | Pygmy whitefish | Thimble | U | night | worm | 15–40 | deep | 0.05–0.3 | 2.20 | none | cold | glow |
-| northern_pike | Northern pike | Water Wolf | U | day | minnow/shad | 1–6 | lilies, cypress | 2–25 | 3.60 | hearty | — | golden |
-| yellow_perch | Yellow perch | Tiger-Stripe | C | day | worm/minnow | 1–8 | lilies, flats, landing | 0.2–1.8 | 3.40 | fillet | — | golden |
-| burbot | Burbot | Eelpout | U | night | minnow/roe | 10–40 | deep, rocks | 1–12 | 3.80 | hearty | cold | ink |
-| largescale_sucker | Largescale sucker | Rubber-Lip | C | day | worm/dough | 1–10 | inlet, flats | 1–6 | 1.20 | hearty | — | albino |
-| longnose_sucker | Longnose sucker | Snoot | U | day | worm | 2–15 | rocks, deep | 0.5–4 | 1.30 | hearty | cold | rose |
-| peamouth | Peamouth | Pea-Pod | C | dusk | worm/dough | 1–8 | lilies, inlet | 0.2–1.2 | 1.60 | panfish | surface | golden |
-| northern_pikeminnow | Northern pikeminnow | Big-Mouth Minnow | U | dusk | minnow | 1–10 | rocks, open | 1–8 | 1.80 | hearty | — | starry |
-| redside_shiner | Redside shiner | Sunset Flicker | C | day | worm | 0.3–4 | flats, lilies | 0.02–0.2 | 1.40 | none | surface | rose |
-| slimy_sculpin | Slimy sculpin | Puddle-Puss | U | night | worm | 2–20 | rocks | 0.02–0.1 | 1.50 | none | cold, shy | ink |
-| mottled_sculpin | Mottled sculpin | Patchwork | U | night | worm/craw | 0.5–6 | inlet, rocks | 0.02–0.12 | 1.50 | none | shy | albino |
-| lake_chub | Lake chub | Button | C | day | worm/dough | 0.5–6 | flats, inlet | 0.05–0.4 | 1.30 | none | — | golden |
-| pumpkinseed | Pumpkinseed | Penny-Cheek | C | day | worm | 0.3–4 | lilies, landing | 0.1–0.8 | 2.40 | panfish | surface | rose |
-| cisco | Cisco | Lake Herring | U | dawn | worm/roe | 6–30 | open, deep | 0.3–2 | 2.60 | fillet | cold | glow |
-| arctic_grayling | Arctic grayling | Sail-Fin | R | day | worm/roe | 0.5–4 | inlet | 0.3–2.5 | 6.50 | trout | surface, shy | starry |
-| golden_trout | Golden trout | Sunbeam | R | day | worm/roe | 0.5–4 | inlet, flats | 0.2–2.5 | 7.20 | trout | shy | starry |
-| tiger_trout | Tiger trout | Marble-Back | R | dusk | minnow | 2–10 | rocks, cypress | 1–8 | 6.00 | trout | — | golden |
-| splake | Splake | Twice-Char | U | dawn | minnow/roe | 4–20 | deep, rocks | 1–8 | 4.90 | trout | cold | glow |
-| longnose_dace | Longnose dace | Riffle-Nose | U | day | worm | 0.2–2 | inlet | 0.01–0.06 | 1.40 | none | shy | rose |
-| mountain_sucker | Mountain sucker | Cobble-Kiss | U | day | worm/dough | 0.5–5 | inlet, rocks | 0.1–0.8 | 1.30 | hearty | — | albino |
+| westslope_cutthroat | Westslope cutthroat trout | Red-Throat | C | day | worm/roe | 1–10 | inlet, rocks, flats | 0.5–4 | 5.52 | trout | cold | rose |
+| rainbow_trout | Rainbow trout | Sky-Side | C | day | worm/dough | 1–12 | inlet, lilies, open | 0.5–8 | 5.28 | trout | surface | golden |
+| brook_trout | Brook trout | Speckle | U | dawn | worm/roe | 0.5–6 | inlet, flats | 0.3–3 | 6.24 | trout | shy | rose |
+| brown_trout | Brown trout | Butter-Belly | U | dusk | minnow/craw | 2–15 | rocks, cypress | 1–14 | 5.76 | trout | shy | golden |
+| kokanee | Kokanee salmon | Silver Bullet | C | dawn | roe/dough | 6–25 | open, deep | 0.5–3 | 4.92 | trout | cold | rose |
+| lake_whitefish | Lake whitefish | Snow-Belly | C | day | worm/roe | 8–30 | deep, flats | 1–8 | 3.84 | fillet | cold | glow |
+| mountain_whitefish | Mountain whitefish | Pebble-Nose | C | day | worm/craw | 1–8 | inlet, rocks | 0.5–3 | 3.48 | fillet | — | starry |
+| pygmy_whitefish | Pygmy whitefish | Thimble | U | night | worm | 15–40 | deep | 0.05–0.3 | 2.64 | none | cold | glow |
+| northern_pike | Northern pike | Water Wolf | U | day | minnow/shad | 1–6 | lilies, cypress | 2–25 | 4.32 | hearty | — | golden |
+| yellow_perch | Yellow perch | Tiger-Stripe | C | day | worm/minnow | 1–8 | lilies, flats, landing | 0.2–1.8 | 4.08 | fillet | — | golden |
+| burbot | Burbot | Eelpout | U | night | minnow/roe | 10–40 | deep, rocks | 1–12 | 4.56 | hearty | cold | ink |
+| largescale_sucker | Largescale sucker | Rubber-Lip | C | day | worm/dough | 1–10 | inlet, flats | 1–6 | 1.44 | hearty | — | albino |
+| longnose_sucker | Longnose sucker | Snoot | U | day | worm | 2–15 | rocks, deep | 0.5–4 | 1.56 | hearty | cold | rose |
+| peamouth | Peamouth | Pea-Pod | C | dusk | worm/dough | 1–8 | lilies, inlet | 0.2–1.2 | 1.92 | panfish | surface | golden |
+| northern_pikeminnow | Northern pikeminnow | Big-Mouth Minnow | U | dusk | minnow | 1–10 | rocks, open | 1–8 | 2.16 | hearty | — | starry |
+| redside_shiner | Redside shiner | Sunset Flicker | C | day | worm | 0.3–4 | flats, lilies | 0.02–0.2 | 1.68 | none | surface | rose |
+| slimy_sculpin | Slimy sculpin | Puddle-Puss | U | night | worm | 2–20 | rocks | 0.02–0.1 | 1.80 | none | cold, shy | ink |
+| mottled_sculpin | Mottled sculpin | Patchwork | U | night | worm/craw | 0.5–6 | inlet, rocks | 0.02–0.12 | 1.80 | none | shy | albino |
+| lake_chub | Lake chub | Button | C | day | worm/dough | 0.5–6 | flats, inlet | 0.05–0.4 | 1.56 | none | — | golden |
+| pumpkinseed | Pumpkinseed | Penny-Cheek | C | day | worm | 0.3–4 | lilies, landing | 0.1–0.8 | 2.88 | panfish | surface | rose |
+| cisco | Cisco | Lake Herring | U | dawn | worm/roe | 6–30 | open, deep | 0.3–2 | 3.12 | fillet | cold | glow |
+| arctic_grayling | Arctic grayling | Sail-Fin | R | day | worm/roe | 0.5–4 | inlet | 0.3–2.5 | 7.80 | trout | surface, shy | starry |
+| golden_trout | Golden trout | Sunbeam | R | day | worm/roe | 0.5–4 | inlet, flats | 0.2–2.5 | 8.64 | trout | shy | starry |
+| tiger_trout | Tiger trout | Marble-Back | R | dusk | minnow | 2–10 | rocks, cypress | 1–8 | 7.20 | trout | — | golden |
+| splake | Splake | Twice-Char | U | dawn | minnow/roe | 4–20 | deep, rocks | 1–8 | 5.88 | trout | cold | glow |
+| longnose_dace | Longnose dace | Riffle-Nose | U | day | worm | 0.2–2 | inlet | 0.01–0.06 | 1.68 | none | shy | rose |
+| mountain_sucker | Mountain sucker | Cobble-Kiss | U | day | worm/dough | 0.5–5 | inlet, rocks | 0.1–0.8 | 1.56 | hearty | — | albino |
 | white_sturgeon | White sturgeon | The Old Plates | V | night | shad/roe | 15–40 | deep | 20–150 | — | none | cold, protected | albino |
-| walleye | Walleye | Glass-Eye | U | dusk | minnow/worm | 3–15 | rocks, open | 1–10 | 4.50 | fillet | — | golden |
-| sauger | Sauger | Sand-Eye | U | night | minnow | 3–15 | inlet, deep | 0.5–4 | 4.20 | fillet | cold | glow |
-| shorthead_redhorse | Shorthead redhorse | Rusty Tail | U | day | worm/craw | 1–8 | inlet, rocks | 1–5 | 1.40 | hearty | — | rose |
-| fathead_minnow | Fathead minnow | Pudge | C | day | worm/dough | 0.2–3 | landing, flats | 0.005–0.03 | 1.00 | none | — | golden |
+| walleye | Walleye | Glass-Eye | U | dusk | minnow/worm | 3–15 | rocks, open | 1–10 | 5.40 | fillet | — | golden |
+| sauger | Sauger | Sand-Eye | U | night | minnow | 3–15 | inlet, deep | 0.5–4 | 5.04 | fillet | cold | glow |
+| shorthead_redhorse | Shorthead redhorse | Rusty Tail | U | day | worm/craw | 1–8 | inlet, rocks | 1–5 | 1.68 | hearty | — | rose |
+| fathead_minnow | Fathead minnow | Pudge | C | day | worm/dough | 0.2–3 | landing, flats | 0.005–0.03 | 1.20 | none | — | golden |
 
 ### 1.5 Crater Caldera (34: 14 real, 20 caldera-fictional)
 
-Lake price note: about 1.5×. Crater has no `inlet` zone.
+Lake price note: about 2.9× (V1-44, from 1.5×). Most of a Crater line's catch is small fish (chiselmouth, perch, sunfish), so the caldera pays the most per pound to land an attentive player's day in `02 §15.1`'s band. Crater has no `inlet` zone.
 
 | id | Name | Folk name | T | Time | Baits | Depth m | Zones | lb | $/lb | Food | Tags | Shiny |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| redband_trout | Redband trout | Ember-Stripe | C | day | worm/grub | 1–12 | springs, rocks, open | 0.5–6 | 5.00 | trout | — | rose |
-| coastal_cutthroat | Coastal cutthroat trout | Rain-Throat | U | dawn | worm/roe | 1–10 | cypress, lilies | 0.5–4 | 5.40 | trout | shy | golden |
+| redband_trout | Redband trout | Ember-Stripe | C | day | worm/grub | 1–12 | springs, rocks, open | 0.5–6 | 9.75 | trout | — | rose |
+| coastal_cutthroat | Coastal cutthroat trout | Rain-Throat | U | dawn | worm/roe | 1–10 | cypress, lilies | 0.5–4 | 10.53 | trout | shy | golden |
 | lahontan_cutthroat | Lahontan cutthroat trout | Desert King | R | dawn | minnow/roe | 2–20 | deep, open | 2–20 | — | trout | cold, protected | starry |
-| chinook | Chinook salmon | King's Supper | R | dawn | roe/shad | 10–40 | deep, open | 5–40 | 6.20 | trout | cold | golden |
-| coho | Coho salmon | Silver-Side | U | dawn | roe/minnow | 6–30 | open | 3–15 | 5.80 | trout | cold | rose |
-| tui_chub | Tui chub | Button-Belly | C | day | worm/dough | 1–10 | flats, lilies | 0.1–1 | 1.80 | none | — | golden |
-| speckled_dace | Speckled dace | Freckle | C | day | worm | 0.3–3 | springs, flats | 0.01–0.05 | 1.60 | none | shy | starry |
-| oregon_chub | Oregon chub | Moss Pip | U | day | worm/dough | 0.3–3 | lilies | 0.01–0.04 | 2.20 | none | shy | glow |
-| klamath_smallscale_sucker | Klamath smallscale sucker | Soft-Mouth | U | day | worm/dough | 2–15 | flats, deep | 1–5 | 1.70 | hearty | — | albino |
-| blue_chub | Blue chub | Bluebell | C | day | worm/grub | 1–8 | lilies, cypress | 0.2–1.5 | 1.90 | none | surface | glow |
-| prickly_sculpin | Prickly sculpin | Pincushion | U | night | worm/grub | 2–25 | rocks | 0.02–0.15 | 1.80 | none | shy | ink |
-| umpqua_pikeminnow | Umpqua pikeminnow | River Wolf | U | dusk | minnow | 2–12 | cypress, rocks | 1–6 | 2.20 | hearty | — | starry |
-| chiselmouth | Chiselmouth | Scraper | C | day | worm/dough | 0.5–6 | rocks, flats | 0.2–1.5 | 1.60 | hearty | — | golden |
-| alvord_chub | Alvord chub | Dust Pip | R | day | grub | 0.5–4 | springs | 0.02–0.1 | 4.00 | none | shy | glow |
-| cobalt_cisco | Cobalt cisco | Blue Ghost | C | dawn | roe/dough | 15–60 | deep, open | 0.3–2 | 3.20 | fillet | cold | glow |
-| obsidian_darter | Obsidian darter | Glass Bead | U | day | grub | 1–10 | rocks | 0.01–0.05 | 3.50 | none | shy | starry |
-| ember_char | Ember char | Coal-Belly | R | dusk | grub/roe | 4–30 | springs, deep | 1–9 | 7.40 | trout | — | glow |
-| ash_minnow | Ash minnow | Smudge | C | day | worm/grub | 0.3–4 | flats | 0.01–0.04 | 1.40 | none | — | albino |
-| cinder_sculpin | Cinder sculpin | Hot-Rock | U | night | grub | 2–20 | springs, rocks | 0.05–0.25 | 2.80 | none | shy | ink |
-| pumice_skipper | Pumice skipper | Bobber-Fish | C | day | dough/worm | 0–2 | flats, lilies | 0.1–0.6 | 2.40 | panfish | surface | golden |
-| fumarole_perch | Fumarole perch | Steam-Stripe | C | day | worm/grub | 1–8 | springs | 0.2–1.6 | 3.80 | panfish | — | rose |
-| sulfur_shiner | Sulfur shiner | Yellow Spark | C | day | worm | 0.5–5 | springs, lilies | 0.02–0.1 | 1.70 | none | surface | golden |
-| basalt_bass | Basalt bass | Black Brick | U | dawn | craw/minnow | 2–12 | rocks, cypress | 1–7 | 5.20 | bass | — | starry |
-| glasswing_trout | Glasswing trout | Window-Fin | R | day | roe/grub | 2–20 | open | 1–6 | 7.80 | trout | shy | glow |
-| mistfin_dace | Mistfin dace | Fog-Flicker | U | dawn | worm | 0.5–4 | lilies, flats | 0.02–0.08 | 2.60 | none | — | starry |
-| lava_belly_sunfish | Lava-belly sunfish | Hot Penny | C | day | worm/grub | 0.5–5 | springs, lilies | 0.2–1.4 | 2.90 | panfish | surface | rose |
-| geyser_goby | Geyser goby | Hiccup | U | night | grub | 0.5–6 | springs | 0.02–0.12 | 2.70 | none | shy | glow |
-| moonpool_whitefish | Moonpool whitefish | Night-Lamp | U | night | roe/worm | 10–50 | deep | 1–6 | 4.60 | fillet | cold | glow |
-| snagtooth_pike | Snagtooth pike | Old Crook-Jaw | U | dusk | minnow/shad | 1–8 | cypress | 3–20 | 4.40 | hearty | — | golden |
-| fog_mudminnow | Fog mudminnow | Hide-Away | U | dawn | worm | 0.3–3 | cypress, lilies | 0.01–0.04 | 2.10 | none | shy | ink |
-| indigo_eelpout | Indigo eelpout | Velvet Rope | R | night | shad/grub | 20–60 | deep | 2–14 | 5.60 | hearty | cold | starry |
-| steam_carp | Steam carp | Kettle-Lips | C | day | dough/worm | 1–6 | springs, flats | 2–16 | 1.40 | hearty | — | golden |
-| rimrock_bullhead | Rimrock bullhead | Pebble-Whisker | C | night | liver/grub | 1–10 | rocks, cypress | 0.3–2.5 | 2.60 | catfish | — | albino |
-| vent_catfish | Vent catfish | Warm-Whiskers | U | night | liver/shad | 8–40 | springs, deep | 2–25 | 4.20 | catfish | — | glow |
+| chinook | Chinook salmon | King's Supper | R | dawn | roe/shad | 10–40 | deep, open | 5–40 | 12.09 | trout | cold | golden |
+| coho | Coho salmon | Silver-Side | U | dawn | roe/minnow | 6–30 | open | 3–15 | 11.31 | trout | cold | rose |
+| tui_chub | Tui chub | Button-Belly | C | day | worm/dough | 1–10 | flats, lilies | 0.1–1 | 3.51 | none | — | golden |
+| speckled_dace | Speckled dace | Freckle | C | day | worm | 0.3–3 | springs, flats | 0.01–0.05 | 3.12 | none | shy | starry |
+| oregon_chub | Oregon chub | Moss Pip | U | day | worm/dough | 0.3–3 | lilies | 0.01–0.04 | 4.29 | none | shy | glow |
+| klamath_smallscale_sucker | Klamath smallscale sucker | Soft-Mouth | U | day | worm/dough | 2–15 | flats, deep | 1–5 | 3.32 | hearty | — | albino |
+| blue_chub | Blue chub | Bluebell | C | day | worm/grub | 1–8 | lilies, cypress | 0.2–1.5 | 3.71 | none | surface | glow |
+| prickly_sculpin | Prickly sculpin | Pincushion | U | night | worm/grub | 2–25 | rocks | 0.02–0.15 | 3.51 | none | shy | ink |
+| umpqua_pikeminnow | Umpqua pikeminnow | River Wolf | U | dusk | minnow | 2–12 | cypress, rocks | 1–6 | 4.29 | hearty | — | starry |
+| chiselmouth | Chiselmouth | Scraper | C | day | worm/dough | 0.5–6 | rocks, flats | 0.2–1.5 | 3.12 | hearty | — | golden |
+| alvord_chub | Alvord chub | Dust Pip | R | day | grub | 0.5–4 | springs | 0.02–0.1 | 7.80 | none | shy | glow |
+| cobalt_cisco | Cobalt cisco | Blue Ghost | C | dawn | roe/dough | 15–60 | deep, open | 0.3–2 | 6.24 | fillet | cold | glow |
+| obsidian_darter | Obsidian darter | Glass Bead | U | day | grub | 1–10 | rocks | 0.01–0.05 | 6.83 | none | shy | starry |
+| ember_char | Ember char | Coal-Belly | R | dusk | grub/roe | 4–30 | springs, deep | 1–9 | 14.43 | trout | — | glow |
+| ash_minnow | Ash minnow | Smudge | C | day | worm/grub | 0.3–4 | flats | 0.01–0.04 | 2.73 | none | — | albino |
+| cinder_sculpin | Cinder sculpin | Hot-Rock | U | night | grub | 2–20 | springs, rocks | 0.05–0.25 | 5.46 | none | shy | ink |
+| pumice_skipper | Pumice skipper | Bobber-Fish | C | day | dough/worm | 0–2 | flats, lilies | 0.1–0.6 | 4.68 | panfish | surface | golden |
+| fumarole_perch | Fumarole perch | Steam-Stripe | C | day | worm/grub | 1–8 | springs | 0.2–1.6 | 7.41 | panfish | — | rose |
+| sulfur_shiner | Sulfur shiner | Yellow Spark | C | day | worm | 0.5–5 | springs, lilies | 0.02–0.1 | 3.32 | none | surface | golden |
+| basalt_bass | Basalt bass | Black Brick | U | dawn | craw/minnow | 2–12 | rocks, cypress | 1–7 | 10.14 | bass | — | starry |
+| glasswing_trout | Glasswing trout | Window-Fin | R | day | roe/grub | 2–20 | open | 1–6 | 15.21 | trout | shy | glow |
+| mistfin_dace | Mistfin dace | Fog-Flicker | U | dawn | worm | 0.5–4 | lilies, flats | 0.02–0.08 | 5.07 | none | — | starry |
+| lava_belly_sunfish | Lava-belly sunfish | Hot Penny | C | day | worm/grub | 0.5–5 | springs, lilies | 0.2–1.4 | 5.66 | panfish | surface | rose |
+| geyser_goby | Geyser goby | Hiccup | U | night | grub | 0.5–6 | springs | 0.02–0.12 | 5.27 | none | shy | glow |
+| moonpool_whitefish | Moonpool whitefish | Night-Lamp | U | night | roe/worm | 10–50 | deep | 1–6 | 8.97 | fillet | cold | glow |
+| snagtooth_pike | Snagtooth pike | Old Crook-Jaw | U | dusk | minnow/shad | 1–8 | cypress | 3–20 | 8.58 | hearty | — | golden |
+| fog_mudminnow | Fog mudminnow | Hide-Away | U | dawn | worm | 0.3–3 | cypress, lilies | 0.01–0.04 | 4.10 | none | shy | ink |
+| indigo_eelpout | Indigo eelpout | Velvet Rope | R | night | shad/grub | 20–60 | deep | 2–14 | 10.92 | hearty | cold | starry |
+| steam_carp | Steam carp | Kettle-Lips | C | day | dough/worm | 1–6 | springs, flats | 2–16 | 2.73 | hearty | — | golden |
+| rimrock_bullhead | Rimrock bullhead | Pebble-Whisker | C | night | liver/grub | 1–10 | rocks, cypress | 0.3–2.5 | 5.07 | catfish | — | albino |
+| vent_catfish | Vent catfish | Warm-Whiskers | U | night | liver/shad | 8–40 | springs, deep | 2–25 | 8.19 | catfish | — | glow |
 
 Weather affinities (×1.4 in that weather, else ×1.0): mistfin_dace and
 fog_mudminnow in **fog**. glasswing_trout in **clear**.
 
 ### 1.6 Starlight Nebula Lagoon (34, fictional)
 
-Lake price note: about 1.8×. The Nebula keeps the normal 24-hour clock, but its sky
+Lake price note: about 1.45× (V1-44, from 1.8×: the Lagoon's fish are big and bite well, and at 1.8× a day ran past `02 §15.1`'s band). The Nebula keeps the normal 24-hour clock, but its sky
 is always starlit. The four time bands display as **Rising** (dawn), **Bright**
 (day), **Fading** (dusk) and **Deep** (night).
 
 | id | Name | Folk name | T | Time | Baits | Depth m | Zones | lb | $/lb | Food | Tags | Shiny |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| comet_minnow | Comet minnow | Tail-Light | C | day | stardust/worm | 0.5–4 | inlet, flats | 0.02–0.1 | 2.40 | none | surface | starry |
-| meteor_bass | Meteor bass | Rock-Drop | C | dawn | stardust/minnow | 2–12 | rocks | 1–8 | 6.80 | bass | — | golden |
-| quasar_koi | Quasar koi | Lantern Koi | U | day | dough/stardust | 0.5–4 | lilies | 2–18 | 7.50 | cosmic | surface | golden |
-| pulsar_perch | Pulsar perch | Blinker | C | night | stardust/worm | 1–8 | lilies, open | 0.2–1.8 | 4.80 | cosmic | — | glow |
-| lunar_loach | Lunar loach | Moon-Noodle | U | night | stardust | 0.3–3 | flats, reeds | 0.05–0.3 | 4.20 | none | shy | albino |
-| solar_sunfish | Solar sunfish | Little Sun | C | day | stardust/worm | 0.3–4 | lilies, landing | 0.2–1.5 | 4.40 | cosmic | surface | golden |
-| starling_shiner | Starling shiner | Twinkle-Fry | C | dusk | stardust | 0.3–4 | reeds, flats | 0.02–0.1 | 2.20 | none | surface | starry |
-| galaxy_gar | Galaxy gar | Swirl-Snout | U | dusk | shad/stardust | 1–10 | cypress, current | 3–25 | 4.60 | hearty | current | starry |
-| aurora_trout | Aurora trout | Ribbon-Light | U | dawn | roe/stardust | 2–15 | inlet, current | 1–7 | 8.20 | trout | current | rose |
-| cosmic_carp | Cosmic carp | Big Bubble | C | day | dough/stardust | 1–8 | flats, lilies | 3–24 | 2.60 | hearty | — | golden |
-| void_eel | Void eel | Long Shadow | R | night | liver/stardust | 20–60 | deep | 2–15 | 7.60 | hearty | — | ink |
-| orbit_bluegill | Orbit bluegill | Ring-Gill | C | day | worm/stardust | 0.3–4 | lilies, landing | 0.1–1 | 3.60 | panfish | — | rose |
-| gravity_drum | Gravity drum | Thumper | U | day | craw/stardust | 4–20 | deep, open | 2–16 | 3.40 | hearty | — | glow |
-| photon_tetra | Photon tetra | Spark | C | night | stardust | 0.5–5 | reeds, lilies | 0.01–0.03 | 2.80 | none | — | glow |
-| nova_pike | Nova pike | Flare-Jaw | R | dusk | minnow/stardust | 1–8 | cypress | 4–24 | 7.20 | hearty | — | golden |
-| dwarf_star_darter | Dwarf-star darter | Speck | U | day | stardust | 0.5–6 | rocks | 0.01–0.04 | 4.00 | none | shy | starry |
-| saturnfin_puffer | Saturnfin puffer | Ring-Ball | U | day | dough/stardust | 1–8 | open, current | 0.3–2 | 5.00 | none | surface, current | rose |
-| celestial_catfish | Celestial catfish | Star-Whiskers | C | night | liver/stardust | 3–20 | deep, cypress | 2–30 | 5.20 | catfish | — | starry |
-| moonbeam_crappie | Moonbeam crappie | Paper-Moon | C | dawn | minnow/stardust | 1–8 | cypress, lilies | 0.3–2.4 | 5.40 | panfish | — | glow |
-| twinkle_shad | Twinkle shad | Glitter-Fry | C | day | stardust | 1–10 | open, current | 0.1–1.2 | 1.80 | none | current | starry |
-| eclipse_bowfin | Eclipse bowfin | Half-Moon | U | night | shad/stardust | 0.5–6 | reeds, cypress | 1–10 | 3.80 | hearty | — | ink |
-| stardust_bullhead | Stardust bullhead | Sprinkle-Cat | C | night | liver/worm | 0.5–6 | flats, inlet | 0.3–3 | 3.40 | catfish | — | starry |
-| asteroid_sucker | Asteroid sucker | Pock-Lip | U | day | dough/stardust | 3–20 | rocks, deep | 1–8 | 2.40 | hearty | — | albino |
-| halo_whitefish | Halo whitefish | Ring-Light | U | dawn | roe/stardust | 8–30 | open, deep | 1–6 | 5.80 | fillet | — | glow |
-| constellation_char | Constellation char | Dot-to-Dot | R | dusk | roe/stardust | 4–25 | current, deep | 1–10 | 9.40 | trout | current | starry |
-| milky_way_buffalo | Milky-way buffalo | Cream-Back | U | day | dough/stardust | 3–20 | open, flats | 4–30 | 2.20 | hearty | — | albino |
-| supernova_salmon | Supernova salmon | Burst | R | dawn | roe/stardust | 6–30 | current, open | 5–28 | 9.80 | trout | current | golden |
-| event_horizon_goby | Event-horizon goby | Edge-Sitter | R | night | stardust | 30–60 | deep | 0.05–0.3 | 8.00 | none | shy | ink |
-| zodiac_zander | Zodiac zander | Twelve-Stripe | U | dusk | minnow/stardust | 3–15 | rocks, open | 1–12 | 6.40 | fillet | — | golden |
-| plasma_pickerel | Plasma pickerel | Zap-Jaw | U | dawn | minnow/stardust | 0.5–5 | reeds, lilies | 0.5–5 | 5.60 | hearty | — | glow |
-| ion_icefish | Ion icefish | Clear-Cat | R | night | stardust | 10–40 | deep, current | 0.1–0.8 | 8.60 | none | shy, current | glow |
-| prism_ray | Prism ray | Rainbow Kite | R | day | craw/stardust | 2–12 | flats | 2–20 | 8.20 | cosmic | — | rose |
-| comet_tail_betta | Comet-tail betta | Silk-Tail | U | day | stardust | 0–2 | lilies, reeds | 0.02–0.08 | 5.20 | none | surface | rose |
-| purrsec_lanternfish | Purrsec lanternfish | Purr-Light | U | night | stardust | 10–40 | open, deep | 0.02–0.1 | 6.00 | none | — | glow |
+| comet_minnow | Comet minnow | Tail-Light | C | day | stardust/worm | 0.5–4 | inlet, flats | 0.02–0.1 | 1.92 | none | surface | starry |
+| meteor_bass | Meteor bass | Rock-Drop | C | dawn | stardust/minnow | 2–12 | rocks | 1–8 | 5.44 | bass | — | golden |
+| quasar_koi | Quasar koi | Lantern Koi | U | day | dough/stardust | 0.5–4 | lilies | 2–18 | 6.00 | cosmic | surface | golden |
+| pulsar_perch | Pulsar perch | Blinker | C | night | stardust/worm | 1–8 | lilies, open | 0.2–1.8 | 3.84 | cosmic | — | glow |
+| lunar_loach | Lunar loach | Moon-Noodle | U | night | stardust | 0.3–3 | flats, reeds | 0.05–0.3 | 3.36 | none | shy | albino |
+| solar_sunfish | Solar sunfish | Little Sun | C | day | stardust/worm | 0.3–4 | lilies, landing | 0.2–1.5 | 3.52 | cosmic | surface | golden |
+| starling_shiner | Starling shiner | Twinkle-Fry | C | dusk | stardust | 0.3–4 | reeds, flats | 0.02–0.1 | 1.76 | none | surface | starry |
+| galaxy_gar | Galaxy gar | Swirl-Snout | U | dusk | shad/stardust | 1–10 | cypress, current | 3–25 | 3.68 | hearty | current | starry |
+| aurora_trout | Aurora trout | Ribbon-Light | U | dawn | roe/stardust | 2–15 | inlet, current | 1–7 | 6.56 | trout | current | rose |
+| cosmic_carp | Cosmic carp | Big Bubble | C | day | dough/stardust | 1–8 | flats, lilies | 3–24 | 2.08 | hearty | — | golden |
+| void_eel | Void eel | Long Shadow | R | night | liver/stardust | 20–60 | deep | 2–15 | 6.08 | hearty | — | ink |
+| orbit_bluegill | Orbit bluegill | Ring-Gill | C | day | worm/stardust | 0.3–4 | lilies, landing | 0.1–1 | 2.88 | panfish | — | rose |
+| gravity_drum | Gravity drum | Thumper | U | day | craw/stardust | 4–20 | deep, open | 2–16 | 2.72 | hearty | — | glow |
+| photon_tetra | Photon tetra | Spark | C | night | stardust | 0.5–5 | reeds, lilies | 0.01–0.03 | 2.24 | none | — | glow |
+| nova_pike | Nova pike | Flare-Jaw | R | dusk | minnow/stardust | 1–8 | cypress | 4–24 | 5.76 | hearty | — | golden |
+| dwarf_star_darter | Dwarf-star darter | Speck | U | day | stardust | 0.5–6 | rocks | 0.01–0.04 | 3.20 | none | shy | starry |
+| saturnfin_puffer | Saturnfin puffer | Ring-Ball | U | day | dough/stardust | 1–8 | open, current | 0.3–2 | 4.00 | none | surface, current | rose |
+| celestial_catfish | Celestial catfish | Star-Whiskers | C | night | liver/stardust | 3–20 | deep, cypress | 2–30 | 4.16 | catfish | — | starry |
+| moonbeam_crappie | Moonbeam crappie | Paper-Moon | C | dawn | minnow/stardust | 1–8 | cypress, lilies | 0.3–2.4 | 4.32 | panfish | — | glow |
+| twinkle_shad | Twinkle shad | Glitter-Fry | C | day | stardust | 1–10 | open, current | 0.1–1.2 | 1.44 | none | current | starry |
+| eclipse_bowfin | Eclipse bowfin | Half-Moon | U | night | shad/stardust | 0.5–6 | reeds, cypress | 1–10 | 3.04 | hearty | — | ink |
+| stardust_bullhead | Stardust bullhead | Sprinkle-Cat | C | night | liver/worm | 0.5–6 | flats, inlet | 0.3–3 | 2.72 | catfish | — | starry |
+| asteroid_sucker | Asteroid sucker | Pock-Lip | U | day | dough/stardust | 3–20 | rocks, deep | 1–8 | 1.92 | hearty | — | albino |
+| halo_whitefish | Halo whitefish | Ring-Light | U | dawn | roe/stardust | 8–30 | open, deep | 1–6 | 4.64 | fillet | — | glow |
+| constellation_char | Constellation char | Dot-to-Dot | R | dusk | roe/stardust | 4–25 | current, deep | 1–10 | 7.52 | trout | current | starry |
+| milky_way_buffalo | Milky-way buffalo | Cream-Back | U | day | dough/stardust | 3–20 | open, flats | 4–30 | 1.76 | hearty | — | albino |
+| supernova_salmon | Supernova salmon | Burst | R | dawn | roe/stardust | 6–30 | current, open | 5–28 | 7.84 | trout | current | golden |
+| event_horizon_goby | Event-horizon goby | Edge-Sitter | R | night | stardust | 30–60 | deep | 0.05–0.3 | 6.40 | none | shy | ink |
+| zodiac_zander | Zodiac zander | Twelve-Stripe | U | dusk | minnow/stardust | 3–15 | rocks, open | 1–12 | 5.12 | fillet | — | golden |
+| plasma_pickerel | Plasma pickerel | Zap-Jaw | U | dawn | minnow/stardust | 0.5–5 | reeds, lilies | 0.5–5 | 4.48 | hearty | — | glow |
+| ion_icefish | Ion icefish | Clear-Cat | R | night | stardust | 10–40 | deep, current | 0.1–0.8 | 6.88 | none | shy, current | glow |
+| prism_ray | Prism ray | Rainbow Kite | R | day | craw/stardust | 2–12 | flats | 2–20 | 6.56 | cosmic | — | rose |
+| comet_tail_betta | Comet-tail betta | Silk-Tail | U | day | stardust | 0–2 | lilies, reeds | 0.02–0.08 | 4.16 | none | surface | rose |
+| purrsec_lanternfish | Purrsec lanternfish | Purr-Light | U | night | stardust | 10–40 | open, deep | 0.02–0.1 | 4.80 | none | — | glow |
 
 Weather affinity: every Nebula species ×1.25 during **aurora**.
 
