@@ -2409,7 +2409,7 @@ _HELP = (
         "Space drops or raises the anchor",
         "W / S also pull the anchor when you mean to go",
         "",
-        "F sets a trotline       E checks one, or opens the landing",
+        "F sets a trotline     E checks a line or the landing",
         "Tab chart    J journal    I livewell",
         "C hails a paw-wave NPC: within 20 m, below 3 knots",
         "T changes time: 1x 3x 6x 12x, while you are still",
@@ -2422,10 +2422,10 @@ _HELP = (
     ("TROT LINES", (
         "There is no rod and reel. The lines do the fishing.",
         "Idle the boat, point at open water, and set.",
-        "Each hook takes one piece of bait and holds one fish.",
+        "Each hook takes one bait. A line can mix up to three.",
         "Corks mark the hooks. A flag means a fish is on.",
-        "Tired fish turn red on the chart. About four hours left.",
-        "The landing, and the water around it, is a no-line zone.",
+        "Tired fish go red on the chart, about four hours left.",
+        "The landing and water around it are a no-line zone.",
         "",
         "Anchor and let time run. Come back and check.",
         "Take fish into the livewell, rebait, or pull the line.",
@@ -2433,21 +2433,21 @@ _HELP = (
         "Run a line over and you may knock one off.",
         "",
         "While the game is closed the lines keep soaking,",
-        "for up to six hours of real time, then the fish get away.",
+        "for up to six real hours, then the fish get away.",
     )),
     ("THE LANDING", (
         "Nose into the slip and press E.",
         "Sell the well. Buy bait by the dozen.",
         "Motors, a deeper well, a bait box,",
-        "a depth finder, and a bow light are at the same counter.",
-        "The rowboat runs on oars; its electric motor is optional.",
+        "a depth finder and a bow light are at that counter.",
+        "Rowboats use oars; the electric motor is optional.",
         "",
         "Hull, deck, buoy, and tiller colors are yours once you",
         "buy them. Wearing one you own is free.",
         "",
         "Your active boat sets the deployed-line limit.",
-        "Lines already out stay out if you switch to a smaller boat.",
-        "Worms on the flats keep the boat in bait.",
+        "Lines out stay out if you switch to a smaller boat.",
+        "Bait comes from buying, recipes, or quest gifts.",
         "Liver, cut shad, and the deep hole are where the",
         "heavy fish live, and they fill a small livewell fast.",
     )),
@@ -2463,16 +2463,25 @@ _HELP = (
         "Wind power burns no fuel. Lower the sail to stop.",
         "Space anchors and lowers the sail.",
         "",
-        "Fuel is sold in the Boats tab. Each boat keeps its tank.",
+        "Buy fuel in the Boats tab. Each boat keeps its tank.",
         "Idle, then R calls a tow if you get stranded.",
-        "Lakes: pick up your lines, then travel from the landing.",
+        "Lakes: pick up your lines, then travel from a landing.",
         "Money, catches, gear, boats, and journal come with you.",
+    )),
+    ("BAIT SECTIONS", (
+        "A line has one to three bait sections.",
+        "Hooks are shared out evenly, in order, across them.",
+        "Each hook takes the bait of its own section.",
+        "",
+        "Q or G sets how many sections, 1 to 3.",
+        "Tab picks which section you edit.",
+        "Up and down pick the bait for that section.",
     )),
     ("FIRST HOUR", (
         "A day starts at 6 AM and lasts 24 minutes.",
         "W and S throttle up and down. A and D steer.",
         "Idle with Shift. Press F to set a trotline.",
-        "The number keys pick bait. Enter sets the line.",
+        "The 1 to 5 keys pick bait. Enter sets the line.",
         "Anchor with Space and press T to let time run.",
         "E checks a line once its cork flag is up.",
         "Keep the fish, rebait, or pull the line.",
@@ -2480,7 +2489,7 @@ _HELP = (
         "Sell the well in the Sell tab. Bait is in the Bait tab.",
         "Bot rides the bow. B sends him out to a line and back.",
         "The journal's Story tab shows your next step.",
-        "Press H any time to come back to these pages.",
+        "H opens these pages on the water. Pause has Help too.",
     )),
     ("LAKES AND TRAVEL", (
         "Five waters. Briar and Cedar Creek are open now.",
@@ -2507,6 +2516,14 @@ _HELP = (
         "What we heard stays put. What we found grows.",
         "The title changes: Fishypedia, The Book of Five",
         "Waters, then Pescapedia when all 144 are verified.",
+        "Mouse: click tabs, species, controls and week rows.",
+        "The wheel scrolls the book. Kitchen lists take clicks.",
+    )),
+    ("THE CHART", (
+        "On the chart: C hails, Space anchors, Q sails,",
+        "R tows, B sends Bot. Tab or Esc closes the chart.",
+        "",
+        "Chart keys work only while the chart is open.",
     )),
     ("SHINIES AND TROPHIES", (
         "About 1 in 64 standard catches is a shiny. It is",
@@ -2526,13 +2543,13 @@ _HELP = (
         "marks the cats who are here now.",
         "Hail with C within 20 m, under 3 knots.",
         "In a chat, W/S or the arrows pick a reply.",
-        "Numbers 1 to 9 pick one too. Enter or C goes on.",
+        "Numbers 1 to 5 pick one too. Enter or C goes on.",
         "Esc closes a chat, unless a story scene is playing.",
         "Each cat starts as a Stranger, becomes an",
         "Acquaintance after their first quest, and a Friend",
         "after the second. Greetings change at each step.",
         "Friends write once their quests are all done.",
-        "Postmaster Pounce carries one letter a day, 8 AM to 4 PM.",
+        "Postmaster Pounce: one letter a day, 8 AM to 4 PM.",
         "Tinker Thistle moors at your lake on Saturdays.",
     )),
     ("QUESTS AND STORY", (
@@ -2624,9 +2641,10 @@ _HELP = (
         "A line that meets every requirement hooks it on",
         "the first haul of an eligible window. Then a photo",
         "and a trophy replica for the rail.",
-        "The Whiskered Guardian and the Star-Whale are",
-        "witnessed. Settle In: anchored by the Nebula",
-        "reflection, press C and keep still for 45 seconds.",
+        "Star-Whale: Settle In by the Nebula reflection.",
+        "Press C there and keep still for 45 seconds.",
+        "Whiskered Guardian: no Settle In. Be in Cedar Creek's",
+        "deep water, 6 to 8 PM, with 8 Ripples.",
         "Repeats add a weight record, once per game week.",
     )),
     ("SETTINGS AND CAPTIONS", (
@@ -2635,9 +2653,9 @@ _HELP = (
         "Dyslexia-friendly font: on or off.",
         "Reduced motion: no camera sway, simpler fades.",
         "Haul speed: Normal, Quick or Instant. Hold E to hurry.",
-        "Captions: a caption for every chime, Bot sound and horn.",
+        "Captions: every chime, Bot sound and horn gets one.",
         "Volumes: master, music, ambience and effects.",
-        "Collar visibility hides Bot's collar. The story still counts.",
+        "Collar visibility hides the collar. Story still counts.",
         "Keyboard controls: Enter rebinds. Backspace or Esc",
         "cancels. Keys in use swap with the one you replace.",
         "Reset keyboard controls brings back the defaults.",
@@ -2661,13 +2679,13 @@ _GAMEPAD_HELP_CONTROLS = {
     "Power stays set       Shift returns it to idle":
         "Power stays set       Shift idles (keyboard)",
     "A D or arrows steer   arrows look up and down":
-        "Left stick steers; D-pad / stick move through menus",
+        "Left stick steers. The pad has no look control.",
     "Space drops or raises the anchor":
         "Space anchors (keyboard)",
     "W / S also pull the anchor when you mean to go":
         "Use the left stick or triggers to set the throttle",
-    "F sets a trotline       E checks one, or opens the landing":
-        "X sets a trotline       A checks one or opens the landing",
+    "F sets a trotline     E checks a line or the landing":
+        "X sets a trotline     A checks a line or the landing",
     "Tab chart    J journal    I livewell":
         "Back chart    J journal / I livewell (keyboard)",
     "C hails a paw-wave NPC: within 20 m, below 3 knots":
@@ -2685,9 +2703,9 @@ _GAMEPAD_HELP_CONTROLS = {
     "Q raises or lowers the daysailer's sail.":
         "Q raises or lowers the daysailer's sail (keyboard).",
     "A/D steers. Sail across the wind; tack to go upwind.":
-        "Left stick steers. Sail across the wind; tack to go upwind.",
+        "Left stick steers. Sail across the wind; tack upwind.",
     "W/S controls its small auxiliary. Shift idles it.":
-        "Stick / triggers control the auxiliary; Shift idles (keyboard).",
+        "Stick or triggers run it; Shift idles (keyboard).",
     "Space anchors and lowers the sail.":
         "Space anchors and lowers the sail (keyboard).",
     "Idle, then R calls a tow if you get stranded.":
@@ -2696,7 +2714,7 @@ _GAMEPAD_HELP_CONTROLS = {
         "Left stick or triggers throttle. The stick steers.",
     "Idle with Shift. Press F to set a trotline.":
         "Ease off the triggers. X sets a trotline.",
-    "The number keys pick bait. Enter sets the line.":
+    "The 1 to 5 keys pick bait. Enter sets the line.":
         "D-pad or stick picks bait. A sets the line.",
     "Anchor with Space and press T to let time run.":
         "Anchor with Space; T lets time run (keyboard).",
@@ -2706,8 +2724,8 @@ _GAMEPAD_HELP_CONTROLS = {
         "Head for the landing and press A to open the shop.",
     "Bot rides the bow. B sends him out to a line and back.":
         "Bot rides the bow. Y tap sends him out and back.",
-    "Press H any time to come back to these pages.":
-        "Pause (Start), then Help, to come back here.",
+    "H opens these pages on the water. Pause has Help too.":
+        "Pause (Start), then Help, opens these pages.",
     "At a landing, press E and pick the Lakes tab.":
         "At a landing, press A and pick the Lakes tab.",
     "A/D changes tabs, W/S picks a lake, Enter travels.":
@@ -2726,7 +2744,7 @@ _GAMEPAD_HELP_CONTROLS = {
         "Hail with RB within 20 m, under 3 knots.",
     "In a chat, W/S or the arrows pick a reply.":
         "The D-pad picks a reply in a chat.",
-    "Numbers 1 to 9 pick one too. Enter or C goes on.":
+    "Numbers 1 to 5 pick one too. Enter or C goes on.":
         "A goes on. Number keys pick a reply (keyboard).",
     "Esc closes a chat, unless a story scene is playing.":
         "B closes a chat, unless a story scene is playing.",
@@ -2742,12 +2760,20 @@ _GAMEPAD_HELP_CONTROLS = {
         "Y tap sends him to a line; tap again to recall.",
     "Wave Chime, $180: G near a line, while slow.":
         "Wave Chime, $180: LB near a line, while slow.",
-    "reflection, press C and keep still for 45 seconds.":
-        "reflection, press RB and keep still for 45 seconds.",
+    "Press C there and keep still for 45 seconds.":
+        "Press RB there and keep still for 45 seconds.",
     "Pause (Esc, or Start), then Settings.":
         "Pause (Start), then Settings.",
     "Haul speed: Normal, Quick or Instant. Hold E to hurry.":
         "Haul speed: Normal, Quick or Instant. Hold A to hurry.",
+    "Q or G sets how many sections, 1 to 3.":
+        "LB sets how many sections, 1 to 3.",
+    "Tab picks which section you edit.":
+        "Back picks which section you edit.",
+    "On the chart: C hails, Space anchors, Q sails,":
+        "On the chart: RB hails; the rest are keyboard.",
+    "R tows, B sends Bot. Tab or Esc closes the chart.":
+        "Back or B closes the chart. R tows (keyboard).",
     "Keyboard controls: Enter rebinds. Backspace or Esc":
         "Keyboard controls: rebinding (keyboard).",
 }
@@ -2809,7 +2835,7 @@ _KEYBOARD_ROWS = (
         (("Pantry", ("galley",)), ("Chart", ("chart",))),
         (("Journal", ("journal",)), ("Livewell", ("livewell",))),
         (("Help", ("help",)), ("Mute", ("mute",))),
-        (("Pause", ("pause",)), ("New morning", ("new_game",))),
+        (("Pause", ("pause",)), ("New (title)", ("new_game",))),
         (("Menu up/dn", ("menu_up", "menu_down")),
          ("Menu L/R", ("menu_left", "menu_right"))),
         (("Select", ("select",)), None),
@@ -2837,7 +2863,7 @@ _PAD_STICK_ROWS = (
     ("In pause, Y", "Opens the pantry; cook at a landing."),
     ("", ""),
     ("The book, livewell, time, sail, tow, mute, help", ""),
-    ("and new morning have no pad button yet.", ""),
+    ("and the title's New morning have no pad button yet.", ""),
 )
 
 
