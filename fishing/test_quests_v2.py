@@ -127,10 +127,25 @@ class QuestData(Worlds):
         for qid in QUEST_IDS:
             self.assertEqual(merged.quests[qid], alone.quests[qid])
             self.assertNotIn("kind", merged.quests[qid])
-        # Only an extends row's recopied lines (q08's greeting and offer, 05 §6.2) differ, in text only.
+        # Only an extends row's recopied lines differ, in text only: q08's greeting and offer
+        # (05 §6.2), and the V3 offer, progress and completion lines that stated rules, rewards
+        # or numbers, recopied into each cat's voice (05 §0, V1-43).
         recopied = {f"{row['id']}:dialogue:{stage}" for row in CONTENT_V2_RAW["quests.json"]["extends"]
                     for stage in row["lines"]}
-        self.assertEqual(recopied, {"q08_channel_run:dialogue:greeting", "q08_channel_run:dialogue:offer"})
+        rules = {"q01_tea_leaves_deep_holes": ("offer", "progress", "completion"),
+                 "q02_lonely_star_current": ("offer", "progress", "completion"),
+                 "q03_unstrung_line": ("offer", "progress", "completion"),
+                 "q04_great_contour_chart": ("offer", "completion"),
+                 "q05_moonlight_trotlines": ("offer", "progress", "completion"),
+                 "q06_unrepeatable_sunrise": ("offer", "progress", "completion"),
+                 "q07_art_of_the_nap": ("offer", "progress", "completion"),
+                 "q08_channel_run": ("greeting", "offer", "progress", "completion"),
+                 "q09_quiet_channel": ("offer", "progress", "completion"),
+                 "q10_ballad_lonely_star": ("completion",),
+                 "q11_deep_water_drift": ("offer", "progress", "completion"),
+                 "q12_first_voyage": ("offer", "progress", "completion")}
+        self.assertEqual(recopied, {f"{qid}:dialogue:{stage}" for qid, stages in rules.items()
+                                    for stage in stages})
         for node_id, node in alone.dialogue.items():
             if node_id in recopied:
                 self.assertNotEqual(merged.dialogue[node_id]["text"], node["text"])
