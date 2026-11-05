@@ -13,7 +13,7 @@ from .game import Keys, Session, _camera
 from .gamepad import KEY_NAMES, normalize_key_bindings
 from .platform import Input, SCAN, find_font
 from .savepaths import merge_v2_defaults
-from .sim import State
+from .sim import Hook, SetLine, State
 from .ui import UI, UIState, TEXT_SIZE_SCALES
 from .world import World
 
@@ -192,6 +192,36 @@ class SettingsChecks(unittest.TestCase):
         })
         rows = UI.__new__(UI)._settings_rows(state)
         self.assertIn(("Haul speed", "Instant"), rows)
+
+    def test_haul_speed_setting_changes_how_long_a_24_hook_haul_takes(self):
+        def haul_seconds(speed):
+            temp = tempfile.TemporaryDirectory(prefix="trotline-haul-speed-")
+            self.addCleanup(temp.cleanup)
+            state = State.new(self.world, seed=121)
+            state.x, state.z = self.world.anchors["briar:inlet"].position
+            state.speed = 0.0
+            state.throttle = state.throttle_setting = 0.0
+            state.anchored = True
+            state.v2["settings"]["haul_speed"] = speed
+            hooks = [Hook(True) for _ in range(24)]
+            state.lines = [SetLine("std", "worm", state.x - 10, state.z, state.x + 10, state.z,
+                                   "open", hooks)]
+            session = Session(self.world, Path(temp.name) / "save.json", state, False)
+            session.ui.mode = "play"
+            state.slip_status = lambda _world: None
+            session.tick(Keys(pressed={"e"}), 0.0)  # Instant hauls are already at the summary
+            elapsed = 0.0
+            while session.ui.mode == "haul" and elapsed < 12.0:
+                session.tick(Keys(), 0.05)
+                elapsed += 0.05
+            self.assertEqual(session.ui.mode, "check")
+            return elapsed
+
+        instant, quick, normal = (haul_seconds(speed) for speed in ("instant", "quick", "normal"))
+        self.assertLess(instant, 0.2)
+        self.assertAlmostEqual(quick, 24 * 0.10, delta=0.35)
+        self.assertAlmostEqual(normal, 24 * 0.25, delta=0.35)
+        self.assertLess(quick, normal)
 
     def test_collar_visibility_controls_bot_rendering(self):
         state = State.new(self.world, seed=17)
