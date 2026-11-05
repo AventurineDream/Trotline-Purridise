@@ -2023,3 +2023,23 @@ V1-40 (#68) makes the offline release (02 §20). The package runs without Python
 - **Setup.** `scripts/setup.sh` checks Python 3.10+, creates `.venv`, installs the requirements, checks that SDL2, SDL2_ttf and a Linux font load through the game's own loaders, and runs `--selftest --software`. `scripts/setup.ps1` does the same on Windows, with the DLL download links.
 - **CI** (`.github/workflows/package.yml`, separate from `gameplay-tests`). `package-linux` builds the archive. `package-smoke` runs in a bare `ubuntu:24.04` container with no Python. It installs five apt libraries (`libdrm2`, `libxcb1`, three `libwayland`), runs `--selftest --software`, and checks that a v1 fixture migrates on a fresh `XDG_DATA_HOME`. `package-windows` and `package-macos` run only from `workflow_dispatch`.
 - **Checks.** Here: the self-test passes from the bundle in a cleared environment; the smoke sequence passes in a bare `ubuntu:24.04` container, and fails without the apt libraries. Not checked here: Windows, macOS, a real window, OpenGL and audio. The checklist (`docs/RELEASE-CHECKLIST.md`) lists the manual release checks.
+
+## Implemented in-game help (V1-41)
+
+V1-41 (#69) writes help for every system in 02 and adds glyph tables built from the player's own bindings (02 §16–§17).
+
+**Pages.** The help has 22 pages, and `HELP_N` is their count. The four original pages keep indices 0 to 3, which the smoke test and the field-guide checks rely on. `FIRST HOUR` follows, then one page for each system: lakes and travel, the book, shinies and trophies, cats and hailing, quests and story, the week and cookout, kitchen and galley, cozy and old salt, catnaps and rested, Bot and his tools, legendaries, settings and captions, and where saves live. The last four pages are generated: two `KEYBOARD` pages and two `GAMEPAD` pages.
+
+**Glyph tables** (`ui.help_pages(saved_bindings)`). The keyboard pages read `normalize_key_bindings(settings["key_bindings"])` at draw time, so a rebound key appears on its row. Each row holds two actions. The gamepad pages are built from `BUTTON_ACTIONS` plus the Y tap and hold. The page count does not depend on the bindings, so `HELP_N` is fixed.
+
+**Gamepad wording.** Every authored help line that names a key has an entry in `_GAMEPAD_HELP_CONTROLS`. The entry names a pad control or says `(keyboard)`. Controls with no pad button say so on the gamepad pages: the book, livewell, time scale, sail, tow, mute, help and new morning. Anchoring with Space is keyboard only, as before.
+
+**Tests** (`test_help.py`, and `test_ui_layout.py` widened to match):
+- every page fits at all three `TEXT_SIZE_SCALES`, at the five layout resolutions, on both devices, with the default keys and with `catnap` rebound to X, measured with the game's own text rendering;
+- every player action in `ACTION_SYMBOLS` (not menu navigation or the alias pairs) has a keyboard row showing its bound key;
+- rebinding `catnap` changes the keyboard page, including the page as drawn;
+- each system keyword appears on some help page;
+- each line that names a key has gamepad wording;
+- `HELP_N` is the same for every set of bindings.
+
+`test_ui_layout.py` now iterates `help_pages()` and `range(HELP_N)` where it used `_HELP` and a fixed count, so its layout checks cover the generated pages too.

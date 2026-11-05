@@ -45,8 +45,10 @@ from .imageops import resize_rgb
 from .raster import raster_tri
 from .world import ZONE_NAME, World
 from .gamepad import (
-    ACTION_ALIASES, ACTION_SYMBOLS, default_key_bindings,
-    normalize_key_bindings,
+    ACTION_ALIASES, ACTION_SYMBOLS, BUTTON_A, BUTTON_B, BUTTON_BACK,
+    BUTTON_DPAD_DOWN, BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT, BUTTON_DPAD_UP,
+    BUTTON_LEFTSHOULDER, BUTTON_RIGHTSHOULDER, BUTTON_START, BUTTON_X, BUTTON_Y,
+    default_key_bindings, normalize_key_bindings,
 )
 from .boat import (
     BOATS, FUEL_PRICE, ROWBOAT_MOTOR_PRICE, ROWBOAT_BATTERY_KWH,
@@ -770,7 +772,7 @@ class UI:
             else:
                 self._settings(frame, state, ui)
         elif mode == "help":
-            self._help(frame, ui)
+            self._help(frame, ui, state)
         elif mode == "credits":
             self._credits(frame, state, ui)
         self._caption(frame, state, ui)
@@ -2317,8 +2319,29 @@ class UI:
         self._center(frame, self._trim(ui.caption, size, pw - 24), w / 2,
                      y + 8, size, INK, family="sans")
 
-    def _help(self, frame, ui: UIState):
-        pages = _HELP
+    def _table_columns(self, lines, size):
+        """Measured column offsets for the table rows of a help page (V1-41).
+
+        A table row is a tuple of cell strings. Column c is as wide as its widest
+        cell on the page, measured at `size`, and columns sit `_TABLE_GAP_EMS` em
+        apart. Returns (offsets, width). A page without table rows gives ((), 0).
+        """
+        rows = [line for line in lines if isinstance(line, tuple)]
+        columns = max((len(row) for row in rows), default=0)
+        widths = [0] * columns
+        for row in rows:
+            for index, cell in enumerate(row):
+                if cell:
+                    widths[index] = max(widths[index], self._measure(cell, size, "mono"))
+        gap = _TABLE_GAP_EMS * self.cell(size)[0]
+        offsets, x = [], 0
+        for width in widths:
+            offsets.append(x)
+            x += width + gap
+        return tuple(offsets), max(0, x - gap)
+
+    def _help(self, frame, ui: UIState, state=None):
+        pages = help_pages(_saved_bindings(state))
         ui.help_page %= len(pages)
         title, lines = pages[ui.help_page]
         if ui.input_device == "gamepad":
@@ -2334,12 +2357,16 @@ class UI:
         foot = self._controls(ui, "WASD or arrows turn pages    Esc closes",
                               "D-pad / stick turn pages    B closes")
         page_w = self._measure(page, body, "mono")
-        content_w = max(self._measure(line, body, "mono") for line in (*lines, foot) if line)
+        # Table rows are sized column by column, exactly as they are drawn below.
+        offsets, table_w = self._table_columns(lines, body)
+        plain = [line for line in (*lines, foot) if isinstance(line, str) and line]
+        content_w = max([self._measure(line, body, "mono") for line in plain] + [table_w])
         content_w = max(content_w, self._measure(title, head, "mono") + page_w + 16)
         pw = min(w - 16, max(int(w * 0.70), content_w + m * 2))
         # Fallback fonts may give descenders a taller surface than "M".
         # Space rows using the actual authored strings on this machine.
-        ch = max(self._render(line, body, INK).shape[0] for line in (*lines, foot) if line)
+        ch = max(self._render(text, body, INK).shape[0]
+                 for line in (*lines, foot) for text in _row_cells(line) if text)
         hh = self._render(title, head, INK).shape[0]
         header = 2 if h < 300 else 4 if h < 400 else 14
         top = header + hh + (2 if h < 300 else 4 if h < 400 else 10)
@@ -2350,12 +2377,12 @@ class UI:
         # Expand the sheet before reducing spacing. Even at 480x270 the
         # authored text keeps its readable 12px font; only blank gaps collapse.
         gap = max(0, min(3, (available - len(lines) * ch) // len(lines)))
-        blank_count = sum(not line for line in lines)
+        blank_count = sum(_row_blank(line) for line in lines)
         blank_h = ch + gap
         if blank_count:
             blank_h = max(0, min(blank_h,
                 (available - (len(lines) - blank_count) * (ch + gap)) // blank_count))
-        row_heights = [ch + gap if line else blank_h for line in lines]
+        row_heights = [blank_h if _row_blank(line) else ch + gap for line in lines]
         ph = min(h - vertical_margin, max(int(h * 0.74), top + sum(row_heights) + foot_gap + ch + bottom))
         x, y = (w - pw) // 2, (h - ph) // 2
         self._panel(frame, x, y, pw, ph, 0.92)
@@ -2364,7 +2391,11 @@ class UI:
                    y + header + (hh - ch) // 2, body, GOLD, shadow=False)
         row_y = y + top
         for line, row_h in zip(lines, row_heights):
-            if line:
+            if isinstance(line, tuple):
+                for offset, cell in zip(offsets, line):
+                    if cell:
+                        self._text(frame, cell, x + m + offset, row_y, body, INK, shadow=False)
+            elif line:
                 self._text(frame, line, x + m, row_y, body, INK, shadow=False)
             row_y += row_h
         self._text(frame, foot, x + m, y + ph - ch - bottom, body, DIM, shadow=False)
@@ -2437,6 +2468,191 @@ _HELP = (
         "Lakes: pick up your lines, then travel from the landing.",
         "Money, catches, gear, boats, and journal come with you.",
     )),
+    ("FIRST HOUR", (
+        "A day starts at 6 AM and lasts 24 minutes.",
+        "W and S throttle up and down. A and D steer.",
+        "Idle with Shift. Press F to set a trotline.",
+        "The number keys pick bait. Enter sets the line.",
+        "Anchor with Space and press T to let time run.",
+        "E checks a line once its cork flag is up.",
+        "Keep the fish, rebait, or pull the line.",
+        "Head for the landing and press E to open the shop.",
+        "Sell the well in the Sell tab. Bait is in the Bait tab.",
+        "Bot rides the bow. B sends him out to a line and back.",
+        "The journal's Story tab shows your next step.",
+        "Press H any time to come back to these pages.",
+    )),
+    ("LAKES AND TRAVEL", (
+        "Five waters. Briar and Cedar Creek are open now.",
+        "Flathead opens after chapter 2, Crater after 3,",
+        "and the Starlight Nebula Lagoon after chapter 4.",
+        "",
+        "At a landing, press E and pick the Lakes tab.",
+        "A/D changes tabs, W/S picks a lake, Enter travels.",
+        "Pick up your lines first. Money, catches, gear,",
+        "boats and the journal all come with you.",
+        "",
+        "Flathead has snow mist, Crater caldera fog and",
+        "Nebula aurora. Reeds need the Reed Anchor.",
+        "Nebula currents drift lines unless you own the",
+        "Zero-G Winch.",
+    )),
+    ("THE BOOK", (
+        "J opens the book. A/D changes tabs, W/S chooses.",
+        "Enter opens a fish or turns a page. J closes it.",
+        "Tabs: Fish, Book, Ripples & Keepsakes, Story,",
+        "Watch and Week.",
+        "Stages: Rumor, Identified (1 catch), Bait known",
+        "(3), Verified (5), Mastered (10). Each one toasts.",
+        "What we heard stays put. What we found grows.",
+        "The title changes: Fishypedia, The Book of Five",
+        "Waters, then Pescapedia when all 144 are verified.",
+    )),
+    ("SHINIES AND TROPHIES", (
+        "About 1 in 64 standard catches is a shiny. It is",
+        "rolled once, when caught. Shinies sell for 3x,",
+        "and start Treasured, so bulk sale keeps them.",
+        "Verified species can be tracked, one at a time.",
+        "Track from the species entry: click it, or press F.",
+        "Tracking guarantees a shiny by the 50th catch.",
+        "The counter survives switching targets and reloads.",
+        "In the livewell, Enter or T marks Treasured.",
+        "Trophy shelf: F hangs a replica on a rail boat.",
+        "Fish cards and the book show each weight;",
+        "the book keeps your best.",
+    )),
+    ("CATS AND HAILING", (
+        "Cats you can see sit on their own boats. The chart",
+        "marks the cats who are here now.",
+        "Hail with C within 20 m, under 3 knots.",
+        "In a chat, W/S or the arrows pick a reply.",
+        "Numbers 1 to 9 pick one too. Enter or C goes on.",
+        "Esc closes a chat, unless a story scene is playing.",
+        "Each cat starts as a Stranger, becomes an",
+        "Acquaintance after their first quest, and a Friend",
+        "after the second. Greetings change at each step.",
+        "Friends write once their quests are all done.",
+        "Postmaster Pounce carries one letter a day, 8 AM to 4 PM.",
+        "Tinker Thistle moors at your lake on Saturdays.",
+    )),
+    ("QUESTS AND STORY", (
+        "Cats offer quests in dialogue. Declined offers stay.",
+        "Accepted quests show in the book's Story tab.",
+        "Turn a quest in to its giver, or the lake's host.",
+        "Turn-ins never take your fish, gear or boats.",
+        "The first quest of a cat gives a Ripple, a line",
+        "they remember. The second gives a Keepsake.",
+        "Ripples and Keepsakes are the book's third tab.",
+        "The story is five chapters of three steps each.",
+        "Finish a chapter to open the next lake's route.",
+    )),
+    ("THE WEEK AND COOKOUT", (
+        "The week starts on Monday and rolls over at 6 AM.",
+        "The book's Week tab lists all seven days.",
+        "Each lake has two Lake Days, with a bonus for",
+        "certain fish, hours or weather.",
+        "Forecasts survive reloads and lake travel.",
+        "Bot points out nearby good water once a day.",
+        "You can ask him from the Kitchen menu too.",
+        "Sunday, 5 to 8 PM, the lake's cats gather.",
+        "Share one ordinary fish at the Kitchen menu",
+        "for a pantry gift, once per lake each Sunday.",
+        "Missing a cookout costs nothing.",
+    )),
+    ("KITCHEN AND GALLEY", (
+        "K opens the pantry from the water. Cooking needs",
+        "a landing, or a galley boat at anchor.",
+        "The Kitchen tab at a landing has the same menu.",
+        "Each host sells one specialty; pantries hold 20.",
+        "Kibble Tins are $3 everywhere: a snack, not a buff.",
+        "Each dish needs one fish from a food group",
+        "and one pantry item. The smallest fish is used.",
+        "Shiny, Treasured, protected and legendary fish",
+        "are never used. Each cooked dish gives its buff.",
+        "Hosts teach dishes in their chapter. Cards cost $40",
+        "after that chapter.",
+        "Recipe bait takes two parent baits and an item.",
+        "It makes twelve.",
+    )),
+    ("COZY AND OLD SALT", (
+        "New Game asks for your pace. Settings change it.",
+        "Cozy, the default, has no penalties at all.",
+        "Old Salt has a light routine. Nothing is ever lost.",
+        "Energy: 16 awake hours is Drowsy, and hauls are",
+        "25% slower. After 20 hours a safe catnap runs.",
+        "Hunger: 24 hours without a meal is Peckish.",
+        "Boats run 20% slower until you eat.",
+        "Any dish or Kibble Tin counts as a meal.",
+        "Prompts come at most once per 10 real minutes.",
+        "Later snoozes a prompt for 30 minutes. F or Esc.",
+        "Tow: free in Cozy. In Old Salt it is $25 plus 2%",
+        "of the boat's price, or all your cash if less.",
+        "Menus and pauses stop every need clock.",
+    )),
+    ("CATNAPS AND RESTED", (
+        "Z takes a two-hour catnap. Hold Y on a pad.",
+        "Anchor or dock first. Hammock boats also nap",
+        "while idling with the sail down.",
+        "Lines keep soaking, and naps count as game time.",
+        "Any key or click ends the fade early.",
+        "Pause, then Z or F, also naps.",
+        "The first nap in a while grants Rested for six",
+        "game hours. Rested can bring a dream: a habitat lead.",
+        "Read it in the book, under What we heard.",
+        "Only one ordinary dream waits at a time.",
+        "Extra naps just pass time. Nothing is lost by it.",
+    )),
+    ("BOT AND HIS TOOLS", (
+        "Bot is the tin deckhand. His name, Word-###,",
+        "shows on the title screen and in the book.",
+        "B sends him to a line, or ahead. B recalls him.",
+        "Shells swap free at the landing's Bot tab.",
+        "Shells: Tin, Frog (chapter 1), Duck (2), Sub (3),",
+        "and Astral (5). Tools need their shell earned.",
+        "Reed Anchor, $120: sets lines in reeds.",
+        "Wave Chime, $180: G near a line, while slow.",
+        "Thermocline Scanner, $260: the cold layer on",
+        "Flathead and Crater, shown in the HUD.",
+        "Zero-G Winch, $400: holds lines in Nebula currents.",
+        "Sonar Grid, $150: chart overlay. Needs a depth finder.",
+    )),
+    ("LEGENDARIES", (
+        "Twelve legendary fish: ten to catch, two witnessed.",
+        "Each gated one has a watch card in the Watch tab.",
+        "The card lists the clue, the requirements, and the",
+        "next window when they line up, weather included.",
+        "A line that meets every requirement hooks it on",
+        "the first haul of an eligible window. Then a photo",
+        "and a trophy replica for the rail.",
+        "The Whiskered Guardian and the Star-Whale are",
+        "witnessed. Settle In: anchored by the Nebula",
+        "reflection, press C and keep still for 45 seconds.",
+        "Repeats add a weight record, once per game week.",
+    )),
+    ("SETTINGS AND CAPTIONS", (
+        "Pause (Esc, or Start), then Settings.",
+        "Text size: Small, Standard or Large.",
+        "Dyslexia-friendly font: on or off.",
+        "Reduced motion: no camera sway, simpler fades.",
+        "Haul speed: Normal, Quick or Instant. Hold E to hurry.",
+        "Captions: a caption for every chime, Bot sound and horn.",
+        "Volumes: master, music, ambience and effects.",
+        "Collar visibility hides Bot's collar. The story still counts.",
+        "Keyboard controls: Enter rebinds. Backspace or Esc",
+        "cancels. Keys in use swap with the one you replace.",
+        "Reset keyboard controls brings back the defaults.",
+    )),
+    ("WHERE SAVES LIVE", (
+        "The save is save.json in the game's user-data",
+        "folder, the per-user app-data place for this game.",
+        "The title screen offers Continue when one exists.",
+        "It autosaves about every 45 seconds, and it saves",
+        "when you quit, pause to title, or change lakes.",
+        "An old v1 save, saves/briar.json, is migrated.",
+        "The original is kept in a backup folder beside it.",
+        "Start with --save PATH to use another file.",
+        "Your money, fish, gear, boats and journal are kept.",
+    )),
 )
 
 _GAMEPAD_HELP_CONTROLS = {
@@ -2476,6 +2692,64 @@ _GAMEPAD_HELP_CONTROLS = {
         "Space anchors and lowers the sail (keyboard).",
     "Idle, then R calls a tow if you get stranded.":
         "Press R (keyboard) to call a tow if you get stranded.",
+    "W and S throttle up and down. A and D steer.":
+        "Left stick or triggers throttle. The stick steers.",
+    "Idle with Shift. Press F to set a trotline.":
+        "Ease off the triggers. X sets a trotline.",
+    "The number keys pick bait. Enter sets the line.":
+        "D-pad or stick picks bait. A sets the line.",
+    "Anchor with Space and press T to let time run.":
+        "Anchor with Space; T lets time run (keyboard).",
+    "E checks a line once its cork flag is up.":
+        "A checks a line once its cork flag is up.",
+    "Head for the landing and press E to open the shop.":
+        "Head for the landing and press A to open the shop.",
+    "Bot rides the bow. B sends him out to a line and back.":
+        "Bot rides the bow. Y tap sends him out and back.",
+    "Press H any time to come back to these pages.":
+        "Pause (Start), then Help, to come back here.",
+    "At a landing, press E and pick the Lakes tab.":
+        "At a landing, press A and pick the Lakes tab.",
+    "A/D changes tabs, W/S picks a lake, Enter travels.":
+        "D-pad changes tabs and lakes; A travels.",
+    "J opens the book. A/D changes tabs, W/S chooses.":
+        "J opens the book (keyboard). D-pad changes tabs.",
+    "Enter opens a fish or turns a page. J closes it.":
+        "A opens a fish or turns a page. B closes it.",
+    "Track from the species entry: click it, or press F.":
+        "Track from the entry: click it, or press X.",
+    "In the livewell, Enter or T marks Treasured.":
+        "In the livewell, Enter or T marks Treasured (keyboard).",
+    "Trophy shelf: F hangs a replica on a rail boat.":
+        "Trophy shelf: X hangs a replica on a rail boat.",
+    "Hail with C within 20 m, under 3 knots.":
+        "Hail with RB within 20 m, under 3 knots.",
+    "In a chat, W/S or the arrows pick a reply.":
+        "The D-pad picks a reply in a chat.",
+    "Numbers 1 to 9 pick one too. Enter or C goes on.":
+        "A goes on. Number keys pick a reply (keyboard).",
+    "Esc closes a chat, unless a story scene is playing.":
+        "B closes a chat, unless a story scene is playing.",
+    "K opens the pantry from the water. Cooking needs":
+        "Pause, then Y, opens the pantry. Cooking needs",
+    "Later snoozes a prompt for 30 minutes. F or Esc.":
+        "Later snoozes a prompt for 30 minutes. X or B.",
+    "Z takes a two-hour catnap. Hold Y on a pad.":
+        "Hold Y for a two-hour catnap.",
+    "Pause, then Z or F, also naps.":
+        "Pause, then X, also naps.",
+    "B sends him to a line, or ahead. B recalls him.":
+        "Y tap sends him to a line; tap again to recall.",
+    "Wave Chime, $180: G near a line, while slow.":
+        "Wave Chime, $180: LB near a line, while slow.",
+    "reflection, press C and keep still for 45 seconds.":
+        "reflection, press RB and keep still for 45 seconds.",
+    "Pause (Esc, or Start), then Settings.":
+        "Pause (Start), then Settings.",
+    "Haul speed: Normal, Quick or Instant. Hold E to hurry.":
+        "Haul speed: Normal, Quick or Instant. Hold A to hurry.",
+    "Keyboard controls: Enter rebinds. Backspace or Esc":
+        "Keyboard controls: rebinding (keyboard).",
 }
 
 _GAMEPAD_TUTORIAL_PROMPTS = {
@@ -2497,6 +2771,126 @@ _GAMEPAD_TUTORIAL_TOASTS = {
 }
 
 
+# --- glyph tables (V1-41) -------------------------------------------------
+#
+# The keyboard tables name each player action with the key bound to it, so a
+# rebound key shows here. Each row holds up to two actions. Every page's line
+# count is fixed, so HELP_N does not depend on the bindings.
+
+# Space between table columns, in em (the body font's "M" width).
+_TABLE_GAP_EMS = 2
+
+
+def _row_cells(line):
+    """A help line as its cells: a table row is a tuple, anything else one string."""
+    return line if isinstance(line, tuple) else (line,)
+
+
+def _row_blank(line):
+    return not any(_row_cells(line))
+
+_KEY_GLYPHS = {
+    "shift": "Shift", "rshift": "R Shift", "return": "Enter", "esc": "Esc",
+    "space": "Space", "tab": "Tab", "up": "Up", "down": "Down",
+    "left": "Left", "right": "Right",
+}
+_KEYBOARD_ROWS = (
+    ("KEYBOARD: ON THE WATER", (
+        (("Throttle up", ("throttle_up",)), ("Throttle dn", ("throttle_down",))),
+        (("Steer left", ("steer_left",)), ("Steer right", ("steer_right",))),
+        (("Idle", ("idle",)), ("Idle, too", ("idle_right",))),
+        (("Anchor", ("anchor",)), ("Set trotline", ("set_line",))),
+        (("Check/land", ("check_or_land",)), ("Raise sail", ("sail",))),
+        (("Call a tow", ("tow",)), ("Bot out/back", ("bot",))),
+        (("Bot's chime", ("bot_tool",)), ("Hail, talk", ("hail",))),
+    )),
+    ("KEYBOARD: THE REST", (
+        (("Time scale", ("time_scale",)), ("Catnap", ("catnap",))),
+        (("Pantry", ("galley",)), ("Chart", ("chart",))),
+        (("Journal", ("journal",)), ("Livewell", ("livewell",))),
+        (("Help", ("help",)), ("Mute", ("mute",))),
+        (("Pause", ("pause",)), ("New morning", ("new_game",))),
+        (("Menu up/dn", ("menu_up", "menu_down")),
+         ("Menu L/R", ("menu_left", "menu_right"))),
+        (("Select", ("select",)), None),
+    )),
+)
+
+# (buttons, name, what it does). The page is built from these rows; the test
+# checks that every button in BUTTON_ACTIONS has a row.
+_PAD_BUTTON_ROWS = (
+    ((BUTTON_A,), "A", "Check a line or landing; select"),
+    ((BUTTON_B,), "B", "Pause; back out of menus and pages"),
+    ((BUTTON_X,), "X", "Set a trotline; track a shiny"),
+    ((BUTTON_Y,), "Y tap", "Send or recall Bot"),
+    ((BUTTON_Y,), "Y hold", "Catnap at anchor or a landing"),
+    ((BUTTON_LEFTSHOULDER,), "LB", "Use the Bot tool (the Wave Chime)"),
+    ((BUTTON_RIGHTSHOULDER,), "RB", "Hail a cat; go on talking"),
+    ((BUTTON_START,), "Start", "Pause"),
+    ((BUTTON_BACK,), "Back", "Chart"),
+    ((BUTTON_DPAD_UP, BUTTON_DPAD_DOWN, BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT),
+     "D-pad", "Move through menus, tabs and pages"),
+)
+_PAD_STICK_ROWS = (
+    ("Left stick", "Steer. Up and down set the throttle."),
+    ("RT / LT", "Throttle up; down to idle and reverse."),
+    ("In pause, Y", "Opens the pantry; cook at a landing."),
+    ("", ""),
+    ("The book, livewell, time, sail, tow, mute, help", ""),
+    ("and new morning have no pad button yet.", ""),
+)
+
+
+def _glyph(key: str) -> str:
+    return _KEY_GLYPHS.get(key) or UI._key_name(key)
+
+
+def _keyboard_cell(bindings, item) -> tuple:
+    """(key, label) for one keyboard table cell; ("", "") when the row has none."""
+    if item is None:
+        return ("", "")
+    label, actions = item
+    return ("/".join(_glyph(bindings[action]) for action in actions), label)
+
+
+def _keyboard_pages(bindings) -> tuple:
+    pages = []
+    for title, rows in _KEYBOARD_ROWS:
+        lines = ["Each key is the one you have bound.", ""]
+        for left, right in rows:
+            lines.append((*_keyboard_cell(bindings, left), *_keyboard_cell(bindings, right)))
+        pages.append((title, tuple(lines)))
+    return tuple(pages)
+
+
+def _gamepad_pages() -> tuple:
+    buttons = tuple((name, what) for _buttons, name, what in _PAD_BUTTON_ROWS)
+    sticks = tuple((name, what) if what else name for name, what in _PAD_STICK_ROWS)
+    return (
+        ("GAMEPAD: BUTTONS", buttons),
+        ("GAMEPAD: STICKS, PAUSE", sticks),
+    )
+
+
+_GAMEPAD_PAGES = _gamepad_pages()
+
+
+def help_pages(saved_bindings=None) -> tuple:
+    """Every help page: the authored pages, then the keyboard and gamepad tables.
+
+    `saved_bindings` is the `key_bindings` setting. The keyboard tables follow it,
+    but the page count never changes with the bindings.
+    """
+    bindings = normalize_key_bindings(saved_bindings)
+    return (*_HELP, *_keyboard_pages(bindings), *_GAMEPAD_PAGES)
+
+
+def _saved_bindings(state):
+    v2 = getattr(state, "v2", None)
+    settings = v2.get("settings") if isinstance(v2, dict) else None
+    return settings.get("key_bindings") if isinstance(settings, dict) else None
+
+
 def _prompt_for_device(prompt: str | None, input_device: str) -> str | None:
     if prompt and input_device == "gamepad":
         if prompt.startswith("E  "):
@@ -2515,7 +2909,7 @@ def _help_title(topic: str) -> str:
     return f"{topic}  ·  {GAME_TITLE}"
 
 
-HELP_N = len(_HELP)
+HELP_N = len(help_pages())
 
 
 def _clamp(index: int, count: int) -> int:

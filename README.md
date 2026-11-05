@@ -44,12 +44,49 @@ Reed Passage. [Lake framework](docs/issue-51/README.md) · [Fish data and captur
   mode.
 - **Built to a 3 GB RAM cap** with fully procedural art.
 
+## Playing
+
+Press **H** in the game for help. Each page covers one topic, and the last pages
+are the **keyboard** and **gamepad** tables. The keyboard table shows the keys you
+have actually bound, so a rebound key shows correctly. Change keys in Pause →
+Settings → Keyboard controls. The **First hour** page is the place to start.
+
+### The five waters
+
+- **Little Briar**: where you start. Reeds, flats and the landing, and the Reed Passage on the chart.
+- **Cedar Creek Lake**: a reservoir with a branching shore. Open from the start.
+- **Flathead Alpine Lake**: opens after chapter 2. Snow mist, and a cold layer you can scan for.
+- **Crater Caldera**: opens after chapter 3. A steep caldera, warm springs and fog.
+- **Starlight Nebula Lagoon**: opens after chapter 4. Currents, reeds and aurora nights.
+
+Travel from a landing: press **E** and choose the Lakes tab. Pull your lines first.
+Money, catches, gear, boats and the journal come with you.
+
+### The main systems
+
+- **The book (J)**: 144 fish and 12 legendaries. Entries grow from rumor to verified notes. Track one species for a shiny (about 1 in 64).
+- **Cats and quests**: hail a cat with **C**. Quests give cash, Ripples and keepsakes. Turn-ins never take your fish. Friends write letters.
+- **The week**: the book's Week tab shows each lake's Lake Days. On Sunday from 5 to 8 PM the lake's cats gather at the landing for a cookout.
+- **Kitchen (K)**: cook a dish from one fish and one pantry item, at a landing or on a galley boat at anchor.
+- **Comfort**: Cozy (the default) has no penalties. Old Salt adds energy and hunger routines, and still never strands you. A catnap (**Z**) passes two hours, and a nap can bring Bot's dream, a habitat lead.
+- **Bot (B)**: five shells and five tools, including the Wave Chime (**G**) and the Zero-G Winch.
+- **Legendaries**: twelve in all. Ten can be caught and two are witnessed, the Whiskered Guardian and the Star-Whale. Trophy replicas hang on boats with a trophy rail.
+
+### Where your save lives
+
+The game saves to `save.json` in your per-user app-data folder, not the install
+folder. (Only if that folder cannot be found does it use `saves/save.json` beside
+the game.) It autosaves about every 45 seconds and when you quit. An older
+`saves/briar.json` is migrated, and a backup of the original is kept in a
+`backup` folder beside the new save. Start the game with `--save PATH` to use a
+different file.
+
 ## The current build
 
 Everything below describes what is playable on `main` today. The game was
 previously titled *Little Briar*; that is now the first lake's name.
 
-A first-person trotline game with two lakes, 36 catchable fish, and four boat models. Start in a 12-foot jon boat, set lines, let them soak, and sell the catch at the landing. Earn a wind-powered daysailer or a 15-foot pontoon and take your gear to Cedar Creek Lake, or buy a 10-foot rowboat for oar-powered travel. There is no rod and reel.
+A first-person trotline game with five lakes, 144 catchable species and 12 legendaries, and 24 boats in eight families. You start in a 12-foot jon boat, set lines, let them soak, and sell the catch at the landing. The cat cast is 52 cats (51 roster rows; Pip & Pebble share one boat), and the story runs five chapters to *The Book of Five Waters*. There is no rod and reel.
 
 The lake now uses a 16:9 OpenGL renderer: fixed terrain, a dense procedural forest, reflected trees and sky, gentle water ripples, warm dawn and sunset light, night lighting, and mist in rain. The boat and landing have individual boards and hardware, and the HUD uses a quiet lake-journal style.
 
@@ -209,25 +246,7 @@ One real second is one minute on the lake. A day is 24 minutes. `T` cycles 1×, 
 
 **Bot** is the tin deckhand on the bow. `B` sends him to the nearest trotline, or a short way ahead if nothing is set. He calls back the depth (a range, unless you own the finder), the ground, and what he would bait. `B` again brings him home. He does not change what bites or what fish are worth. A tow or a change of lake puts him back on deck.
 
-| Key | Pad | Action |
-| --- | --- | --- |
-| W / S | Left stick up/down, RT/LT | Raise / lower the throttle lever; S past idle selects reverse |
-| Shift (either key) | — | Return the throttle to idle; the boat coasts |
-| A / D, arrows | Left stick left/right | Steer. Keyboard arrows also look up and down |
-| Space | — | Drop or raise the anchor |
-| F | X | Set a trotline |
-| E | A | Check a line, or open the current landing |
-| Q | — | Raise / lower the daysailer's sail |
-| R | — | Call a tow while idling, with the sail lowered |
-| B | Y tap | Send Bot ahead or out to a line. Press again to call him back |
-| Z | Y hold | Two-hour catnap at anchor or a landing; idle hammock boats can nap anywhere |
-| G | LB | Use the active Bot tool (reserved until its gameplay ticket lands) |
-| K | Pause → Y | Pantry; cook at a landing or while anchored aboard a galley boat |
-| Tab | Back | Chart |
-| J / I | — | Journal / livewell |
-| T | — | Time scale, while you are still |
-| C | RB | Hail a nearby NPC (within 20 m, below 3 knots) |
-| H / M / Esc | — / — / B or Start | Help / mute / pause |
+Every key and button is on the help screen (**H**), in its own pages for the keyboard and the gamepad. The keys shown there are your current bindings.
 
 Menus accept **W/S** to move through items and **A/D** to change tabs, lines, or
 pages. Arrow keys also work, including held-key repeat. Enter or Space selects;
