@@ -1,9 +1,12 @@
 """In-game help (V1-41): every page fits, the glyph tables follow the bindings and
 line up by column, and every system and player action has a page."""
 
+import os
 import re
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 
@@ -11,7 +14,7 @@ from .gamepad import (
     ACTION_ALIASES, ACTION_SYMBOLS, BUTTON_ACTIONS, BUTTON_Y, normalize_key_bindings,
     set_key_binding,
 )
-from .platform import Text
+from .platform import FONT_CANDIDATES, Text, find_font
 from .ui import (
     HELP_N, TEXT_SIZE_SCALES, UI, UIState, _GAMEPAD_HELP_CONTROLS, _HELP,
     _KEYBOARD_ROWS, _PAD_BUTTON_ROWS, _glyph, _help_title, help_pages,
@@ -163,6 +166,83 @@ class HelpTextChecks(unittest.TestCase):
                 self.assertIn(keyword.casefold(), text)
 
 
+def _page_lines(title):
+    """The authored lines of one help page, table rows flattened to their cells."""
+    for page_title, lines in help_pages():
+        if page_title == title:
+            return _cells(lines)
+    raise AssertionError(f"no help page named {title!r}")
+
+
+class HelpContentChecks(unittest.TestCase):
+    """The corrected claims (V1-41 audit, #122) and the topics the help now covers."""
+
+    def test_the_original_pages_keep_their_places(self):
+        self.assertEqual([title for title, _ in help_pages()[:4]],
+                         ["ON THE WATER", "TROT LINES", "THE LANDING", "BOATS AND OTHER WATERS"])
+
+    def test_no_claim_of_foraging_or_a_pressed_h_anywhere(self):
+        text = "\n".join(_all_lines(help_pages()))
+        self.assertNotIn("Worms", text)
+        self.assertNotIn("any time to come back", text)
+        self.assertNotIn("Numbers 1 to 9", text)
+
+    def test_numbers_are_described_as_one_to_five(self):
+        self.assertTrue(any(line.startswith("Numbers 1 to 5 pick one too.")
+                            for line in _page_lines("CATS AND HAILING")))
+
+    def test_new_morning_is_labelled_as_a_title_key_only(self):
+        keyboard = [line for title, page in help_pages() if title.startswith("KEYBOARD")
+                    for line in _cells(page)]
+        self.assertNotIn("New morning", keyboard)
+        self.assertTrue(any(isinstance(line, tuple) and "New (title)" in line
+                            for title, page in help_pages() if title.startswith("KEYBOARD")
+                            for line in page))
+
+    def test_guardian_and_star_whale_are_split(self):
+        lines = _page_lines("LEGENDARIES")
+        guardian = next(line for line in lines if "Whiskered Guardian" in line)
+        whale = next(line for line in lines if "Star-Whale" in line)
+        self.assertIn("no Settle In", guardian)
+        self.assertIn("Settle In", whale)
+        self.assertIn("Press C", " ".join(lines))
+        text = " ".join(lines)
+        self.assertIn("Cedar Creek", text)
+        self.assertIn("6 to 8 PM", text)
+        self.assertIn("8 Ripples", text)
+
+    def test_bait_sections_are_covered(self):
+        page = " ".join(_page_lines("BAIT SECTIONS"))
+        self.assertIn("one to three bait sections", page)
+        self.assertIn("Q or G sets how many sections, 1 to 3.", page)
+        self.assertIn("Tab picks which section you edit.", page)
+        # The gamepad wording names LB (sections) and Back (section).
+        self.assertIn("LB", _GAMEPAD_HELP_CONTROLS["Q or G sets how many sections, 1 to 3."])
+        self.assertIn("Back", _GAMEPAD_HELP_CONTROLS["Tab picks which section you edit."])
+        self.assertIn("A line can mix up to three.", " ".join(_page_lines("TROT LINES")))
+
+    def test_chart_keys_are_covered(self):
+        page = " ".join(_page_lines("THE CHART"))
+        for phrase in ("C hails", "Space anchors", "Q sails", "R tows", "B sends Bot",
+                       "Tab or Esc closes"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, page)
+        self.assertIn("RB", _GAMEPAD_HELP_CONTROLS["On the chart: C hails, Space anchors, Q sails,"])
+
+    def test_mouse_is_covered_on_the_book_page(self):
+        page = " ".join(_page_lines("THE BOOK"))
+        self.assertIn("Mouse: click tabs, species, controls and week rows.", page)
+        self.assertIn("The wheel scrolls the book.", page)
+
+    def test_the_pad_says_it_has_no_look_control(self):
+        self.assertIn("no look control",
+                      _GAMEPAD_HELP_CONTROLS["A D or arrows steer   arrows look up and down"])
+
+    def test_the_first_hour_describes_h_truthfully(self):
+        page = " ".join(_page_lines("FIRST HOUR"))
+        self.assertIn("H opens these pages on the water. Pause has Help too.", page)
+
+
 class HelpLayoutChecks(unittest.TestCase):
     """Drawn positions of the glyph tables, read from the game's own text calls."""
 
@@ -295,6 +375,56 @@ class HelpFitChecks(unittest.TestCase):
     def test_every_help_page_fits_with_rebound_keys(self):
         bindings = set_key_binding(None, "catnap", "x")
         self._check(bindings, SimpleNamespace(v2={"settings": {"key_bindings": bindings}}))
+
+
+# DejaVu Sans Mono is what CI gets from fonts-dejavu-core; it has no Liberation copy.
+DEJAVU_MONO = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+DEJAVU_SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
+
+def _installed_mono_fonts():
+    return [path for path in FONT_CANDIDATES
+            if "Mono" in Path(path).name and os.path.exists(path)]
+
+
+class MonoFontChecks(unittest.TestCase):
+    """The "mono" family must be a monospace face wherever one is installed (#122)."""
+
+    def setUp(self):
+        self.text = Text()
+        self.addCleanup(self.text.close)
+
+    def _advances(self, text):
+        # Thin and wide glyphs in a monospace face draw at one width. SDL_ttf sizes the
+        # surface to the ink, which can overhang the advance by a pixel, so allow one.
+        thin = text.render("iiiiiiii", 14, (255, 255, 255), "mono").shape[1]
+        wide = text.render("WWWWWWWW", 14, (255, 255, 255), "mono").shape[1]
+        return thin, wide
+
+    def test_mono_resolves_to_a_monospace_font_when_one_is_installed(self):
+        installed = _installed_mono_fonts()
+        if not installed:
+            self.skipTest("no monospace candidate font is installed here")
+        self.assertIn(find_font("mono"), installed)
+
+    def test_mono_text_has_one_advance_for_thin_and_wide_glyphs(self):
+        if not _installed_mono_fonts():
+            self.skipTest("no monospace candidate font is installed here")
+        thin, wide = self._advances(self.text)
+        self.assertLessEqual(abs(thin - wide), 1, f"iiiiiiii is {thin}px, WWWWWWWW is {wide}px")
+
+    def test_dejavu_mono_is_chosen_over_dejavu_sans_as_on_ci(self):
+        # CI installs only fonts-dejavu-core. Simulate that machine: the Liberation
+        # and JetBrains entries are absent, so the proportional DejaVuSans was the
+        # match before the mono paths were added.
+        if not (os.path.exists(DEJAVU_MONO) and os.path.exists(DEJAVU_SANS)):
+            self.skipTest("DejaVu Sans Mono and Sans are not both installed")
+        present = {DEJAVU_MONO, DEJAVU_SANS}
+        # setUp's Text has drawn nothing yet, so its font opens under the patch.
+        with patch("os.path.exists", side_effect=lambda p: p in present):
+            self.assertEqual(find_font("mono"), DEJAVU_MONO)
+            thin, wide = self._advances(self.text)
+        self.assertLessEqual(abs(thin - wide), 1, f"iiiiiiii is {thin}px, WWWWWWWW is {wide}px")
 
 
 if __name__ == "__main__":
