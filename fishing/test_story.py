@@ -584,7 +584,8 @@ class Story(StoryPlay):
         renderer = UI(text, self.world)
         for shown, offered in ((0.0, False), (CREDITS_HOLD_S, True)):
             drawn = []
-            renderer._center = lambda frame, s, *args, **kw: drawn.append(s)
+            # Every helper (_center, _backed) draws through _text.
+            renderer._text = lambda frame, s, *args, **kw: drawn.append(s) or 0
             renderer.draw(np.zeros((720, 1280, 3), np.uint8), self.state, UIState(mode="credits", credits_s=shown))
             self.assertIn("The Book of Five Waters", drawn)
             self.assertEqual(any("keep fishing" in line for line in drawn), offered, shown)

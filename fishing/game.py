@@ -46,7 +46,7 @@ from .bot import tick as tick_bot
 from .sim import State
 from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
 from .ui import (UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, CREDITS_HOLD_S, check_rows,
-                 comfort_controls, shop_rows, title_options)
+                 comfort_controls, pause_options, shop_rows, title_options)
 from .world import World
 from .lakes import travel_caption, travel_lock_reason
 
@@ -54,9 +54,10 @@ DRIVING = {"play"}
 MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
 NAVIGATION_KEYS = set(MENU_DIRECTIONS) | set(MENU_DIRECTIONS.values())
 DRIVING_KEYS = {"w", "s", "a", "d", "up", "down", "left", "right"}
-PAUSE_N = 5
 from .soundscape import CAPTIONS as SOUND_CAPTIONS  # every sound's caption (V1-38)
+from .reading import reading_seconds
 
+CAPTION_SECONDS = 2.4  # the shortest a sound caption shows; longer ones hold to be read
 
 
 def _save_target(root: Path, override: str | Path | None) -> tuple[Path, bool]:
@@ -246,7 +247,7 @@ class Session:
         settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
         if settings.get("captions", True) and self.ui.caption_timer <= 0:
             self.ui.caption = soundscape.caption(kind, self.state)
-            self.ui.caption_timer = 2.4
+            self.ui.caption_timer = reading_seconds(self.ui.caption, CAPTION_SECONDS)
 
     def _tick_whale(self, dt: float) -> None:
         """The Star-Whale comes back to a Skipper settled by the reflection on a clear night,
@@ -435,7 +436,7 @@ class Session:
         if heard:
             # The SFX sound wins a shared tick; a cue's caption otherwise (V1-38).
             self.ui.caption = soundscape.caption(heard[0], self.state)
-            self.ui.caption_timer = 2.4
+            self.ui.caption_timer = reading_seconds(self.ui.caption, CAPTION_SECONDS)
         elif self.ui.caption_timer > 0:
             self.ui.caption_timer = max(0.0, self.ui.caption_timer - max(0.0, float(dt)))
             if self.ui.caption_timer == 0:
@@ -783,29 +784,35 @@ class Session:
         if "tab" in keys.pressed:
             self.ui.mode = "map"
         if "j" in keys.pressed:
-            self.ui.mode = "journal"
-            self.ui.journal_i = 0
-            self.ui.journal_page = 0
-            self.ui.journal_quest_i = 0
-            self.ui.book_detail_page = 0
-            self.ui.book_detail_pages = 1
-            clue = self.state.v2["book"].get("dream_clue")
-            dream_sid = clue.get("species") if isinstance(clue, dict) else None
-            sid = self.ui.book_prompt_species or dream_sid
-            if sid in BOOK_SPECIES_IDS:
-                self.ui.book_entry_i = BOOK_SPECIES_IDS.index(sid)
-                self.ui.journal_i = self.ui.book_entry_i
-                self.ui.journal_page = 1
-                self.ui.book_prompt_species = ""
+            self._open_book()
         if "i" in keys.pressed:
-            self.ui.mode = "well"
-            self.ui.well_i = 0
+            self._open_well()
         if "b" in keys.pressed:
             self._bot()
         if "f" in keys.pressed:
             self._open_set()
         if "e" in keys.pressed:
             self._open_e()
+
+    def _open_book(self):
+        self.ui.mode = "journal"
+        self.ui.journal_i = 0
+        self.ui.journal_page = 0
+        self.ui.journal_quest_i = 0
+        self.ui.book_detail_page = 0
+        self.ui.book_detail_pages = 1
+        clue = self.state.v2["book"].get("dream_clue")
+        dream_sid = clue.get("species") if isinstance(clue, dict) else None
+        sid = self.ui.book_prompt_species or dream_sid
+        if sid in BOOK_SPECIES_IDS:
+            self.ui.book_entry_i = BOOK_SPECIES_IDS.index(sid)
+            self.ui.journal_i = self.ui.book_entry_i
+            self.ui.journal_page = 1
+            self.ui.book_prompt_species = ""
+
+    def _open_well(self):
+        self.ui.mode = "well"
+        self.ui.well_i = 0
 
     def _hail(self):
         npc = nearby_npc(self.state)
@@ -888,16 +895,18 @@ class Session:
         if sound:
             self.sound = sound
 
-    def _tow(self):
+    def _tow(self, toast=True) -> str | None:
         if not self.world_running():
-            return
+            return None
         before = self.state.game_minutes
         error = self.state.tow_to_landing(self.world)
         if error:
-            self.state.toast(error)
-        else:
-            reset_bot(self.state)
-            self._record_world_advance(before)
+            if toast:
+                self.state.toast(error)
+            return error
+        reset_bot(self.state)
+        self._record_world_advance(before)
+        return None
 
     def change_lake(self,lake_id):
         if self.state.lines:
@@ -1647,21 +1656,41 @@ class Session:
         if "esc" in keys.pressed:
             self.ui.mode = "play"
             return
+        options = pause_options(self.state)
         if keys.tap("up", dt):
-            self.ui.pause_i = (self.ui.pause_i - 1) % PAUSE_N
+            self.ui.pause_i = (self.ui.pause_i - 1) % len(options)
         if keys.tap("down", dt):
-            self.ui.pause_i = (self.ui.pause_i + 1) % PAUSE_N
+            self.ui.pause_i = (self.ui.pause_i + 1) % len(options)
         if "return" in keys.pressed or "space" in keys.pressed:
-            choice = self.ui.pause_i
-            if choice == 0:
+            choice = options[self.ui.pause_i % len(options)]
+            self.ui.note = ""
+            if choice == "Resume":
                 self.ui.mode = "play"
-            elif choice == 1:
+            elif choice == "Book":
+                self._open_book()
+            elif choice == "Livewell":
+                self._open_well()
+            elif choice in ("Raise the sail", "Lower the sail"):
+                self.ui.mode = "play"
+                self._sail()
+            elif choice == "Call a tow":
+                # A tow moves the world, so it runs from play; a refusal stays in the menu.
+                self.ui.mode = "play"
+                error = self._tow(toast=False)
+                if error:
+                    self.ui.mode = "pause"
+                    self.ui.note = error
+            elif choice.startswith("Time "):
+                error = self.state.cycle_scale()
+                if error:
+                    self.ui.note = error
+            elif choice == "Settings":
                 self.ui.settings_page = "main"
                 self.ui.settings_i = 0
                 self.ui.mode = "settings"
-            elif choice == 2:
+            elif choice == "Help":
                 self._open_help("pause")
-            elif choice == 3:
+            elif choice == "Main menu":
                 self.save()
                 self._continue_catchup_at = self.state.stamp
                 self._title_catchup_pending = True

@@ -2064,3 +2064,71 @@ V1-42 (#70) reviewed every lake as key art and fixed what the review found.
 - software caldera walls vary more down than across (strata, not columns).
 
 **Budget.** The 1,200-frame software benchmark is unchanged in time and memory, and its coverage stays complete.
+
+## Implemented second-pass UI and UX (V1-43)
+
+V1-43 (#71) went over every screen at every text size, for keyboard and for gamepad, and fixed what that showed.
+
+**Screenshot matrix** (`python3 -m fishing --shots <dir> --ui-matrix [--software] [--dyslexia] [--screens=...]`, `uishots.py`).
+- It draws every screen `UI.draw` can show (`uiscreens.screens`: 234 with real content) at Small, Standard and Large text, for keyboard and for gamepad. Each frame is 1280x720, over one lake frame (Briar's slip at mid-morning).
+- It writes `contact-<size>-<device>.png` per text size and device, and `key-<screen>.png` for the twelve key screens with their six versions side by side. `matrix.json` lists every frame.
+- `uiscreens.py` is the screen list the layout tests used, moved out of `test_ui_layout.py` and given a text-size parameter.
+
+**Contrast (WCAG AA).** Every string now reads at 4.5:1, or 3:1 for 24 px and up, over a night-black lake and over a bright overcast sky.
+- Text drawn straight over the lake sits on a soft dark backing (`UI._backed`, `TEXT_BACKING`):
+  - the haul title, result, speed and footer;
+  - the encounter's skip line and the legendary's name;
+  - the chart's name, key and close hint;
+  - the credits column and its hint;
+  - the title tagline.
+- The HUD panels are a little more opaque (`HUD_PANEL_ALPHA`), and the title gradient is a little stronger.
+- The book's ochre is darker (124, 82, 32), so its footers pass on paper.
+
+**Colour-blind-safe chart.** Every marker differs in shape, not only colour. The key draws each marker beside its name, and no entry names a colour.
+
+| Marker | Shape |
+| --- | --- |
+| Fish on | small fish |
+| Tired fish | cross |
+| Baited hook | dot |
+| Soaking line | dashed |
+| Cat | round pin in its coat colour |
+| Bot | triangle |
+| You | square with a heading tick |
+| Trinidad Cove | hollow diamond |
+
+A neighbouring hook never covers a fish or a cross.
+
+**Focus.** Every list marks its chosen row with a band, a `>` or brackets, as well as gold. The livewell was the one list that used colour alone.
+
+**Fit at every size.**
+- Text on a panel stays inside it at every text size and on both devices. The sized-to-fit panels are:
+  - the HUD clock panel, which sizes to its clock;
+  - the pause menu, which sizes to its longest line;
+  - the bait-setting panel, which sizes to its controls line.
+- Two measurements that used the sans font for mono text are fixed: the key names on the keyboard-controls page, and the chart key.
+- A toast drops below the HUD's top panels instead of covering the clock. It is measured, not counted in cells.
+
+**Gamepad flow.**
+- The pause menu reaches everything that has no pad button: the Book, the Livewell, raising and lowering the sail (on a sailing boat), calling a tow, and the time speed. It is built from `pause_options(state)`.
+- A refused tow stays in the menu and says why. The time speed changes in place.
+- The gamepad help page says where each of these lives, in place of "no pad button yet".
+
+**Caption timing** (`reading.py`). Toasts and sound captions hold long enough to read: a second to notice, then 14 characters a second, never under their old hold and never over 9 s.
+
+**Copy (`05 §0`).**
+- The V3 quest lines that stated rules, rewards or numbers are recopied into each cat's voice through `extends` rows. That covers the offer, progress and completion lines of q01–q12, and story_c2_s3's offer. The rules stay in the book's objective text.
+- `test_copy.py` checks every bubble, greeting, letter and story for:
+  - no money, counts of minutes, metres or hooks, clock times, line tiers or zone ids;
+  - at most 140 characters a bubble and 3 bubbles a node;
+  - only the script's placeholders, never opening a sentence.
+
+**Tests.**
+- `test_accessibility.py`:
+  - contrast on every screen, over both backdrops, in both fonts;
+  - marker shapes;
+  - caption and toast timing for every sound caption and cookout line;
+  - the gamepad pause routes;
+  - the livewell focus band.
+- `test_ui_layout.PanelFitChecks`: text inside its panel at every size and on both devices, and toasts clear of the HUD.
+- `test_copy.py`: the copy rules above.

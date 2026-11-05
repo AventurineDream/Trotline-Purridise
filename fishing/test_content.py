@@ -103,9 +103,14 @@ class ContentChecks(unittest.TestCase):
             offer = c.dialogue[qid+':dialogue:offer']
             self.assertEqual([choice['action'] for choice in offer['choices']], ['accept','decline'])
             self.assertEqual(c.quests[qid]['dialogue']['completed'], qid+':dialogue:return')
+        # The rule lives in the book's objective; the cat says it in her own words (05 §0, V1-43).
+        from .ui import _quest_objective_text
+        rule = _quest_objective_text(c.quests[QUEST_IDS[5]])
+        self.assertIn('livewell during 05:00–08:00', rule)
+        self.assertIn('the fish stays yours', rule)
         text = c.dialogue[QUEST_IDS[5]+':dialogue:offer']['text']
-        self.assertIn('livewell between 05:00 and 08:00', text)
-        self.assertIn('when it took the hook does not matter', text)
+        self.assertIn('around sunrise', text)
+        self.assertNotIn('05:00', text)
 
     def test_missing_fields_and_duplicate_ids(self):
         for group, field in [('npcs','name'),('quests','objective'),('rewards','cash'),('dialogue','text')]:
