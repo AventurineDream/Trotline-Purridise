@@ -432,6 +432,9 @@ def _zone_path_segments(world: World, x0: float, z0: float,
     return out
 
 
+FIRST_BITE_BOOST = 8.0  # bite pace in a new game's prologue, until its first fish (first_bite_nudge)
+
+
 def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float, lake_id="briar", *, game_minutes=None, tool: bottools.ToolState | None = None) -> dict[str, float]:
     out = {}
     lake_rates = LAKE_RATE_MULTIPLIERS.get(lake_id, {})
@@ -888,6 +891,16 @@ class State:
         if hooked or spoiled:
             self.toast(f"While you were away: {hooked} hooked, {spoiled} got away.")
 
+    def first_bite_nudge(self) -> bool:
+        """A new game's prologue, before its first fish is hooked: bites come
+        FIRST_BITE_BOOST times as fast, so the first catch lands within the first few minutes
+        of play (02 §1, V1-44). Saves past the prologue, and migrated ones, never see it."""
+        if self.hooked_total:
+            return False
+        story = self.v2.get("story") if isinstance(self.v2, dict) else None
+        scenes = story.get("scene_states") if isinstance(story, dict) else None
+        return isinstance(scenes, dict) and scenes.get("prologue") == "pending"
+
     def _advance_hours(self, hours: int, toast: bool) -> tuple[int, int]:
         hooked = spoiled = 0
         for _ in range(hours):
@@ -920,6 +933,7 @@ class State:
         if world is not None:
             self.drift_lines(world, hours * 60.0)
         cold_layer = bottools.cold_layer_m(self.lake_id, hour, weather)
+        nudge = self.first_bite_nudge()
         winched = self.owns_tool("zero_g_winch")
         silent_hull = "silent" in self.boat.traits
         for li, line in enumerate(self.lines):
@@ -951,6 +965,8 @@ class State:
                 total = sum(rates.values())
                 if total <= 0:
                     continue
+                if nudge:
+                    total *= FIRST_BITE_BOOST
                 if not self.rng.chance(1.0 - math.exp(-total * hours)):
                     continue
                 sp = self.rng.pick(rates)
@@ -1729,7 +1745,7 @@ class State:
         for hook in line.hooks:
             if hook.catch is None and not hook.baited:
                 hook.baited = True
-        self.toast(f"Rebaited {need} hooks with their section baits.")
+        self.toast(f"Rebaited {need} hook{'s' if need != 1 else ''} with their section baits.")
         return None
 
     def pull_line(self, line_index: int) -> str | None:
