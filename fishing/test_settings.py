@@ -57,9 +57,11 @@ class SettingsChecks(unittest.TestCase):
         self.assertFalse(loaded.v2["profile"]["collar"]["visible"])
 
     def test_pause_menu_opens_settings_and_escape_returns_to_pause(self):
+        from .ui import pause_options
         session = self.make_session()
         session.ui.mode = "pause"
-        session.tick(Keys(pressed={"down"}), 0.05)
+        for _ in range(pause_options(session.state).index("Settings")):
+            session.tick(Keys(pressed={"down"}), 0.05)
         session.tick(Keys(pressed={"return"}), 0.05)
         self.assertEqual(session.ui.mode, "settings")
         session.tick(Keys(pressed={"esc"}), 0.05)

@@ -89,6 +89,13 @@ def main(argv: list[str] | None = None) -> int:
                              if arg.startswith("--lakes=")), None)
             beauty_shots(dest, software="--software" in argv, lakes=selected)
             return 0
+        if "--ui-matrix" in argv:
+            from .uishots import matrix as ui_matrix
+            selected = next((set(arg.split("=", 1)[1].split(",")) for arg in argv
+                             if arg.startswith("--screens=")), None)
+            ui_matrix(dest, software="--software" in argv, dyslexia_font="--dyslexia" in argv,
+                      only=selected)
+            return 0
         if "--lake-framework" in argv:
             from .lakeshots import shots as lake_shots
             selected = next((arg.split("=", 1)[1].split(",") for arg in argv
