@@ -2056,7 +2056,7 @@
         "quest": "story_c2_s2"
       },
       "lines": {
-        "offer": "Set a premium or heavy line in the Marked Pool, and let it soak.",
+        "offer": "Set a good line right where it sits now. Nightfall's best. If the cats bite there, I'll change my directions for good.",
         "progress": "The pool is calm. Let the line soak.",
         "ready": [
           "That's it, that's the spot! I'll have a proper barrier and a sign up by morning. Calm water, marked edges, nobody near the spillway.",
@@ -2724,11 +2724,109 @@
   ],
   "extends": [
     {
+      "id": "q01_tea_leaves_deep_holes",
+      "extends": "q01_tea_leaves_deep_holes",
+      "lines": {
+        "offer": "Set a worm line in Lily cove, dear, then send Bot out to sound it. I'd love to hear what the bottom has to say.",
+        "progress": "A fresh worm line in Lily cove, and Bot's little report on it. The tea leaves can wait for you.",
+        "completion": "Thank you, dear. A little something for the careful work. I'll remember how kindly you listened."
+      }
+    },
+    {
+      "id": "q02_lonely_star_current",
+      "extends": "q02_lonely_star_current",
+      "lines": {
+        "offer": "Set a minnow line by the dam riprap and give it a good soak while you're out. Then check it and tell me how the current treated it.",
+        "progress": "Your minnow line by the riprap wants a proper soak before you check it. Time away from the lake doesn't count, I'm afraid.",
+        "completion": "Well earned, Skipper. The Cedar current will teach you something new every trip."
+      }
+    },
+    {
+      "id": "q03_unstrung_line",
+      "extends": "q03_unstrung_line",
+      "lines": {
+        "offer": "Anchor by the cypress shore and let your engine rest a good long while. Let the water set the pace.",
+        "progress": "Stay anchored by the cypress, engine quiet. Move or start the motor and the stillness begins again.",
+        "completion": "Your pay is ready, and the first Ripple is yours."
+      }
+    },
+    {
+      "id": "q04_great_contour_chart",
+      "extends": "q04_great_contour_chart",
+      "lines": {
+        "offer": "Pip: “Ask Bot to scout the north flats and bring back his depth report.” Pebble: “A rough depth is fine. Maps are about noticing!”",
+        "completion": "Here's your pay, and a Ripple. We're adding a new mark to our chart!"
+      }
+    },
+    {
+      "id": "q05_moonlight_trotlines",
+      "extends": "q05_moonlight_trotlines",
+      "lines": {
+        "offer": "Set a cut-shad line in the deep hole after dark, let it soak a while, then check it. Bring a light if you like.",
+        "progress": "The deep hole, after dark, a cut-shad line with a good soak. Whether you use a light is up to you.",
+        "completion": "Take your pay and another Ripple. Night is a place to know, not a thing to fear."
+      }
+    },
+    {
+      "id": "q06_unrepeatable_sunrise",
+      "extends": "q06_unrepeatable_sunrise",
+      "lines": {
+        "offer": "Bring a golden shiner from a worm line in Lily cove into your livewell around sunrise. Keep the fish. I only want the morning.",
+        "progress": "A golden shiner from a Lily cove worm line, into your livewell around sunrise. When it bit doesn't matter.",
+        "completion": "Here's your pay and a Ripple. I'll remember this sunrise in my own way."
+      }
+    },
+    {
+      "id": "q07_art_of_the_nap",
+      "extends": "q07_art_of_the_nap",
+      "lines": {
+        "offer": "Anchor in Creek inlet and let the engine rest a good long while. Your lines can keep soaking while we nap.",
+        "progress": "Stay anchored in Creek inlet, engine quiet. Any fuss and the nap starts over. Fish all you like.",
+        "completion": "That earns your pay and a Ripple. Now, if you'll excuse me, I've got a nap to finish."
+      }
+    },
+    {
       "id": "q08_channel_run",
       "extends": "q08_channel_run",
       "lines": {
         "greeting": "Ahoy, Skipper! Forty years on riverboats, and you know what I learned? Slow turns win.",
-        "offer": "Take a long, easy run across the open water with me. Your own pace. I want to see how you hold a line."
+        "offer": "Take a long, easy run across the open water with me. Your own pace. I want to see how you hold a line.",
+        "progress": "Keep running the open water under your own steam, Skipper. Oars, motor or sail. A tow doesn't count.",
+        "completion": "Paid, and a Ripple besides. Bot may read the water, but you steered the course."
+      }
+    },
+    {
+      "id": "q09_quiet_channel",
+      "extends": "q09_quiet_channel",
+      "lines": {
+        "offer": "Set a chicken-liver line in Creek channels, let it soak a spell, then check it. No extra gadgets needed!",
+        "progress": "Check your chicken-liver line in Creek channels once it's had a good soak. Time off the lake doesn't count.",
+        "completion": "Take your pay and a Ripple. Turns out balance can be beautifully simple."
+      }
+    },
+    {
+      "id": "q10_ballad_lonely_star",
+      "extends": "q10_ballad_lonely_star",
+      "lines": {
+        "completion": "Here's your pay and a Ripple. The song stays in our memories."
+      }
+    },
+    {
+      "id": "q11_deep_water_drift",
+      "extends": "q11_deep_water_drift",
+      "lines": {
+        "offer": "Set a cut-shad line in the southern basin, have Bot sound it close by, then check it after a good soak. A rough depth is enough.",
+        "progress": "Your cut-shad line in the southern basin: Bot's report on it first, then a proper soak before you check it.",
+        "completion": "You've earned your pay and a Ripple. Data can be modest and still be useful."
+      }
+    },
+    {
+      "id": "q12_first_voyage",
+      "extends": "q12_first_voyage",
+      "lines": {
+        "offer": "Start at Cedar Landing, run to Clear Creek coves, and come back, all at your own helm. Any of your boats will do!",
+        "progress": "Cedar Landing, then Clear Creek coves, then back to the landing, steering yourself. Tows don't count.",
+        "completion": "Here's your pay and a Ripple. I'll draw your route beside mine!"
       }
     }
   ],
