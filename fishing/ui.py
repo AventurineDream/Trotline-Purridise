@@ -66,6 +66,12 @@ WARN = (220, 126, 96)
 # Shallow to deep; the last colour also covers anything deeper.
 SONAR_BAND_COLORS = ((120, 204, 214), (92, 172, 196), (70, 136, 176), (52, 104, 150))
 GOOD = (150, 196, 140)
+# The backing behind text that sits on the lake itself (haul, credits, encounter): at this
+# strength every text colour above reads at 4.5:1 or better over the brightest sky (V1-43).
+TEXT_BACKING = (9, 17, 19)
+TEXT_BACKING_ALPHA = 0.80
+# HUD panels: dark enough that DIM text keeps 4.5:1 over a white noon sky.
+HUD_PANEL_ALPHA = 0.74
 GAME_TITLE = "Trotline Purridise"
 BOOK_STAGE_UP_COUNTS = frozenset(
     threshold for threshold, _stage in BOOK_STAGES if threshold >= 3
@@ -663,6 +669,18 @@ def check_rows(state, line_index: int) -> list[Row]:
     return rows
 
 
+def pause_options(state) -> list[str]:
+    """The pause menu. It also reaches every action that has no pad button of its own, so
+    a player on a gamepad can do everything a keyboard player can (V1-43)."""
+    items = ["Resume", "Book", "Livewell"]
+    boat = getattr(state, "boat", None)
+    if getattr(boat, "sail_speed", 0):
+        items.append("Lower the sail" if getattr(state, "sail_raised", False) else "Raise the sail")
+    scale = getattr(state, "time_scale", 1)
+    items += ["Call a tow", f"Time {scale}x", "Settings", "Help", "Main menu", "Quit"]
+    return items
+
+
 def title_options(has_save: bool) -> list[str]:
     if has_save:
         return ["Continue", "New morning"]
@@ -698,6 +716,7 @@ class UI:
             text_size = 1
         self._text_scale = TEXT_SIZE_SCALES[text_size]
         self._dyslexia_font = bool(settings.get("dyslexia_font", False))
+        self._hud_rects = []  # the HUD's top panels this frame; toasts keep clear of them
         mode = ui.mode
         if mode == "play":
             draw_sighting(frame, state, camera)
@@ -765,7 +784,7 @@ class UI:
         elif mode == "well":
             self._well(frame, state, ui)
         elif mode == "pause":
-            self._pause(frame, ui)
+            self._pause(frame, state, ui)
         elif mode == "settings":
             if ui.settings_page == "keys":
                 self._keybindings(frame, state, ui)
@@ -790,13 +809,16 @@ class UI:
         block = sum(self.cell(size)[1] + 8 for _text, size, _color in rows)
         rest = h // 2 - block // 2
         y = max(rest, h - int(min(ui.credits_rise, 4.0 * h) * h / 720))  # rising from below, then at rest
+        # A dark column behind the names, so they keep AA contrast over a bright dawn (V1-43).
+        column = max(self._measure(text, size, "sans") for text, size, _color in rows if text) + 48
+        self._fill(frame, int(w / 2 - column / 2), 0, int(column), h, TEXT_BACKING, 0.72)
         for text, size, color in rows:
             if -40 < y < h:
                 self._center(frame, text, w / 2, y, size, color)
             y += self.cell(size)[1] + 8
         if ui.credits_s >= CREDITS_HOLD_S:  # keys do nothing while the credits hold
             hint = self._controls(ui, "Press any key to keep fishing.", "Press A to keep fishing.")
-            self._center(frame, hint, w / 2, int(h * 0.82), small, DIM)
+            self._backed(frame, hint, w / 2, int(h * 0.82), small, DIM, "sans", center=True)
 
     def _vignette(self, frame, state, vignette: dict, panel_top: int):
         """A story moment's card beside the dialogue: the book, or Bot's collar (V1-35). It fits
@@ -1075,10 +1097,10 @@ class UI:
             encounterview.name(self, frame, hook.catch.species, beats)
             if encounter.presented(state.v2, hook.catch.species):
                 skip = self._controls(ui, "Esc skip   Hold E hurries", "B skip   Hold A hurries")
-                self._center(frame, skip, w / 2, int(h * 0.95), small, DIM)
+                self._backed(frame, skip, w / 2, int(h * 0.95), small, DIM, "sans", center=True)
             return
         title = f"HAULING  {index + 1:02d} / {len(line.hooks):02d}"
-        self._text(frame, title, int(w * 0.055), int(h * 0.06), head, INK)
+        self._backed(frame, title, int(w * 0.055), int(h * 0.06), head, INK)
         if legend:
             result, result_color = "The line goes heavy.", GOLD  # its name waits for the scene
         elif hook.catch is not None:
@@ -1090,13 +1112,12 @@ class UI:
             result, result_color = "Bait still on", GOOD
         else:
             result, result_color = "Empty hook · bait taken", DIM
-        self._center(frame, result, w / 2, int(h * 0.73), body, result_color)
+        self._backed(frame, result, w / 2, int(h * 0.73), body, result_color, "sans", center=True)
         speed_label = {"normal": "Normal", "quick": "Quick", "instant": "Instant"}.get(speed, "Normal")
-        self._text(frame, f"{speed_label} speed", int(w * 0.055), int(h * 0.13), small,
-                   GOLD, shadow=False)
+        self._backed(frame, f"{speed_label} speed", int(w * 0.055), int(h * 0.13), small, GOLD)
         foot = self._controls(ui, "Hold E 3×   Any key except E skips a card   Esc summary",
                               "Hold A 3×   A skips a card   B summary")
-        self._center(frame, foot, w / 2, int(h * 0.95), small, INK)
+        self._backed(frame, foot, w / 2, int(h * 0.95), small, INK, "sans", center=True)
         if ui.haul_phase == "card" and hook.catch is not None:
             if legend:
                 encounterview.card(self, frame, state, ui, hook.catch)
@@ -1229,6 +1250,21 @@ class UI:
         self._round_fill(dst, x, y, w, h, (17, 31, 32), alpha)
         self._fill(dst, x+10, y, w-20, 1, GOLD, 0.34)
 
+    def _backed(self, frame, s, x, y, size, color, family="mono", center=False) -> int:
+        """Text drawn straight over the lake, on its own soft dark backing (V1-43).
+
+        A drop shadow alone falls below WCAG AA contrast over a bright sky. Behind the
+        backing, every UI text colour reads at 4.5:1 or better, even over white sky."""
+        if not s:
+            return 0
+        width = self._measure(s, size, family)
+        height = self._render(s, size, color, family).shape[0]
+        left = x - width / 2 if center else x
+        pad = max(4, size // 3)
+        self._round_fill(frame, left - pad, y - pad // 2, width + pad * 2, height + pad,
+                         TEXT_BACKING, TEXT_BACKING_ALPHA)
+        return self._text(frame, s, left, y, size, color, False, family)
+
     def _round_fill(self, dst, x, y, w, h, rgb, alpha):
         dh,dw = dst.shape[:2]
         x,y,w,h = int(x),int(y),int(w),int(h)
@@ -1292,9 +1328,7 @@ class UI:
         from . import calendar
         weather = calendar.weather_at(state).replace("_", " ").upper()
         clock = calendar.day_name(state.game_minutes)[:3] + " " + clock_string(state.game_minutes)
-        self._panel(frame,m,m,int(205*unit)+34,int(92*unit)+10,0.66)
-        self._text(frame,self.world.name.upper(),m+16,m+int(11*unit),small,GOLD,False,"sans")
-        self._text(frame,clock,m+16,m+int(31*unit),max(22,int(30*unit)),INK,False,"serif")
+        clock_size = max(22,int(30*unit))
         meta = weather
         if self.world.id == "nebula":
             # The Lagoon names its bands Rising, Bright, Fading and Deep (03 §1.6).
@@ -1303,12 +1337,23 @@ class UI:
             meta = band_label(hour_of_day(state.game_minutes)).upper() + "  /  " + weather
         if state.time_scale!=1:
             meta += f"  /  {state.time_scale}x" + ("" if state.fast_ok() else " held")
+        # As wide as its clock at the largest text (V1-43).
+        lw = max(int(205*unit)+34, self._measure(clock,clock_size,"serif")+34,
+                 self._measure(self.world.name.upper(),small,"sans")+34, self._measure(meta,small,"sans")+34)
+        lh = int(92*unit)+10
+        self._panel(frame,m,m,lw,lh,HUD_PANEL_ALPHA)
+        if getattr(self, "_hud_rects", None) is None:
+            self._hud_rects = []
+        self._hud_rects.append((m, m, lw, lh))
+        self._text(frame,self.world.name.upper(),m+16,m+int(11*unit),small,GOLD,False,"sans")
+        self._text(frame,clock,m+16,m+int(31*unit),clock_size,INK,False,"serif")
         self._text(frame,meta,m+16,m+int(71*unit),small,DIM,False,"sans")
         zone = self.world.zone_name(self.world.zone_at(state.x, state.z))
         zone_width = self._measure(zone,size+4,"serif")
         rx = w-m-max(int(194*unit),zone_width+32)
         rw = w-m-rx
-        self._panel(frame,rx,m,rw,int(140*unit)+10,0.66)
+        self._panel(frame,rx,m,rw,int(140*unit)+10,HUD_PANEL_ALPHA)
+        self._hud_rects.append((rx, m, rw, int(140*unit)+10))
         self._text(frame,"ON THE WATER",rx+16,m+int(11*unit),small,GOLD,False,"sans")
         self._text(frame,zone,rx+16,m+int(31*unit),size+4,INK,False,"serif")
         bearing = ("N","NE","E","SE","S","SW","W","NW")[int((state.yaw%(2*np.pi))/(np.pi/4)+0.5)%8]
@@ -1437,7 +1482,12 @@ class UI:
         x += 8
         frame[y:y + mh, x:x + mw] = scaled
         for line in state.lines:
-            self._seg(frame, line.x0, line.z0, line.x1, line.z1, x, y, mw, mh, self._line_color(line))
+            kind = self._line_kind(line)
+            self._seg(frame, line.x0, line.z0, line.x1, line.z1, x, y, mw, mh, self._line_color(line),
+                      dashed=kind == "soak")
+            if kind == "tired":
+                u, v = self.world.map_pixel((line.x0 + line.x1) / 2, (line.z0 + line.z1) / 2, mw, mh)
+                self._marker(frame, "tired", x + u, y + v)
             if comfort.has_buff(state, "glow_buoys"):
                 for bx, bz in line.buoys():
                     bu, bv = self.world.map_pixel(bx, bz, mw, mh)
@@ -1449,12 +1499,13 @@ class UI:
         self._plot_bot(frame, state, x, y, mw, mh)
         return mh + 35
 
-    def _line_color(self, line):
+    def _line_kind(self, line) -> str:
         if any(h.catch is not None and h.catch.age >= 9.0 for h in line.hooks):
-            return WARN
-        if line.fish_on():
-            return (232, 176, 72)
-        return (126, 168, 146)
+            return "tired"
+        return "fish" if line.fish_on() else "soak"
+
+    def _line_color(self, line):
+        return {"tired": WARN, "fish": (232, 176, 72)}.get(self._line_kind(line), (126, 168, 146))
 
     def _lines_panel(self, frame, state, right, above, width, size) -> int:
         """Height added above the aboard card, including the gap."""
@@ -1496,26 +1547,30 @@ class UI:
         frame[y:y + mh, x:x + mw] = scaled
         for line in state.lines:
             color = self._line_color(line)
-            self._seg(frame, line.x0, line.z0, line.x1, line.z1, x, y, mw, mh, color)
+            self._seg(frame, line.x0, line.z0, line.x1, line.z1, x, y, mw, mh, color,
+                      dashed=self._line_kind(line) == "soak")
             if comfort.has_buff(state, "glow_buoys"):
                 for bx, bz in line.buoys():
                     bu, bv = self.world.map_pixel(bx, bz, mw, mh)
                     self._dot(frame, x + bu, y + bv, 4, GOLD)
             n = max(1, len(line.hooks))
+            markers = []
             for i, hook in enumerate(line.hooks):
                 t = (i + 0.5) / n
                 hx = line.x0 + (line.x1 - line.x0) * t
                 hz = line.z0 + (line.z1 - line.z0) * t
                 if hook.catch is not None and hook.catch.age >= 9.0:
-                    dot = WARN
+                    kind = "tired"
                 elif hook.catch is not None:
-                    dot = (255, 214, 120)
+                    kind = "fish"
                 elif hook.baited:
-                    dot = (186, 214, 196)
+                    kind = "bait"
                 else:
-                    dot = (90, 104, 98)
-                u, v = self.world.map_pixel(hx, hz, mw, mh)
-                self._dot(frame, x + u, y + v, 2 if hook.catch is not None else 1, dot)
+                    kind = "empty"
+                markers.append((kind in ("fish", "tired"), kind, *self.world.map_pixel(hx, hz, mw, mh)))
+            # Fish and tired fish last, so a neighbouring hook never covers their shape.
+            for _on_top, kind, u, v in sorted(markers, key=lambda m: m[0]):
+                self._marker(frame, kind, x + u, y + v)
         self._plot_habitats(frame, x, y, mw, mh)
         sonar_cells = sonar.overlay(state, self.world)
         self._plot_sonar(frame, sonar_cells, x, y, mw, mh)
@@ -1525,13 +1580,48 @@ class UI:
         self._plot_boat(frame, state, x, y, mw, mh, radius=4)
         self._plot_bot(frame, state, x, y, mw, mh)
         size = self._size(frame, "small")
-        self._text(frame, self.world.name, x, y - self.cell(size)[1] - 14, size, INK)
-        legend = "Fish gold   soak green   tired red   NPC blue"
-        if sonar_cells:
-            legend += "   sonar depth bands"
-        self._text(frame, legend, x, y + mh + 12, size, DIM, shadow=False)
+        top = y - self.cell(size)[1] - 14
+        self._backed(frame, self.world.name, x, top, size, INK)
         close_hint = self._controls(ui, "Tab closes the chart", "B closes the chart")
-        self._text(frame, close_hint, x + mw - 20 * self.cell(size)[0], y + mh + 14 + self.cell(size)[1], size, DIM, shadow=False)
+        self._backed(frame, close_hint, x + mw - self._measure(close_hint, size, "mono"), top, size, DIM)
+        self._chart_legend(frame, state, x, y + mh + 12, w - 16, size, bool(sonar_cells))
+
+    def legend_items(self, state, sonar_bands=False) -> list[tuple[str, str]]:
+        """(marker kind, words) for the chart key. Every kind differs in shape, not only
+        colour, so the key reads with any colour vision (V1-43)."""
+        from .botidentity import name as bot_name
+        items = [("fish", "fish on"), ("tired", "tired fish"), ("soak", "soaking line"),
+                 ("cat", "cat"), ("bot", bot_name(state)), ("boat", "you")]
+        if sonar_bands:
+            items.append(("sonar", "sonar depth"))
+        return items
+
+    def _chart_legend(self, frame, state, x, y, right, size, sonar_bands) -> int:
+        """Draws the key as marker + words, wrapping inside [x, right). Returns the bottom."""
+        row_h = self.cell(size)[1]
+        gap = max(14, int(size * 1.4))
+        swatch = max(14, int(size * 1.2))
+        rows, row, width = [], [], 0
+        for kind, words in self.legend_items(state, sonar_bands):
+            item_w = swatch + 6 + self._measure(words, size, "mono")
+            if row and x + width + gap + item_w > right:
+                rows.append((row, width))
+                row, width = [], 0
+            width += (gap if row else 0) + item_w
+            row.append((kind, words, item_w))
+        if row:
+            rows.append((row, width))
+        pad = max(4, size // 3)
+        for index, (items, width) in enumerate(rows):
+            ry = y + index * (row_h + pad)
+            self._round_fill(frame, x - pad, ry - pad // 2, width + pad * 2, row_h + pad,
+                             TEXT_BACKING, TEXT_BACKING_ALPHA)
+            cx = x
+            for kind, words, item_w in items:
+                self._marker(frame, kind, cx + swatch // 2, ry + row_h // 2, legend=True)
+                self._text(frame, words, cx + swatch + 6, ry, size, DIM, False)
+                cx += item_w + gap
+        return y + len(rows) * (row_h + pad)
 
     def _plot_sonar(self, frame, cells, x, y, mw, mh):
         for cell in cells:
@@ -1595,7 +1685,7 @@ class UI:
             return
         u, v = self.world.map_pixel(anchor.x, anchor.z, mw, mh)
         color = (240, 198, 112)
-        self._dot(frame, x + u, y + v, 3 if labels else 2, color)
+        self._shape(frame, "diamond ring", x + u, y + v, 5 if labels else 4, color)
         if labels:
             size = self._size(frame, "small")
             label = anchor.name
@@ -1612,13 +1702,13 @@ class UI:
             if npc.anchor.lake_id != self.world.id:
                 continue
             u, v = self.world.map_pixel(npc.anchor.x, npc.anchor.z, mw, mh)
-            # Each pin wears its cat's coat, ringed so pale coats read on the chart (V1-29).
+            # Each pin wears its cat's coat, ringed so pale coats read on the chart (V1-29),
+            # and is round so no colour vision mistakes it for a fish or the Bot (V1-43).
             radius = 3 if labels else 2
             row = cats.get(npc.id)
             pin = (tuple(int(c * 255 + 0.5) for c in row["appearance"]["colors"]["base"])
                    if row is not None else color)
-            self._dot(frame, x + u, y + v, radius + 1, (28, 34, 38))
-            self._dot(frame, x + u, y + v, radius, pin)
+            self._shape(frame, "disc", x + u, y + v, radius, pin)
             if labels:
                 size = self._size(frame, "small")
                 label = self._trim(npc.name, size, mw)
@@ -1640,15 +1730,78 @@ class UI:
         if state.bot_phase == "home":
             return
         u, v = self.world.map_pixel(state.bot_x, state.bot_z, mw, mh)
-        self._dot(frame, x + u, y + v, 2, (255, 148, 48))
+        self._marker(frame, "bot", x + u, y + v)
 
-    def _seg(self, frame, x0, z0, x1, z1, ox, oy, mw, mh, rgb):
+    def _seg(self, frame, x0, z0, x1, z1, ox, oy, mw, mh, rgb, dashed=False):
         u0, v0 = self.world.map_pixel(x0, z0, mw, mh)
         u1, v1 = self.world.map_pixel(x1, z1, mw, mh)
         steps = max(abs(u1 - u0), abs(v1 - v0), 1)
         for i in range(steps + 1):
+            if dashed and i % 6 >= 3:
+                continue
             t = i / steps
             self._dot(frame, int(ox + u0 + (u1 - u0) * t), int(oy + v0 + (v1 - v0) * t), 1, rgb)
+
+    def _marker(self, frame, kind, x, y, legend=False):
+        """One chart marker. Shape carries the meaning and colour only repeats it (V1-43)."""
+        if kind == "fish":
+            self._shape(frame, "fish", x, y, 5 if legend else 3, (255, 214, 120))
+        elif kind == "tired":
+            self._shape(frame, "cross", x, y, 5 if legend else 3, WARN)
+        elif kind == "bait":
+            self._dot(frame, x, y, 1, (186, 214, 196))
+        elif kind == "empty":
+            self._dot(frame, x, y, 1, (90, 104, 98))
+        elif kind == "soak":
+            # A soaking line on the chart is a row of baited hooks along a dashed line.
+            for k in (-6, -2, 2, 6):
+                self._dot(frame, x + k, y, 1, (186, 214, 196))
+        elif kind == "cat":
+            self._shape(frame, "disc", x, y, 4 if legend else 3, (200, 162, 118))
+        elif kind == "bot":
+            self._shape(frame, "triangle", x, y, 5 if legend else 4, (255, 148, 48))
+        elif kind == "boat":
+            self._dot(frame, x - 2, y, 3, (236, 224, 180))
+            self._dot(frame, x + 5, y, 1, (232, 196, 110))
+        elif kind == "sonar":
+            for k, color in enumerate(SONAR_BAND_COLORS):
+                self._dot(frame, x - 5 + k * 3, y, 1, color)
+
+    def _shape(self, frame, shape, x, y, r, rgb):
+        """A small shape (square, cross, disc, diamond, diamond ring, triangle or fish)
+        with a dark edge, so it reads on pale and dark chart paper alike."""
+        h, w = frame.shape[:2]
+        cx, cy = int(x), int(y)
+        rr = r + 1
+        yy, xx = np.mgrid[-rr:rr + 1, -rr:rr + 1]
+
+        def mask_for(size):
+            if shape == "square":
+                return (np.abs(xx) <= size) & (np.abs(yy) <= size)
+            if shape == "cross":
+                return ((np.abs(xx - yy) <= 1) | (np.abs(xx + yy) <= 1)) & (np.abs(xx) <= size) & (np.abs(yy) <= size)
+            if shape == "disc":
+                return xx * xx + yy * yy <= size * size + size
+            if shape in ("diamond", "diamond ring"):
+                return np.abs(xx) + np.abs(yy) <= size
+            if shape == "fish":
+                # A body twice as long as it is deep, with a forked tail to the right.
+                body = ((xx + size * 0.25) / (size * 0.75)) ** 2 + (yy / max(1.0, size * 0.55)) ** 2 <= 1.0
+                tail = (xx >= size * 0.5) & (xx <= size) & (np.abs(yy) <= (xx - size * 0.5) * 1.4 + 0.5)
+                fork = (xx > size * 0.8) & (np.abs(yy) < (xx - size * 0.8) * 1.5)
+                return body | (tail & ~fork)
+            if shape == "triangle":
+                return (yy <= size) & (yy >= -size) & (np.abs(xx) * 2 <= yy + size)
+            raise ValueError(shape)
+
+        edge, body = mask_for(r + 1), mask_for(r)
+        if shape == "diamond ring":
+            body = body & (np.abs(xx) + np.abs(yy) >= r - 1)
+        for mask, color in ((edge, (28, 34, 38)), (body, rgb)):
+            ys, xs = np.nonzero(mask)
+            px, py = xs - rr + cx, ys - rr + cy
+            keep = (px >= 0) & (px < w) & (py >= 0) & (py < h)
+            frame[py[keep], px[keep]] = np.array(color, np.uint8)
 
     def _dot(self, frame, x, y, r, rgb):
         h, w = frame.shape[:2]
@@ -1669,9 +1822,13 @@ class UI:
             text = _toast_for_device(raw_text, input_device)
             if raw_text == "Shall we add that?":
                 text += " Hold Y to read." if input_device == "gamepad" else " J reads the page."
-                text = self._trim(text, size, w - 32)
-            tw = len(text) * _cw + 16
+            text = self._trim(text, size, w - 48)
+            tw = self._measure(text, size, "mono") + 16
             x = (w - tw) // 2
+            # A toast never covers the HUD's clock or boat panels: it drops below them (V1-43).
+            for rx, ry, rw, rh in getattr(self, "_hud_rects", ()):
+                if x < rx + rw and rx < x + tw and y < ry + rh and ry < y + ch + 8:
+                    y = ry + rh + 8
             self._panel(frame, x, y, tw, ch + 8, 0.72)
             self._text(frame, text, x + 8, y + 3, size, INK)
             y += ch + 12
@@ -1683,7 +1840,9 @@ class UI:
         # A translucent gradient preserves the lake while giving the title air.
         yy = np.arange(h,dtype=np.float32)[:,None,None]/h
         xx = np.arange(w,dtype=np.float32)[None,:,None]/w
-        alpha = np.clip((yy-0.30)*0.78,0,0.58)+np.clip(0.48-xx,0,0.32)
+        # The left column, where the title and menu sit, darkens enough for AA contrast over
+        # a bright sky; the right of the frame keeps the lake (V1-43).
+        alpha = np.minimum(np.clip((yy-0.22)*1.0,0,0.50)+np.clip((0.62-xx)*1.4,0,0.62),0.84)
         frame[:] = (frame*(1-alpha)+np.array([10,25,27],np.float32)*alpha).astype(np.uint8)
         title = max(38,min(96,int(h*0.117)))
         body = max(15,int(h/38))
@@ -1724,7 +1883,7 @@ class UI:
                                   "D-pad / stick choose     A select")
         self._text(frame,controls,x,h-small_h-24*gap_scale,small,DIM,False,"sans")
         mark = "ONE LAKE. NO HURRY."
-        self._text(frame,mark,w-x-self._measure(mark,small),h-small_h-24*gap_scale,small,DIM,False,"sans")
+        self._backed(frame,mark,w-x-self._measure(mark,small,"sans"),h-small_h-24*gap_scale,small,DIM,"sans")
 
     def _comfort_lines(self, value, size, width):
         cache = getattr(self, "_comfort_line_cache", None)
@@ -1929,14 +2088,18 @@ class UI:
 
     def _setbait(self, frame, state, ui: UIState):
         h, w = frame.shape[:2]
-        pw, ph = int(w * 0.56), int(h * 0.62)
-        x, y = (w - pw) // 2, (h - ph) // 2
-        self._panel(frame, x, y, pw, ph, 0.96)
         head = self._size(frame, "head")
         body = self._size(frame, "body")
         small = self._size(frame, "small")
         ch = self.cell(body)[1]
         m = 16
+        foot = self._controls(ui, "W/S bait  A/D line  Q sections  Tab section  1-5 bait  Enter sets",
+                              "D-pad / stick choose  LB sections  Back section  A sets  B back")
+        # Wide enough for its controls line at every text size (V1-43).
+        pw = min(w - 24, max(int(w * 0.56), self._measure(foot, small, "mono") + m * 2))
+        ph = int(h * 0.62)
+        x, y = (w - pw) // 2, (h - ph) // 2
+        self._panel(frame, x, y, pw, ph, 0.96)
         self._text(frame, "SET A LINE", x + m, y + 12, head, INK)
         if not state.held:
             self._text(frame, "No line aboard.", x + m, y + 60, body, WARN)
@@ -1984,8 +2147,6 @@ class UI:
         bait = BAITS[section_baits[ui.set_section]]
         note = ui.note or f"Editing section {ui.set_section + 1}: needs {need}. {bait.blurb}"
         self._text(frame, self._trim(note, small, pw - m * 2), x + m, y + ph - ch - 28, small, WARN if ui.note else DIM, shadow=False)
-        foot = self._controls(ui, "W/S bait  A/D line  Q sections  Tab section  1-5 bait  Enter sets",
-                              "D-pad / stick choose  LB sections  Back section  A sets  B back")
         self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 8, small, DIM, shadow=False)
 
     def _check(self, frame, state, ui: UIState):
@@ -2114,6 +2275,9 @@ class UI:
                 label = f"{weight_string(catch.weight)} {name}, {q}{mark}"
                 color = GOLD if i == ui.well_i else INK
                 ry = top + n * (ch + 2)
+                if i == ui.well_i:
+                    # Focus shows as a band as well as colour, like every other list (V1-43).
+                    self._fill(frame, x + 8, ry - 1, pw - 16, ch + 2, (46, 42, 28), 0.85)
                 self._text(frame, self._trim(label, body, int(pw * 0.68)), x + m, ry, body, color, shadow=False)
                 right = dollars(catch.value())
                 self._text(frame, right, x + pw - m - len(right) * self.cell(body)[0], ry, body, color, shadow=False)
@@ -2121,14 +2285,19 @@ class UI:
                               "D-pad choose    A marks Treasured    B closes")
         self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
 
-    def _pause(self, frame, ui: UIState):
+    def _pause(self, frame, state, ui: UIState):
         h, w = frame.shape[:2]
         self._fill(frame, 0, 0, w, h, (6, 8, 8), 0.35)
-        labels = ["Resume", "Settings", "Help", "Main menu", "Quit"]
+        labels = pause_options(state)
         body = self._size(frame, "body")
         head = self._size(frame, "head")
         small = self._size(frame, "small")
-        pw = min(w - 24, max(420, int(w * 0.34)))
+        foot = ui.note or self._controls(ui, "Arrows · Enter · Z nap · K pantry",
+                                         "D-pad · A · X nap · Y pantry")
+        # Wide enough for the longest entry and the controls line at every text size (V1-43).
+        widest = max([self._measure("> " + label, body, "mono") for label in labels]
+                     + [self._measure(foot, small, "mono")])
+        pw = min(w - 24, max(420, int(w * 0.34), widest + 36))
         ph = 40 + self.cell(head)[1] + len(labels) * (self.cell(body)[1] + 8) + 30
         x, y = (w - pw) // 2, (h - ph) // 2
         self._panel(frame, x, y, pw, ph, 0.92)
@@ -2138,8 +2307,6 @@ class UI:
             color = GOLD if i == ui.pause_i else INK
             prefix = "> " if i == ui.pause_i else "  "
             self._text(frame, prefix + label, x + 18, y + 24 + self.cell(head)[1] + i * (self.cell(body)[1] + 8), body, color)
-        foot = ui.note or self._controls(ui, "Arrows · Enter · Z nap · K pantry",
-                                        "D-pad · A · X nap · Y pantry")
         self._text(frame, foot, x + 18, y + ph - self.cell(small)[1] - 12, small,
                    WARN if ui.note else DIM, shadow=False)
 
@@ -2219,7 +2386,7 @@ class UI:
             prefix = "> " if index == ui.settings_i else "  "
             self._text(frame, prefix + self._trim(label, body, left_width - 10), x + m, ry, body, color, shadow=False)
             value = self._trim(value, body, value_width - 4)
-            self._text(frame, value, x + pw - m - self._measure(value, body), ry, body, color, shadow=False)
+            self._text(frame, value, x + pw - m - self._measure(value, body, "mono"), ry, body, color, shadow=False)
         foot_y = y + ph - m - foot_h
         for line in foot_lines:
             self._text(frame, line, x + m, foot_y, small, DIM, shadow=False)
@@ -2287,7 +2454,7 @@ class UI:
             else:
                 value = self._key_name(bindings.get(action, default_key_bindings()[action]))
             value = self._trim(value, body, value_width)
-            self._text(frame, value, x + pw - m - self._measure(value, body), ry, body, color, shadow=False)
+            self._text(frame, value, x + pw - m - self._measure(value, body, "mono"), ry, body, color, shadow=False)
         foot_y = y + ph - m - foot_h
         for line in foot_lines:
             self._text(frame, line, x + m, foot_y, small, DIM, shadow=False)
@@ -2861,9 +3028,9 @@ _PAD_STICK_ROWS = (
     ("Left stick", "Steer. Up and down set the throttle."),
     ("RT / LT", "Throttle up; down to idle and reverse."),
     ("In pause, Y", "Opens the pantry; cook at a landing."),
-    ("", ""),
-    ("The book, livewell, time, sail, tow, mute, help", ""),
-    ("and the title's New morning have no pad button yet.", ""),
+    ("Start, then", "Book, livewell, sail, tow and time."),
+    ("Settings", "Volumes; Master at 0% is quiet."),
+    ("Title", "D-pad to New morning, then A."),
 )
 
 

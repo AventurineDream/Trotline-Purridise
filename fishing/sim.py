@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Callable, ClassVar
 from uuid import uuid4
 
+from .reading import reading_seconds
 from .data import (
     BAIT_BY_ID,
     BOX_PRICE,
@@ -605,7 +606,8 @@ class State:
         self.sail_raised = False
 
     def toast(self, text: str, seconds: float = 4.8):
-        self.toasts.append([text, seconds])
+        # Never gone before it can be read at a young reader's pace (V1-43).
+        self.toasts.append([text, reading_seconds(text, seconds)])
         if len(self.toasts) > 4:
             self.toasts = self.toasts[-4:]
 
