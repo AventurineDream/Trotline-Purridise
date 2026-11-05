@@ -6,10 +6,12 @@ from unittest.mock import patch
 
 import numpy as np
 
+from . import comfort
+from .data import BAIT_RECIPES, DISHES, PANTRY
 from .platform import Text, find_font
-from .sim import State
+from .sim import Catch, Hook, SetLine, State
 from .ui import (
-    DIM, HELP_N, SPECIES, UI, UIState, _GAMEPAD_HELP_CONTROLS, _help_title,
+    DIM, HELP_N, SHOP_TABS, SPECIES, UI, UIState, _GAMEPAD_HELP_CONTROLS, _help_title,
     _prompt_for_device, _toast_for_device, help_pages,
 )
 from .world import World
@@ -51,6 +53,164 @@ class DevicePromptChecks(unittest.TestCase):
             _toast_for_device("Nose into the landing and press E to sell.", "keyboard"),
             "Nose into the landing and press E to sell.",
         )
+
+
+def _settled_state(world, seed, dyslexia_font):
+    state = State.new(world, seed=seed)
+    state.v2["settings"]["text_size"] = 2
+    state.v2["settings"]["dyslexia_font"] = dyslexia_font
+    return state
+
+
+def _kitchen_state(world, dyslexia_font):
+    """A pantry stocked with every dish and recipe, and fish in the well to cook with."""
+    state = _settled_state(world, 43015, dyslexia_font)
+    state.money = 600
+    state.v2["dishes_known"] = list(DISHES)
+    state.v2["recipes"] = list(BAIT_RECIPES)
+    state.v2["pantry"] = {item: 4 for item in PANTRY}
+    state.bait.update({bait: 1 for recipe in BAIT_RECIPES.values() for bait in recipe.parents})
+    state.well = [Catch("bluegill", .9, 1, 0, "flats", "worm", 8),
+                  Catch("bluegill", 2, 1, 0, "flats", "worm", 8)]
+    comfort.serve_dish(state, DISHES["pecan_chowder"])
+    state.toasts.clear()
+    state.tutorial = 4
+    return state
+
+
+def _haul_state(world, dyslexia_font, *, fish=False, shiny=False):
+    """A line with twelve hooks; the fish and the shiny sit on the hooks the panels show."""
+    state = _settled_state(world, 17 + int(fish) + int(shiny), dyslexia_font)
+    state.toasts.clear()
+    state.tutorial = 4
+    hooks = [Hook(True) for _ in range(12)]
+    if fish:
+        catch = Catch("bluegill", 0.75, 1.0, 0.0, "flats", "worm", 8.0, shiny=shiny)
+        hooks[0] = Hook(False, catch)
+        state._note_journal(catch)
+    if shiny:
+        shiny_catch = Catch("channel", 2.4, 1.0, 0.0, "flats", "worm", 8.0, shiny=True)
+        hooks[5] = Hook(False, shiny_catch)
+        state._note_journal(shiny_catch)
+    state.lines = [SetLine("std", "worm", state.x + 6, state.z + 6,
+                           state.x + 44, state.z + 10, "flats", hooks)]
+    return state
+
+
+def _largest_text_screens(ui, world, dyslexia_font):
+    """(name, state, UIState) for every screen UI.draw can show, each with real content."""
+    from . import legendshots
+    from .bookview import BOOK_TABS, ENTRY_IDS
+    from .kitchen import rows as kitchen_rows
+    screens = []
+
+    def add(name, state, panel):
+        screens.append((name, state, panel))
+
+    base = _settled_state(world, 51, dyslexia_font)
+    add("title", base, UIState(mode="title", has_save=True))
+    add("title new game", base, UIState(mode="title", has_save=False))
+    add("play", base, UIState(mode="play"))
+    add("map", base, UIState(mode="map"))
+    add("dialogue", base, UIState(
+        mode="dialogue",
+        conversation=SimpleNamespace(
+            npc_id=next(iter(ui.narrative_content.npcs)),
+            node_id=next(iter(ui.narrative_content.dialogue)),
+            selected=0,
+        ),
+        dialogue_content=ui.narrative_content,
+    ))
+    for tab in range(len(SHOP_TABS)):
+        add(f"shop {SHOP_TABS[tab]}", base, UIState(mode="shop", shop_tab=tab, shop_i=0))
+    add("setbait", base, UIState(mode="setbait"))
+
+    haul = _haul_state(world, dyslexia_font, fish=True, shiny=True)
+    add("haul rise", _haul_state(world, dyslexia_font, fish=True), UIState(
+        mode="haul", check_line=0, haul_index=6, haul_timer=0.13,
+        haul_counts_before={"bluegill": 0}))
+    add("haul surface", _haul_state(world, dyslexia_font, fish=True), UIState(
+        mode="haul", check_line=0, haul_index=0, haul_phase="surface",
+        haul_counts_before={"bluegill": 0}))
+    add("haul card", _haul_state(world, dyslexia_font, fish=True), UIState(
+        mode="haul", check_line=0, haul_index=0, haul_phase="card",
+        haul_counts_before={"bluegill": 0}))
+    add("haul shiny card", _haul_state(world, dyslexia_font, shiny=True), UIState(
+        mode="haul", check_line=0, haul_index=5, haul_phase="card",
+        haul_counts_before={"channel": 0}))
+    add("haul empty hook", base, UIState(mode="haul", check_line=0, haul_index=0))
+    add("haul summary", haul, UIState(mode="check", check_line=0, check_i=0))
+    add("check", base, UIState(mode="check"))
+
+    # The legendary encounter: its hook, the scene as it holds, and its book page.
+    legend_world = World("briar")
+    legend_state = legendshots._staged(legend_world, "old_lantern")
+    legend_state.v2["settings"]["text_size"] = 2
+    legend_state.v2["settings"]["dyslexia_font"] = dyslexia_font
+    add("legendary rise", legend_state, legendshots._panel("old_lantern", "rise", 0.0))
+    add("legendary encounter", legend_state, legendshots._panel("old_lantern", "encounter", 4.6))
+    add("legendary card", legend_state, legendshots._panel("old_lantern", "card", 0.0))
+
+    kitchen = _kitchen_state(world, dyslexia_font)
+    dish_row = next(i for i, row in enumerate(kitchen_rows(kitchen, world))
+                    if row.arg == "pan_fritters")
+    add("kitchen menu", kitchen, UIState(mode="kitchen", shop_i=dish_row))
+    add("kitchen landing", kitchen, UIState(mode="shop", shop_tab=SHOP_TABS.index("Kitchen")))
+    add("cook dish", kitchen, UIState(
+        mode="cook_confirm", cook_kind="dish", cook_arg="pan_fritters",
+        cook_label="Sunny Pan Fritters", cook_fish=1))
+    add("cook recipe", kitchen, UIState(
+        mode="cook_confirm", cook_kind="recipe", cook_arg="lantern_liver",
+        cook_label="Lantern Liver"))
+    add("cook share", kitchen, UIState(
+        mode="cook_confirm", cook_kind="cookout", cook_label="Cookout"))
+    add("cooking", kitchen, UIState(
+        mode="cooking", cook_label="Sunny Pan Fritters", cook_timer=1,
+        cook_text=DISHES["pan_fritters"].blurb))
+
+    add("pick a pace: cozy", base, UIState(mode="new_mode", new_mode_i=0))
+    add("pick a pace: old salt", base, UIState(mode="new_mode", new_mode_i=1))
+    salty = _settled_state(world, 52, dyslexia_font)
+    salty.v2["settings"]["mode"] = "old_salt"
+    add("needs energy", salty, UIState(mode="needs", needs_kind="energy", comfort_i=0))
+    add("needs hunger", salty, UIState(mode="needs", needs_kind="hunger", comfort_i=1))
+    add("catnap", base, UIState(mode="catnap", nap_timer=1.0))
+    add("catnap forced", base, UIState(mode="catnap", nap_timer=1.0, nap_forced=True))
+    add("credits", base, UIState(mode="credits", credits_s=0.0))
+
+    for shelf in range(3):
+        add(f"journal trophy shelf {shelf + 1}", base, UIState(
+            mode="journal", journal_page=2, book_shelf=shelf, book_collection_i=0))
+    # Every species caught, so each Fish and Book entry (and its next page) has real text.
+    caught = _settled_state(world, 74, dyslexia_font)
+    for index, species in enumerate(SPECIES):
+        caught.journal[species.id] = {
+            "count": 3 + index % 4, "best": 2.1, "lake_id": "briar", "zone": "flats",
+            "bait": "worm", "band": "trophy",
+        }
+    for tab in range(len(BOOK_TABS)):
+        add(f"journal {BOOK_TABS[tab]}", caught, UIState(
+            mode="journal", journal_page=tab, journal_i=0, book_entry_i=0,
+            journal_quest_i=0, book_week_i=0, book_watch_i=0))
+    for entry in range(len(ENTRY_IDS)):
+        add(f"book entry {entry + 1}", caught, UIState(
+            mode="journal", journal_page=1, book_entry_i=entry, book_detail_page=0))
+    add("species detail next page", caught, UIState(mode="journal", journal_page=1,
+                                                    book_entry_i=0, book_detail_page=1))
+    add("species detail on the Fish tab", caught, UIState(mode="journal", journal_page=0,
+                                                          journal_i=0))
+    add("well", base, UIState(mode="well"))
+    well = _settled_state(world, 75, dyslexia_font)
+    well.well = [Catch("bluegill", 0.75, 1.0, 0.0, "flats", "worm", 8.0)]
+    add("well with a fish", well, UIState(mode="well", well_i=0))
+    add("pause", base, UIState(mode="pause"))
+    add("settings", base, UIState(mode="settings"))
+    add("keyboard controls", base, UIState(mode="settings", settings_page="keys", key_binding_i=0))
+    add("keyboard controls scrolled", base, UIState(
+        mode="settings", settings_page="keys", key_binding_i=29))
+    for page in range(HELP_N):
+        add(f"help page {page + 1}", base, UIState(mode="help", help_page=page))
+    return screens
 
 
 class GuideLayoutChecks(unittest.TestCase):
@@ -112,65 +272,37 @@ class GuideLayoutChecks(unittest.TestCase):
                 self.assertLessEqual(y + th, py + ph)
         self.assertGreaterEqual(len(records), 14)
 
-    def test_every_existing_screen_fits_at_1280x720_with_largest_text(self):
-        world = World()
-        state = State.new(world, seed=51)
-        state.v2["settings"]["text_size"] = 2
-        state.v2["settings"]["dyslexia_font"] = True
-        ui = UI(self.text, world)
-        ui._cw, ui._ch = {}, {}
-        text_draw = ui._text
-        records = []
-
-        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
-            image = ui._render(label, size, color, family)
-            records.append((label, int(x), int(y), image.shape[1], image.shape[0]))
-            return text_draw(frame, label, x, y, size, color, shadow, family)
-
-        ui._text = text
+    def test_every_screen_fits_at_1280x720_with_largest_text(self):
+        # Every screen UI.draw can show, at the largest text size, with both the
+        # dyslexia-friendly font and the default mono font.
         width, height = 1280, 720
-        cases = [
-            ("title", UIState(mode="title", has_save=True)),
-            ("play", UIState(mode="play")),
-            ("map", UIState(mode="map")),
-            ("dialogue", UIState(
-                mode="dialogue",
-                conversation=SimpleNamespace(
-                    npc_id=next(iter(ui.narrative_content.npcs)),
-                    node_id=next(iter(ui.narrative_content.dialogue)),
-                    selected=0,
-                ),
-                dialogue_content=ui.narrative_content,
-            )),
-            ("shop", UIState(mode="shop")),
-            ("setbait", UIState(mode="setbait")),
-            ("haul", UIState(mode="haul")),
-            ("check", UIState(mode="check")),
-            ("journal", UIState(mode="journal")),
-            ("narrative journal", UIState(mode="journal", journal_page=1)),
-            ("well", UIState(mode="well")),
-            ("pause", UIState(mode="pause")),
-            ("settings", UIState(mode="settings")),
-            ("keyboard controls", UIState(
-                mode="settings", settings_page="keys", key_binding_i=0)),
-            ("keyboard controls scrolled", UIState(
-                mode="settings", settings_page="keys", key_binding_i=29)),
-        ]
-        for page in range(HELP_N):
-            cases.append((f"help page {page + 1}", UIState(mode="help", help_page=page)))
+        for dyslexia_font in (True, False):
+            font = "dyslexia" if dyslexia_font else "mono"
+            world = World()
+            ui = UI(self.text, world)
+            ui._cw, ui._ch = {}, {}
+            records = []
+            text_draw = ui._text
 
-        for name, screen in cases:
-            with self.subTest(screen=name):
-                records.clear()
-                frame = np.zeros((height, width, 3), np.uint8)
-                ui.draw(frame, state, screen)
-                self.assertTrue(records, f"{name} rendered no text")
-                for label, x, y, tw, th in records:
-                    with self.subTest(screen=name, label=label):
-                        self.assertGreaterEqual(x, 0)
-                        self.assertGreaterEqual(y, 0)
-                        self.assertLessEqual(x + tw, width)
-                        self.assertLessEqual(y + th, height)
+            def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+                image = ui._render(label, size, color, family)
+                records.append((label, int(x), int(y), image.shape[1], image.shape[0]))
+                return text_draw(frame, label, x, y, size, color, shadow, family)
+
+            ui._text = text
+            for name, state, screen in _largest_text_screens(ui, world, dyslexia_font):
+                with self.subTest(screen=name, font=font):
+                    records.clear()
+                    frame = np.zeros((height, width, 3), np.uint8)
+                    ui.draw(frame, state, screen)
+                    self.assertTrue(records, f"{name} ({font}) rendered no text")
+                    for label, x, y, tw, th in records:
+                        with self.subTest(screen=name, font=font, label=label):
+                            self.assertGreaterEqual(x, 0)
+                            self.assertGreaterEqual(y, 0)
+                            self.assertLessEqual(x + tw, width)
+                            self.assertLessEqual(y + th, height)
+            ui._text = text_draw
 
     def test_species_journal_details_reflow_inside_the_panel_at_minimum_size(self):
         world = World()
