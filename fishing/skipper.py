@@ -26,7 +26,9 @@ MITT = np.array((0.93, 0.90, 0.84), np.float32)
 PAD = np.array((0.78, 0.52, 0.52), np.float32)
 WOOD = np.array((0.58, 0.42, 0.26), np.float32)
 LINE = np.array((0.86, 0.82, 0.68), np.float32)
-SILHOUETTE = np.array((0.07, 0.08, 0.09), np.float32)
+# The reflection is the coat in shadow, not black: near-black read as a hole in the
+# water, or a dark creature standing on it (V1-42).
+SILHOUETTE = (COAT * np.float32(0.55)).astype(np.float32)
 
 # Below this speed, with calm water, the Skipper's reflection shows.
 IDLE_SPEED = 0.05
