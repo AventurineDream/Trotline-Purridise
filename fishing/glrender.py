@@ -72,10 +72,10 @@ class LakeRenderer(SoftwareRenderer):
         return obj
 
     def program(self, vert, frag):
-        common = "#version 330\n"+(SHADERS/"common.glsl").read_text()+"\n"
+        common = "#version 330\n"+(SHADERS/"common.glsl").read_text(encoding="utf-8")+"\n"
         return self.own(self.ctx.program(
-            vertex_shader=common+(SHADERS/vert).read_text(),
-            fragment_shader=common+(SHADERS/frag).read_text()))
+            vertex_shader=common+(SHADERS/vert).read_text(encoding="utf-8"),
+            fragment_shader=common+(SHADERS/frag).read_text(encoding="utf-8")))
 
     def target(self, width, height, *, sample_depth=False):
         tex = self.own(self.ctx.texture((width,height),3))
