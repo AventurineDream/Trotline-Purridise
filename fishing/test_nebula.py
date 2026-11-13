@@ -498,7 +498,7 @@ class NebulaSaveRecovery(unittest.TestCase):
             self.assertEqual((kept.x0, kept.z0, kept.x1, kept.z1), (-250, -20, -230, -20))
             self.assertEqual(moved.line_id, buried.line_id)
             loaded.save(path, update_stamp=False)
-            once = json.loads(path.read_text())
+            once = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(State.load(path, world).to_json(), once)
 
 
