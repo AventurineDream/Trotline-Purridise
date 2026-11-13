@@ -684,4 +684,3 @@ class Platform:
             self.sdl.SDL_DestroyWindow(self.window)
             self.window = None
         self.sdl.SDL_Quit()
-
