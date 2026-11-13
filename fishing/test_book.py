@@ -188,7 +188,7 @@ class BookChecks(unittest.TestCase):
         self.assertEqual(saved_book["dream_clue"], None)
 
     def test_book_content_validation_reports_multiple_errors_and_duplicate_keys(self):
-        raw = json.loads(BOOK_CONTENT_PATH.read_text())
+        raw = json.loads(BOOK_CONTENT_PATH.read_text(encoding="utf-8"))
         broken = deepcopy(raw)
         broken["species_rumors"]["bluegill"]["text"] = ""
         broken["legendary_stories"]["old_lantern"]["teller"] = None
