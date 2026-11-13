@@ -191,7 +191,7 @@ class ShaderAgreement(unittest.TestCase):
         ctx = _gl_context(self)
         import moderngl
         try:
-            source = (SHADERS / "cat.frag").read_text()
+            source = (SHADERS / "cat.frag").read_text(encoding="utf-8")
             body = source[source.index("const float TORSO"):source.index("void main()")]
             program = ctx.program(vertex_shader="#version 330\nin vec2 in_xy;\n"
                                                 "void main() { gl_Position = vec4(in_xy, 0.0, 1.0); }",
@@ -243,8 +243,8 @@ void main() {
         ctx = _gl_context(self)
         import moderngl
         try:
-            common = (SHADERS / "common.glsl").read_text()
-            program = ctx.program(vertex_shader="#version 330\n" + common + "\n" + (SHADERS / "cat.vert").read_text(),
+            common = (SHADERS / "common.glsl").read_text(encoding="utf-8")
+            program = ctx.program(vertex_shader="#version 330\n" + common + "\n" + (SHADERS / "cat.vert").read_text(encoding="utf-8"),
                                   varyings=["pos"])
             # Headless EGL has no default framebuffer, and a draw needs one even with no fragments.
             fb = ctx.simple_framebuffer((1, 1))
@@ -520,7 +520,7 @@ class Skipper(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "save.json"
             state.save(path)
-            self.assertNotIn("hauling", path.read_text())
+            self.assertNotIn("hauling", path.read_text(encoding="utf-8"))
             self.assertFalse(State.load(path, World("briar")).hauling)
 
 
