@@ -223,7 +223,7 @@ class World:
         self.shore_grid = None
         if lake_id=="cedar":
             assets = Path(__file__).with_name("assets")
-            self.metadata = json.loads((assets/"cedar.json").read_text())
+            self.metadata = json.loads((assets/"cedar.json").read_text(encoding="utf-8"))
             with np.load(assets/"cedar.npz",allow_pickle=False) as data:
                 self.shore_grid = data["shore"]
                 self.depth_grid = data["depth"]
