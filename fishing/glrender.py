@@ -114,10 +114,10 @@ class LakeRenderer(SoftwareRenderer):
     def program(self, vert, frag):
         """Compile a shader pair with `common.glsl` and this tier's build flags prepended."""
         common = (f"#version 330\n#define HDR {int(self.hdr)}\n"
-                  + (SHADERS/"common.glsl").read_text()+"\n")
+                  + (SHADERS/"common.glsl").read_text(encoding="utf-8")+"\n")
         p = self.own(self.ctx.program(
-            vertex_shader=common+(SHADERS/vert).read_text(),
-            fragment_shader=common+(SHADERS/frag).read_text()))
+            vertex_shader=common+(SHADERS/vert).read_text(encoding="utf-8"),
+            fragment_shader=common+(SHADERS/frag).read_text(encoding="utf-8")))
         self._program_members[p] = set(p)
         return p
 

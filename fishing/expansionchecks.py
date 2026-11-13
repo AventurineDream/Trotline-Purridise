@@ -33,7 +33,7 @@ def expansion_checks(briar,software=False):
           f"minimum best rate {minimum:.3f}x authored default")
     cedar = World("cedar")
     assets = Path(__file__).with_name("assets")
-    metadata = json.loads((assets/"cedar.json").read_text())
+    metadata = json.loads((assets/"cedar.json").read_text(encoding="utf-8"))
     if hashlib.sha256((assets/"cedar.npz").read_bytes()).hexdigest()!=metadata["asset_sha256"]:
         raise AssertionError("Cedar Creek survey asset checksum changed")
     if len(cedar.coast)<100 or not np.isfinite(cedar.depth_grid).all() or not 15<cedar.depth_grid.max()<16.3:

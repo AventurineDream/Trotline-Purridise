@@ -135,7 +135,7 @@ class PaintBaker:
         shaders = Path(__file__).with_name("shaders")
 
         def src(name):
-            return "#version 330\n" + (shaders / name).read_text()
+            return "#version 330\n" + (shaders / name).read_text(encoding="utf-8")
 
         own = self._own
         self.paint = own(ctx.program(vertex_shader=src("flora_paint.vert"), fragment_shader=src("flora_paint.frag")))
