@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _canonical_rows():
-    source = (ROOT / 'docs/v1/03-CONTENT-TABLES.md').read_text()
+    source = (ROOT / 'docs/v1/03-CONTENT-TABLES.md').read_text(encoding="utf-8")
     result = []
     for number, lake in ((3, 'cedar'), (4, 'flathead'), (5, 'crater'), (6, 'nebula')):
         block = source.split(f'### 1.{number} ')[1].split('### 1.')[0].split('## 2.')[0]
@@ -49,7 +49,7 @@ class SpeciesDataChecks(unittest.TestCase):
         authored = {r['id']: r for r in CONTENT_V2_RAW['species.json']['species']}
         self.assertEqual(len(authored), 144)
         self.assertEqual(set(authored), set(BOOK_SPECIES_IDS))
-        script = (ROOT / 'docs/v1/05-SCRIPT.md').read_text()
+        script = (ROOT / 'docs/v1/05-SCRIPT.md').read_text(encoding="utf-8")
         rumors = {}
         for line in script.split('## 8. Book rumors')[1].split('## 9.')[0].splitlines():
             fields = [word.strip() for word in line.strip().strip('|').split('|')]
@@ -75,9 +75,9 @@ class SpeciesDataChecks(unittest.TestCase):
                     self.assertEqual(zone_mult(zone, sid), 1 if index == 0 else .7)
 
     def test_original_36_rows_five_baits_and_habitat_matches_are_unchanged(self):
-        baseline = json.loads((ROOT / 'docs/issue-52/baseline.json').read_text())
+        baseline = json.loads((ROOT / 'docs/issue-52/baseline.json').read_text(encoding="utf-8"))
         # V1-28 repainted every look, so the original rows are pinned without it.
-        repainted = json.loads((ROOT / 'docs/issue-56/baseline.json').read_text())['species_without_look']
+        repainted = json.loads((ROOT / 'docs/issue-56/baseline.json').read_text(encoding="utf-8"))['species_without_look']
         self.assertEqual(set(repainted), set(baseline['species']))
         authored = {r['id']: r for r in CONTENT_V2_RAW['species.json']['species']}
         for sid, expected in repainted.items():
