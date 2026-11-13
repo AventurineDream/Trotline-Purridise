@@ -6,6 +6,7 @@ import json
 import math
 import os
 import re
+
 import sys
 import time
 import tempfile
@@ -36,6 +37,39 @@ from . import calendar
 MEMORY_LIMIT_BYTES = 3_000_000_000
 
 
+def _windows_peak_rss_bytes() -> int:
+    """Read the Windows process peak working set in bytes using psapi."""
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessMemoryCounters(ctypes.Structure):
+        _fields_ = [
+            ("cb", wintypes.DWORD),
+            ("PageFaultCount", wintypes.DWORD),
+            ("PeakWorkingSetSize", ctypes.c_size_t),
+            ("WorkingSetSize", ctypes.c_size_t),
+            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+            ("PagefileUsage", ctypes.c_size_t),
+            ("PeakPagefileUsage", ctypes.c_size_t),
+        ]
+
+    process = ctypes.WinDLL("kernel32", use_last_error=True).GetCurrentProcess
+    process.restype = wintypes.HANDLE
+    counters = ProcessMemoryCounters()
+    counters.cb = ctypes.sizeof(counters)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    get_memory = psapi.GetProcessMemoryInfo
+    get_memory.argtypes = (
+        wintypes.HANDLE, ctypes.POINTER(ProcessMemoryCounters), wintypes.DWORD)
+    get_memory.restype = wintypes.BOOL
+    if not get_memory(process(), ctypes.byref(counters), counters.cb):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return int(counters.PeakWorkingSetSize)
+
+
 def rss_bytes():
     """Return this process image's peak resident set size.
 
@@ -48,6 +82,8 @@ def rss_bytes():
                 return int(line.split()[1]) * 1024
     except (OSError, ValueError):
         pass
+    if resource is None:
+        return _windows_peak_rss_bytes()
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return int(peak * (1024 if os.name == "posix" and sys.platform.startswith("linux") else 1))
 

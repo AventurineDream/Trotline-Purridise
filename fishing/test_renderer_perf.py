@@ -8,7 +8,7 @@ import numpy as np
 
 from .glrender import LakeRenderer
 from .sim import State
-from .verify import drm_memory_bytes
+from .verify import drm_memory_bytes, rss_bytes
 from .world import Face, World
 
 
@@ -51,6 +51,10 @@ class RendererPerfTests(unittest.TestCase):
         self.assertEqual(drm_memory_bytes([shared, shared, plain, shared]), 90000 * 1024)
         self.assertEqual(drm_memory_bytes([shared, other]), 90000 * 1024 + 2 * 1024**2)
         self.assertIsNone(drm_memory_bytes([plain]))
+
+    def test_process_peak_rss_is_reported_in_bytes(self):
+        """The memory budget receives a positive byte count on every supported OS."""
+        self.assertGreater(rss_bytes(), 0)
 
 
 if __name__ == "__main__":
