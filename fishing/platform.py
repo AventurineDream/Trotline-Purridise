@@ -208,7 +208,20 @@ def find_font(family="mono") -> str:
     if is_frozen():
         packaged = tuple(str(fonts / name) for name in BUNDLED_FONTS.get(family, ()))
         preferred = packaged + preferred
-    for path in preferred + FONT_CANDIDATES:
+    # Windows: the standard system fonts. SystemRoot is C:\Windows on a
+    # standard install; on other platforms these paths simply do not
+    # exist and are skipped. The mono entries (Consolas, Courier New,
+    # Lucida Console) are all monospace, so the "mono" family stays
+    # monospace (#122).
+    win_root = os.environ.get("SystemRoot") or os.environ.get("WINDIR") or r"C:\Windows"
+    win_fonts = os.path.join(win_root, "Fonts")
+    win_preferred = {
+        "mono": ("consola.ttf", "cour.ttf", "lucon.ttf"),
+        "sans": ("arial.ttf", "segoeui.ttf"),
+        "serif": ("times.ttf", "georgia.ttf"),
+    }.get(family, ())
+    win_paths = tuple(os.path.join(win_fonts, name) for name in win_preferred)
+    for path in preferred + win_paths + FONT_CANDIDATES:
         if os.path.exists(path):
             return path
     raise FileNotFoundError("No TTF font found for the HUD")
@@ -671,3 +684,4 @@ class Platform:
             self.sdl.SDL_DestroyWindow(self.window)
             self.window = None
         self.sdl.SDL_Quit()
+
