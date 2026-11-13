@@ -1978,7 +1978,7 @@ class State:
 
     @classmethod
     def load(cls, path: Path, world: World) -> "State":
-        raw = json.loads(path.read_text())
+        raw = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
             raise ValueError("save root")
         version = raw.get("version")
@@ -2154,7 +2154,7 @@ def shore_sd_safe(world: World, x: float, z: float) -> float:
 
 def saved_lake(path: Path) -> str:
     try:
-        lake = json.loads(path.read_text()).get("lake_id","briar")
+        lake = json.loads(path.read_text(encoding="utf-8")).get("lake_id","briar")
         return lake if lake in LAKES else "briar"
     except (OSError,ValueError):
         return "briar"
