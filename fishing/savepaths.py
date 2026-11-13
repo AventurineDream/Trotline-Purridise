@@ -289,6 +289,7 @@ def default_v2(state=None) -> dict:
             "volumes": {"master": 1.0, "music": 1.0,
                         "ambience": 1.0, "sfx": 1.0},
             "collar_visible": True,
+            "third_person": False,
             "key_bindings": default_key_bindings(),
         },
         # Quest claims remain in narrative_v1.reward_claims, the existing
@@ -357,7 +358,7 @@ def _valid_leaf(value, default, path: str) -> bool:
         return value in ("normal", "quick", "instant")
     if path in ("v2.settings.dyslexia_font", "v2.settings.reduced_motion",
                 "v2.settings.captions", "v2.settings.collar_visible",
-                "v2.profile.collar.visible"):
+                "v2.settings.third_person", "v2.profile.collar.visible"):
         return type(value) is bool
     if path.startswith("v2.settings.volumes."):
         try:
@@ -408,8 +409,29 @@ def _normalize_known_v2(default, saved, path: str):
 
 def load_game_save(save_path: str | Path, state_type: Type,
                    world_factory: Callable[[str], object],
-                   legacy_path: str | Path | None = None):
-    """Load, migrate, or recover a save; return ``(world, state, has_save)``."""
+                   legacy_path: str | Path | None = None, *,
+                   persist_changes: bool = True):
+    """Load, migrate, or recover a save and return its world and live state.
+
+    Args:
+        save_path: Active save path; existing backup files share its directory.
+        state_type: Simulation class providing ``load`` and ``new`` constructors.
+        world_factory: Build the authored world named by the selected save.
+        legacy_path: Optional install-era save searched after active backups.
+        persist_changes: If False, keep migrations/recovery in memory and do not
+            write, back up, replace, or rename any save file.
+
+    Returns:
+        ``(world, state, has_save)``; the bool is false when no candidate loads.
+
+    Raises:
+        UnsupportedSaveVersionError: The newest readable candidate is from a
+            newer game version. OSError: An unreadable active candidate fails.
+
+    Side effects:
+        Reads candidate save files. When ``persist_changes`` is true, may write
+        migration backups, recovery copies, and a migrated/recovered active save.
+    """
     target = Path(save_path)
     active_existed = target.is_file()
     candidates = save_candidates(target, legacy_path)
@@ -450,24 +472,32 @@ def load_game_save(save_path: str | Path, state_type: Type,
         from_backup = is_backup_path(source, target)
         is_v1 = version == 1
         is_other_source = source.resolve() != target.resolve()
-        if active_existed and is_other_source:
+        if persist_changes and active_existed and is_other_source:
             _preserve_rejected_save(target)
         if is_v1:
-            if not from_backup:
-                _write_backup(source, target)
-            state.save(target, update_stamp=False)
-        elif is_other_source:
+            if persist_changes:
+                if not from_backup:
+                    _write_backup(source, target)
+                state.save(target, update_stamp=False)
+        elif persist_changes and is_other_source:
             state.save(target)
         if from_backup or (active_existed and is_other_source):
-            state.toast("Your save was restored from a backup.")
+            message = ("Your save was restored from a backup." if persist_changes else
+                       "A backup was loaded for Devmode; save files were not changed.")
+            state.toast(message)
         return world, state, True
 
     world = world_factory("briar")
     state = state_type.new(world)
     if candidates:
         if active_existed:
-            _preserve_rejected_save(target)
-            state.toast("The saved game could not be restored. A copy was kept for recovery.")
+            if persist_changes:
+                _preserve_rejected_save(target)
+                message = "The saved game could not be restored. A copy was kept for recovery."
+            else:
+                message = ("The saved game could not be restored. "
+                           "Devmode left all save files untouched.")
+            state.toast(message)
         else:
             state.toast("The saved game could not be restored. Your files are still available in the save folder.")
     return world, state, False

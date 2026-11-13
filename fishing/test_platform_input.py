@@ -96,6 +96,42 @@ class PlatformInputChecks(unittest.TestCase):
         self.push(event)
         self.assertEqual(self.platform.poll().mouse_wheel, 0)
 
+    def test_fractional_wheel_deltas_accumulate_into_menu_steps(self):
+        """Retain fractional trackpad deltas until a whole menu step is reached."""
+        self.assertEqual(self.platform._wheel_steps(0.5, 0), 0)
+        self.assertEqual(self.platform._wheel_steps(0.5, 0), 1)
+        self.assertEqual(self.platform._wheel_steps(0.5, 1), 0)
+        self.assertEqual(self.platform._wheel_steps(0.5, 1), -1)
+
+        self.assertEqual(self.platform._wheel_steps(0.5, 0), 0)
+        self.focus(False)
+        self.platform.poll()
+        self.focus(True)
+        self.platform.poll()
+        self.assertEqual(self.platform._wheel_steps(0.5, 0), 0)
+
+    def test_dev_panel_discards_partial_wheel_input_before_returning_to_menu(self):
+        """A half-wheel delta swallowed by Devmode cannot scroll the menu after closing it."""
+        from .game import Session
+        from .sim import State
+        from .world import World
+
+        world = World("briar")
+        with tempfile.TemporaryDirectory(prefix="dev-wheel-") as temp:
+            session = Session(world, Path(temp) / "save.json", State.new(world, seed=17),
+                              has_save=False, dev=True)
+            session.ui.mode = "journal"
+            session.dev_mode.open = True
+            session.ui.book_entry_i = 0
+            self.assertEqual(self.platform._wheel_steps(0.5, 0), 0)
+            session.tick(self.platform.poll(), 0.0)
+            self.assertEqual(self.platform._input.mouse_wheel_remainder, 0.0)
+
+            session.dev_mode.open = False
+            self.assertEqual(self.platform._wheel_steps(0.5, 0), 0)
+            session.tick(self.platform.poll(), 0.0)
+            self.assertEqual(session.ui.book_entry_i, 0)
+
     def test_complete_taps_between_frames_survive_once(self):
         for name in SCAN:
             self.key(name)

@@ -109,6 +109,40 @@ class SaveV2Checks(unittest.TestCase):
                         self.assertEqual(result.get(key), self.expected_migrated_value(key, value),
                                          f"{name}: {key}")
 
+    def test_read_only_devmode_migrates_v1_without_touching_active_save(self):
+        raw = (FIXTURES / "mid_game.json").read_bytes()
+        self.save_path.parent.mkdir(parents=True, exist_ok=True)
+        self.save_path.write_bytes(raw)
+
+        world, state, has_save = load_game_save(
+            self.save_path, State, World, persist_changes=False)
+
+        self.assertTrue(has_save)
+        self.assertEqual(world.id, "briar")
+        self.assertIn("settings", state.v2)
+        self.assertEqual(self.save_path.read_bytes(), raw)
+        self.assertEqual(savepaths.backup_candidates(self.save_path), [])
+
+    def test_read_only_devmode_recovers_backup_without_replacing_any_files(self):
+        backup_dir = savepaths.backup_directory(self.save_path)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        active_bytes = b"corrupt active save"
+        self.save_path.parent.mkdir(parents=True, exist_ok=True)
+        self.save_path.write_bytes(active_bytes)
+        backup_bytes = (FIXTURES / "mid_game.json").read_bytes()
+        backup = backup_dir / "briar.v1.20260102T000000000000Z.json"
+        backup.write_bytes(backup_bytes)
+
+        world, state, has_save = load_game_save(
+            self.save_path, State, World, persist_changes=False)
+
+        self.assertTrue(has_save)
+        self.assertEqual(world.id, "briar")
+        self.assertEqual(self.save_path.read_bytes(), active_bytes)
+        self.assertEqual(backup.read_bytes(), backup_bytes)
+        self.assertEqual(list(self.save_path.parent.glob("save.rejected.*.json")), [])
+        self.assertTrue(any("files were not changed" in toast[0] for toast in state.toasts))
+
     def test_v2_defaults_and_migration_derived_book_stages(self):
         _, fresh, _ = self.migrate_fixture("fresh.json")
         defaults = fresh["v2"]
@@ -146,6 +180,7 @@ class SaveV2Checks(unittest.TestCase):
             "volumes": {"master": 1.0, "music": 1.0,
                         "ambience": 1.0, "sfx": 1.0},
             "collar_visible": True,
+            "third_person": False,
             "key_bindings": default_key_bindings(),
         })
         self.assertEqual(defaults["reward_claims"], {
@@ -458,10 +493,15 @@ class SaveV2Checks(unittest.TestCase):
             self.assertEqual(savepaths.resolve_save_path(), self.root / "platform" / "save.json")
             self.assertEqual(savepaths.resolve_save_path("explicit.json"), Path("explicit.json"))
 
+        from . import detail
         from .__main__ import main
+        # main() configures the process tier; later modules must still see the default.
+        self.addCleanup(setattr, detail, "_current", detail._current)
         with patch("fishing.game.run") as run:
-            self.assertEqual(main(["--software", "--save", str(self.save_path)]), 0)
-        run.assert_called_once_with(software=True, save_path=self.save_path)
+            self.assertEqual(main(["--software", "--dev", "--detail", "low",
+                                   "--save", str(self.save_path)]), 0)
+        run.assert_called_once_with(software=True, save_path=self.save_path,
+                                    dev=True, detail="low")
 
         from .game import _save_target
         with patch("fishing.game.resolve_save_path", side_effect=RuntimeError("SDL failed")):
@@ -470,10 +510,12 @@ class SaveV2Checks(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "SDL failed"):
                 _save_target(self.root, self.save_path)
 
+        self.save_path.parent.mkdir(parents=True, exist_ok=True)
+        self.save_path.write_text(
+            json.dumps({"version": State.SAVE_VERSION + 1}), encoding="utf-8")
         output = StringIO()
-        with patch("fishing.game.run", side_effect=UnsupportedSaveVersionError(3, 2)), \
-                redirect_stderr(output):
-            self.assertEqual(main([]), 1)
+        with redirect_stderr(output):
+            self.assertEqual(main(["--save", str(self.save_path)]), 1)
         self.assertIn("update the game before loading", output.getvalue())
 
     def test_explicit_v1_save_override_gets_backed_up_before_replacement(self):

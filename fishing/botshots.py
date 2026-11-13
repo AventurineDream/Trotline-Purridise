@@ -64,7 +64,7 @@ def _rss_bytes():
         return int(Path('/proc/self/statm').read_text().split()[1])*os.sysconf('SC_PAGE_SIZE')
     except (OSError,ValueError,AttributeError):
         if resource is None:
-            return 0
+            return __import__("fishing.verify", fromlist=["rss_bytes"]).rss_bytes()
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024
 
 

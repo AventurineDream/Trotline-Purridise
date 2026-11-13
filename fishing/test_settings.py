@@ -30,14 +30,15 @@ class SettingsChecks(unittest.TestCase):
         return Session(self.world, path, State.new(self.world, seed=31), False)
 
     def test_settings_menu_updates_and_roundtrips_visible_options(self):
+        """Settings changes on the menu survive the normal save/reload path."""
         session = self.make_session()
         session.ui.mode = "settings"
 
         # Values that cycle forward once reach a visibly different option.
-        for index in (0, 1, 2, 3, 4, 5, 10):
+        for index in (0, 1, 2, 3, 5, 6, 11):
             session.ui.settings_i = index
             session.tick(Keys(pressed={"right"}), 0.05)
-        for index in (6, 7, 8, 9):
+        for index in (7, 8, 9, 10):
             session.ui.settings_i = index
             session.tick(Keys(pressed={"left"}), 0.05)
 
@@ -55,6 +56,27 @@ class SettingsChecks(unittest.TestCase):
         })
         self.assertFalse(settings["collar_visible"])
         self.assertFalse(loaded.v2["profile"]["collar"]["visible"])
+
+    def test_camera_view_toggle_is_saved_and_reloaded(self):
+        """Both menu toggles persist the opt-in camera choice across a reload."""
+        session = self.make_session()
+        session.ui.mode = "settings"
+        session.ui.settings_i = 4
+        self.assertFalse(session.state.v2["settings"]["third_person"])
+        rows = UI.__new__(UI)._settings_rows(session.state)
+        self.assertEqual(rows[4], ("Camera view", "First person"))
+        session.tick(Keys(pressed={"left"}), 0.05)
+        self.assertTrue(session.state.v2["settings"]["third_person"])
+        session.tick(Keys(pressed={"right"}), 0.05)
+        self.assertFalse(session.state.v2["settings"]["third_person"])
+        session.tick(Keys(pressed={"return"}), 0.05)
+        self.assertTrue(session.state.v2["settings"]["third_person"])
+
+        loaded = State.load(session.save_path, self.world)
+        rows = UI.__new__(UI)._settings_rows(loaded)
+        self.assertTrue(loaded.v2["settings"]["third_person"])
+        self.assertEqual(rows[4], ("Camera view", "Third person"))
+        self.assertEqual(rows[-1], ("Keyboard controls", "Open  >"))
 
     def test_pause_menu_opens_settings_and_escape_returns_to_pause(self):
         from .ui import pause_options
@@ -261,24 +283,10 @@ class SettingsChecks(unittest.TestCase):
 class MixerVolumeChecks(unittest.TestCase):
     @staticmethod
     def silent_mixer():
-        audio = Audio.__new__(Audio)
-        audio._volumes = {"master": 1.0, "music": 1.0,
-                          "ambience": 1.0, "sfx": 1.0}
-        audio.time = 0.0
-        audio.motor_phase = 0.0
-        audio.oar_phase = 0.0
-        audio._water = np.ones(256, np.float32)
-        audio._water_at = 0
-        audio._wind = np.zeros(256, np.float32)
-        audio._wind_at = 0
-        audio._crickets = np.zeros(256, np.float32)
-        audio._cricket_at = 0
-        audio._hour = 12.0
-        audio._rain = 0.0
-        audio._sailing = False
-        audio._motorized = False
-        audio._rowing = False
-        audio.shots = []
+        """A device-free mixer on a still briar noon: the ambience bus carries the lake
+        beds, while sfx and music carry only the shots each test plants."""
+        audio = Audio(device=False, tier="low")
+        audio.prime(hour=12.0, lake_id="briar", motorized=False)
         return audio
 
     def test_master_ambience_sfx_and_music_have_separate_gains(self):
@@ -323,6 +331,13 @@ class SettingsPresentationChecks(unittest.TestCase):
             "master": 1.0, "music": 1.0, "ambience": 1.0, "sfx": 1.0,
         })
 
+    def test_old_saves_default_to_first_person_and_reject_malformed_camera_view(self):
+        """Older saves and malformed values keep the opt-in first-person default."""
+        migrated = merge_v2_defaults(None, {})
+        self.assertFalse(migrated["settings"]["third_person"])
+        malformed = merge_v2_defaults(None, {"settings": {"third_person": "yes"}})
+        self.assertFalse(malformed["settings"]["third_person"])
+
     def test_caption_setting_controls_accessible_sound_copy(self):
         session = Session.__new__(Session)
         session.state = SimpleNamespace(v2={"settings": {"captions": True}})
@@ -358,7 +373,7 @@ class SettingsPresentationChecks(unittest.TestCase):
             "settings": {
                 "mode": "old_salt", "text_size": 2,
                 "dyslexia_font": True, "reduced_motion": True,
-                "haul_speed": "quick", "captions": False,
+                "third_person": True, "haul_speed": "quick", "captions": False,
                 "volumes": {"master": 0.8, "music": 0.7,
                             "ambience": 0.6, "sfx": 0.5},
                 "collar_visible": False,
@@ -371,6 +386,7 @@ class SettingsPresentationChecks(unittest.TestCase):
             ("Text size", "Large"),
             ("Dyslexia-friendly font", "Atkinson Hyperlegible"),
             ("Reduced motion", "On"),
+            ("Camera view", "Third person"),
             ("Haul speed", "Quick"),
             ("Captions", "Off"),
             ("Master volume", "80%"),

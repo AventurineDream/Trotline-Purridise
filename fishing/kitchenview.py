@@ -208,7 +208,7 @@ def kitchen_gallery(destination, *, text=None, world=None, background=None):
                   'p50_ms': round(float(np.percentile(timings, 50)), 2),
                   'p95_ms': round(float(np.percentile(timings, 95)), 2),
                   'text_size': 2, 'accessibility_font': True,
-                  'peak_rss_mib': round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+                  'peak_rss_mib': round(__import__("fishing.verify", fromlist=["rss_bytes"]).rss_bytes() / 1024**2, 1),
                   'text_cache_mb': round(text.cache_bytes / 1e6, 2),
                   'scope': 'Warmed kitchen UI composition, including scrolling lists, fish confirmation and steam; excludes lake rendering'}
         (out / 'kitchen-benchmark.json').write_text(json.dumps(report, indent=2) + '\n')

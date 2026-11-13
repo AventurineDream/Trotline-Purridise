@@ -162,6 +162,70 @@ class InTheSession(unittest.TestCase):
             self.session.tick(Keys(), 0.5)
         self.assertEqual(self.session.stage.t, t)
 
+    def test_optional_chase_camera_has_a_fixed_pose_independent_of_animation(self):
+        """The opt-in chase pose stays level and unchanged by decorative animation."""
+        state = self.session.state
+        state.v2["settings"]["third_person"] = True
+        state.yaw = 0.4
+        state.look = 0.0
+        state.anim = 0.0
+        self.session.ui.mode = "play"
+
+        cam = _camera(self.renderer, self.session)
+        expected = (
+            state.x - math.sin(state.yaw) * 6.0,
+            state.boat.eye_height + 2.2,
+            state.z - math.cos(state.yaw) * 6.0,
+            state.yaw,
+            -math.atan2(2.2, 6.0) + state.look,
+            0.0,
+        )
+        self.assertEqual((cam.x, cam.y, cam.z, cam.yaw, cam.pitch, cam.roll), expected)
+        self.assertIsNotNone(cam.boat)
+        self.assertTrue(np.isfinite(cam.dirs).all())
+        target = cam.project_world(state.x, state.boat.eye_height, state.z)
+        self.assertIsNotNone(target)
+        self.assertAlmostEqual(target[0], cam.w / 2, delta=1.0)
+        self.assertAlmostEqual(target[1], cam.h / 2, delta=1.0)
+        self.assertEqual(self.renderer.render(state, cam).shape, (90, 160, 3))
+
+        state.anim = 830.0
+        unchanged = _camera(self.renderer, self.session)
+        self.assertEqual(
+            (unchanged.x, unchanged.y, unchanged.z, unchanged.yaw,
+             unchanged.pitch, unchanged.roll),
+            expected,
+        )
+        state.v2["settings"]["reduced_motion"] = True
+        reduced_motion = _camera(self.renderer, self.session)
+        self.assertEqual(
+            (reduced_motion.x, reduced_motion.y, reduced_motion.z,
+             reduced_motion.yaw, reduced_motion.pitch, reduced_motion.roll),
+            expected,
+        )
+
+    def test_story_camera_overrides_chase_view_and_chase_resumes_afterward(self):
+        """Authored staging wins while active; the saved chase preference resumes after it."""
+        state = self.session.state
+        state.v2["settings"]["third_person"] = True
+        self.session.ui.mode = "play"
+        self.session.stage = staging.Clock("credits", t=1.6)
+
+        staged = _camera(self.renderer, self.session)
+        expected_stage = staging.staged_camera(self.renderer, state, self.session.stage)
+        self.assertIsNotNone(staged.boat)
+        self.assertEqual(
+            (staged.x, staged.y, staged.z, staged.yaw, staged.pitch),
+            (expected_stage.x, expected_stage.y, expected_stage.z,
+             expected_stage.yaw, expected_stage.pitch),
+        )
+
+        self.session.stage = None
+        resumed = _camera(self.renderer, self.session)
+        self.assertIsNotNone(resumed.boat)
+        self.assertEqual((resumed.boat.x, resumed.boat.z), (state.x, state.z))
+        self.assertAlmostEqual(math.hypot(resumed.x - state.x, resumed.z - state.z), 6.0)
+
     def test_an_unstaged_frame_draws_exactly_as_before(self):
         # Outside a staged scene the camera is the Skipper's own, holding no boat, so the
         # renderers take their old path and the frame is the same picture.

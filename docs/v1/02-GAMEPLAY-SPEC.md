@@ -679,10 +679,11 @@ prompts follow the last-used device.
 ## 17. Accessibility and settings (new)
 
 Text size (3 steps), dyslexia-friendly font option, reduced motion (no camera
-sway, simple fades), haul speed (Normal, Quick, Instant), colorblind-safe markers
-(shape + color), captions for every chime, Bot sound and NPC horn, hold-to-confirm
-off by default, remappable keys, master/music/ambience/SFX volume, and collar
-visibility.
+sway, simple fades), optional third-person camera view (first person by default;
+authored story staging remains authoritative), haul speed (Normal, Quick, Instant),
+colorblind-safe markers (shape + color), captions for every chime, Bot sound and
+NPC horn, hold-to-confirm off by default, remappable keys, master/music/ambience/SFX
+volume, and collar visibility.
 
 ---
 

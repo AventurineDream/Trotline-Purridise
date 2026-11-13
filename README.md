@@ -112,7 +112,7 @@ cover, rain, mist, water chop, and lighting fade together; the sun and moon
 follow continuous orbits across midnight and fade at the horizon. The sky uses
 the fractional lake clock so lighting moves smoothly between game minutes.
 
-Graphics are designed for a **3 GB RAM budget**. Rendering is capped at 1440×810 with up to 4× antialiasing on a GPU; reflections use half that resolution in each direction. Mesa software graphics uses at most 640×360. There is one small shared foliage atlas, fixed geometry and buoy buffers, and an 8 MiB text cache. There are no large downloaded texture packs or retained frame histories.
+Graphics are designed for a **3 GB RAM budget**. The 3D scene target is capped at 1440×810 and scales with its detail tier (low 55%, standard 60%, high 90%, ultra 100% of the window); UI remains native-size. The GPU upscales the scene before final readback. Low/standard use 1× sampling, while high/ultra use up to 4× antialiasing. Reflections use half the internal render resolution. Mesa software graphics uses at most 640×360. Text and UI layer caches are bounded by the tier (text 8–64 MiB, UI layers 32–256 MiB). There are no large downloaded texture packs or retained frame histories.
 
 ## Run
 
@@ -130,15 +130,43 @@ To set up a fresh clone and check it first, run `sh scripts/setup.sh` (on Window
 
 ```sh
 ./play.sh --selftest          # gameplay and graphics regressions. No window.
-./play.sh --shots shots       # PNG frames of the lake and the menus
+./play.sh --shots shots       # PNG frames of the lakes and menus
+./play.sh --shots shots/legendary --legendary  # legendary scenes and book portraits
 ./play.sh --chart shots/chart.png
-./play.sh --benchmark 1200    # both lakes, four boats, menus, weather, and 15 buoys
+./play.sh --benchmark 1200    # five lakes, boats, menus, weather, and full coverage
 ./play.sh --software          # use the simpler CPU fallback
+./play.sh --detail auto       # choose the highest tier that fits free memory
+./play.sh --detail low        # lower-memory systems and the lightest GPU effects
+./play.sh --detail high       # larger baked textures, shadows and scene targets
+./play.sh --detail ultra      # upper tier; peak target 2.6 GiB RSS + GPU
+./play.sh --detail standard   # pin the balanced tier
 ./play.sh --selftest --software
 ./play.sh --smoke             # real window, sailing, purchases, weather, and lake changes
 ```
 
-The benchmark writes `shots/benchmark.json`, records peak process RAM and frame times, and fails if RAM reaches 3,000,000,000 bytes. Its full 1,200-frame run checks observed coverage of both lakes, all four boats, seven shop tabs, four help pages, 144 fish and 12 quest journal entries, and dialogue for all twelve givers in four quest states. It also exercises weather fades, fuel and battery gauges, paints, and fifteen buoys. Repeated lake changes release the previous renderer before building the next. Anchored geometry and finite floating-point scene colors are checked as well. Results depend on the graphics driver and the other applications running on the computer.
+Detail tiers keep the same shader path on GPU systems and size their baked
+textures to available memory. `--detail auto` is the default; it selects a tier
+from currently available RAM, and the low tier is forced for the CPU fallback
+and Mesa software OpenGL. `TROTLINE_DETAIL=<tier>` can pin a tier for a
+repeatable capture or benchmark.
+
+For an opt-in playtest overlay, launch interactive play with `./play.sh --dev`.
+It adds a persistent **DEV** marker; press **grave** from any screen to open or
+close the panel. **Up/Down** (or W/S) selects a command, **Left/Right** (or A/D)
+chooses a fish or any authored lake, **Enter/Space** runs it, and **Esc/grave**
+closes it. While open, panel input is intercepted instead of reaching game
+screens or controls. A `--dev` run never writes the loaded save; cheats and
+ordinary play remain in memory only; title cheats carry through **Continue**.
+Reset requires an explicit confirmation and never deletes the save file.
+The panel offers **+$1,000**, **Refill bait**, **Starter kit** ($1,000 and a
+bait-box refill), **Advance 1 game hour**, **Catch standard fish**, **Fill first
+line** with distinct standard species, **Change lake** (unlocks the selected
+authored route in memory; requires a docked boat and no deployed lines), **Set
+up Old Lantern encounter**, and **Reset in-memory session**. The legendary
+fixture requires Little Briar, no deployed lines, a held line, and enough
+bait-box capacity; it uses the authored Old Lantern requirements and real hook.
+
+The benchmark writes `shots/benchmark.json`, records peak process RAM and DRM-reported GPU memory, and fails if their combined bytes reach 3,000,000,000. Its 1,200-frame run checks all five lakes and boats, eight shop tabs, four help pages, every fish and cat model, 12 quest journal entries, and all twelve dialogue givers across four quest states. It exercises weather, fuel and battery, paint, buoys, audio, a legendary scene and catchability, while checking per-subsystem memory and fixed geometry. Results depend on the graphics driver and other applications running on the computer.
 
 During play the window and lake share one OpenGL context. The window check reads the pixels submitted to the actual window and verifies that presenting a frame does not corrupt subsequent lake frames. Headless screenshots use a separate standalone context.
 
@@ -256,6 +284,11 @@ to controller glyphs after the last controller input, and back to keyboard hints
 after the last keyboard input. Release a direction used in a menu before using it
 to drive the boat again.
 
+**Pause → Settings → Camera view** switches between **First person** (the
+default) and **Third person**. The preference is saved. Third person keeps a
+fixed position behind and above the boat, without bob or smoothing. Authored
+story shots take priority; the selected view returns when staging ends.
+
 Short taps are retained even when pressed and released between rendered frames.
 Losing window focus clears pending input and menu repeat, while held steering
 and throttle still follow the current keyboard state.
@@ -276,6 +309,11 @@ Story details wrap across numbered pages in small windows; **Enter/A** or
 Rumors, Watch clues, legendary records and keepsake descriptions also wrap onto
 as many pages as needed. Finish the Watch card's pages to open its entry;
 finish a shelf item's pages to switch to the next shelf.
+Each caught legendary gets a calm five-second reveal on its first haul; later
+reveals can be skipped or hurried. The camera stays anchored and the catch is
+still released. Its illustrated Book entry keeps the record and the Trophies
+shelf shows a gold replica. The Fire-Lizard's page says “NOT A FISH!”; the
+Zero-G Winch gives the Nebula Weaver a floating-line variant.
 
 Standard catches now have a **1 in 64** shiny chance, rolled once and saved on
 the catch. After five catches of a species (**Verified**), its Book entry offers

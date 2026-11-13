@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import re
 import sys
 import time
 import tempfile
@@ -14,9 +16,9 @@ try:
     import resource
 except ImportError:  # Windows: the resource module is Unix-only
     resource = None
-
 import numpy as np
 
+from . import detail as detail_tiers
 from .camera import Camera
 from .data import PAINT, SPECIES
 from .dialogue import Conversation
@@ -35,12 +37,72 @@ MEMORY_LIMIT_BYTES = 3_000_000_000
 
 
 def rss_bytes():
-    # Linux ru_maxrss is KiB, and records the process peak, including startup.
-    # Without the resource module (Windows) there is no reading; return 0
-    # so the memory check is skipped rather than crashing the process.
-    if resource is None:
-        return 0
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024
+    """Return this process image's peak resident set size.
+
+    Returns:
+        Peak resident bytes, read from Linux VmHWM or the platform resource API.
+    """
+    try:
+        for line in Path("/proc/self/status").read_text().splitlines():
+            if line.startswith("VmHWM:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, ValueError):
+        pass
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return int(peak * (1024 if os.name == "posix" and sys.platform.startswith("linux") else 1))
+
+
+_DRM_UNITS = {"": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
+
+
+def drm_memory_bytes(fdinfo_texts):
+    """Total GPU memory described by a process's DRM fdinfo records.
+
+    Several descriptors usually share one DRM client (EGL opens the device more
+    than once), and each repeats that client's totals, so clients are counted
+    once. Values carry a unit suffix; a bare number is bytes.
+
+    Args:
+        fdinfo_texts: The contents of each ``/proc/<pid>/fdinfo/<fd>`` file.
+
+    Returns:
+        Resident bytes across all memory regions and clients (falling back to
+        ``drm-total-*`` for drivers without resident accounting), or ``None``
+        if no descriptor belongs to a DRM device.
+    """
+    clients = {}
+    for text in fdinfo_texts:
+        client = re.search(r"^drm-client-id:\s*(\S+)", text, re.M)
+        if client is None:
+            continue
+        device = re.search(r"^drm-pdev:\s*(\S+)", text, re.M)
+        sums = {}
+        for kind, value, unit in re.findall(
+                r"^drm-(resident|total)-\S+:\s*(\d+)[ \t]*(KiB|MiB|GiB)?", text, re.M):
+            sums[kind] = sums.get(kind, 0) + int(value) * _DRM_UNITS[unit]
+        if sums:
+            key = (device.group(1) if device else "", client.group(1))
+            clients[key] = sums.get("resident", sums.get("total", 0))
+    return sum(clients.values()) if clients else None
+
+
+def gpu_memory_bytes():
+    """GPU memory this process holds, from the kernel's DRM accounting.
+
+    Returns:
+        Bytes (see `drm_memory_bytes`), or ``None`` where the platform or
+        driver does not expose DRM fdinfo.
+    """
+    texts = []
+    try:
+        for path in Path("/proc/self/fdinfo").iterdir():
+            try:
+                texts.append(path.read_text())
+            except OSError:
+                continue
+    except OSError:
+        return None
+    return drm_memory_bytes(texts)
 
 
 def graphics_checks(renderer, world):
@@ -386,7 +448,50 @@ def scope_counts() -> dict:
             "legendary_scenes": 1}
 
 
+def _benchmark_play_loop(world, state, text, software):
+    """Measure the full-size GPU output pass and play-UI composition."""
+    report = {}
+    for width, height in ((1200, 675), (1440, 810)):
+        render_width, render_height = detail_tiers.render_dimensions(
+            width, height, software=software)
+        renderer = Renderer(world, render_width, render_height, software=software,
+                            output_size=(width, height))
+        ui = UI(text, world)
+        panel = UIState(mode="play", has_save=True)
+        full_ms, render_ms = [], []
+        try:
+            for frame_i in range(60):
+                start = time.perf_counter()
+                cam = renderer.camera_for(state)
+                low = renderer.render(state, cam)
+                big = low if low.shape[:2] == (height, width) else resize_rgb(low, width, height)
+                ui.draw(big, state, panel, cam)
+                if frame_i >= 10:
+                    full_ms.append((time.perf_counter() - start) * 1000)
+                    render_ms.append(renderer.last_ms)
+            report[f"{width}x{height}"] = {
+                "frames": len(full_ms),
+                "full_frame_p50_ms": round(float(np.percentile(full_ms, 50)), 3),
+                "full_frame_p95_ms": round(float(np.percentile(full_ms, 95)), 3),
+                "render_call_p50_ms": round(float(np.percentile(render_ms, 50)), 3),
+                "render_cpu_p50_ms": None,
+                "true_gpu_p50_ms": None,
+            }
+        finally:
+            renderer.close()
+    return report
+
 def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
+    """Benchmark renderer/UI throughput and memory bounds.
+
+    Args:
+        frames: Full benchmark frame count; at least 60.
+        dest: JSON report destination.
+        software: Whether to use CPU rendering instead of OpenGL.
+
+    Returns:
+        Zero after writing and printing the benchmark report.
+    """
     if frames<60:
         raise ValueError("Use at least 60 frames for a meaningful benchmark")
     from .content import WEATHER_STATES
@@ -395,8 +500,10 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
     from .fishmesh import fish_card, haul_mesh, legendary_ids
     from .specieschecks import validate_catchability
     from .legendshots import _draw as draw_scene, _panel as scene_panel, _staged
+    render_width, render_height = detail_tiers.render_dimensions(1440, 810, software=software)
     world = World(LAKE_ORDER[0])
-    renderer = Renderer(world,1440,810,software=software)
+    renderer = Renderer(world, render_width, render_height, software=software,
+                        output_size=(1440, 810))
     text = Text()
     ui = UI(text,world)
     state = State.new(world,seed=24)
@@ -461,7 +568,8 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                 world = World(lake_id)
                 state.bind(world)
                 state.npcs = active_npcs(state,world,npc_content)
-                renderer = Renderer(world,1440,810,software=software)
+                renderer = Renderer(world,render_width,render_height,software=software,
+                                    output_size=(1440, 810))
                 ui = UI(text,world)
             t0 = time.perf_counter()
             state.anim = i/30
@@ -526,7 +634,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                 for slot_name,paints in PAINT.items():
                     state.look_paint[slot_name] = paints[(i//60)%len(paints)][0]
             low = renderer.render(state)
-            big = resize_rgb(low,1440,810)
+            big = low if low.shape[:2] == (810, 1440) else resize_rgb(low,1440,810)
             ui.draw(big,state,panel)
             coverage["modes"].add(panel.mode)
             coverage["lake_boat_pairs"].add(f"{world.id}/{state.boat_id}")
@@ -544,8 +652,9 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
                 raise AssertionError("invalid frame")
             if text.cache_bytes>text.cache_limit:
                 raise AssertionError("text cache exceeded its memory budget")
-            if rss_bytes()>=MEMORY_LIMIT_BYTES:
-                raise AssertionError("game exceeded 3 GB of RAM")
+            gpu_bytes = gpu_memory_bytes()
+            if rss_bytes() + (gpu_bytes or 0) >= MEMORY_LIMIT_BYTES:
+                raise AssertionError("game exceeded 3 GB combined process/GPU memory")
             actors = renderer.actor_memory()
             actor_peak = max(actor_peak,actors["total_bytes_bound"])
             if actors["resident_actors"]>actors["max_actors"] or actor_peak>actors["budget_bytes"]:
@@ -587,17 +696,22 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
         catchability = _catchability_section(validate_catchability())
         if catchability["species_count"] != len(SPECIES):
             raise AssertionError(f"catchability covers {catchability['species_count']} species")
+        play_loop = _benchmark_play_loop(world, state, text, software)
+        gpu_bytes = gpu_memory_bytes()
         report = {
             "frames":frames,"backend":renderer.backend,
             "render_size":[renderer.w,renderer.h],"window_size":[1440,810],
+            "output_size":[1440,810],
             "antialias_samples":getattr(renderer,"samples",1),
             "render_median_ms":round(float(np.median(render_ms)),2),
             "full_frame_median_ms":round(float(np.median(frame_ms)),2),
             "full_frame_p50_ms":round(float(np.percentile(frame_ms,50)),2),
             "full_frame_p95_ms":round(float(np.percentile(frame_ms,95)),2),
+            "play_loop":play_loop,
             "mode_median_ms":{mode:round(float(np.median(values)),2) for mode,values in mode_ms.items() if values},
             "lake_boat_median_ms":{mode:round(float(np.median(values)),2) for mode,values in lake_boat_ms.items() if values},
             "peak_rss_mb":round(rss_bytes()/1024**2,2),
+            "gpu_resident_mb":None if gpu_bytes is None else round(gpu_bytes/1024**2,2),
             "ram_limit_bytes":MEMORY_LIMIT_BYTES,
             "text_cache_limit_bytes":text.cache_limit,
             "cat_actor_memory":{**renderer.actor_memory(),"peak_total_bytes_bound":actor_peak},

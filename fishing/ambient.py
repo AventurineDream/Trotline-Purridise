@@ -98,7 +98,8 @@ def faces(state, world, light=None):
     elif world.generated:
         from .lakegen import smoke_faces
         out.extend(smoke_faces(state, world))
-    t = float(state.anim)
+    reduced = bool(state.v2.get("settings", {}).get("reduced_motion", False))
+    t = 0.0 if reduced else float(state.anim)
     # Only two nearby stable habitats are active, regardless of world size.
     nearby = sorted(world.zones, key=lambda row: (row[1]-state.x)**2+(row[2]-state.z)**2)[:2]
     if light['night'] < 0.65 and light['rain'] < 0.8:

@@ -328,7 +328,8 @@ def coverage_report() -> dict:
         block = audio._mix(SR // 2, 0.0, 0.0)
         lakes[lake] = {"ambience": sorted(heard), "bed_peak": int(np.max(np.abs(block))),
                        "expected": sorted(AMBIENCE[lake])}
-        total += audio.buffer_bytes()
+    # Audio objects for each lake share one tier-keyed store; count the warmed bank once.
+    total += audio.buffer_bytes()
     complete = (all(v["peak"] > 0 and v["captioned"] for v in kinds.values())
                 and all(set(v["ambience"]) == set(v["expected"]) and v["bed_peak"] > 0 for v in lakes.values()))
     return {"kinds": kinds, "lakes": lakes, "bytes": total, "budget_bytes": AUDIO_BUDGET_BYTES,

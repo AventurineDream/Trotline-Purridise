@@ -345,6 +345,44 @@ class BookView:
             image = silhouette(w, h)
         self.u._blit_rgb(self.frame, image, x, y)
 
+    def legendary_art(self, sid, rect, *, trophy=False):
+        """Draw a legendary's framed field photo, or its gold trophy replica, into `rect`.
+
+        Args:
+            sid: Legendary id; its LEGENDARY_DATA lake picks the mesh.
+            rect: (x, y, w, h) in frame pixels; rects under 24 px on a side draw nothing.
+            trophy: Tint the side-on haul mesh gold and stand it on a plinth.
+        Side effects:
+            Writes only into the book frame; never touches state or V2.
+        Raises:
+            KeyError: If `sid` has no authored legendary look.
+        """
+        from .legendary import LEGENDARY_DATA
+        from .ui import _fit, _haul_mesh_sprite
+        x, y, w, h = (int(value) for value in rect)
+        if w < 24 or h < 24:
+            return
+        data = LEGENDARY_DATA.get(sid, {})
+        lake_id = data.get("lake", "briar")
+        self.fill((x, y, w, h), LEATHER)
+        inset = max(2, min(5, w // 72, h // 24))
+        inner = (x + inset, y + inset, w - inset * 2, h - inset * 2)
+        self.fill(inner, (70, 56, 39) if trophy else PAPER)
+        iw, ih = max(1, inner[2] - 12), max(1, inner[3] - 16)
+        sprite = _haul_mesh_sprite(sid, lake_id, False)
+        image = _fit(sprite, iw, ih).copy()
+        if trophy:
+            rgb = image[:, :, :3].astype(np.uint16)
+            gold = np.array((242, 195, 94), np.uint16)
+            image[:, :, :3] = ((rgb * 45 + gold * 55) // 100).astype(np.uint8)
+        self.u._blit(self.frame, image, inner[0] + 6, inner[1] + 6)
+        if trophy:
+            base_w = max(44, w // 3)
+            base_h = max(5, h // 18)
+            self.fill((x + (w - base_w) // 2, y + h - inset - base_h,
+                       base_w, base_h), OCHRE)
+
+
     def draw(self):
         l = self.layout
         self.ui.book_detail_pages = 1
@@ -530,7 +568,10 @@ class BookView:
         self.footer(f"Entry {self.ui.book_entry_i + 1}/{len(ENTRY_IDS)} · Page {index + 1}/{count}")
 
     def legendary(self, sid):
+        """Draw a saved first-hand legendary record beside its procedural photo."""
+        from .legendary import LEGENDARY_DATA
         page = legendary_page(sid, self.state.v2, remember=False)
+        name = LEGENDARY_DATA.get(sid, {}).get("name", sid.replace("_", " ").title())
         values = ["RECORDED" if page["verified"] else "A LAKE STORY",
                   '“' + page["story"] + '” — ' + page["teller"]]
         for index, record in enumerate(page["records"], 1):
@@ -553,6 +594,7 @@ class BookView:
         self.footer(f"Page {index}/{count} · Enter turns")
 
     def shelf(self):
+        """Draw trophy replicas as small gold figures; other shelves remain text-led."""
         names = ("Ripples", "Keepsakes", "Trophies")
         rows = collection_rows(self.state, self.u.narrative_content, self.ui.book_shelf)
         width = None
@@ -831,7 +873,7 @@ def book_gallery(destination, *, text=None, world=None):
         report = {"frames": len(timings), "resolution": [1280, 720],
                   "p50_ms": round(float(np.percentile(timings, 50)), 2),
                   "p95_ms": round(float(np.percentile(timings, 95)), 2),
-                  "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+                  "peak_rss_mib": round(__import__("fishing.verify", fromlist=["rss_bytes"]).rss_bytes() / 1024**2, 1),
                   "text_cache_mb": round(text.cache_bytes / 1e6, 2),
                   "tabs": list(BOOK_TABS), "text_sizes": [0, 1, 2],
                   "benchmark_text_size": 2,
