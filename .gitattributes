@@ -1,0 +1,6 @@
+# Quest content and data files must keep LF endings on every platform.
+# test_quests_v2 pins fishing/assets/narrative_v1.json by raw-byte sha256,
+# so a CRLF checkout on Windows changes the hash and fails the test.
+# (Binary assets such as .npz and fonts are deliberately not listed here.)
+fishing/assets/*.json eol=lf
+fishing/assets/content_v2/*.json eol=lf
