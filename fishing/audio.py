@@ -335,7 +335,12 @@ class _BedStore:
         self._poll_cues()
         sound = self._cues.get((kind, variant))
         if sound is None:
-            sound = self._cues.setdefault((kind, variant), synth.build_cue(kind, self.rate, variant))
+            if kind in synth.CUE_PEAK_DB:
+                sound = synth.build_cue(kind, self.rate, variant)
+            else:
+                # V1-38 motifs and story/ambient calls have authored waveforms, not generic cue presets.
+                sound = _soundscape_cue(kind, self.rate)
+            self._cues[(kind, variant)] = sound
         return sound
 
     def strokes(self) -> list[np.ndarray]:
@@ -390,6 +395,25 @@ def _store_for(tier: detail.Detail) -> _BedStore:
         if store is None:
             store = _STORES[key] = _BedStore(*key)
         return store
+
+
+def _soundscape_cue(kind: str, rate: int) -> np.ndarray:
+    """Resample an authored mono soundscape cue to stereo float32 at the mixer rate."""
+    from . import soundscape
+
+    source = soundscape.tone(kind).astype(F32) / F32(32767.0)
+    if rate != soundscape.SR:
+        count = max(1, int(round(len(source) * rate / soundscape.SR)))
+        positions = np.arange(count, dtype=F32) * F32(soundscape.SR / rate)
+        left = np.floor(positions).astype(np.intp)
+        right = np.minimum(left + 1, len(source) - 1)
+        fraction = positions - left
+        source = source[left] + (source[right] - source[left]) * fraction
+    stereo = np.empty((len(source), 2), dtype=F32)
+    stereo[:, 0] = source
+    stereo[:, 1] = source
+    stereo.setflags(write=False)
+    return stereo
 
 
 class Audio:

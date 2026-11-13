@@ -1796,6 +1796,8 @@ class UI:
         u1, v1 = self.world.map_pixel(x1, z1, mw, mh)
         steps = max(abs(u1 - u0), abs(v1 - v0), 1)
         samples = np.arange(steps + 1, dtype=np.float64) / steps
+        if dashed:
+            samples = samples[np.arange(steps + 1) % 6 < 3]
         xs = (ox + u0 + (u1 - u0) * samples).astype(np.intp)
         ys = (oy + v0 + (v1 - v0) * samples).astype(np.intp)
         height, width = frame.shape[:2]

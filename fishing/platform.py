@@ -440,6 +440,7 @@ class Platform:
         s.SDL_GL_GetDrawableSize.argtypes = [c_void_p,ctypes.POINTER(c_int),ctypes.POINTER(c_int)]
         s.SDL_GL_DeleteContext.argtypes = [c_void_p]
         s.SDL_GL_GetProcAddress.argtypes = [c_char_p]
+        s.SDL_GL_GetProcAddress.restype = c_void_p
         s.SDL_GL_SetSwapInterval.argtypes = [c_int]
         s.SDL_GL_GetSwapInterval.restype = c_int
         self.vsync = False

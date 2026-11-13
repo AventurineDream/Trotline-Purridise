@@ -85,6 +85,24 @@ class GuideLayoutChecks(unittest.TestCase):
             ui.draw(frame, state, UIState(mode="map"))
         self.assertGreater(np.count_nonzero(frame), 0)
 
+    def test_minimap_soak_lines_keep_their_dash_pattern(self):
+        """Soaking status remains readable without relying on line colour alone."""
+        class PixelMap:
+            @staticmethod
+            def map_pixel(x, z, width, height):
+                return int(x), int(z)
+
+        ui = UI.__new__(UI)
+        ui.world = PixelMap()
+        solid = np.zeros((20, 60, 3), np.uint8)
+        dashed = solid.copy()
+        ui._seg(solid, 3, 10, 56, 10, 0, 0, 60, 20, (180, 210, 190))
+        ui._seg(dashed, 3, 10, 56, 10, 0, 0, 60, 20, (180, 210, 190), dashed=True)
+        self.assertGreater(np.count_nonzero(solid), 0)
+        self.assertLess(np.count_nonzero(dashed), np.count_nonzero(solid))
+        self.assertFalse(np.any(dashed[9:12, 7]))
+        self.assertTrue(np.any(solid[9:12, 7]))
+
     def test_ui_presentation_caches_are_bounded_and_released(self):
         """Keep per-world raster layers inside their byte caps and clear them on close."""
         world = World()

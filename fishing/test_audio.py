@@ -171,6 +171,22 @@ class AudioChecks(unittest.TestCase):
             # A >= 4 ms raised-cosine attack reaches only ~15% by 1 ms.
             self.assertLess(float(env[:first].max()), 0.25 * settled, kind)
 
+    def test_authored_soundscape_cues_keep_their_original_tones(self):
+        """V1-38 motifs and story calls must not degrade to generic synth beeps."""
+        for kind in (name for name in soundscape.KINDS if name not in synth.CUE_PEAK_DB):
+            with self.subTest(kind=kind):
+                source = soundscape.tone(kind).astype(np.float32) / np.float32(32767.0)
+                count = int(round(len(source) * self.rate / soundscape.SR))
+                positions = np.arange(count, dtype=np.float32) * np.float32(soundscape.SR / self.rate)
+                left = np.floor(positions).astype(np.intp)
+                right = np.minimum(left + 1, len(source) - 1)
+                fraction = positions - left
+                expected = source[left] + (source[right] - source[left]) * fraction
+                actual = self.audio._tone(kind)
+                self.assertEqual(actual.shape, (count, 2), kind)
+                np.testing.assert_allclose(actual[:, 0], expected, atol=1e-7)
+                np.testing.assert_array_equal(actual[:, 0], actual[:, 1])
+
     def test_bite_rises_above_a_frog_chorus(self):
         scene = dict(lake_id="briar", hour=23.0)
         frogs = [(1.0 + 0.02 * i, "frog", "ambience") for i in range(6)]
