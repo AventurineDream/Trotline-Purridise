@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import math
-import resource
 import sys
 import time
 from pathlib import Path
+
+try:
+    import resource
+except ImportError:  # Windows: the resource module is Unix-only
+    resource = None
 
 import numpy as np
 
@@ -171,10 +175,15 @@ def selftest(*,software=False) -> int:
         raise AssertionError(f"frame {low.shape} {low.dtype}")
     if float(low.std()) < 8:
         raise AssertionError("frame is flat")
-    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
-    print(f"frame {low.shape[1]}x{low.shape[0]}  std {low.std():.1f}  RSS {rss:.0f} MB")
-    if rss > 1500:
-        raise AssertionError(f"RSS {rss:.0f} MB")
+    if resource is not None:
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+        print(f"frame {low.shape[1]}x{low.shape[0]}  std {low.std():.1f}  RSS {rss:.0f} MB")
+        if rss > 1500:
+            raise AssertionError(f"RSS {rss:.0f} MB")
+    else:
+        # Windows has no resource module, so the RSS budget check is
+        # skipped there; the frame shape and flatness checks above still run.
+        print(f"frame {low.shape[1]}x{low.shape[0]}  std {low.std():.1f}  RSS n/a (no resource module)")
     from .verify import graphics_checks
     graphics_checks(renderer,world)
     weather_checks(renderer,world)
@@ -656,3 +665,4 @@ if __name__ == "__main__":
     except AssertionError as exc:
         print(f"failed: {exc}", file=sys.stderr)
         raise SystemExit(1)
+
