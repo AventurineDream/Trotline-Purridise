@@ -42,10 +42,10 @@ class Captions(unittest.TestCase):
         self.assertEqual(soundscape.bus("horn"), "sfx")
 
     def test_every_sound_the_game_plays_is_known_and_captioned(self):
-        source = (ROOT / "game.py").read_text() + (ROOT / "bot.py").read_text()
+        source = (ROOT / "game.py").read_text(encoding="utf-8") + (ROOT / "bot.py").read_text(encoding="utf-8")
         played = set(re.findall(r'self\.sound = "([a-z_]+)"', source))
         played |= set(re.findall(r'self\.cue\("([a-z_]+)"\)', source))
-        played |= set(re.findall(r'return "([a-z_]+)"', (ROOT / "bot.py").read_text())) & set(soundscape.KINDS)
+        played |= set(re.findall(r'return "([a-z_]+)"', (ROOT / "bot.py").read_text(encoding="utf-8"))) & set(soundscape.KINDS)
         self.assertTrue({"bite", "error", "splash", "horn", "legendary", "whale_song"} <= played)
         for kind in played:
             self.assertIn(kind, soundscape.CAPTIONS, kind)
