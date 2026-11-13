@@ -12,7 +12,7 @@ from .narrative import QUEST_IDS, RIPPLE_BY_QUEST, DAY_NPCS
 
 class ContentChecks(unittest.TestCase):
     def setUp(self):
-        self.raw = json.loads(CONTENT_PATH.read_text())
+        self.raw = json.loads(CONTENT_PATH.read_text(encoding="utf-8"))
 
     def invalid(self, edit, expected):
         raw = deepcopy(self.raw)
