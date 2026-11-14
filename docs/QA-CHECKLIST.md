@@ -94,35 +94,33 @@ worktree before its rebase, based at `6ae08f3`. The final PR integrates with
   the chart and lagoon transition were captured. Earlier QA notes also record
   a camera-view toggle and hull framing; these were not repeated after integrating
   upstream V1-42–V1-44.
-- **Current local verification:** `python -m unittest fishing.test_audio fishing.test_nebula`
-  ran 52 tests successfully; native and software `python -m fishing --selftest` both
-  reported `selftest ok`. The earlier full suite on the rebased tree ran 836 tests and
-  `fishing.test_narrative` ran 37 successfully, before the final review fixes.
-- **Current 1,200-frame benchmarks:** all four tiers reported complete five-lake
-  coverage with copy-on-ingest audio samples. Combined process RSS plus
-  DRM-reported GPU allocation is checked against the 3,000,000,000-byte limit
-  on every frame:
+- **Current local verification on the rebased tree:** `python -m unittest discover -v`
+  ran 865 tests successfully (1 skipped). The audio, pacing, and EGL-map targeted
+  set ran 58 tests successfully; native and software `--selftest` both reported
+  `selftest ok`. Local Python was 3.15.2; GitHub validation targets Python 3.12.
+- **Final 1,200-frame benchmarks:** all four tiers reported complete five-lake
+  coverage after restoring the HDR shader setup and copy-on-ingest audio samples.
+  Combined process RSS plus DRM-reported GPU allocation is checked against
+  3,000,000,000 bytes on every frame:
 
   | Detail | 3D target at 1440×810 | Play-loop p50 / p95 at 1200×675 | Peak combined MiB |
   | --- | ---: | ---: | ---: |
-  | Low | 792×445 | 17.55 / 20.63 ms | 759 |
-  | Standard | 864×486 | 18.92 / 22.51 ms | 1,345 |
-  | High | 1296×729 | 27.25 / 33.35 ms | 1,770 |
-  | Ultra | 1440×810 | 37.48 / 47.16 ms | 2,624 |
+  | Low | 792×445 | 16.71 / 24.00 ms | 653 |
+  | Standard | 864×486 | 18.23 / 25.02 ms | 1,321 |
+  | High | 1296×729 | 28.94 / 36.48 ms | 1,657 |
+  | Ultra | 1440×810 | 32.85 / 40.79 ms | 2,677 |
 
 - **Performance tradeoff:** Standard at 60% of window resolution missed the
-  earlier ~17 ms p50 target by about 1.9 ms on this loaded host. I kept 60%
+  earlier ~17 ms p50 target by about 1.2 ms on this loaded host. I kept 60%
   rather than lowering the default scene resolution further; the cost is a
   softer image.
-- **Memory details:** Ultra peaked at 1,955 MiB DRM GPU allocation and 2,624 MiB
-  combined; its measured audio bank used 117.87 MiB of the 150 MiB budget.
-  That is below the 2.6 GiB tier target and the 3 GB hard limit.
-- **GitHub gate not established:** the push validation run on source head
-  `aea0438c` failed twice before runner allocation (`runner_id=0`, no steps or
-  logs); the Windows and package workflows also failed before runner allocation.
-  Repository Actions are enabled and GitHub Status reported no unresolved incident.
-  These runs provide no code-level result; do not merge until the required
-  exact-head `gameplay-tests` job passes.
+- **Memory details:** Ultra peaked at 2,049 MiB DRM GPU allocation and 2,677 MiB
+  combined. Its audio bank used 117.87 MiB of the 150 MiB budget. The result is
+  about 15 MiB above the soft 2.6 GiB tier target but remains 184 MiB under the
+  3 GB hard ceiling; the 4x MSAA setting is retained for image quality.
+- **CI gate:** GitHub run status is tracked on the PR. Per
+  `docs/PR-REVIEW-POLICY.md`, the exact-head push `gameplay-tests` job must pass
+  before merge.
 - **Not established:** the final rebased window was not replayed; audio was not
   auditioned by ear, physical-controller operation was not tested, and a natural
   unlock/story playthrough was not completed.
