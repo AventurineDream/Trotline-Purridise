@@ -732,6 +732,8 @@ class Audio:
             # Mute drops every bus and its pending captions; nothing waits to play after.
             self.shots.clear()
             self._played.clear()
+            self._duck_frames = 0
+            self._duck = 1.0
         if not (self.ok or self._virtual):
             return
         dt = max(0.0, float(dt))
