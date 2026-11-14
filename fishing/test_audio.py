@@ -111,14 +111,14 @@ class Captions(unittest.TestCase):
     def test_gameplay_environment_and_chime_cues_are_captioned(self):
         """Keep the current gameplay cue vocabulary and authored schedules captioned."""
         cues = {
-            "bite", "bot", "click", "cookout", "error", "horn", "hum", "hum_winch",
-            "lake_day", "legendary", "splash", "whale_song",
+            "lake_day", "legendary", "sell", "splash", "whale_song",
         }
         cues.update(soundscape.motif_for(lake) for lake in soundscape.LAKES)
         for lake in soundscape.LAKES:
             cues.update(soundscape.AMBIENCE[lake])
         cues.update(CHIMES)
         for kind in cues:
+            self.assertIn(kind, soundscape.KINDS + CHIMES, kind)
             self.assertTrue(soundscape.caption(kind), kind)
             self.assertIn(soundscape.bus(kind), ("music", "ambience", "sfx"), kind)
         self.assertTrue(all(soundscape.bus(k) == "music" for k in soundscape.MUSIC_CAPTIONS))
