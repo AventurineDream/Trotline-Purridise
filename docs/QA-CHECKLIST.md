@@ -82,7 +82,7 @@ Use a **disposable save** for every pass: launch with `--save <scratch>` (for ex
 The checklist remains reusable; unchecked boxes are not claims of a complete
 manual playthrough. The real-window replay below was captured on the pass2
 worktree before its rebase, based at `6ae08f3`. The final PR integrates with
-`main` at `498e879`; no post-rebase live-window replay was performed.
+`main` at `797c317`; no post-rebase live-window replay was performed.
 
 - **Headless gameplay/input:** new-game flow, set/soak/haul, keep/release/rebait/pull,
   kitchen confirmation/cancellation/skipping, quest turn-in, boat purchase/switching,
@@ -94,30 +94,36 @@ worktree before its rebase, based at `6ae08f3`. The final PR integrates with
   the chart and lagoon transition were captured. Earlier QA notes also record
   a camera-view toggle and hull framing; these were not repeated after integrating
   upstream V1-42–V1-44.
-- **Current local verification on the rebased tree:** `python -m unittest discover -v`
-  ran 865 tests successfully (1 skipped). The audio, pacing, and EGL-map targeted
-  set ran 58 tests successfully; native and software `--selftest` both reported
-  `selftest ok`. Local Python was 3.15.2; GitHub validation targets Python 3.12.
+- **Current local verification:** the focused review-fix suite ran 89 tests
+  successfully. Native and software `python -m fishing --selftest` both
+  reported `selftest ok`. A full suite on the earlier rebased head ran 865
+  tests successfully (1 skipped); the latest full-suite rerun exceeded the
+  600-second command timeout while the long playthrough test was running, with
+  no assertion failure reported before timeout. Local Python was 3.15.2;
+  GitHub validation targets Python 3.12, and its exact-head push check remains
+  the merge gate.
 - **Final 1,200-frame benchmarks:** all four tiers reported complete five-lake
   coverage after restoring the HDR shader setup and copy-on-ingest audio samples.
-  Combined process RSS plus DRM-reported GPU allocation is checked against
-  3,000,000,000 bytes on every frame:
+  The primary renderer is closed before the separate play-loop measurement so
+  the peak does not count two renderers at once. Combined process RSS plus
+  DRM-reported GPU allocation is checked against 3,000,000,000 bytes on every
+  frame:
 
   | Detail | 3D target at 1440×810 | Play-loop p50 / p95 at 1200×675 | Peak combined MiB |
   | --- | ---: | ---: | ---: |
-  | Low | 792×445 | 16.71 / 24.00 ms | 653 |
-  | Standard | 864×486 | 18.23 / 25.02 ms | 1,321 |
-  | High | 1296×729 | 28.94 / 36.48 ms | 1,657 |
-  | Ultra | 1440×810 | 32.85 / 40.79 ms | 2,677 |
+  | Low | 792×445 | 17.39 / 21.23 ms | 603 |
+  | Standard | 864×486 | 19.23 / 27.99 ms | 1,202 |
+  | High | 1296×729 | 30.35 / 48.24 ms | 1,588 |
+  | Ultra | 1440×810 | 34.77 / 40.30 ms | 2,643 |
 
 - **Performance tradeoff:** Standard at 60% of window resolution missed the
-  earlier ~17 ms p50 target by about 1.2 ms on this loaded host. I kept 60%
+  earlier ~17 ms p50 target by about 2.2 ms on this loaded host. I kept 60%
   rather than lowering the default scene resolution further; the cost is a
   softer image.
-- **Memory details:** Ultra peaked at 2,049 MiB DRM GPU allocation and 2,677 MiB
-  combined. Its audio bank used 117.87 MiB of the 150 MiB budget. The result is
-  about 15 MiB above the soft 2.6 GiB tier target but remains 184 MiB under the
-  3 GB hard ceiling; the 4x MSAA setting is retained for image quality.
+- **Memory details:** Ultra peaked at 2,049 MiB DRM GPU allocation and 2,643 MiB
+  combined. Its audio bank used 117.87 MiB of the 150 MiB budget. That is
+  19 MiB below the soft 2.6 GiB tier target and 218 MiB under the 3 GB hard
+  ceiling; the 4x MSAA setting is retained for image quality.
 - **CI gate:** GitHub run status is tracked on the PR. Per
   `docs/PR-REVIEW-POLICY.md`, the exact-head push `gameplay-tests` job must pass
   before merge.
