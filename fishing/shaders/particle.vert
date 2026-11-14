@@ -141,7 +141,7 @@ void wisp_place(vec4 a, vec4 b) {
     // Centres sit over water; the fragment shader thins each sheet towards
     // the bank so none cuts into the land. Near ones fade out so the mist
     // never walls off the view from the boat.
-    float wet = smoothstep(4.0, -6.0, shore(C.xz));
+    float wet = 1.0-smoothstep(-6.0, 4.0, shore(C.xz));
     FADE = wet*box_fade(C, r)*smoothstep(9.0, 30.0, distance(C, eye))*far_fade(C, 80.0, 135.0)*sin(life*PI);
     v_tex.xy = vec2(b.w*7.0, a.y*5.0) + p_time*vec2(0.0035, 0.0006);
 }
@@ -301,7 +301,7 @@ void dust_place(vec4 a, vec4 b) {
     S = vec2(0.018+0.022*b.z);
     MINPX = 1.9;
     SHAPE = 0;
-    float wet = smoothstep(2.0, -4.0, shore(C.xz));
+    float wet = 1.0-smoothstep(-4.0, 2.0, shore(C.xz));
     FADE = wet*box_fade(C, r)*near_fade(C, 2.0, 5.0)*smoothstep(0.0, 0.6, y)*(1.0-smoothstep(2.0, H, y));
 }
 void dust_shade(vec4 a, vec4 b) {

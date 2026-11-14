@@ -307,7 +307,7 @@ vec3 sky_clouds(vec3 d, vec3 bg, out float alpha) {
     // Optical depth above the threshold, in absolute units: sparse clouds on
     // a clear day are small and thin, a fair-weather field grows thick cores.
     float t0 = max(c0.r+ero-thr,0.0);
-    float t1 = max(c1.r+ero-thr,0.0)*smoothstep(0.85,0.25,y);
+    float t1 = max(c1.r+ero-thr,0.0)*(1.0-smoothstep(0.25,0.85,y));
     float t = max(t0,t1);
     // 0 where we see only the flat underside, 1 for the top of a side wall.
     float wall = t1/(t0+t1+1e-4);

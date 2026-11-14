@@ -267,8 +267,8 @@ void main() {
     if (briar()) {
         vec3 grass = mix(vec3(.16,.24,.13),vec3(.31,.36,.18),n2);
         // Moss in damp hollows and under crowns, dry seed-heads on the knolls.
-        grass = mix(grass,vec3(.13,.21,.10),smoothstep(0.45,0.25,n1)*0.7+cover*0.25);
-        grass = mix(grass,vec3(.40,.38,.22),smoothstep(0.62,0.8,n2)*smoothstep(0.0,-1.5,cav)*0.55);
+        grass = mix(grass,vec3(.13,.21,.10),(1.0-smoothstep(0.25,0.45,n1))*0.7+cover*0.25);
+        grass = mix(grass,vec3(.40,.38,.22),smoothstep(0.62,0.8,n2)*(1.0-smoothstep(-1.5,0.0,cav))*0.55);
         vec3 earth = mix(vec3(.38,.31,.21),vec3(.57,.48,.33),n2);
         vec3 litter = mix(vec3(.30,.22,.13),vec3(.40,.29,.16),n3);
         float edge = sd+(n3-0.5)*3.0+(n1-0.5)*4.0;
@@ -337,10 +337,10 @@ void main() {
             // The cinder isle: black scoria, rust flecks, darker towards the vent.
             vec3 cinder = mix(vec3(.045,.055,.08),vec3(.13,.15,.20),n2);
             cinder = mix(cinder,vec3(.20,.10,.08),smoothstep(0.7,0.85,n3)*0.6);
-            cinder *= mix(1.0,0.7,smoothstep(0.6,0.0,isl));
-            c = mix(c,cinder,smoothstep(1.15,1.0,isl));
-            dk = mix(dk,2.0/3.0,smoothstep(1.15,1.0,isl));
-            gloss = mix(gloss,0.12,smoothstep(1.15,1.0,isl));
+            cinder *= mix(1.0,0.7,1.0-smoothstep(0.0,0.6,isl));
+            c = mix(c,cinder,1.0-smoothstep(1.0,1.15,isl));
+            dk = mix(dk,2.0/3.0,1.0-smoothstep(1.0,1.15,isl));
+            gloss = mix(gloss,0.12,1.0-smoothstep(1.0,1.15,isl));
         }
         if (distance(p,lilies)<110.0 && sd<30.0) c = vec3(.14,.26,.18)*(0.8+n2*.3);
         float lip = 1.0-smoothstep(0.3,1.5,sd);
@@ -395,7 +395,7 @@ float hgt(vec2 p, int k) {
     }
     if (k==1) {   // soil, sand and dust: fine grain and a few pebbles
         vec3 c = cells(p*24.0,24.0);
-        return fbm(p*16.0,16.0,4)*0.6+smoothstep(0.35,0.0,c.x)*step(0.8,c.z)*0.5;
+        return fbm(p*16.0,16.0,4)*0.6+(1.0-smoothstep(0.0,0.35,c.x))*step(0.8,c.z)*0.5;
     }
     if (k==2) {   // gravel and scree: rounded stones
         vec3 c = cells(p*12.0,12.0);

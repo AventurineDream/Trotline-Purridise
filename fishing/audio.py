@@ -36,6 +36,7 @@ import math
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time as _time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -64,12 +65,16 @@ DUCK_GAIN = 10 ** (-7.0 / 20)  # ambience under a bite
 PRIORITY_CUES = ("bite",)
 EVENT_BEDS = ("insects", "birds", "frogs")
 WORKERS = 3                   # beds synthesised at once
-# Scratch files hand samples from workers to the game; tmpfs keeps them in RAM.
-SCRATCH_DIR = "/dev/shm" if os.access("/dev/shm", os.W_OK) else os.environ.get("TMPDIR", "/tmp")
+# Shared memory avoids disk I/O for worker samples when it is available.
 PACKAGE_ROOT = str(Path(__file__).resolve().parents[1])
 # Child interpreter entry: put the package on sys.path, then run one synthesis job.
 WORKER_BOOT = ("import sys; sys.path.insert(0, sys.argv.pop(1)); "
                "from fishing.audiosynth import _worker; _worker(sys.argv[1:])")
+
+
+def _scratch_directory() -> str:
+    """Choose shared memory when writable, otherwise the platform's system temp folder."""
+    return "/dev/shm" if os.access("/dev/shm", os.W_OK) else tempfile.gettempdir()
 
 # Bed levels in dBFS RMS at full weight, per lake. Tuned against the loudness table in
 # fishing/test_audio.py (ambience sits between -35 and -24 dBFS).
@@ -127,9 +132,9 @@ class _BedStore:
     Why processes: bed synthesis runs Python loops over thousands of events. On threads
     those loops hold the GIL for whole switch intervals, and measured frames stalled
     5-14 ms while beds built. A worker process (`python -m fishing.audiosynth`) writes
-    raw samples to a scratch file in RAM (/dev/shm when present); the store memory-maps
-    it read-only and unlinks it at once, so attaching costs no copy and leaves no file.
-    Frozen builds or a failed spawn fall back to in-process threads.
+    raw samples to scratch space (/dev/shm when writable, system temp otherwise); completed
+    outputs are copied into ordinary arrays, then their maps are closed before unlinking.
+    Frozen builds or a failed spawn fall back to threads.
 
     One store per (rate, loop lengths) is shared by every Audio in the process, so tests
     and offline renders reuse the beds the game built. Lake-specific beds are kept for the
@@ -163,7 +168,7 @@ class _BedStore:
 
     def _scratch(self, label: str) -> str:
         name = f"trotline-audio-{os.getpid()}-{next(self._serial)}-{label.replace(':', '-')}.raw"
-        return os.path.join(SCRATCH_DIR, name)
+        return os.path.join(_scratch_directory(), name)
 
     def _spawn(self, args: list[str], path: str) -> subprocess.Popen | None:
         if not self._spawn_ok:
@@ -213,13 +218,12 @@ class _BedStore:
         try:
             if info is None:
                 raise OSError(f"audio worker for {key} failed")
-            data = np.memmap(path, np.int16, "r", shape=(2, self.frames(key)))
+            data = _copy_worker_output(path, np.int16, (2, self.frames(key)))
             self._beds[key] = synth.Bed(data, float(info["unit"]))
             self.build_seconds[key] = float(info["seconds"])
         except (OSError, ValueError, KeyError):
-            self._threads[key] = self._threads_pool().submit(self._build_here, key)
-        finally:
             _unlink(path)
+            self._threads[key] = self._threads_pool().submit(self._build_here, key)
 
     def poll(self) -> None:
         """Collect finished workers and start queued ones (never blocks)."""
@@ -315,7 +319,7 @@ class _BedStore:
         try:
             if info is None:
                 raise OSError("audio cue worker failed")
-            bank = np.memmap(path, F32, "r").reshape(-1, 2)
+            bank = _copy_worker_output(path, F32).reshape(-1, 2)
             strokes = []
             for kind, variant, first, frames in info["index"]:
                 sound = bank[first:first + frames]
@@ -326,9 +330,8 @@ class _BedStore:
             self._strokes = strokes
             self.build_seconds["cues"] = float(info["seconds"])
         except (OSError, ValueError, KeyError):
-            self._cue_job = self._threads_pool().submit(self._cues_here)
-        finally:
             _unlink(path)
+            self._cue_job = self._threads_pool().submit(self._cues_here)
 
     def cue(self, kind: str, variant: int) -> np.ndarray:
         """Finished (n, 2) float32 cue; synthesised on the spot if the bank is not ready."""
@@ -378,10 +381,34 @@ class _BedStore:
             self._pool.shutdown(wait=False, cancel_futures=True)
 
 
+def _copy_worker_output(path: str, dtype, shape: tuple[int, ...] | None = None) -> np.ndarray:
+    """Detach worker samples before closing and unlinking their backing file.
+
+    Args:
+        path: Completed worker scratch file.
+        dtype: Numpy sample type written by the worker.
+        shape: Optional bed shape; cues remain flat until their index is applied.
+
+    Returns:
+        An ordinary ndarray that remains valid after the scratch file is removed.
+    """
+    mapped = None
+    try:
+        mapped = np.memmap(path, dtype, mode="r", shape=shape)
+        samples = np.array(mapped, copy=True)
+        return samples
+    finally:
+        try:
+            if mapped is not None:
+                mapped._mmap.close()
+        finally:
+            _unlink(path)
+
+
 def _unlink(path: str) -> None:
     try:
         os.unlink(path)
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
         pass
 
 
@@ -433,14 +460,15 @@ class Audio:
             device = bool(open_device)
         self._setup(detail.TIERS[tier] if tier in detail.TIERS else detail.current(),
                     wait=not device)
-        # A device that will not open leaves the mixer silent, as before; only a
-        # device-less mixer drains into its in-memory queue.
+        # Offline twins use _setup's virtual default; an interactive mixer must open SDL first.
         self._virtual = not device
-        self._store.request("lap")
-        self._store.request("wash")
-        self._store.prefetch_cues()
+        # Do not synthesize beds or cues for a mixer that can neither play nor render.
         if device:
             self._open_device()
+        if self.ok or self._virtual:
+            self._store.request("lap")
+            self._store.request("wash")
+            self._store.prefetch_cues()
 
     def _setup(self, tier: detail.Detail, *, wait: bool, store: _BedStore | None = None) -> None:
         self.ok = False

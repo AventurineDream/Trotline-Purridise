@@ -1,4 +1,4 @@
-"""Measured proof that the lake's voice is calm, clean and unclipped (no listening needed).
+"""V1-38 acceptance contracts and measured proof that the lake's voice is calm, clean and unclipped.
 
 Every check renders through `Audio.render_offline`, i.e. the same update/mix path the game
 plays, on device-less mixers, so the tests are deterministic and need no sound card.
@@ -21,18 +21,36 @@ Thresholds (dBFS is relative to int16 full scale, RMS over both channels):
 from __future__ import annotations
 
 import math
+import os
 import sys
+import tempfile
 import time
 import unittest
 import wave
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+
 from . import audiosynth as synth
-from . import detail, soundscape
-from .audio import BED_CAP_BYTES, SCENE_FADE, Audio, _store_for
+from . import calendar, detail, encounter, soundscape
+from .audio import (
+    BED_CAP_BYTES,
+    SCENE_FADE,
+    Audio,
+    _BedStore,
+    _copy_worker_output,
+    _soundscape_cue,
+    _store_for,
+    _unlink,
+)
 from .botchimes import CHIMES
+from .content import load_content
+from .game import Keys, Session
+from .legendary import LEGENDARY_DATA
+from .sim import Catch, Hook, SetLine, State
+from .world import World
 
 AMBIENCE_BAND = (-35.0, -24.0)
 JUMP_LIMIT = 0.25          # full-scale units per 44.1 kHz sample; a click is a step this big
@@ -73,6 +91,269 @@ def band_energy(x: np.ndarray, rate: int, lo: float, hi: float) -> float:
     spec = np.abs(np.fft.rfft(mono * np.hanning(len(mono)))) ** 2
     f = np.fft.rfftfreq(len(mono), 1.0 / rate)
     return float(spec[(f >= lo) & (f <= hi)].sum())
+
+
+
+
+def _schedule(lake, hour, *, finale=False, seconds=600):
+    audio = Audio(open_device=False)
+    audio.reset_schedule(lake, hour, finale=finale)
+    heard = set()
+    for _ in range(seconds):
+        audio.time += 1.0
+        audio._schedule()
+        heard.update(audio.take_played())
+        audio.shots.clear()
+    return heard
+
+
+class Captions(unittest.TestCase):
+    def test_every_sound_has_a_caption_and_a_bus(self):
+        for kind in soundscape.KINDS + CHIMES:
+            self.assertTrue(soundscape.caption(kind), kind)
+            self.assertIn(soundscape.bus(kind), ("music", "ambience", "sfx"), kind)
+        self.assertTrue(all(soundscape.bus(k) == "music" for k in soundscape.MUSIC_CAPTIONS))
+        self.assertTrue(all(soundscape.bus(k) == "ambience" for k in soundscape.AMBIENCE_CAPTIONS))
+        self.assertEqual(soundscape.bus("horn"), "sfx")
+
+
+    def test_a_shells_chime_reads_as_its_shell(self):
+        state = State.new(World("briar"), seed=1)
+        self.assertEqual(soundscape.caption("bot", state), soundscape.caption("bot", state))
+        self.assertTrue(soundscape.caption("bot_tin", state))
+
+
+class Sounds(unittest.TestCase):
+    def test_every_sound_synthesizes_once_and_is_heard(self):
+        for kind in soundscape.KINDS:
+            samples = soundscape.tone(kind)
+            self.assertEqual(samples.dtype, np.int16, kind)
+            self.assertGreater(int(np.max(np.abs(samples))), 200, kind)
+            self.assertLessEqual(len(samples) / soundscape.SR, 13.0, kind)
+            self.assertIs(soundscape.tone(kind), samples)
+            self.assertFalse(samples.flags.writeable)
+
+    def test_each_lake_has_its_own_motif(self):
+        motifs = [soundscape.tone(soundscape.motif_for(lake)) for lake in soundscape.LAKES]
+        for i in range(len(motifs)):
+            for j in range(i + 1, len(motifs)):
+                n = min(len(motifs[i]), len(motifs[j]))
+                self.assertFalse(np.array_equal(motifs[i][:n], motifs[j][:n]))
+        self.assertEqual(soundscape.motif_for("nowhere"), "motif_briar")
+
+
+class Ambience(unittest.TestCase):
+    def test_each_lake_calls_with_its_own_voice(self):
+        self.assertEqual(_schedule("briar", 6.5) | _schedule("briar", 12.0) | _schedule("briar", 23.0),
+                         {"loon", "gull", "frog"})
+        flathead = _schedule("flathead", 6.5) | _schedule("flathead", 12.0) | _schedule("flathead", 23.0)
+        self.assertEqual(flathead, {"loon", "larch_wind", "ice_tick"})
+        self.assertNotIn("ice_tick", _schedule("flathead", 14.0))  # only on cold hours
+        crater = _schedule("crater", 12.0) | _schedule("crater", 23.0)
+        self.assertEqual(crater, {"spring", "raven"})
+        self.assertNotIn("raven", _schedule("crater", 23.0))  # ravens by day
+        self.assertEqual(_schedule("nebula", 23.0), {"twinkle", "choir"})
+        self.assertIn("whale_song", _schedule("nebula", 23.0, finale=True))
+        self.assertNotIn("whale_song", _schedule("nebula", 12.0, finale=True))
+
+    def test_the_caldera_is_hushed(self):
+        loud, hushed = Audio(open_device=False), Audio(open_device=False)
+        loud._lake_id, hushed._lake_id = "briar", "crater"
+        loud._motorized = hushed._motorized = False  # the beds alone: no outboard
+        a = np.abs(loud._mix(4096, 0.0, 0.0).astype(np.float32)).mean()
+        b = np.abs(hushed._mix(4096, 0.0, 0.0).astype(np.float32)).mean()
+        self.assertLess(b, a * 0.8)
+
+    def test_the_coverage_report_is_complete_and_inside_the_budget(self):
+        report = soundscape.coverage_report()
+        self.assertTrue(report["complete"])
+        self.assertTrue(report["within_budget"])
+        self.assertLess(report["bytes"], soundscape.AUDIO_BUDGET_BYTES)
+        self.assertEqual(set(report["lakes"]), set(soundscape.LAKES))
+
+
+class Mixer(unittest.TestCase):
+    def test_m_mutes_everything_and_nothing_waits_to_play(self):
+        audio = Audio(open_device=False)
+        for kind in ("bite", "loon", "motif_briar"):
+            audio.shots.append((soundscape.tone(kind), 0, soundscape.bus(kind)))
+        audio._played.append("loon")
+        audio.update(0.05, 0.0, 0.0, True)
+        self.assertEqual(audio.shots, [])
+        self.assertEqual(audio.take_played(), [])
+
+    def test_music_plays_on_its_bus_and_one_motif_at_a_time(self):
+        audio = Audio(open_device=False)
+        audio.ok = True
+        audio.blip("motif_briar")
+        audio.blip("motif_cedar")
+        self.assertEqual([bus for _s, _c, bus in audio.shots], ["music"])
+        np.testing.assert_array_equal(audio.shots[0][0], _soundscape_cue("motif_cedar", audio.rate))
+        audio.set_volumes(ambience=0.0, sfx=0.0, music=0.0)
+        audio._water = np.zeros(256, np.float32)
+        self.assertEqual(int(np.max(np.abs(audio._mix(512, 0.0, 0.0)))), 0)
+        audio.set_volumes(music=1.0)
+        self.assertGreater(int(np.max(np.abs(audio._mix(512, 0.0, 0.0)))), 0)
+
+
+class Cues(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.path = Path(tmp.name) / "save.json"
+        self.content = load_content()
+        self.world = World("briar")
+
+    def session(self, state):
+        with patch("fishing.game.load_content", return_value=self.content):
+            session = Session(self.world, self.path, state, True)
+        session.ui.mode = "play"
+        return session
+
+    def state(self, minutes):
+        state = State.new(self.world, seed=38)
+        state.x, state.z = self.world.slip.world(60.0, 0.0)
+        state.anchored, state.speed = True, 0.0
+        state.game_minutes = minutes
+        return state
+
+    def assert_captioned(self, session, kinds):
+        """Require runtime-dispatched cues to be known, captioned, and assigned a bus."""
+        for kind in kinds:
+            self.assertIn(kind, soundscape.KINDS + CHIMES, kind)
+            self.assertTrue(soundscape.caption(kind, session.state), kind)
+            self.assertIn(soundscape.bus(kind), ("music", "ambience", "sfx"), kind)
+
+    def heard(self, session, ticks=1, dt=0.05):
+        out = []
+        for _ in range(ticks):
+            session.tick(Keys(), dt)
+            seen = [k for k in (session.sound, *session.cues) if k]
+            self.assert_captioned(session, seen)
+            out.extend(seen)
+        return out
+
+    def test_the_lakes_motif_plays_at_dawn_and_dusk_once(self):
+        session = self.session(self.state(1440 - 1))
+        self.heard(session)
+        session.state.game_minutes = 1440 + 1
+        self.assertEqual(self.heard(session).count("motif_briar"), 1)
+        self.assertNotIn("motif_briar", self.heard(session, 5))
+        session.state.game_minutes = 1440 + 13 * 60 + 1
+        self.assertIn("motif_briar", self.heard(session))
+
+    def test_a_lake_day_rings_its_bell_once(self):
+        row = next(day for day in calendar.LAKE_DAYS if day.lake == "briar")
+        day = next(d for d in range(1, 8) if calendar.weekday(d * 1440) == row.weekday)
+        session = self.session(self.state(day * 1440 + 120))
+        heard = self.heard(session, 3)
+        self.assertEqual(heard.count("lake_day"), 1)
+        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["lake_day"])
+
+    def test_the_cookout_rings_once(self):
+        event = calendar.CALENDAR_DATA["cookout"]
+        day = next(d for d in range(1, 8) if calendar.weekday(d * 1440) == event["weekday"])
+        minutes = day * 1440 + int((event["start_hour"] - 6 + 0.5) * 60)
+        self.assertTrue(calendar.cookout_active(minutes))
+        session = self.session(self.state(minutes))
+        self.assertEqual(self.heard(session, 3).count("cookout"), 1)
+
+    def test_the_hail_sounds_the_horn(self):
+        session = self.session(self.state(1440 + 300))
+        cat = SimpleNamespace(id="willow", name="Willow")
+        with patch("fishing.game.nearby_npc", return_value=cat), \
+                patch("fishing.game.record_hail", return_value=False), \
+                patch("fishing.game.open_conversation", return_value=None), \
+                patch("fishing.game.calendar.chat", return_value=False), \
+                patch("fishing.game.kitchen.teach", return_value=False):
+            session.cues = []
+            session._hail()
+        self.assertEqual(session.cues, ["horn"])
+        self.assert_captioned(session, session.cues)
+
+    def test_a_legendary_brings_its_chord_with_its_name(self):
+        state = self.state(1440 + 300)
+        hooks = [Hook(True) for _ in range(3)]
+        row = LEGENDARY_DATA["old_lantern"]
+        hooks[0] = Hook(False, Catch("old_lantern", row["weight_lb"], 1.0, 0.0, "open", row["bait"], 21.0,
+                                     legendary=True, disposition="release"))
+        state.lines = [SetLine("heavy", "lantern_liver", state.x - 3, state.z, state.x + 3, state.z, "open", hooks)]
+        session = self.session(state)
+        session._open_e()
+        heard = self.heard(session, int((encounter.SCENE_S + 1.0) / 0.1), dt=0.1)
+        self.assertEqual(heard.count("legendary"), 1)
+        self.assertLess(heard.index("hum"), heard.index("legendary"))
+
+    def test_a_staged_story_moment_brings_the_motif(self):
+        session = self.session(State.new(self.world, seed=35))
+        session.ui.mode, session.ui.new_mode_i = "new_mode", 0
+        session.tick(Keys(pressed={"return"}), 0.05)
+        self.assertEqual(session.stage.stage_id, "pro_01")
+        self.assertIn("motif_briar", session.cues)
+        self.assert_captioned(session, session.cues)
+
+
+class AudioWorkerFallbacks(unittest.TestCase):
+    def test_scratch_uses_system_temp_when_shared_memory_is_unavailable(self):
+        store = _BedStore(22050, 1024, 1024)
+        self.addCleanup(store.shutdown)
+        with patch("fishing.audio.os.access", return_value=False), \
+                patch("fishing.audio.tempfile.gettempdir", return_value="/portable-temp"):
+            path = store._scratch("bed")
+        self.assertEqual(Path(path).parent, Path("/portable-temp"))
+
+    def test_worker_samples_survive_unlink_after_mapping_closes(self):
+        real_memmap, real_unlink = np.memmap, os.unlink
+        for dtype, shape in ((np.int16, (2, 4)), (np.float32, None)):
+            with self.subTest(dtype=dtype), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "samples.raw"
+                raw = np.arange(8, dtype=dtype)
+                raw.tofile(path)
+                expected = raw.reshape(shape) if shape is not None else raw.reshape(-1, 2)
+                mappings = []
+
+                def open_mapping(*args, **kwargs):
+                    mapped = real_memmap(*args, **kwargs)
+                    mappings.append(mapped)
+                    return mapped
+
+                def unlink_after_close(candidate):
+                    self.assertTrue(mappings[-1]._mmap.closed)
+                    real_unlink(candidate)
+
+                with patch("fishing.audio.np.memmap", side_effect=open_mapping), \
+                        patch("fishing.audio.os.unlink", side_effect=unlink_after_close):
+                    samples = _copy_worker_output(str(path), dtype, shape)
+                if shape is None:
+                    samples = samples.reshape(-1, 2)
+                np.testing.assert_array_equal(samples, expected)
+                samples[0, 0] = 123
+                self.assertEqual(samples[0, 0], 123)
+
+    def test_permission_error_during_scratch_unlink_is_contained(self):
+        with patch("fishing.audio.os.unlink", side_effect=PermissionError):
+            _unlink("missing-or-busy.raw")
+
+    def test_unavailable_mixer_does_not_start_bed_or_cue_synthesis(self):
+        class IdleStore:
+            def __init__(self):
+                self.requests = []
+                self.prefetch_count = 0
+
+            def request(self, key):
+                self.requests.append(key)
+
+            def prefetch_cues(self):
+                self.prefetch_count += 1
+
+        store = IdleStore()
+        with patch("fishing.audio._store_for", return_value=store), \
+                patch("fishing.audio._load", side_effect=OSError("no audio device")):
+            audio = Audio(device=True, tier="low")
+        self.assertFalse(audio.ok)
+        self.assertFalse(audio._virtual)
+        self.assertEqual(store.requests, [])
+        self.assertEqual(store.prefetch_count, 0)
 
 
 class AudioChecks(unittest.TestCase):

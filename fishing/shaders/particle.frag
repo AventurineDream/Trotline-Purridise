@@ -39,10 +39,10 @@ void main() {
         // Soft against land without a depth read: thin the sheet where it
         // nears a bank, or where land lies between it and the eye (a slope
         // in front would otherwise cut it with a hard edge).
-        float open = smoothstep(-1.0, -9.0, shore(v_world));
+        float open = 1.0-smoothstep(-9.0, -1.0, shore(v_world));
         for (int k = 0; k < 3; k++) {
             vec2 q = mix(eye.xz, v_world, 0.55+0.17*float(k));
-            open = min(open, smoothstep(2.0, -6.0, shore(q)));
+            open = min(open, 1.0-smoothstep(-6.0, 2.0, shore(q)));
         }
         body = ell*density*smoothstep(0.0, 0.8, v_tex.z)*open;
         glow = 0.0;

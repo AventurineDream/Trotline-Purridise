@@ -1985,6 +1985,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
     dw, dh = Platform.display_size()
     width, height = _window_size(dw, dh)
     platform = Platform(width, height, GAME_TITLE,graphics=not software)
+    # Text and UI snapshot their cache budgets; determine software fallback first.
+    detail_tiers.configure(software=software or platform.context is None, override=detail)
     text = Text()
     ui = UI(text, world)
     # Show a real first frame while the forest and shaders initialize.
@@ -1995,8 +1997,6 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
     ui._center(loading,"Opening the lake...",width/2,int(height*0.58),
                max(14,height//40),(218,187,124))
     platform.present(loading)
-    # Audio and the renderer both size their caches from the tier.
-    detail_tiers.configure(software=software or platform.context is None, override=detail)
     audio = Audio(tier=detail_tiers.current().name)
     render_width, render_height = detail_tiers.render_dimensions(
         width, height, software=software or platform.context is None)
@@ -2088,13 +2088,15 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                 if save_acc >= 45.0:
                     session.save()
                     save_acc = 0.0
-            if not getattr(platform, "vsync", False):
-                frame_deadline += 1 / 60
-                remaining = frame_deadline - time.perf_counter()
-                if remaining > 0:
-                    time.sleep(remaining)
-                else:
-                    frame_deadline += math.ceil(-remaining * 60) / 60
+            period = 1 / 30 if not session.focused else 1 / 60
+            if getattr(platform, "vsync", False) and session.focused:
+                period = 1 / 240
+            frame_deadline += period
+            remaining = frame_deadline - time.perf_counter()
+            if remaining > 0:
+                time.sleep(remaining)
+            else:
+                frame_deadline += math.ceil(-remaining / period) * period
     finally:
         if session.ui.mode != "title":
             try:
@@ -2102,6 +2104,7 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
             except OSError:
                 pass
         audio.close()
+        ui.close()
         renderer.close()
         text.close()
         platform.close()
@@ -2126,6 +2129,7 @@ def _enter_lake(platform, session, renderer, ui, text, loading, software, last_f
         ui._center(loading,f"Opening {session.world.name}...",width/2,height/2,
                    max(18,height//30),(238,233,216),"serif")
         platform.present(loading)
+    ui.close()
     renderer.close()
     ui = UI(text,session.world)
     render_width, render_height = detail_tiers.render_dimensions(
@@ -2153,16 +2157,27 @@ def _play_starlight(platform, session, source, destination, start, end, reduced)
     from . import starlight
     begin = platform.ticks()
     while True:
+        frame_started = time.perf_counter()
         elapsed = (platform.ticks() - begin) / 1000.0
         t = min(end, start + elapsed / starlight.DURATION)
-        if platform.poll(0.0).quit:
+        keys = platform.poll(0.0)
+        if keys.quit:
             session.quit = True
             return
         platform.present(starlight.frame(source, destination, t, reduced_motion=reduced))
         if t >= end:
             return
-        if not getattr(platform, "vsync", False):
-            platform.delay(8)
+        focused = bool(getattr(keys, "focused", getattr(session, "focused", True)))
+        session.focused = focused
+        if not focused:
+            period = 1 / 30
+        elif getattr(platform, "vsync", False):
+            period = 1 / 240
+        else:
+            period = 1 / 125
+        remaining = period - (time.perf_counter() - frame_started)
+        if remaining > 0:
+            time.sleep(remaining)
 
 
 def _camera(renderer: Renderer, session: Session):
