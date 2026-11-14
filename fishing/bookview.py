@@ -555,7 +555,7 @@ class BookView:
         self.footer(f"Page {index}/{count} · Enter turns")
 
     def shelf(self):
-        """Draw trophy replicas as small gold figures; other shelves remain text-led."""
+        """Draw the selected collection shelf; Trophies uses ``trophy()`` for its replica and rail."""
         names = ("Ripples", "Keepsakes", "Trophies")
         rows = collection_rows(self.state, self.u.narrative_content, self.ui.book_shelf)
         width = None
