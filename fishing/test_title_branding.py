@@ -14,10 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 class TitleBrandingChecks(unittest.TestCase):
     def test_branding_surfaces_use_the_canonical_title(self):
         self.assertEqual(GAME_TITLE, "Trotline Purridise")
-        self.assertEqual((ROOT / "README.md").read_text().splitlines()[0],
+        self.assertEqual((ROOT / "README.md").read_text(encoding="utf-8").splitlines()[0],
                          f"# {GAME_TITLE}")
-        ui_source = (ROOT / "fishing" / "ui.py").read_text()
-        game_source = (ROOT / "fishing" / "game.py").read_text()
+        ui_source = (ROOT / "fishing" / "ui.py").read_text(encoding="utf-8")
+        game_source = (ROOT / "fishing" / "game.py").read_text(encoding="utf-8")
         self.assertIn("self._text(frame,GAME_TITLE", ui_source)
         self.assertIn("Platform(width, height, GAME_TITLE", game_source)
         self.assertIn("ui._center(loading,GAME_TITLE", game_source)
@@ -32,7 +32,7 @@ class TitleBrandingChecks(unittest.TestCase):
         )
         little_briar_strings = set()
         for path in ui_paths:
-            tree = ast.parse(path.read_text(), filename=str(path))
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             little_briar_strings.update(
                 node.value for node in ast.walk(tree)
                 if isinstance(node, ast.Constant)
@@ -42,7 +42,7 @@ class TitleBrandingChecks(unittest.TestCase):
         self.assertEqual(little_briar_strings, {
             "Little Briar Lake",
         })
-        verify_source = (ROOT / "fishing" / "verify.py").read_text()
+        verify_source = (ROOT / "fishing" / "verify.py").read_text(encoding="utf-8")
         self.assertIn('Platform(1280,720,f"{GAME_TITLE} — visual check"',
                       verify_source)
 

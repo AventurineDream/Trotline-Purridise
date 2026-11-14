@@ -263,7 +263,7 @@ class NPCChecks(unittest.TestCase):
             self.assertEqual(loaded.narrative.schedule_seed, 0)
             self.assertEqual(loaded.npcs[1].id, day_encounters(0, 'briar', 0)[0])
             session.save()
-            self.assertEqual(json.loads(self.path.read_text())['narrative_v1']['schedule_seed'], 0)
+            self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))['narrative_v1']['schedule_seed'], 0)
 
     def test_schedule_does_not_consume_rng_or_change_fishing(self):
         before = self.state.to_json()

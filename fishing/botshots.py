@@ -4,7 +4,12 @@ import gc
 import math
 import os
 from pathlib import Path
-import resource
+try:
+    import resource
+except ImportError:
+    # Unix-only; on Windows the /proc fallback below is also unavailable,
+    # so _rss_bytes() reports 0 instead of crashing.
+    resource = None
 import time
 import tracemalloc
 import wave
@@ -58,6 +63,8 @@ def _rss_bytes():
     try:
         return int(Path('/proc/self/statm').read_text().split()[1])*os.sysconf('SC_PAGE_SIZE')
     except (OSError,ValueError,AttributeError):
+        if resource is None:
+            return 0
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024
 
 

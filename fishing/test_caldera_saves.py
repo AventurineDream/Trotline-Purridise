@@ -52,7 +52,7 @@ class CalderaSaveRecoveryChecks(unittest.TestCase):
         self.assertEqual(loaded.bot_target_line_id,recovered.line_id)
         self.assertEqual((loaded.bot_tx,loaded.bot_tz),recovered.point_at(0))
         loaded.save(self.path,update_stamp=False)
-        once=json.loads(self.path.read_text())
+        once=json.loads(self.path.read_text(encoding="utf-8"))
         again=State.load(self.path,self.world)
         self.assertEqual(again.to_json(),once)
 

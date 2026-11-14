@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import json
 import math
-import resource
 import sys
 import time
 import tempfile
 import types
 from pathlib import Path
+
+try:
+    import resource
+except ImportError:  # Windows: the resource module is Unix-only
+    resource = None
 
 import numpy as np
 
@@ -32,6 +36,10 @@ MEMORY_LIMIT_BYTES = 3_000_000_000
 
 def rss_bytes():
     # Linux ru_maxrss is KiB, and records the process peak, including startup.
+    # Without the resource module (Windows) there is no reading; return 0
+    # so the memory check is skipped rather than crashing the process.
+    if resource is None:
+        return 0
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024
 
 

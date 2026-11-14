@@ -227,5 +227,9 @@ jobs:
           if ($out -notmatch ' backup=(\S+)') { throw 'could not read the backup path from --check-save output' }
           $backup = $Matches[1]
           if (-not (Test-Path $backup) -or (Get-Item $backup).Length -eq 0) { throw 'migration backup is missing or empty' }
-          if ((Split-Path $backup -Parent) -ne (Split-Path $save -Parent)) { throw 'backup is not beside the migrated save' }
+          # The backup lives in a `backup` folder beside the save (README:
+          # "a backup of the original is kept in a `backup` folder beside
+          # the new save"; savepaths.backup_directory), not beside the save
+          # file itself.
+          if ((Split-Path $backup -Parent) -ne (Join-Path (Split-Path $save -Parent) 'backup')) { throw 'backup is not in the backup folder beside the migrated save' }
           if (Compare-Object (Get-Content $backup) (Get-Content 'saves\briar.json')) { throw 'backup differs from the original save' }
