@@ -963,7 +963,8 @@ def _worker(argv: list[str]) -> None:
     """`bed <key> <rate> <frames> <path>` or `cues <rate> <path>`: synthesise, write the
     samples to path, and print one JSON line ({"unit"} or {"index"}, plus "seconds").
 
-    Side effect: lowers this process's CPU priority so the game's frames come first.
+    Side effect: on platforms with `os.nice`, raises this process's niceness by 10 so the
+    game's frames come first; this priority adjustment is Unix/platform-dependent.
     """
     if hasattr(os, "nice"):
         os.nice(10)

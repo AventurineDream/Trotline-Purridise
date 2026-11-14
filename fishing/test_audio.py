@@ -1,7 +1,8 @@
-"""V1-38 acceptance contracts and measured proof that the lake's voice is calm, clean and unclipped.
+"""V1-38 audio contracts and measured proof that the lake's voice is calm, clean and unclipped.
 
-Every check renders through `Audio.render_offline`, i.e. the same update/mix path the game
-plays, on device-less mixers, so the tests are deterministic and need no sound card.
+Audio-quality checks render through `Audio.render_offline` on device-less mixers;
+scheduler, mixer, cue-dispatch, and worker tests also exercise their components
+directly, so tests need no sound card.
 
 Also a listening-set tool for humans:
     python -m fishing.test_audio --dump /tmp/trotline-pass2/audio [--tier ultra]

@@ -1,7 +1,7 @@
 """Regression tests for opt-in Devmode routing and its in-memory reset guard.
 
-These tests use a real headless Session but never open a window or write a save;
-Devmode's state mutations remain confined to the disposable in-memory fixture.
+These tests use a real headless Session but never open a window. Devmode itself does not save;
+one Continue test seeds a disposable temporary save to compare its bytes.
 """
 
 from copy import deepcopy

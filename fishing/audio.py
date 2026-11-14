@@ -127,19 +127,18 @@ def _daywindow(hour: float, up0: float, up1: float, down0: float, down1: float) 
 
 
 class _BedStore:
-    """Builds beds and the cue bank in worker processes and keeps the ones in use.
+    """Build and retain ambience beds and a cue bank shared by Audio instances.
 
-    Why processes: bed synthesis runs Python loops over thousands of events. On threads
-    those loops hold the GIL for whole switch intervals, and measured frames stalled
-    5-14 ms while beds built. A worker process (`python -m fishing.audiosynth`) writes
-    raw samples to scratch space (/dev/shm when writable, system temp otherwise); completed
-    outputs are copied into ordinary arrays, then their maps are closed before unlinking.
-    Frozen builds or a failed spawn fall back to threads.
+    Bed synthesis runs Python loops over thousands of events; executor threads held
+    the GIL for 5–14 ms per build, so normal startup uses a worker process launched
+    with `python -c WORKER_BOOT` to run `audiosynth._worker`. It writes raw samples
+    to scratch space (`/dev/shm` when writable, system temp otherwise); outputs are
+    copied before their maps close and the files are unlinked.
 
-    One store per (rate, loop lengths) is shared by every Audio in the process, so tests
-    and offline renders reuse the beds the game built. Lake-specific beds are kept for the
-    two most recently requested lakes (the current one and the one fading out), which
-    bounds memory at 5 shared + 6 lake beds. All methods run on the game thread.
+    Frozen builds or failed spawns use `_build_here`/`_cues_here` on executor threads.
+    Lifecycle and polling stay on the game thread. A store per (rate, loop lengths) is
+    shared by Audio instances, and lake-specific beds retain only the current and
+    fading lakes to bound memory at 5 shared + 6 lake beds.
     """
 
     def __init__(self, rate: int, noise_frames: int, event_frames: int):
