@@ -97,6 +97,19 @@ class AmbientChecks(unittest.TestCase):
             self.assertEqual(ambient.faces(state, world, {'night': 0, 'rain': 1}), [])
             self.assertEqual(ambient.faces(state, world, {'night': 1, 'rain': 1}), [])
 
+    def test_reduced_motion_holds_ambient_bird_geometry(self):
+        """Decorative bird poses do not advance under Reduced Motion."""
+        world = self.worlds["briar"]
+        state = State.new(world, seed=73)
+        state.v2["settings"]["reduced_motion"] = True
+        light = {"night": 0.0, "rain": 0.0}
+        state.anim = 3.0
+        first = geometry(ambient.faces(state, world, light))
+        state.anim = 37.0
+        later = geometry(ambient.faces(state, world, light))
+        self.assertTrue(first.size)
+        np.testing.assert_array_equal(first, later)
+
     def test_bird_species_have_distinct_silhouettes(self):
         shapes = []
         self.assertGreaterEqual(len(ambient.BIRD_SPECIES), 3)

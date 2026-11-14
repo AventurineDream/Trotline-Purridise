@@ -700,8 +700,19 @@ def clear_caches() -> None:
 # --- Coat patterns: the reference for shaders/cat.frag ---------------------------
 
 def _hash3(p):
-    v = np.sin(p[..., 0] * 127.1 + p[..., 1] * 311.7 + p[..., 2] * 74.7) * 43758.5453
-    return v - np.floor(v)
+    # Quantize the occasional fractional salt before hashing; integer mixing
+    # avoids backend-specific sin precision amplified by the old large scale.
+    q = np.floor(p * np.float32(10.0) + np.float32(0.5)).astype(np.int32).astype(np.uint32)
+    with np.errstate(over="ignore"):
+        h = q[..., 0] * np.uint32(0x8DA6B343)
+        h ^= q[..., 1] * np.uint32(0xD8163841)
+        h ^= q[..., 2] * np.uint32(0xCB1AB31F)
+        h ^= h >> np.uint32(16)
+        h *= np.uint32(0x7FEB352D)
+        h ^= h >> np.uint32(15)
+        h *= np.uint32(0x846CA68B)
+        h ^= h >> np.uint32(16)
+    return (h >> np.uint32(8)).astype(np.float32) * np.float32(1.0 / 16777216.0)
 
 
 def _noise3(p):

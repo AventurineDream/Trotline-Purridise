@@ -11,7 +11,17 @@ out vec4 frag;
 const float TORSO=0., HEAD=1., MUZZLE=2., EAR=5., ARM_UPPER=8., FOREARM=9., PAW=10., LEG=11., FOOT=12.,
             TAIL=13., RUFF=17., FOREARM_WAVE=18., PAW_WAVE=19.;
 bool is(float a, float b) { return abs(a-b) < 0.5; }
-float hash3(vec3 p) { return fract(sin(p.x*127.1+p.y*311.7+p.z*74.7)*43758.5453); }
+float hash3(vec3 p) {
+    // Match catmesh._hash3 with integer mixing, avoiding sin phase differences.
+    uvec3 q = uvec3(ivec3(floor(p*10.0+0.5)));
+    uint h = q.x*0x8DA6B343u ^ q.y*0xD8163841u ^ q.z*0xCB1AB31Fu;
+    h ^= h >> 16;
+    h *= 0x7FEB352Du;
+    h ^= h >> 15;
+    h *= 0x846CA68Bu;
+    h ^= h >> 16;
+    return float(h >> 8) * (1.0/16777216.0);
+}
 float noise3(vec3 p) {
     vec3 i = floor(p), f = fract(p);
     f = f*f*(3.0-2.0*f);

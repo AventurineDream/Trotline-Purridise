@@ -345,6 +345,7 @@ class BookView:
             image = silhouette(w, h)
         self.u._blit_rgb(self.frame, image, x, y)
 
+
     def draw(self):
         l = self.layout
         self.ui.book_detail_pages = 1
@@ -530,6 +531,7 @@ class BookView:
         self.footer(f"Entry {self.ui.book_entry_i + 1}/{len(ENTRY_IDS)} · Page {index + 1}/{count}")
 
     def legendary(self, sid):
+        """Draw a saved first-hand legendary record beside its procedural photo."""
         page = legendary_page(sid, self.state.v2, remember=False)
         values = ["RECORDED" if page["verified"] else "A LAKE STORY",
                   '“' + page["story"] + '” — ' + page["teller"]]
@@ -553,6 +555,7 @@ class BookView:
         self.footer(f"Page {index}/{count} · Enter turns")
 
     def shelf(self):
+        """Draw the selected collection shelf; Trophies uses ``trophy()`` for its replica and rail."""
         names = ("Ripples", "Keepsakes", "Trophies")
         rows = collection_rows(self.state, self.u.narrative_content, self.ui.book_shelf)
         width = None
@@ -831,7 +834,7 @@ def book_gallery(destination, *, text=None, world=None):
         report = {"frames": len(timings), "resolution": [1280, 720],
                   "p50_ms": round(float(np.percentile(timings, 50)), 2),
                   "p95_ms": round(float(np.percentile(timings, 95)), 2),
-                  "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+                  "peak_rss_mib": round(__import__("fishing.verify", fromlist=["rss_bytes"]).rss_bytes() / 1024**2, 1),
                   "text_cache_mb": round(text.cache_bytes / 1e6, 2),
                   "tabs": list(BOOK_TABS), "text_sizes": [0, 1, 2],
                   "benchmark_text_size": 2,

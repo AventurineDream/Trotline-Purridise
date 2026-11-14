@@ -198,7 +198,7 @@ def remap_keyboard(pressed, held, saved=None) -> tuple[set[str], set[str]]:
     # Number keys remain the bait shortcuts unless the player deliberately
     # assigns one to an action.
     bound = set(bindings.values())
-    for key in "12345":
+    for key in "123456789":
         if key in pressed and key not in bound:
             translated_pressed.add(key)
         if key in held and key not in bound:

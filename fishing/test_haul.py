@@ -191,5 +191,15 @@ class HaulChecks(unittest.TestCase):
         self.assertNotIn("NEW!", text.calls)
 
 
+    def test_opening_a_new_haul_resets_the_hook_rise_clock(self):
+        """A prior interrupted rise must not make the next haul start part-raised."""
+        session = self.make_session(12)
+        session.ui.haul_timer = haul_cadence(session.state)
+        with patch.object(session.state, "nearest_line", return_value=0):
+            session._open_e()
+        self.assertEqual(session.ui.mode, "haul")
+        self.assertEqual(session.ui.haul_phase, "rise")
+        self.assertEqual(session.ui.haul_timer, 0.0)
+
 if __name__ == "__main__":
     unittest.main()

@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import ctypes
+import math
 from collections import OrderedDict
-from ctypes import c_char_p, c_int, c_uint8, c_uint16, c_uint32, c_void_p
+from ctypes import c_char_p, c_float, c_int, c_uint8, c_uint16, c_uint32, c_uint64, c_void_p
 from pathlib import Path
 
 import numpy as np
 
 from .bundle import bundled_library, is_frozen, platform_library_name
+from . import detail
 from .gamepad import (
     Gamepad, SDL_ControllerAxisEvent, SDL_ControllerButtonEvent,
     SDL_ControllerDeviceEvent, SDL_CONTROLLERDEVICEADDED,
@@ -64,6 +66,10 @@ FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/TTF/DejaVuSans.ttf",
 )
+
+class SDL_version(ctypes.Structure):
+    _fields_ = [("major", c_uint8), ("minor", c_uint8), ("patch", c_uint8)]
+
 
 
 class SDL_Rect(ctypes.Structure):
@@ -129,9 +135,12 @@ class SDL_MouseButtonEvent(ctypes.Structure):
 
 
 class SDL_MouseWheelEvent(ctypes.Structure):
-    # Only the stable SDL2 prefix is read; later precision fields are optional.
-    _fields_ = [("type", c_uint32), ("timestamp", c_uint32), ("windowID", c_uint32),
-                ("which", c_uint32), ("x", c_int), ("y", c_int), ("direction", c_uint32)]
+    # SDL 2.0.18+ can place wheel deltas in preciseY instead of y.
+    _fields_ = [
+        ("type", c_uint32), ("timestamp", c_uint32), ("windowID", c_uint32),
+        ("which", c_uint32), ("x", c_int), ("y", c_int), ("direction", c_uint32),
+        ("preciseX", c_float), ("preciseY", c_float), ("mouseX", c_int), ("mouseY", c_int),
+    ]
 
 
 class SDL_Event(ctypes.Union):
@@ -140,7 +149,8 @@ class SDL_Event(ctypes.Union):
         ("caxis", SDL_ControllerAxisEvent),
         ("button", SDL_MouseButtonEvent), ("wheel", SDL_MouseWheelEvent),
         ("cbutton", SDL_ControllerButtonEvent),
-        ("cdevice", SDL_ControllerDeviceEvent), ("pad", c_uint8 * 56),
+        # SDL2 uses 8-byte alignment for this 56-byte event union on 64-bit ABIs.
+        ("cdevice", SDL_ControllerDeviceEvent), ("pad", c_uint64 * 7),
     ]
 
 
@@ -252,7 +262,7 @@ class Text:
         self.fonts: dict[tuple, c_void_p] = {}
         self.cache = OrderedDict()
         self.cache_bytes = 0
-        self.cache_limit = 8 * 1024 * 1024
+        self.cache_limit = detail.current().text_cache_bytes
 
     def _err(self) -> str:
         err = self.sdl.SDL_GetError()
@@ -357,6 +367,7 @@ class Input:
         self.focused = True
         self.mouse_click = None
         self.mouse_wheel = 0
+        self.mouse_wheel_remainder = 0.0
         self.viewport = (1280, 720)
         self._rep: dict[str, float] = {}
 
@@ -376,8 +387,26 @@ class Input:
 
 class Platform:
     def __init__(self, w: int, h: int, title: str = "Briar Lake", *, graphics=True, verify_pixels=False):
+        """Create the SDL window and optionally configure its shared GL presenter.
+
+        Args:
+            w: Logical window width in pixels.
+            h: Logical window height in pixels.
+            title: Window title.
+            graphics: Whether to request an OpenGL-backed presentation path.
+            verify_pixels: Whether to retain an exact copy of the submitted frame.
+
+        Returns:
+            None; ``context`` and ``vsync`` describe the resulting backend.
+
+        Side effects:
+            Initializes SDL and creates a window; GL windows request adaptive
+            swap interval first, then ordinary interval 1.
+        """
         self.sdl = _load("libSDL2-2.0.so.0")
         s = self.sdl
+        s.SDL_GetVersion.argtypes = [ctypes.POINTER(SDL_version)]
+        s.SDL_GetVersion.restype = None
         s.SDL_Init.argtypes = [c_uint32]
         s.SDL_Init.restype = c_int
         s.SDL_GetError.restype = c_char_p
@@ -418,6 +447,9 @@ class Platform:
         s.SDL_GL_DeleteContext.argtypes = [c_void_p]
         s.SDL_GL_GetProcAddress.argtypes = [c_char_p]
         s.SDL_GL_GetProcAddress.restype = c_void_p
+        s.SDL_GL_SetSwapInterval.argtypes = [c_int]
+        s.SDL_GL_GetSwapInterval.restype = c_int
+        self.vsync = False
         self.context = None
         self.gl_context = None
         self._gl_objects = []
@@ -428,6 +460,11 @@ class Platform:
         if s.SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK
                       | SDL_INIT_GAMECONTROLLER) < 0:
             raise RuntimeError(self._err())
+        # SDL_GetVersion is safe after initialization and lets old SDL builds
+        # avoid reading preciseY, which was not part of their wheel event.
+        version = SDL_version()
+        s.SDL_GetVersion(ctypes.byref(version))
+        self._sdl_version = (version.major, version.minor, version.patch)
         self.gamepad = Gamepad(s)
         self._last_device = "keyboard"
         self.window = None
@@ -447,9 +484,15 @@ class Platform:
                 if not self.gl_context:
                     raise RuntimeError(self._err())
                 self.context = moderngl.create_context(require=330)
+                self.vsync = False
+                for interval in (-1, 1):
+                    if s.SDL_GL_SetSwapInterval(interval) == 0:
+                        self.vsync = s.SDL_GL_GetSwapInterval() != 0
+                        break
                 self._setup_presenter()
             except (ImportError,RuntimeError,ValueError) as exc:
                 self._close_graphics()
+                self.vsync = False
                 if self.window:
                     s.SDL_DestroyWindow(self.window)
                     self.window = None
@@ -538,6 +581,34 @@ class Platform:
         if ms > 0:
             self.sdl.SDL_Delay(ms)
 
+    def _wheel_steps(self, precise_y: float, direction: int) -> int:
+        """Return whole menu-wheel steps while retaining high-resolution remainder.
+
+        Args:
+            precise_y: Vertical wheel delta in wheel-step units from SDL.
+            direction: SDL wheel direction; one means the delta is flipped.
+
+        Returns:
+            Signed whole-step delta; fractional motion is retained for later frames.
+        """
+        if not math.isfinite(precise_y):
+            return 0
+        if direction == 1:
+            precise_y = -precise_y
+        self._input.mouse_wheel_remainder += precise_y
+        steps = math.trunc(self._input.mouse_wheel_remainder)
+        self._input.mouse_wheel_remainder -= steps
+        return steps
+
+    def _wheel_delta(self, event: SDL_MouseWheelEvent) -> float:
+        """Use preciseY only when the linked SDL version guarantees that field."""
+        wheel_y = float(event.y)
+        if self._sdl_version >= (2, 0, 18):
+            precise_y = float(event.preciseY)
+            if math.isfinite(precise_y) and precise_y != 0.0:
+                return precise_y
+        return wheel_y
+
     def poll(self, dt: float = 0.0) -> Input:
         # Reuse one Input so key-repeat timers survive across frames.
         inp = self._input
@@ -560,6 +631,7 @@ class Platform:
                     self.gamepad.clear_input()
                     inp.mouse_click = None
                     inp.mouse_wheel = 0
+                    inp.mouse_wheel_remainder = 0.0
                 elif event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED:
                     self._focused = True
             elif event.type == SDL_MOUSEBUTTONDOWN and self._focused:
@@ -567,7 +639,8 @@ class Platform:
                     inp.mouse_click = (event.button.x, event.button.y)
                     self._last_device = "mouse"
             elif event.type == SDL_MOUSEWHEEL and self._focused:
-                inp.mouse_wheel += event.wheel.y * (-1 if event.wheel.direction == 1 else 1)
+                wheel_y = self._wheel_delta(event.wheel)
+                inp.mouse_wheel += self._wheel_steps(wheel_y, event.wheel.direction)
                 self._last_device = "mouse"
             elif event.type == SDL_KEYDOWN and self._focused and not event.key.repeat:
                 name = _SCAN_NAMES.get(event.key.keysym.scancode)

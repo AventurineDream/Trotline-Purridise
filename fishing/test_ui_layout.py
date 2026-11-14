@@ -72,6 +72,54 @@ class GuideLayoutChecks(unittest.TestCase):
         self.text = Text()
         self.addCleanup(self.text.close)
 
+    def test_chart_mode_does_not_draw_play_hud_or_transient_overlays(self):
+        """The chart owns the compact screen so map footer text stays legible."""
+        world = World()
+        state = State.new(world, seed=92)
+        state.toast("Line set on the open water. 12 hooks, nightcrawlers.")
+        ui = UI(self.text, world)
+        frame = np.zeros((360, 640, 3), np.uint8)
+        with patch.object(ui, "_hud", side_effect=AssertionError("play HUD drawn under chart")), \
+                patch.object(ui, "_caption", side_effect=AssertionError("caption drawn over chart")), \
+                patch.object(ui, "_toasts", side_effect=AssertionError("toast drawn over chart")):
+            ui.draw(frame, state, UIState(mode="map"))
+        self.assertGreater(np.count_nonzero(frame), 0)
+
+    def test_minimap_soak_lines_keep_their_dash_pattern(self):
+        """Soaking status remains readable without relying on line colour alone."""
+        class PixelMap:
+            @staticmethod
+            def map_pixel(x, z, width, height):
+                return int(x), int(z)
+
+        ui = UI.__new__(UI)
+        ui.world = PixelMap()
+        solid = np.zeros((20, 60, 3), np.uint8)
+        dashed = solid.copy()
+        ui._seg(solid, 3, 10, 56, 10, 0, 0, 60, 20, (180, 210, 190))
+        ui._seg(dashed, 3, 10, 56, 10, 0, 0, 60, 20, (180, 210, 190), dashed=True)
+        self.assertGreater(np.count_nonzero(solid), 0)
+        self.assertLess(np.count_nonzero(dashed), np.count_nonzero(solid))
+        self.assertFalse(np.any(dashed[9:12, 7]))
+        self.assertTrue(np.any(solid[9:12, 7]))
+
+    def test_ui_presentation_caches_are_bounded_and_released(self):
+        """Keep per-world raster layers inside their byte caps and clear them on close."""
+        world = World()
+        state = State.new(world, seed=91)
+        ui = UI(self.text, world)
+        frame = np.zeros((675, 1200, 3), np.uint8)
+        ui.draw(frame, state, UIState(mode="map"))
+        ui.draw(frame, state, UIState(mode="title"))
+        self.assertGreater(ui._map_image_cache_bytes, 0)
+        self.assertGreater(ui._title_alpha_cache_bytes, 0)
+        self.assertLessEqual(ui._map_image_cache_bytes, ui._map_image_cache_limit)
+        self.assertLessEqual(ui._title_alpha_cache_bytes, ui._title_alpha_cache_limit)
+        self.assertLessEqual(self.text.cache_bytes, self.text.cache_limit)
+        ui.close()
+        self.assertEqual(ui._map_image_cache_bytes, 0)
+        self.assertEqual(ui._title_alpha_cache_bytes, 0)
+
     def test_every_authored_page_fits_without_clipping_or_text_overlap(self):
         self._check_pages()
 

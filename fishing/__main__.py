@@ -30,12 +30,43 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Dispatch CLI modes, consuming ``--dev`` only for interactive gameplay.
+
+    Args:
+        argv: Optional argument sequence; None reads the process command line.
+
+    Returns:
+        0 for a completed mode, 1 for an unsupported newer save, or 2 for
+        malformed save or detail arguments.
+
+    Side effects:
+        Interactive normal play may write its save; ``--dev`` does not. Screenshot
+        modes write images to their requested output paths.
+
+    Examples:
+        ``python -m fishing --dev --save /tmp/trotline-dev.json``
+        ``python -m fishing --detail ultra``
+        ``python -m fishing --selftest --software``
+    """
     argv = list(sys.argv[1:] if argv is None else argv)
+    dev = "--dev" in argv
+    argv = [arg for arg in argv if arg != "--dev"]
     try:
         argv, save_path = parse_save_option(argv)
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 2
+    from . import detail as detail_tiers
+    detail_override = None
+    if "--detail" in argv:
+        i = argv.index("--detail")
+        detail_override = argv[i+1] if i + 1 < len(argv) else ""
+        if detail_override != "auto" and detail_override not in detail_tiers.TIERS:
+            print(f"--detail needs one of: auto, {', '.join(detail_tiers.ORDER)}", file=sys.stderr)
+            return 2
+        del argv[i:i+2]
+    # Every renderer path, not only live play, follows the same free-memory choice.
+    detail_tiers.configure(software="--software" in argv, override=detail_override)
     if "--selftest" in argv:
         return selftest(software="--software" in argv)
     if "--check-save" in argv:
@@ -43,8 +74,8 @@ def main(argv: list[str] | None = None) -> int:
     if "--benchmark" in argv:
         from .verify import benchmark
         i = argv.index("--benchmark")
-        frames = int(argv[i+1]) if i+1<len(argv) and argv[i+1].isdigit() else 1200
-        return benchmark(frames,software="--software" in argv)
+        frames = int(argv[i+1]) if i + 1 < len(argv) and argv[i+1].isdigit() else 1200
+        return benchmark(frames, software="--software" in argv)
     if "--smoke" in argv:
         from .verify import window_smoke
         return window_smoke()
@@ -112,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         return shots(dest)
     from .game import run
     try:
-        run(software="--software" in argv, save_path=save_path)
+        run(software="--software" in argv, save_path=save_path, dev=dev, detail=detail_override)
     except UnsupportedSaveVersionError as exc:
         print(exc, file=sys.stderr)
         return 1

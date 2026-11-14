@@ -402,6 +402,38 @@ class StarlightTravel(unittest.TestCase):
         self.assertTrue(session.quit)
         self.assertEqual(len(platform.frames), 2)
 
+    def test_transition_uses_a_safety_floor_when_vsync_does_not_block(self):
+        from unittest.mock import patch
+        from .game import _play_starlight
+
+        class Platform:
+            vsync = True
+
+            def __init__(self, focused):
+                self.now = 0
+                self.focused = focused
+
+            def ticks(self):
+                self.now += 10
+                return self.now
+
+            def poll(self, _dt):
+                return type("Input", (), {"quit": False, "focused": self.focused})()
+
+            def present(self, _frame):
+                pass
+
+        class Session:
+            quit = False
+            focused = True
+
+        source = np.zeros((8, 8, 3), np.uint8)
+        for focused, minimum in ((True, 0.002), (False, 0.03)):
+            platform = Platform(focused)
+            with patch("fishing.game.time.sleep") as sleep:
+                _play_starlight(platform, Session(), source, None, 0.0, 0.05, False)
+            self.assertTrue(any(call.args[0] >= minimum for call in sleep.call_args_list))
+
     def test_lake_change_tips_into_starlight_only_on_lagoon_routes(self):
         import tempfile
         from pathlib import Path
@@ -448,7 +480,8 @@ class StarlightTravel(unittest.TestCase):
                     self.assertIsNone(session.change_lake(destination))
                     platform = Platform()
                     loading = np.empty((180, 320, 3), np.uint8)
-                    renderer, ui = _enter_lake(platform, session, renderer, ui, text, loading, True, shown)
+                    renderer, ui = _enter_lake(
+                        platform, session, renderer, ui, text, loading, True, True, shown)
                     try:
                         self.assertIs(renderer.world, session.world)
                         self.assertEqual(renderer.world.id, destination)

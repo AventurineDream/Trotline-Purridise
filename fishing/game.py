@@ -37,16 +37,18 @@ from .book import take_dream_clue
 from . import comfort
 from . import encounter
 from . import soundscape
+from . import detail as detail_tiers
 from . import kitchen
 from .bookview import (BOOK_TABS, ENTRY_IDS, book_controls, book_layout, contains,
                        move_selection, tracker_species, turn_page)
 from .bot import reset as reset_bot
 from .bot import summon as summon_bot
 from .bot import tick as tick_bot
-from .sim import State
+from .sim import Catch, State
 from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
 from .ui import (UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, CREDITS_HOLD_S, check_rows,
-                 comfort_controls, pause_options, shop_rows, title_options)
+                 comfort_controls, pause_options, shop_rows, title_options,
+                 SETTINGS_ROW_COUNT, SETTINGS_KEYBOARD_CONTROLS_ROW)
 from .world import World
 from .lakes import travel_caption, travel_lock_reason
 
@@ -56,6 +58,10 @@ NAVIGATION_KEYS = set(MENU_DIRECTIONS) | set(MENU_DIRECTIONS.values())
 DRIVING_KEYS = {"w", "s", "a", "d", "up", "down", "left", "right"}
 from .soundscape import CAPTIONS as SOUND_CAPTIONS  # every sound's caption (V1-38)
 from .reading import reading_seconds
+PAUSE_N = 5
+# A fixed level chase pose keeps the boat centred without adding camera animation.
+THIRD_PERSON_DISTANCE = 6.0  # world units behind the boat
+THIRD_PERSON_ELEVATION = 2.2  # world units above the pilot's eye
 
 CAPTION_SECONDS = 2.4  # the shortest a sound caption shows; longer ones hold to be read
 
@@ -112,10 +118,26 @@ class MenuKeys:
 
 
 class Session:
-    def __init__(self, world: World, save_path: Path, state: State, has_save: bool):
+    def __init__(self, world: World, save_path: Path, state: State, has_save: bool, *, dev=False):
+        """Create a gameplay session with optional unsaved playtest controls.
+
+        Args:
+            world: Authored lake world bound to ``state``.
+            save_path: Target used by ordinary sessions when saving.
+            state: Loaded or newly-created simulation state.
+            has_save: Whether a persistent save was loaded.
+            dev: Enable the overlay and disable all save writes for this session.
+
+        Returns:
+            None.
+        """
         self.world = world
         self.save_path = Path(save_path)
         self.state = state
+        self.dev_mode = None
+        if dev:
+            from .devmode import DevMode
+            self.dev_mode = DevMode(self)
         # Offline catch-up ends when this process opens the title screen. Time
         # spent reading there must not be added when Continue is selected.
         self._continue_catchup_at = time.time()
@@ -153,10 +175,23 @@ class Session:
         self.cues.append(kind)
 
     def tick(self, keys, dt: float) -> None:
+        """Advance one input frame and its simulation state.
+
+        Args:
+            keys: Platform or headless input object for this frame.
+            dt: Elapsed real time in seconds, clamped by the caller.
+
+        Returns:
+            None.
+
+        Side effects:
+            Updates UI/simulation; an enabled Devmode consumes its input before gameplay.
+        """
         self.sound = None
         self.cues = []
         self.ui.input_device = getattr(keys, "device", self.ui.input_device)
         settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
+        input_source = keys
         keys = session_input(keys, settings.get("key_bindings"), self._input_repeat)
         self.focused = bool(getattr(keys, "focused", True))
         if keys.quit:
@@ -164,6 +199,27 @@ class Session:
                 self.save()
             self.quit = True
             return
+        if self.dev_mode is not None:
+            physical_pressed = getattr(keys, "physical_keyboard_pressed",
+                                       getattr(keys, "keyboard_pressed", keys.pressed))
+            consumed = self.dev_mode.handle(set(physical_pressed), set(keys.pressed))
+            if consumed:
+                # The overlay owns all input for this frame, including the key that closes it.
+                keys.pressed.clear()
+                keys.held.clear()
+                # Settings key capture reads physical metadata as well as action sets.
+                for name in ("physical_keyboard_pressed", "physical_keyboard_press_order"):
+                    physical = getattr(keys, name, None)
+                    if hasattr(physical, "clear"):
+                        physical.clear()
+                keys.mouse_click = None
+                keys.mouse_wheel = 0
+                # The fractional wheel remainder belongs to SDL's input, not its action wrapper.
+                wheel_remainder = getattr(input_source, "mouse_wheel_remainder", None)
+                if wheel_remainder is not None:
+                    input_source.mouse_wheel_remainder = 0.0
+            if self.dev_mode.skip_world_tick:
+                return
         self._book_presentation(dt)
         driving_presses = keys.pressed & DRIVING_KEYS if self.ui.mode in DRIVING else set()
         self._menu_held.intersection_update(keys.held)
@@ -449,6 +505,16 @@ class Session:
             self._npc_key = key
 
     def save(self) -> None:
+        """Save ordinary sessions; Devmode preserves all state in memory only.
+
+        Returns:
+            None.
+
+        Side effects:
+            Writes the state to ``save_path`` only when Devmode is disabled.
+        """
+        if self.dev_mode is not None:
+            return
         if self._title_catchup_pending and self.ui.has_save:
             self.state.catch_up(now=self._continue_catchup_at)
             self._title_catchup_pending = False
@@ -659,11 +725,12 @@ class Session:
         if "return" in keys.pressed or "space" in keys.pressed:
             choice = options[self.ui.title_i % len(options)]
             if choice == "Continue":
-                try:
-                    self.state = State.load(self.save_path, self.world)
-                except (OSError, ValueError, KeyError):
-                    self.state.toast("That save could not be read.")
-                    return
+                if self.dev_mode is None:
+                    try:
+                        self.state = State.load(self.save_path, self.world)
+                    except (OSError, ValueError, KeyError):
+                        self.state.toast("That save could not be read.")
+                        return
                 self._attach_quest_manager()
                 if self._title_catchup_pending:
                     self.state.catch_up(now=self._continue_catchup_at)
@@ -1082,8 +1149,17 @@ class Session:
             speed = "normal"
         if speed == "instant" and not self.ui.haul_encounter_only:
             self._start_haul_perk(line)
-            self.ui.mode = "check"
-            self.ui.check_i = 0
+            first = next((i for i, hook in enumerate(line.hooks)
+                          if encounter.is_legendary(hook.catch)
+                          and not encounter.presented(self.state.v2, hook.catch.species)), None)
+            if first is None:
+                self.ui.mode = "check"
+                self.ui.check_i = 0
+            else:
+                # Instant skips ordinary hooks, but never a legendary's first scene (02 §7.2).
+                self.ui.haul_index = first
+                self.ui.haul_encounter_only = True
+                self._begin_encounter(line.hooks[first])
             return
         cadence = haul_cadence(self.state) * self.ui.haul_picnic_factor
         multiplier = 3.0 if "e" in keys.held else 1.0
@@ -1093,13 +1169,11 @@ class Session:
             self.ui.check_i = 0
             return
         if self.ui.haul_phase == "card" and keys.pressed - {"e"}:
-            # A legendary's page stands a moment first, so keys pressed through its scene don't
-            # turn it unread.
+            # A legendary's framed book page must remain readable before it advances.
             if not (encounter.is_legendary(line.hooks[self.ui.haul_index].catch)
                     and self.ui.haul_phase_timer < encounter.PAGE_SETTLE_S):
                 self._next_haul_hook()
                 return
-
         remaining = step
         for _ in range(len(line.hooks) * 3 + 4):
             if remaining <= 1e-9 or self.ui.mode != "haul":
@@ -1110,9 +1184,8 @@ class Session:
                 return
             hook = line.hooks[self.ui.haul_index]
             if self.ui.haul_phase == "encounter":
-                return  # the scene keeps its own clock (`_encounter_keys`)
+                return
             if self.ui.haul_phase == "card":
-                # A legendary's book page holds longer than a fish card.
                 hold = encounter.PHOTO_S if encounter.is_legendary(hook.catch) else 1.2
                 needed = max(0.0, hold - self.ui.haul_phase_timer)
                 used = min(remaining, needed)
@@ -1146,8 +1219,8 @@ class Session:
                 self._begin_encounter(hook)
                 return
             if hook.catch is not None:
-                self.ui.haul_phase = "surface"
                 self.ui.haul_timer = cadence
+                self.ui.haul_phase = "surface"
                 self.ui.haul_phase_timer = 0.0
             else:
                 self._next_haul_hook()
@@ -1451,7 +1524,7 @@ class Session:
             section_baits[self.ui.set_section] = self.ui.set_bait
             self.ui.set_section_baits = tuple(section_baits)
             self.ui.note = ""
-        for i, name in enumerate("12345"):
+        for i, name in enumerate("123456789"[:len(BAITS)]):
             if name in keys.pressed:
                 self.ui.set_bait = i
                 section_baits[self.ui.set_section] = self.ui.set_bait
@@ -1711,15 +1784,15 @@ class Session:
         rows = self.ui.settings_i
         settings = self.state.v2.setdefault("settings", {})
         if keys.tap("up", dt):
-            self.ui.settings_i = (self.ui.settings_i - 1) % 12
+            self.ui.settings_i = (self.ui.settings_i - 1) % SETTINGS_ROW_COUNT
         elif keys.tap("down", dt):
-            self.ui.settings_i = (self.ui.settings_i + 1) % 12
+            self.ui.settings_i = (self.ui.settings_i + 1) % SETTINGS_ROW_COUNT
         elif keys.tap("left", dt):
             self._adjust_setting(rows, -1)
         elif keys.tap("right", dt):
             self._adjust_setting(rows, 1)
         elif "return" in keys.pressed or "space" in keys.pressed:
-            if rows == 11:
+            if rows == SETTINGS_KEYBOARD_CONTROLS_ROW:
                 self.ui.settings_page = "keys"
                 self.ui.key_binding_i = 0
                 self.ui.capturing_key = False
@@ -1742,15 +1815,17 @@ class Session:
         elif row == 3:
             settings["reduced_motion"] = not bool(settings.get("reduced_motion", False))
         elif row == 4:
+            settings["third_person"] = not bool(settings.get("third_person", False))
+        elif row == 5:
             speeds = ("normal", "quick", "instant")
             current = settings.get("haul_speed", "normal")
             if current not in speeds:
                 current = "normal"
             settings["haul_speed"] = speeds[(speeds.index(current) + (1 if direction >= 0 else -1)) % len(speeds)]
-        elif row == 5:
+        elif row == 6:
             settings["captions"] = not bool(settings.get("captions", True))
-        elif 6 <= row <= 9:
-            name = ("master", "music", "ambience", "sfx")[row - 6]
+        elif 7 <= row <= 10:
+            name = ("master", "music", "ambience", "sfx")[row - 7]
             volumes = settings.get("volumes")
             if not isinstance(volumes, dict):
                 volumes = {}
@@ -1763,7 +1838,7 @@ class Session:
             if not math.isfinite(current):
                 current = 1.0
             volumes[name] = round(max(0.0, min(1.0, current + direction * 0.1)), 2)
-        elif row == 10:
+        elif row == 11:
             profile = self.state.v2.setdefault("profile", {})
             collar = profile.setdefault("collar", {})
             visible = not bool(settings.get("collar_visible", collar.get("visible", True)))
@@ -1864,29 +1939,60 @@ class OpenedSave:
     used_local_fallback: bool
 
 
-def open_save(save_path: str | Path | None = None) -> OpenedSave:
-    """Pick the save file, migrate the install-era save, or recover. run() and --check-save use this."""
+def open_save(save_path: str | Path | None = None, *, persist_changes: bool = True) -> OpenedSave:
+    """Select, migrate, or recover the save for this run.
+
+    Args:
+        save_path: Optional explicit save path; otherwise use the platform location.
+        persist_changes: Whether load-time migration/recovery may write save files.
+
+    Returns:
+        The loaded world, state, and save-selection metadata.
+
+    Side effects:
+        Reads saves; when enabled, migration/recovery may write backups and saves.
+    """
     root = app_root()
     legacy_path = root / LEGACY_SAVE if save_path is None else None
     target, used_local_fallback = _save_target(root, save_path)
     started_from_legacy = (legacy_path is not None and legacy_path.is_file()
                            and not target.is_file())
     world, state, has_save = load_game_save(
-        target, State, World, legacy_path=legacy_path)
+        target, State, World, legacy_path=legacy_path, persist_changes=persist_changes)
     return OpenedSave(world, state, has_save, target, legacy_path,
                       started_from_legacy, used_local_fallback)
 
 
-def run(*,software=False, save_path: str | Path | None = None) -> None:
-    opened = open_save(save_path)
+def run(*, software=False, save_path: str | Path | None = None, dev=False,
+        detail: str | None = None) -> None:
+    """Run interactive play with optional software rendering and unsaved Devmode.
+
+    Args:
+        software: Use the CPU renderer instead of the OpenGL renderer.
+        save_path: Optional save path; None selects the platform save location.
+        dev: Enable playtest controls and suppress all save writes.
+        detail: Detail tier name, or None/``auto`` to fit available memory.
+
+    Side effects:
+        Opens the game window; ordinary play saves, while Devmode remains in memory.
+    """
+    opened = open_save(save_path, persist_changes=not dev)
     world, state, has_save = opened.world, opened.state, opened.has_save
     if opened.used_local_fallback:
         state.toast("Platform save folder unavailable; using the local save folder.")
-    session = Session(world, opened.path, state, has_save)
+    session = Session(world, opened.path, state, has_save, dev=dev)
 
     dw, dh = Platform.display_size()
     width, height = _window_size(dw, dh)
     platform = Platform(width, height, GAME_TITLE,graphics=not software)
+    software_backend = software or platform.context is None
+    renderer_name = (str(platform.context.info.get("GL_RENDERER", "")).lower()
+                     if platform.context is not None else "")
+    software_tier = software_backend or any(
+        name in renderer_name for name in ("llvmpipe", "softpipe", "swrast"))
+    # Text, UI, and audio snapshot tier budgets; Mesa software GL needs the same
+    # low-memory policy as the CPU renderer even though its GL context is usable.
+    detail_tiers.configure(software=software_tier, override=detail)
     text = Text()
     ui = UI(text, world)
     # Show a real first frame while the forest and shaders initialize.
@@ -1897,16 +2003,27 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
     ui._center(loading,"Opening the lake...",width/2,int(height*0.58),
                max(14,height//40),(218,187,124))
     platform.present(loading)
-    audio = Audio()
-    renderer = Renderer(world,width,height,software=software or platform.context is None,
-                        context=platform.context)
+    audio = Audio(tier=detail_tiers.current().name)
+    render_width, render_height = detail_tiers.render_dimensions(
+        width, height, software=software_tier)
+    renderer = Renderer(world,render_width,render_height,software=software_backend,
+                        context=platform.context, output_size=(width, height))
     ui.fish_card_renderer = getattr(renderer, "fish_card", None)
     last = platform.ticks()
     save_acc = 0.0
     blip = None
     low = None
+    frame_deadline = time.perf_counter()
+    previous_frame_started = None
+    smooth_frame_ms = 0.0
+    perf_sample_at = 0.0
     try:
         while not session.quit:
+            frame_started = time.perf_counter()
+            # The first frame has no predecessor to time against.
+            frame_elapsed = (None if previous_frame_started is None
+                             else frame_started - previous_frame_started)
+            previous_frame_started = frame_started
             now = platform.ticks()
             dt = min(0.25, max(0.0, (now - last) / 1000.0))
             last = now
@@ -1921,17 +2038,36 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
                 break
             if renderer.world is not session.world:
                 # The transition runs on the last lake image without its HUD.
-                scene = None if low is None else resize_rgb(low, width, height)
+                scene = low
+                if scene is not None and scene.shape[:2] != (height, width):
+                    scene = resize_rgb(scene, width, height)
                 renderer, ui = _enter_lake(platform, session, renderer, ui, text, loading,
-                                           software or platform.context is None, scene)
+                                           software_backend, software_tier, scene)
                 # The startup variable must not retain the first lake's grids.
                 world = session.world
                 last = platform.ticks()
             cam = _camera(renderer, session)
             platform.make_current()
             low = renderer.render(session.state, cam)
-            big = resize_rgb(low, width, height)
+            # The UI paints into a separate array: `low` stays HUD-free for the lake transition.
+            big = (low.copy() if low.shape[:2] == (height, width)
+                   else resize_rgb(low, width, height))
             ui.draw(big, session.state, session.ui, cam)
+            if session.dev_mode is not None:
+                if frame_elapsed is not None:
+                    smooth_frame_ms = (frame_elapsed * 1000 if not smooth_frame_ms
+                                       else smooth_frame_ms * 0.9 + frame_elapsed * 100)
+                if time.perf_counter() - perf_sample_at >= 1.0:
+                    from .verify import gpu_memory_bytes, rss_bytes
+                    gpu_bytes = gpu_memory_bytes()
+                    session.dev_mode.perf = (
+                        # One rate from the smoothed frame time, so the two figures agree.
+                        1000.0 / smooth_frame_ms if smooth_frame_ms else 0.0,
+                        smooth_frame_ms, rss_bytes() / 1024**2,
+                        None if gpu_bytes is None else gpu_bytes / 1024**2,
+                    )
+                    perf_sample_at = time.perf_counter()
+                session.dev_mode.draw(big, ui)
             platform.present(big)
             motion_reduced = bool(session.state.v2.get("settings", {}).get("reduced_motion", False))
             if session.world_running() and not motion_reduced:
@@ -1946,6 +2082,7 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
                          sailing=session.state.sail_raised,
                          # A starlight barge glides without either sound.
                          motorized=electric or (boat.fuelled and session.state.boat_id!="rowboat"),
+                         electric=electric,
                          rowing=(boat.power in ("paddle", "oars") and not electric
                                  and abs(session.state.throttle)>0.01),
                          volumes=session.state.v2.get("settings", {}).get("volumes", {}),
@@ -1957,8 +2094,18 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
                 if save_acc >= 45.0:
                     session.save()
                     save_acc = 0.0
-            spent = platform.ticks() - now
-            platform.delay(max(0, 16 - spent))
+            # Unfocused windows idle at 30 Hz; otherwise the loop targets 60 Hz.
+            # Accepted swap intervals may still return immediately on some drivers,
+            # so keep a 240 Hz safety floor when focused.
+            period = 1 / 30 if not session.focused else 1 / 60
+            if getattr(platform, "vsync", False) and session.focused:
+                period = 1 / 240
+            frame_deadline += period
+            remaining = frame_deadline - time.perf_counter()
+            if remaining > 0:
+                time.sleep(remaining)
+            else:
+                frame_deadline += math.ceil(-remaining / period) * period
     finally:
         if session.ui.mode != "title":
             try:
@@ -1966,12 +2113,14 @@ def run(*,software=False, save_path: str | Path | None = None) -> None:
             except OSError:
                 pass
         audio.close()
+        ui.close()
         renderer.close()
         text.close()
         platform.close()
 
 
-def _enter_lake(platform, session, renderer, ui, text, loading, software, last_frame):
+def _enter_lake(platform, session, renderer, ui, text, loading, software_backend,
+                software_tier, last_frame):
     """Swap to the session's new lake and return its renderer and UI.
 
     Travel to or from the Lagoon tips into starlight from the last lake image
@@ -1990,14 +2139,21 @@ def _enter_lake(platform, session, renderer, ui, text, loading, software, last_f
         ui._center(loading,f"Opening {session.world.name}...",width/2,height/2,
                    max(18,height//30),(238,233,216),"serif")
         platform.present(loading)
+    ui.close()
     renderer.close()
     ui = UI(text,session.world)
-    renderer = Renderer(session.world,width,height,software=software,context=platform.context)
+    render_width, render_height = detail_tiers.render_dimensions(
+        width, height, software=software_tier)
+    renderer = Renderer(session.world,render_width,render_height,
+                        software=software_backend, context=platform.context,
+                        output_size=(width, height))
     ui.fish_card_renderer = getattr(renderer, "fish_card", None)
     if starlit and not session.quit:
         platform.make_current()
         # The HUD returns with the first ordinary frame on the new water.
-        arrival = resize_rgb(renderer.render(session.state, _camera(renderer, session)), width, height)
+        arrival = renderer.render(session.state, _camera(renderer, session))
+        if arrival.shape[:2] != (height, width):
+            arrival = resize_rgb(arrival, width, height)
         _play_starlight(platform, session, last_frame, arrival, starlight.TIP_END, 1.0, reduced)
     return renderer, ui
 
@@ -2011,23 +2167,51 @@ def _play_starlight(platform, session, source, destination, start, end, reduced)
     from . import starlight
     begin = platform.ticks()
     while True:
+        frame_started = time.perf_counter()
         elapsed = (platform.ticks() - begin) / 1000.0
         t = min(end, start + elapsed / starlight.DURATION)
-        if platform.poll(0.0).quit:
+        keys = platform.poll(0.0)
+        if keys.quit:
             session.quit = True
             return
         platform.present(starlight.frame(source, destination, t, reduced_motion=reduced))
         if t >= end:
             return
-        platform.delay(8)
+        focused = bool(getattr(keys, "focused", getattr(session, "focused", True)))
+        session.focused = focused
+        # Transitions retain the old 8 ms cadence without vsync; keep the same
+        # unfocused and nonblocking-swap safety floors as the main loop.
+        if not focused:
+            period = 1 / 30
+        elif getattr(platform, "vsync", False):
+            period = 1 / 240
+        else:
+            period = 1 / 125
+        remaining = period - (time.perf_counter() - frame_started)
+        if remaining > 0:
+            time.sleep(remaining)
 
 
 def _camera(renderer: Renderer, session: Session):
     state = session.state
     if session.ui.mode != "title":
-        reduced = bool(state.v2.get("settings", {}).get("reduced_motion", False))
+        settings = state.v2.get("settings", {}) if isinstance(state.v2, dict) else {}
+        reduced = bool(settings.get("reduced_motion", False))
         clock = session.stage if session.stage is not None else session.whale_clock  # V1-35, V1-37
-        return staging.staged_camera(renderer, state, clock, reduced=reduced)
+        cam = staging.staged_camera(renderer, state, clock, reduced=reduced)
+        if cam.boat is not None or settings.get("third_person") is not True:
+            return cam
+        yaw = state.yaw
+        pitch = -math.atan2(THIRD_PERSON_ELEVATION, THIRD_PERSON_DISTANCE) + state.look
+        x = state.x - math.sin(yaw) * THIRD_PERSON_DISTANCE
+        z = state.z - math.cos(yaw) * THIRD_PERSON_DISTANCE
+        chase = renderer.camera_for(state, yaw=yaw, pitch=pitch, x=x, z=z)
+        # Both camera position representations must move together; rays depend only on yaw/pitch.
+        chase.y += THIRD_PERSON_ELEVATION
+        chase.eye[1] += THIRD_PERSON_ELEVATION
+        # The hull and paws stay at the ordinary boat camera while the view moves behind them.
+        chase.boat = cam
+        return chase
     settings = state.v2.get("settings", {}) if isinstance(state.v2, dict) else {}
     reduced_motion = bool(settings.get("reduced_motion", False))
     yaw = state.yaw if reduced_motion else state.yaw + math.sin(state.anim * 0.12) * 0.55

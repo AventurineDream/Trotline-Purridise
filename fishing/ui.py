@@ -57,7 +57,7 @@ from .boat import (
 from .lakes import LAKES, LAKE_ZONE_NAMES, travel_lock_reason
 from .data import weight_string
 from .weather import wind_at
-from . import comfort
+from . import comfort, detail
 
 INK = (238, 233, 216)
 DIM = (169, 183, 175)
@@ -81,6 +81,8 @@ SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes", "Kitchen", "Bot"
 _TABS = SHOP_TABS
 TEXT_SIZE_SCALES = (0.9, 1.0, 1.15)
 MODES = comfort.MODES
+SETTINGS_ROW_COUNT = 13
+SETTINGS_KEYBOARD_CONTROLS_ROW = SETTINGS_ROW_COUNT - 1
 VOLUME_NAMES = ("master", "music", "ambience", "sfx")
 VOLUME_LABELS = {
     "master": "Master volume", "music": "Music volume",
@@ -694,9 +696,27 @@ class UI:
         self.narrative_content = load_content()
         self._cw: dict[tuple[int, str], int] = {}
         self._ch: dict[tuple[int, str], int] = {}
+        self._map_image_cache: dict[tuple[int, int, int], np.ndarray] = {}
+        self._map_image_cache_bytes = 0
+        # The tier's UI layer cap is shared: a third for chart images, the rest for title washes.
+        layer_bytes = detail.current().ui_layer_cache_bytes
+        self._map_image_cache_limit = layer_bytes // 3
+        # Per-size title wash terms: keep-weight (h,w,1) and tint-add (h,w,3), uint16.
+        self._title_alpha_cache: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
+        self._title_alpha_cache_bytes = 0
+        self._title_alpha_cache_limit = layer_bytes - self._map_image_cache_limit
         self._text_scale = 1.0
         self._dyslexia_font = False
         self.fish_card_renderer = None
+
+    def close(self) -> None:
+        """Release presentation caches when this UI is retired with its world."""
+        self._map_image_cache.clear()
+        self._map_image_cache_bytes = 0
+        self._title_alpha_cache.clear()
+        self._title_alpha_cache_bytes = 0
+        self._cw.clear()
+        self._ch.clear()
 
     def cell(self, size: int) -> tuple[int, int]:
         actual = self._actual_size(size)
@@ -718,6 +738,7 @@ class UI:
         self._dyslexia_font = bool(settings.get("dyslexia_font", False))
         self._hud_rects = []  # the HUD's top panels this frame; toasts keep clear of them
         mode = ui.mode
+        self._caption_floor = None
         if mode == "play":
             draw_sighting(frame, state, camera)
         if mode == "title":
@@ -738,7 +759,9 @@ class UI:
         if mode == "play":
             if comfort.drowsy(state.v2):
                 self._drowsy_edges(frame)
-            self._hud(frame, state, ui)
+            # Only in play is the control-hint bar the bottom-most thing on screen;
+            # the map and dialogue panels cover it, so captions stay at the edge there.
+            self._caption_floor = self._hud(frame, state, ui)
             if ui.stage_fx and "sketch" in ui.stage_fx:
                 # A "Draw it" scene read early: the drawing finishes while the staging plays out.
                 self._sketch(frame, ui.stage_fx["sketch"])
@@ -751,10 +774,12 @@ class UI:
             self._caption(frame, state, ui)
             return
         if mode == "map":
-            self._hud(frame, state, ui)
+            # The chart is a full-screen information surface; drawing the play HUD
+            # underneath it makes its footer and map labels collide at compact sizes.
             self._map(frame, state, ui, big=True)
-            self._caption(frame, state, ui)
-            self._toasts(frame, state, ui.input_device)
+            # Toasts float across the lake view, but collide with the chart title
+            # and footer on compact screens; the chart is a deliberate focus mode.
+
             return
         if mode == "dialogue":
             if ui.stage_fx:  # a staged story scene: letterbox and fade, without the HUD (V1-35)
@@ -1130,7 +1155,8 @@ class UI:
         x, y = (w - pw) // 2, (h - ph) // 2
         self._fill(frame, 0, 0, w, h, (4, 10, 12), 0.58)
         self._panel(frame, x, y, pw, ph, 0.98)
-        self._center(frame, "A FISH SURFACES", w / 2, y + 18,
+        heading = "A LEGENDARY SURFACES" if catch.legendary else "A FISH SURFACES"
+        self._center(frame, heading, w / 2, y + 18,
                      self._size(frame, "head"), GOLD)
         try:
             card = (self.fish_card_renderer(catch.species, catch.shiny)
@@ -1215,12 +1241,12 @@ class UI:
         if x0 >= x1 or y0 >= y1:
             return
         patch = src[y0 - int(y): y0 - int(y) + (y1 - y0), x0 - int(x): x0 - int(x) + (x1 - x0)]
-        alpha = patch[:, :, 3:4].astype(np.float32) * (1.0 / 255.0)
-        if float(alpha.max()) <= 0:
-            return
-        rgb = patch[:, :, :3].astype(np.float32)
-        region = dst[y0:y1, x0:x1].astype(np.float32)
-        dst[y0:y1, x0:x1] = np.clip(region * (1.0 - alpha) + rgb * alpha, 0, 255).astype(np.uint8)
+        alpha = patch[:, :, 3:4].astype(np.uint16)
+        region = dst[y0:y1, x0:x1]
+        region[:] = (
+            region.astype(np.uint16) * (255 - alpha)
+            + patch[:, :, :3].astype(np.uint16) * alpha
+        ) // 255
 
     @staticmethod
     def _blit_rgb(dst, src, x, y):
@@ -1240,10 +1266,14 @@ class UI:
         if alpha >= 1.0:
             dst[y0:y1,x0:x1] = rgb
             return
-        region = dst[y0:y1, x0:x1].astype(np.float32)
-        region *= 1.0-alpha
-        region += np.array(rgb,np.float32)*alpha
-        dst[y0:y1,x0:x1] = region.astype(np.uint8)
+        # Weights out of 256 so the divide is a shift; rounding stays within one level.
+        weight = min(256, max(0, int(alpha * 256 + 0.5)))
+        region = dst[y0:y1, x0:x1]
+        work = region.astype(np.uint16)
+        work *= 256 - weight
+        work += np.asarray(rgb, np.uint16) * weight + 128
+        work >>= 8
+        region[:] = work
 
     def _panel(self, dst, x, y, w, h, alpha=0.82):
         self._round_fill(dst, x+2, y+4, w, h, (5, 10, 10), 0.20)
@@ -1286,9 +1316,12 @@ class UI:
             xx = np.arange(ax,bx,dtype=np.float32)[None,:]
             dx = np.maximum(np.maximum(x+r-xx,xx-(x+w-r-1)),0)
             dy = np.maximum(np.maximum(y+r-yy,yy-(y+h-r-1)),0)
-            a = np.clip(r+0.5-np.hypot(dx,dy),0,1)[...,None]*alpha
+            a = (np.clip(r+0.5-np.hypot(dx,dy),0,1)*alpha*255+0.5).astype(np.uint16)[...,None]
             region = dst[ay:by,ax:bx]
-            region[:] = (region*(1-a)+np.asarray(rgb,np.float32)*a).astype(np.uint8)
+            region[:] = (
+                region.astype(np.uint16) * (255-a)
+                + np.asarray(rgb,np.uint16) * a
+            ) // 255
 
     def _text(self, frame, s: str, x, y, size, color, shadow=True, family="mono") -> int:
         if not s:
@@ -1306,7 +1339,21 @@ class UI:
     def _center(self, frame, s, x, y, size, color, family="sans"):
         return self._text(frame,s,x-self._measure(s,size,family)/2,y,size,color,family=family)
 
-    def _trim(self, s: str, size: int, width: int) -> str:
+    def _trim(self, s: str, size: int, width: int, family: str = "mono") -> str:
+        """Shorten `s` with ".." to fit `width` pixels in the font it will be drawn in."""
+        if family != "mono":
+            # Proportional text is narrower than the mono cell estimate, which
+            # used to cut captions that had room to spare.
+            if self._measure(s, size, family) <= width:
+                return s
+            low, high = 1, len(s)
+            while low < high:
+                mid = (low + high + 1) // 2
+                if self._measure(s[:mid] + "..", size, family) <= width:
+                    low = mid
+                else:
+                    high = mid - 1
+            return s[:low] + ".."
         cw, _ch = self.cell(size)
         n = max(1, int(width) // cw)
         if len(s) <= n:
@@ -1465,6 +1512,7 @@ class UI:
         hint_x, hint_y = (w-hint_w-24)//2, h-m-hint_h
         self._panel(frame,hint_x,hint_y,hint_w+24,hint_h,0.88)
         self._center(frame,hint,w/2,hint_y+6,small,INK)
+        return hint_y
 
     def _minimap(self, frame, state, margin, bottom, input_device="keyboard") -> int:
         chart = self.world.map_small
@@ -1533,7 +1581,6 @@ class UI:
 
     def _map(self, frame, state, ui: UIState, big=True):
         h, w = frame.shape[:2]
-        self._fill(frame, 0, 0, w, h, (8, 10, 8), 0.45)
         chart = self.world.map_rgb
         mw = int(w * 0.62)
         mh = int(mw * chart.shape[0] / chart.shape[1])
@@ -1542,8 +1589,20 @@ class UI:
             mw = int(mh * chart.shape[1] / chart.shape[0])
         x = (w - mw) // 2
         y = int(h * 0.10)
-        scaled = _fit(chart, mw, mh)
-        self._panel(frame, x - 8, y - 8, mw + 16, mh + 16, 0.88)
+        map_key = (id(chart), mw, mh)
+        scaled = self._map_image_cache.get(map_key)
+        if scaled is None:
+            scaled = _fit(chart, mw, mh)
+            if scaled.nbytes <= self._map_image_cache_limit:
+                self._map_image_cache.clear()
+                self._map_image_cache[map_key] = scaled
+                self._map_image_cache_bytes = scaled.nbytes
+        # The opaque chart overwrites nearly half the frame, so the wash and the
+        # panel are blended only in the four strips around it.
+        for view, ox, oy in ((frame[:y], 0, 0), (frame[y + mh:], 0, y + mh),
+                             (frame[y:y + mh, :x], 0, y), (frame[y:y + mh, x + mw:], x + mw, y)):
+            self._fill(view, -ox, -oy, w, h, (8, 10, 8), 0.45)
+            self._panel(view, x - 8 - ox, y - 8 - oy, mw + 16, mh + 16, 0.88)
         frame[y:y + mh, x:x + mw] = scaled
         for line in state.lines:
             color = self._line_color(line)
@@ -1736,11 +1795,21 @@ class UI:
         u0, v0 = self.world.map_pixel(x0, z0, mw, mh)
         u1, v1 = self.world.map_pixel(x1, z1, mw, mh)
         steps = max(abs(u1 - u0), abs(v1 - v0), 1)
-        for i in range(steps + 1):
-            if dashed and i % 6 >= 3:
+        samples = np.arange(steps + 1, dtype=np.float64) / steps
+        if dashed:
+            samples = samples[np.arange(steps + 1) % 6 < 3]
+        xs = (ox + u0 + (u1 - u0) * samples).astype(np.intp)
+        ys = (oy + v0 + (v1 - v0) * samples).astype(np.intp)
+        height, width = frame.shape[:2]
+        for dy in (-1, 0, 1):
+            py = ys + dy
+            valid_y = (py >= 0) & (py < height)
+            if not valid_y.any():
                 continue
-            t = i / steps
-            self._dot(frame, int(ox + u0 + (u1 - u0) * t), int(oy + v0 + (v1 - v0) * t), 1, rgb)
+            for dx in (-1, 0, 1):
+                px = xs + dx
+                valid = valid_y & (px >= 0) & (px < width)
+                frame[py[valid], px[valid]] = rgb
 
     def _marker(self, frame, kind, x, y, legend=False):
         """One chart marker. Shape carries the meaning and colour only repeats it (V1-43)."""
@@ -1816,8 +1885,12 @@ class UI:
             return
         size = self._size(frame, "small")
         _cw, ch = self.cell(size)
-        w = frame.shape[1]
-        y = max(8, frame.shape[0] // 7)
+        h, w = frame.shape[:2]
+        unit = h / 720
+        margin = max(12, int(26 * unit))
+        # Leave the tallest right-hand HUD panel unobscured (sail/wind, Bot,
+        # or scanner status can extend it beyond the location label).
+        y = margin + int(140 * unit) + 18
         for raw_text, _ttl in state.toasts[-3:]:
             text = _toast_for_device(raw_text, input_device)
             if raw_text == "Shall we add that?":
@@ -1830,7 +1903,7 @@ class UI:
                 if x < rx + rw and rx < x + tw and y < ry + rh and ry < y + ch + 8:
                     y = ry + rh + 8
             self._panel(frame, x, y, tw, ch + 8, 0.72)
-            self._text(frame, text, x + 8, y + 3, size, INK)
+            self._text(frame, text, x + 8, y + 3, size, INK, False, "sans")
             y += ch + 12
 
     # --- menus -----------------------------------------------------------
@@ -1838,12 +1911,26 @@ class UI:
     def _title(self, frame, state, ui: UIState):
         h, w = frame.shape[:2]
         # A translucent gradient preserves the lake while giving the title air.
-        yy = np.arange(h,dtype=np.float32)[:,None,None]/h
-        xx = np.arange(w,dtype=np.float32)[None,:,None]/w
-        # The left column, where the title and menu sit, darkens enough for AA contrast over
-        # a bright sky; the right of the frame keeps the lake (V1-43).
-        alpha = np.minimum(np.clip((yy-0.22)*1.0,0,0.50)+np.clip((0.62-xx)*1.4,0,0.62),0.84)
-        frame[:] = (frame*(1-alpha)+np.array([10,25,27],np.float32)*alpha).astype(np.uint8)
+        terms = self._title_alpha_cache.get((w, h))
+        if terms is None:
+            yy = np.arange(h,dtype=np.float32)[:,None,None]/h
+            xx = np.arange(w,dtype=np.float32)[None,:,None]/w
+            # Keep the original AA backing: both the left title column and horizon must meet contrast.
+            alpha = np.minimum(np.clip((yy-0.22)*1.0,0,0.50)
+                               + np.clip((0.62-xx)*1.4,0,0.62),0.84)
+            weight = (alpha*256+0.5).astype(np.uint16)
+            terms = (256-weight, weight*np.array([10,25,27],np.uint16)+128)
+            size = terms[0].nbytes+terms[1].nbytes
+            if size <= self._title_alpha_cache_limit:
+                self._title_alpha_cache.clear()
+                self._title_alpha_cache[(w, h)] = terms
+                self._title_alpha_cache_bytes = size
+        keep, tint = terms
+        work = frame.astype(np.uint16)
+        work *= keep
+        work += tint
+        work >>= 8
+        frame[:] = work
         title = max(38,min(96,int(h*0.117)))
         body = max(15,int(h/38))
         small = max(11,int(h/60))
@@ -1945,27 +2032,35 @@ class UI:
                 body += "\nBot's dream left a habitat lead in your book."
             labels = None
             selected = 0
-        if labels:
-            self._round_fill(frame, x, y, width, height, (17, 31, 32), 1)
-        self._fill(frame, x + 10, y, width - 20, 1, GOLD, .34)
         head, size = self._size(frame, "head"), self._size(frame, "body")
         while head > 10 and self._measure(title, head) > width - 32:
             head -= 1
-        self._text(frame, title, x + 16, y + 16, head, INK, False, "sans")
-        top = y + 30 + self._render(title, head, INK, "sans").shape[0]
+        title_h = self._render(title, head, INK, "sans").shape[0]
         hint = self._controls(ui, "Arrows choose · Enter selects · Esc back",
                                "D-pad chooses · A selects · B back") if labels else "Any key or click finishes the fade."
         if labels and ui.mode == "needs":
             hint = self._controls(ui, "Arrows choose · Enter selects · F / Esc later",
                                    "D-pad chooses · A selects · X / B later")
         values = body + "\n" + hint
-        available = buttons[0][1] - 12 - top
+        available = buttons[0][1] - 12 - (y + 30 + title_h)
         while size > 10:
             lines, line_height = self._comfort_lines(values, size, width - 32)
             if len(lines) * line_height <= available:
                 break
             size -= 1
         lines, line_height = self._comfort_lines(values, size, width - 32)
+        if labels:
+            # A sheet just tall enough for its words, resting on the fixed
+            # buttons, so the lake stays in view above a question.
+            spare = available - len(lines) * line_height
+            if spare > 0:
+                y, height = y + spare, height - spare
+            self._fill(frame, 0, 0, w, h, (6, 14, 16), 0.30)
+            self._panel(frame, x, y, width, height, 0.95)
+        else:
+            self._fill(frame, x + 10, y, width - 20, 1, GOLD, .34)
+        self._text(frame, title, x + 16, y + 16, head, INK, False, "sans")
+        top = y + 30 + title_h
         for index, line in enumerate(lines):
             self._text(frame, line, x + 16, top + index * line_height,
                        size, DIM, False, "sans")
@@ -2074,14 +2169,17 @@ class UI:
             color = INK if row.enabled else DIM
             if i == ui.shop_i:
                 color = GOLD
-            label = self._trim(row.label, body, pw * 0.68)
-            self._text(frame, label, x + m, ry, body, color, shadow=False)
+            # A label may run up to its own right-hand column, not a fixed share of the panel.
             rw = len(row.right) * self.cell(body)[0]
+            label = self._trim(row.label, body, pw - m * 2 - rw - self.cell(body)[0])
+            self._text(frame, label, x + m, ry, body, color, shadow=False)
             self._text(frame, row.right, x + pw - m - rw, ry, body, color, shadow=False)
         blurb = rows[ui.shop_i].blurb if rows else ""
         if ui.note:
             blurb = ui.note
-        self._text(frame, self._trim(blurb, small, pw - m * 2), x + m, y + ph - ch - 28, small, WARN if ui.note else DIM, shadow=False)
+        # Blurbs and notes are sentences: proportional type fits far more of them.
+        self._text(frame, self._trim(blurb, small, pw - m * 2, "sans"), x + m, y + ph - ch - 28,
+                   small, WARN if ui.note else DIM, False, "sans")
         foot = self._controls(ui, "W/S choose  A/D tabs  Arrows too  Enter buys  Esc",
                               "D-pad / stick choose  D-pad tabs  A buys  B back")
         self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 8, small, DIM, shadow=False)
@@ -2146,8 +2244,13 @@ class UI:
             self._text(frame, right, x + pw - m - rw, ry, body, color, shadow=False)
         bait = BAITS[section_baits[ui.set_section]]
         note = ui.note or f"Editing section {ui.set_section + 1}: needs {need}. {bait.blurb}"
-        self._text(frame, self._trim(note, small, pw - m * 2), x + m, y + ph - ch - 28, small, WARN if ui.note else DIM, shadow=False)
-        self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 8, small, DIM, shadow=False)
+        self._text(frame, self._trim(note, small, pw - m * 2, "sans"), x + m, y + ph - ch - 28,
+                   small, WARN if ui.note else DIM, False, "sans")
+        # Proportional text collapses double spaces, so the groups need a visible divider.
+        foot = self._controls(ui, f"W/S bait · A/D line · Q sections · Tab section · 1-{min(9, len(BAITS))} bait · Enter sets",
+                              "D-pad / stick choose · LB sections · Back section · A sets · B back")
+        self._text(frame, self._trim(foot, small, pw - m * 2, "sans"), x + m,
+                   y + ph - self.cell(small)[1] - 8, small, DIM, False, "sans")
 
     def _check(self, frame, state, ui: UIState):
         rows = check_rows(state, ui.check_line)
@@ -2186,16 +2289,17 @@ class UI:
             color = GOLD if i == ui.check_i else (INK if row.enabled or row.kind != "hook" else DIM)
             if row.kind == "hook" and not row.enabled and i != ui.check_i:
                 color = DIM
-            label = self._trim(row.label, body, int(pw * 0.72))
+            rw = len(row.right) * self.cell(body)[0]
+            label = self._trim(row.label, body, pw - m * 2 - rw - self.cell(body)[0])
             self._text(frame, label, x + m, ry, body, color, shadow=False)
             if row.right:
-                rw = len(row.right) * self.cell(body)[0]
                 self._text(frame, row.right, x + pw - m - rw, ry, body, color, shadow=False)
         foot = ui.note or self._controls(
             ui, "W/S choose  Enter toggles  Resolve applies  Esc back",
             "D-pad choose  A toggles / applies  B back",
         )
-        self._text(frame, self._trim(foot, small, pw - m * 2), x + m, y + ph - self.cell(small)[1] - 10, small, WARN if ui.note else DIM, shadow=False)
+        self._text(frame, self._trim(foot, small, pw - m * 2, "sans"), x + m,
+                   y + ph - self.cell(small)[1] - 10, small, WARN if ui.note else DIM, False, "sans")
 
     def _journal(self, frame, state, ui: UIState):
         from .bookview import BOOK_TABS
@@ -2333,6 +2437,8 @@ class UI:
             ("Text size", ("Small", "Standard", "Large")[text_size]),
             ("Dyslexia-friendly font", "Atkinson Hyperlegible" if settings.get("dyslexia_font") else "Off"),
             ("Reduced motion", "On" if settings.get("reduced_motion") else "Off"),
+            ("Camera view", "Third person" if settings.get("third_person") is True
+             else "First person"),
             ("Haul speed", {"normal": "Normal", "quick": "Quick", "instant": "Instant"}[haul_speed]),
             ("Captions", "On" if settings.get("captions", True) else "Off"),
         ]
@@ -2470,7 +2576,7 @@ class UI:
             size = self._size(frame, "small")
             while size > 9 and self._render(ui.caption, size, INK, "sans").shape[0] > 18:
                 size -= 1
-            label = self._trim(ui.caption, size, w - 48)
+            label = self._trim(ui.caption, size, w - 48, "sans")
             glyph_h = self._render(label, size, INK, "sans").shape[0]
             width = self._measure(label, size) + 20
             x, y = (w - width) // 2, h - glyph_h - 8
@@ -2481,9 +2587,12 @@ class UI:
         text_w = self._measure(ui.caption, size)
         pw = min(w - 24, text_w + 32)
         ph = self.cell(size)[1] + 16
-        x, y = (w - pw) // 2, max(4, h - ph - 18)
+        # Over the HUD the caption sits above the control-hint bar, not on it.
+        floor = getattr(self, "_caption_floor", None)
+        x = (w - pw) // 2
+        y = max(4, h - ph - 18) if floor is None else max(4, floor - ph - 8)
         self._panel(frame, x, y, pw, ph, 0.94)
-        self._center(frame, self._trim(ui.caption, size, pw - 24), w / 2,
+        self._center(frame, self._trim(ui.caption, size, pw - 24, "sans"), w / 2,
                      y + 8, size, INK, family="sans")
 
     def _table_columns(self, lines, size):
@@ -3129,6 +3238,10 @@ def _fit(img: np.ndarray, tw: int, th: int) -> np.ndarray:
     return img[ys][:, xs]
 
 
+# Haul sprite pixels per fish-mesh unit; the legendary idle bob converts with it.
+_HAUL_SPRITE_SCALE = 136.0
+
+
 @lru_cache(maxsize=48)
 def _haul_mesh_sprite(species_id: str, lake_id: str, shiny: bool) -> np.ndarray:
     """Rasterize a cached side-on fish mesh for the haul's surface beat."""
@@ -3139,9 +3252,8 @@ def _haul_mesh_sprite(species_id: str, lake_id: str, shiny: bool) -> np.ndarray:
     depth = np.full((height, width), 1e6, dtype=np.float32)
     mesh = haul_mesh(species_id, lake_id, shiny)
     projected = mesh.vertices[:, :2].copy()
-    scale = 136.0
-    projected[:, 0] = width * 0.5 + projected[:, 0] * scale
-    projected[:, 1] = height * 0.5 - projected[:, 1] * scale
+    projected[:, 0] = width * 0.5 + projected[:, 0] * _HAUL_SPRITE_SCALE
+    projected[:, 1] = height * 0.5 - projected[:, 1] * _HAUL_SPRITE_SCALE
     for index, triangle in enumerate(mesh.triangles):
         vertices = mesh.vertices[triangle]
         xy = projected[triangle]
@@ -3236,7 +3348,7 @@ def comfort_gallery(destination, *, text=None, world=None, background=None):
         report = {"frames": len(timings), "resolution": [1280, 720],
                   "p50_ms": round(float(np.percentile(timings, 50)), 2),
                   "p95_ms": round(float(np.percentile(timings, 95)), 2),
-                  "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+                  "peak_rss_mib": round(__import__("fishing.verify", fromlist=["rss_bytes"]).rss_bytes() / 1024**2, 1),
                   "text_cache_mb": round(text.cache_bytes / 1e6, 2),
                   "text_size": 2, "accessibility_font": True,
                   "scope": "Warmed comfort UI composition including Drowsy edges; excludes lake rendering"}

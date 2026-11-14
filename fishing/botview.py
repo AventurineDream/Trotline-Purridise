@@ -89,7 +89,7 @@ def bot_gallery(destination, *, text=None, world=None, background=None):
                 timings.append((time.perf_counter()-start)*1000)
         report = dict(frames=len(timings), resolution=[1280, 720], text_size=2, accessibility_font=True,
                       p50_ms=round(float(np.percentile(timings, 50)), 2), p95_ms=round(float(np.percentile(timings, 95)), 2),
-                      peak_rss_mib=round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024, 1),
+                      peak_rss_mib=round(__import__("fishing.verify", fromlist=["rss_bytes"]).rss_bytes()/1024**2, 1),
                       text_cache_mb=round(text.cache_bytes/1e6, 2),
                       scope='Warmed Bot shell/tool/collar menu composition; excludes lake rendering')
         (out / 'bot-identity-benchmark.json').write_text(json.dumps(report, indent=2)+'\n')
