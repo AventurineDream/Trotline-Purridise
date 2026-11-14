@@ -108,8 +108,17 @@ def _schedule(lake, hour, *, finale=False, seconds=600):
 
 
 class Captions(unittest.TestCase):
-    def test_every_sound_has_a_caption_and_a_bus(self):
-        for kind in soundscape.KINDS + CHIMES:
+    def test_gameplay_environment_and_chime_cues_are_captioned(self):
+        """Keep the current gameplay cue vocabulary and authored schedules captioned."""
+        cues = {
+            "bite", "bot", "click", "cookout", "error", "horn", "hum", "hum_winch",
+            "lake_day", "legendary", "splash", "whale_song",
+        }
+        cues.update(soundscape.motif_for(lake) for lake in soundscape.LAKES)
+        for lake in soundscape.LAKES:
+            cues.update(soundscape.AMBIENCE[lake])
+        cues.update(CHIMES)
+        for kind in cues:
             self.assertTrue(soundscape.caption(kind), kind)
             self.assertIn(soundscape.bus(kind), ("music", "ambience", "sfx"), kind)
         self.assertTrue(all(soundscape.bus(k) == "music" for k in soundscape.MUSIC_CAPTIONS))
@@ -292,6 +301,55 @@ class Cues(unittest.TestCase):
         self.assertIn("motif_briar", session.cues)
         self.assert_captioned(session, session.cues)
 
+
+    def test_set_feedback_paths_emit_captioned_error_and_splash(self):
+        session = self.session(self.state(1440 + 300))
+        for expected, result in (("error", "That line cannot be set."), ("splash", None)):
+            session.ui.mode = "set"
+            session.sound = None
+            with patch.object(session.state, "try_set", return_value=result):
+                session._set_keys(Keys(pressed={"return"}), 0.05)
+            self.assertEqual(session.sound, expected)
+            self.assert_captioned(session, [session.sound])
+
+    def test_hook_count_increase_emits_a_captioned_bite(self):
+        session = self.session(self.state(1440 + 300))
+        state = session.state
+
+        def hook_fish(_dt, **_kwargs):
+            state.hooked_total += 1
+
+        with patch.object(state, "advance", side_effect=hook_fish):
+            heard = self.heard(session)
+        self.assertIn("bite", heard)
+
+    def test_bot_sound_is_captioned_when_the_session_dispatches_it(self):
+        session = self.session(self.state(1440 + 300))
+        with patch("fishing.game.tick_bot", return_value="bot"):
+            heard = self.heard(session)
+        self.assertIn("bot", heard)
+
+    def test_staged_whale_story_dispatches_its_captioned_song(self):
+        session = self.session(self.state(1440 + 300))
+        session.ui.mode = "dialogue"
+        session.conversation = SimpleNamespace(node=lambda _content: {"scene": "story_c5_whale"})
+        with patch("fishing.game.staging.stage_of", return_value="story_c5_whale"):
+            session._tick_stage(0.05)
+        self.assertEqual(session.cues, ["whale_song"])
+        self.assert_captioned(session, session.cues)
+
+    def test_winch_haul_uses_its_captioned_hum_variant(self):
+        state = self.state(1440 + 300)
+        hooks = [Hook(True) for _ in range(3)]
+        row = LEGENDARY_DATA["old_lantern"]
+        hooks[0] = Hook(False, Catch("old_lantern", row["weight_lb"], 1.0, 0.0, "open", row["bait"], 21.0,
+                                     legendary=True, disposition="release"))
+        state.lines = [SetLine("heavy", "lantern_liver", state.x - 3, state.z, state.x + 3, state.z, "open", hooks)]
+        session = self.session(state)
+        with patch("fishing.game.encounter.variant", return_value="winch"):
+            session._open_e()
+            heard = self.heard(session, int((encounter.SCENE_S + 1.0) / 0.1), dt=0.1)
+        self.assertIn("hum_winch", heard)
 
 class AudioWorkerFallbacks(unittest.TestCase):
     def test_scratch_uses_system_temp_when_shared_memory_is_unavailable(self):

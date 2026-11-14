@@ -238,12 +238,12 @@ class LakeFrameworkChecks(unittest.TestCase):
                     world = World(lake)
                 with ctx:
                     renderer = LakeRenderer(world, 160, 90, context=ctx)
-                try:
-                    frame = renderer.render(State.new(world))
-                    self.assertEqual(frame.shape, (90, 160, 3))
-                    self.assertGreater(float(frame.std()), 8)
-                finally:
-                    renderer.close()
+                    try:
+                        frame = renderer.render(State.new(world))
+                        self.assertEqual(frame.shape, (90, 160, 3))
+                        self.assertGreater(float(frame.std()), 8)
+                    finally:
+                        renderer.close()
         finally:
             ctx.release()
 
