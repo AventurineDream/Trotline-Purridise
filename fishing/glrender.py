@@ -125,12 +125,6 @@ class LakeRenderer(SoftwareRenderer):
         self._objects.append(obj)
         return obj
 
-    def program(self, vert, frag):
-        common = "#version 330\n"+(SHADERS/"common.glsl").read_text(encoding="utf-8")+"\n"
-        return self.own(self.ctx.program(
-            vertex_shader=common+(SHADERS/vert).read_text(encoding="utf-8"),
-            fragment_shader=common+(SHADERS/frag).read_text(encoding="utf-8")))
-
     def target(self, width, height, *, sample_depth=False, hdr=False):
         """A colour texture and framebuffer; `hdr` makes it RGBA16F so values may exceed 1."""
         tex = self.own(self.ctx.texture((width,height),4,dtype="f2") if hdr
