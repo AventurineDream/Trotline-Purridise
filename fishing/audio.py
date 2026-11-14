@@ -101,6 +101,7 @@ ENGINE_ORDERS = np.arange(0.5, 16.5, 0.5)
 
 _STORES: dict[tuple[int, int, int], "_BedStore"] = {}
 _STORES_LOCK = threading.Lock()
+_SCRATCH_SERIAL = itertools.count()
 
 
 def _db(value: float) -> float:
@@ -156,7 +157,6 @@ class _BedStore:
         self._cue_job: tuple[subprocess.Popen, str] | Future | None = None
         self._pool: ThreadPoolExecutor | None = None
         self._spawn_ok = bool(sys.executable) and not getattr(sys, "frozen", False)
-        self._serial = itertools.count()
         atexit.register(self.shutdown)
 
     def frames(self, key: str) -> int:
@@ -166,7 +166,7 @@ class _BedStore:
     # ------------------------------------------------------------ jobs
 
     def _scratch(self, label: str) -> str:
-        name = f"trotline-audio-{os.getpid()}-{next(self._serial)}-{label.replace(':', '-')}.raw"
+        name = f"trotline-audio-{os.getpid()}-{next(_SCRATCH_SERIAL)}-{label.replace(':', '-')}.raw"
         return os.path.join(_scratch_directory(), name)
 
     def _spawn(self, args: list[str], path: str) -> subprocess.Popen | None:

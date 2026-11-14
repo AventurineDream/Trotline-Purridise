@@ -191,6 +191,22 @@ class Mixer(unittest.TestCase):
         self.assertEqual(audio.shots, [])
         self.assertEqual(audio.take_played(), [])
 
+    def test_muted_bite_does_not_leave_ambience_ducked(self):
+        audio = Audio(device=False, tier="low")
+        audio._primed = True
+        audio._motorized = False
+        audio.blip("bite")
+        with patch.object(audio, "_targets", return_value={}):
+            audio._mix(audio.block, 0.0, 0.0, wait=False)
+            audio.update(0.0, 0.0, 0.0, True)
+            frames = np.arange(audio.block * 4)
+            ambience = (np.sin(2 * np.pi * 440 * frames / audio.rate) * 32767).astype(np.int16)
+            audio.shots.append((ambience, 0, "ambience"))
+            audio._sink = []
+            audio.update(0.0, 0.0, 0.0, False)
+        heard = np.concatenate(audio._sink)
+        self.assertGreater(float(np.sqrt(np.mean(heard.astype(np.float64) ** 2))), 2000.0)
+
     def test_music_plays_on_its_bus_and_one_motif_at_a_time(self):
         audio = Audio(open_device=False)
         audio.ok = True
@@ -359,6 +375,14 @@ class AudioWorkerFallbacks(unittest.TestCase):
                 patch("fishing.audio.tempfile.gettempdir", return_value="/portable-temp"):
             path = store._scratch("bed")
         self.assertEqual(Path(path).parent, Path("/portable-temp"))
+
+    def test_scratch_paths_are_unique_across_stores(self):
+        first = _BedStore(22050, 1024, 1024)
+        second = _BedStore(44100, 2048, 2048)
+        self.addCleanup(first.shutdown)
+        self.addCleanup(second.shutdown)
+        self.assertNotEqual(first._scratch("bed"), second._scratch("bed"))
+
 
     def test_worker_samples_survive_unlink_after_mapping_closes(self):
         real_memmap, real_unlink = np.memmap, os.unlink

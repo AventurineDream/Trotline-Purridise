@@ -600,7 +600,9 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             block = max(1, frames // len(LAKE_ORDER))
             lake_id = LAKE_ORDER[min(len(LAKE_ORDER) - 1, i // block)]
             if world.id!=lake_id:
-                renderer.close()
+                renderer_to_close = renderer
+                renderer = None
+                renderer_to_close.close()
                 world = World(lake_id)
                 state.bind(world)
                 state.npcs = active_npcs(state,world,npc_content)
@@ -732,13 +734,21 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
         catchability = _catchability_section(validate_catchability())
         if catchability["species_count"] != len(SPECIES):
             raise AssertionError(f"catchability covers {catchability['species_count']} species")
+        renderer_report = {
+            "backend": renderer.backend,
+            "render_size": [renderer.w, renderer.h],
+            "window_size": [1440, 810],
+            "output_size": [1440, 810],
+            "antialias_samples": getattr(renderer, "samples", 1),
+            "cat_actor_memory": {**renderer.actor_memory(), "peak_total_bytes_bound": actor_peak},
+        }
+        renderer_to_close = renderer
+        renderer = None
+        renderer_to_close.close()
         play_loop = _benchmark_play_loop(world, state, text, software)
         gpu_bytes = gpu_memory_bytes()
         report = {
-            "frames":frames,"backend":renderer.backend,
-            "render_size":[renderer.w,renderer.h],"window_size":[1440,810],
-            "output_size":[1440,810],
-            "antialias_samples":getattr(renderer,"samples",1),
+            "frames":frames,**renderer_report,
             "render_median_ms":round(float(np.median(render_ms)),2),
             "full_frame_median_ms":round(float(np.median(frame_ms)),2),
             "full_frame_p50_ms":round(float(np.percentile(frame_ms,50)),2),
@@ -750,7 +760,6 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             "gpu_resident_mb":None if gpu_bytes is None else round(gpu_bytes/1024**2,2),
             "ram_limit_bytes":MEMORY_LIMIT_BYTES,
             "text_cache_limit_bytes":text.cache_limit,
-            "cat_actor_memory":{**renderer.actor_memory(),"peak_total_bytes_bound":actor_peak},
             "memory_mb":memory,
             "memory_samples":samples,
             "audio":{"sounds":len(audio["kinds"]),
@@ -784,8 +793,13 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
         print(json.dumps({k:v for k,v in report.items() if k not in ("memory_samples","checks","catchability","coverage","coverage_expected")},indent=2))
         return 0
     finally:
-        renderer.close()
-        text.close()
+        try:
+            if renderer is not None:
+                renderer_to_close = renderer
+                renderer = None
+                renderer_to_close.close()
+        finally:
+            text.close()
 
 
 def window_smoke():

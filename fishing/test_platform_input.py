@@ -96,6 +96,20 @@ class PlatformInputChecks(unittest.TestCase):
         self.push(event)
         self.assertEqual(self.platform.poll().mouse_wheel, 0)
 
+    def test_old_sdl_uses_integer_wheel_delta_when_precise_y_is_garbage(self):
+        self.platform._sdl_version = (2, 0, 17)
+        event = SDL_Event()
+        event.wheel.y = 1
+        event.wheel.preciseY = 1234.0
+        self.assertEqual(self.platform._wheel_delta(event.wheel), 1.0)
+
+    def test_sdl_2018_uses_nonzero_fractional_precise_wheel_delta(self):
+        self.platform._sdl_version = (2, 0, 18)
+        event = SDL_Event()
+        event.wheel.y = 3
+        event.wheel.preciseY = 0.5
+        self.assertEqual(self.platform._wheel_delta(event.wheel), 0.5)
+
     def test_fractional_wheel_deltas_accumulate_into_menu_steps(self):
         """Retain fractional trackpad deltas until a whole menu step is reached."""
         self.assertEqual(self.platform._wheel_steps(0.5, 0), 0)

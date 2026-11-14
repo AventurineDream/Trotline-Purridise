@@ -1985,8 +1985,14 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
     dw, dh = Platform.display_size()
     width, height = _window_size(dw, dh)
     platform = Platform(width, height, GAME_TITLE,graphics=not software)
-    # Text and UI snapshot their cache budgets; determine software fallback first.
-    detail_tiers.configure(software=software or platform.context is None, override=detail)
+    software_backend = software or platform.context is None
+    renderer_name = (str(platform.context.info.get("GL_RENDERER", "")).lower()
+                     if platform.context is not None else "")
+    software_tier = software_backend or any(
+        name in renderer_name for name in ("llvmpipe", "softpipe", "swrast"))
+    # Text, UI, and audio snapshot tier budgets; Mesa software GL needs the same
+    # low-memory policy as the CPU renderer even though its GL context is usable.
+    detail_tiers.configure(software=software_tier, override=detail)
     text = Text()
     ui = UI(text, world)
     # Show a real first frame while the forest and shaders initialize.
@@ -1999,8 +2005,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
     platform.present(loading)
     audio = Audio(tier=detail_tiers.current().name)
     render_width, render_height = detail_tiers.render_dimensions(
-        width, height, software=software or platform.context is None)
-    renderer = Renderer(world,render_width,render_height,software=software or platform.context is None,
+        width, height, software=software_tier)
+    renderer = Renderer(world,render_width,render_height,software=software_backend,
                         context=platform.context, output_size=(width, height))
     ui.fish_card_renderer = getattr(renderer, "fish_card", None)
     last = platform.ticks()
@@ -2036,7 +2042,7 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                 if scene is not None and scene.shape[:2] != (height, width):
                     scene = resize_rgb(scene, width, height)
                 renderer, ui = _enter_lake(platform, session, renderer, ui, text, loading,
-                                           software or platform.context is None, scene)
+                                           software_backend, software_tier, scene)
                 # The startup variable must not retain the first lake's grids.
                 world = session.world
                 last = platform.ticks()
@@ -2113,7 +2119,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
         platform.close()
 
 
-def _enter_lake(platform, session, renderer, ui, text, loading, software, last_frame):
+def _enter_lake(platform, session, renderer, ui, text, loading, software_backend,
+                software_tier, last_frame):
     """Swap to the session's new lake and return its renderer and UI.
 
     Travel to or from the Lagoon tips into starlight from the last lake image
@@ -2136,9 +2143,9 @@ def _enter_lake(platform, session, renderer, ui, text, loading, software, last_f
     renderer.close()
     ui = UI(text,session.world)
     render_width, render_height = detail_tiers.render_dimensions(
-        width, height, software=software or platform.context is None)
+        width, height, software=software_tier)
     renderer = Renderer(session.world,render_width,render_height,
-                        software=software or platform.context is None, context=platform.context,
+                        software=software_backend, context=platform.context,
                         output_size=(width, height))
     ui.fish_card_renderer = getattr(renderer, "fish_card", None)
     if starlit and not session.quit:

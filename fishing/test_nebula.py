@@ -480,7 +480,8 @@ class StarlightTravel(unittest.TestCase):
                     self.assertIsNone(session.change_lake(destination))
                     platform = Platform()
                     loading = np.empty((180, 320, 3), np.uint8)
-                    renderer, ui = _enter_lake(platform, session, renderer, ui, text, loading, True, shown)
+                    renderer, ui = _enter_lake(
+                        platform, session, renderer, ui, text, loading, True, True, shown)
                     try:
                         self.assertIs(renderer.world, session.world)
                         self.assertEqual(renderer.world.id, destination)

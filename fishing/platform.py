@@ -67,6 +67,10 @@ FONT_CANDIDATES = (
     "/usr/share/fonts/TTF/DejaVuSans.ttf",
 )
 
+class SDL_version(ctypes.Structure):
+    _fields_ = [("major", c_uint8), ("minor", c_uint8), ("patch", c_uint8)]
+
+
 
 class SDL_Rect(ctypes.Structure):
     _fields_ = [("x", c_int), ("y", c_int), ("w", c_int), ("h", c_int)]
@@ -401,6 +405,8 @@ class Platform:
         """
         self.sdl = _load("libSDL2-2.0.so.0")
         s = self.sdl
+        s.SDL_GetVersion.argtypes = [ctypes.POINTER(SDL_version)]
+        s.SDL_GetVersion.restype = None
         s.SDL_Init.argtypes = [c_uint32]
         s.SDL_Init.restype = c_int
         s.SDL_GetError.restype = c_char_p
@@ -454,6 +460,11 @@ class Platform:
         if s.SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK
                       | SDL_INIT_GAMECONTROLLER) < 0:
             raise RuntimeError(self._err())
+        # SDL_GetVersion is safe after initialization and lets old SDL builds
+        # avoid reading preciseY, which was not part of their wheel event.
+        version = SDL_version()
+        s.SDL_GetVersion(ctypes.byref(version))
+        self._sdl_version = (version.major, version.minor, version.patch)
         self.gamepad = Gamepad(s)
         self._last_device = "keyboard"
         self.window = None
@@ -589,6 +600,15 @@ class Platform:
         self._input.mouse_wheel_remainder -= steps
         return steps
 
+    def _wheel_delta(self, event: SDL_MouseWheelEvent) -> float:
+        """Use preciseY only when the linked SDL version guarantees that field."""
+        wheel_y = float(event.y)
+        if self._sdl_version >= (2, 0, 18):
+            precise_y = float(event.preciseY)
+            if math.isfinite(precise_y) and precise_y != 0.0:
+                return precise_y
+        return wheel_y
+
     def poll(self, dt: float = 0.0) -> Input:
         # Reuse one Input so key-repeat timers survive across frames.
         inp = self._input
@@ -619,9 +639,7 @@ class Platform:
                     inp.mouse_click = (event.button.x, event.button.y)
                     self._last_device = "mouse"
             elif event.type == SDL_MOUSEWHEEL and self._focused:
-                wheel_y = float(event.wheel.preciseY)
-                if not math.isfinite(wheel_y) or wheel_y == 0.0:
-                    wheel_y = float(event.wheel.y)
+                wheel_y = self._wheel_delta(event.wheel)
                 inp.mouse_wheel += self._wheel_steps(wheel_y, event.wheel.direction)
                 self._last_device = "mouse"
             elif event.type == SDL_KEYDOWN and self._focused and not event.key.repeat:
