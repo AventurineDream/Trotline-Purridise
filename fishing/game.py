@@ -2088,6 +2088,9 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                 if save_acc >= 45.0:
                     session.save()
                     save_acc = 0.0
+            # Unfocused windows idle at 30 Hz; otherwise the loop targets 60 Hz.
+            # Accepted swap intervals may still return immediately on some drivers,
+            # so keep a 240 Hz safety floor when focused.
             period = 1 / 30 if not session.focused else 1 / 60
             if getattr(platform, "vsync", False) and session.focused:
                 period = 1 / 240
@@ -2169,6 +2172,8 @@ def _play_starlight(platform, session, source, destination, start, end, reduced)
             return
         focused = bool(getattr(keys, "focused", getattr(session, "focused", True)))
         session.focused = focused
+        # Transitions retain the old 8 ms cadence without vsync; keep the same
+        # unfocused and nonblocking-swap safety floors as the main loop.
         if not focused:
             period = 1 / 30
         elif getattr(platform, "vsync", False):

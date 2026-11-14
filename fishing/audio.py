@@ -65,7 +65,6 @@ DUCK_GAIN = 10 ** (-7.0 / 20)  # ambience under a bite
 PRIORITY_CUES = ("bite",)
 EVENT_BEDS = ("insects", "birds", "frogs")
 WORKERS = 3                   # beds synthesised at once
-# Shared memory avoids disk I/O for worker samples when it is available.
 PACKAGE_ROOT = str(Path(__file__).resolve().parents[1])
 # Child interpreter entry: put the package on sys.path, then run one synthesis job.
 WORKER_BOOT = ("import sys; sys.path.insert(0, sys.argv.pop(1)); "
@@ -73,7 +72,7 @@ WORKER_BOOT = ("import sys; sys.path.insert(0, sys.argv.pop(1)); "
 
 
 def _scratch_directory() -> str:
-    """Choose shared memory when writable, otherwise the platform's system temp folder."""
+    """Choose writable /dev/shm to avoid worker-sample disk I/O; otherwise use system temp."""
     return "/dev/shm" if os.access("/dev/shm", os.W_OK) else tempfile.gettempdir()
 
 # Bed levels in dBFS RMS at full weight, per lake. Tuned against the loudness table in
@@ -626,9 +625,14 @@ class Audio:
             self._volumes[name] = max(0.0, min(1.0, value))
 
     def _tone(self, kind: str, variant: int = 0) -> np.ndarray:
-        """PCM for one cue at the mixer rate: the shell chimes exactly as
-        `botchimes.synthesize` makes them (mono int16), every other kind as a finished
-        (n, 2) float32 cue from `audiosynth.build_cue`."""
+        """Return one cue as PCM at the mixer's sample rate.
+
+        Shell chimes use `botchimes.synthesize` (mono int16). With the normal
+        store, synth-bank kinds are (n, 2) float32 cues from `build_cue`; other
+        V1-38 kinds use authored `soundscape.tone` waveforms resampled by
+        `_soundscape_cue`. A bare diagnostic Audio object without a store falls
+        back to `build_cue`.
+        """
         rate = getattr(self, "rate", CHIME_RATE)
         if kind in CHIMES:
             return synthesize_chime(kind, rate) if rate != CHIME_RATE else synthesize_chime(kind)
