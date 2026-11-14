@@ -74,7 +74,7 @@ def rss_bytes():
     """Return this process image's peak resident set size.
 
     Returns:
-        Peak resident bytes, read from Linux VmHWM or the platform resource API.
+        Peak resident bytes from Linux VmHWM, Unix `resource`, or Windows PSAPI.
     """
     try:
         for line in Path("/proc/self/status").read_text().splitlines():

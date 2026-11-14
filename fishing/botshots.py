@@ -7,8 +7,7 @@ from pathlib import Path
 try:
     import resource
 except ImportError:
-    # Unix-only; on Windows the /proc fallback below is also unavailable,
-    # so _rss_bytes() reports 0 instead of crashing.
+    # Windows lacks resource; after /proc is unavailable, verify.rss_bytes() uses psapi.
     resource = None
 import time
 import tracemalloc
