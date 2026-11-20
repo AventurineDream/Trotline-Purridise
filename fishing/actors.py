@@ -181,8 +181,7 @@ class ActorCache:
 def memory_report(cache: ActorCache | None, gpu_bytes: int = 0, paint_bytes: int = 0) -> dict:
     """Bytes held for cat actors and portraits, against the 150 MiB budget (06 §7)."""
     from . import catart
-    portraits = (catart.portrait.cache_info().currsize * catart.PORTRAIT_SIZE ** 2 * 3
-                 + catart.portrait_at.cache_info().currsize * catart.PORTRAIT_SIZE ** 2 * 3)
+    portraits = catart.portrait_bytes_bound()
     report = {
         "resident_actors": len(cache.actors) if cache is not None else 0,
         "max_actors": MAX_ACTORS,

@@ -4,21 +4,29 @@ A small deferred rasterizer writes each pixel's coat position, normal, part
 and vertex paint, then shades the whole frame at once. Fur takes its coat
 pattern per pixel (the same `catmesh.coat_rgb` the GL shader mirrors), so
 stripes and points stay crisp at portrait size.
+
+A dialogue portrait is rendered once into layers (paper, cat, coverage, eyes);
+`portrait_rig` scales them to the panel with open, half and closed lids so
+portraitmotion can animate the card per frame without rasterizing again.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
 import math
+from typing import NamedTuple
 
 import numpy as np
 
 from . import catmesh
 from .catmesh import FUR_PARTS, LOD0, LOD1
+from .portraitmotion import LIDS, PortraitRig
 from .raster import cover
 
 PAPER = np.asarray((0.91, 0.875, 0.79), np.float32)
 PORTRAIT_SIZE = 256
+FRAME_RGB = (151, 133, 103)  # the card's drawn border line
+INK = np.asarray((0.15, 0.13, 0.11), np.float32)
 
 
 def _view(yaw, pitch):
@@ -32,8 +40,12 @@ def _view(yaw, pitch):
 
 
 def rasterize(mesh: catmesh.CatMesh, weights: dict, width: int, height: int, *, yaw=0.6, pitch=0.18,
-              frame=None, light=(0.45, 0.75, 0.55), rim=0.55, background=None, ambient=0.55):
-    """(RGB float image, alpha mask) of one posed actor from a fixed view."""
+              frame=None, light=(0.45, 0.75, 0.55), rim=0.55, background=None, ambient=0.55, parts=False):
+    """(RGB float image, alpha mask) of one posed actor from a fixed view.
+
+    With parts=True a third value is returned: the (height, width) int16 mesh part id
+    of each pixel, -1 where nothing covers it (the portrait finds its eyes this way).
+    """
     pos, nrm = mesh.blend(weights)
     rgb, glow = catmesh.paint(mesh)
     right, up, forward = _view(yaw, pitch)
@@ -55,7 +67,7 @@ def rasterize(mesh: catmesh.CatMesh, weights: dict, width: int, height: int, *, 
     out = np.empty((height, width, 3), np.float32)
     out[:] = PAPER if background is None else background
     if not covered.any():
-        return out, covered
+        return (out, covered, np.full((height, width), -1, np.int16)) if parts else (out, covered)
     # Row-major pixel order matches out[covered].
     order = np.argsort(pixels)
     tri = tris[owner[order]]
@@ -97,7 +109,11 @@ def rasterize(mesh: catmesh.CatMesh, weights: dict, width: int, height: int, *, 
     # A hand-ink outline where the silhouette meets the paper.
     edge_px = covered & ~(np.roll(covered, 1, 0) & np.roll(covered, -1, 0) & np.roll(covered, 1, 1)
                           & np.roll(covered, -1, 1))
-    out[edge_px] = out[edge_px] * 0.45 + np.asarray((0.15, 0.13, 0.11), np.float32) * 0.55
+    out[edge_px] = out[edge_px] * 0.45 + INK * 0.55
+    if parts:
+        part_img = np.full(height * width, -1, np.int16)
+        part_img[np.sort(pixels)] = part
+        return out, covered, part_img.reshape(height, width)
     return out, covered
 
 
@@ -108,9 +124,38 @@ def _pose_weights(mesh, wave=0.0):
     return {base: 1.0 - wave, "wave": wave}
 
 
+class PortraitLayers(NamedTuple):
+    """One cat's 256×256 portrait render, kept so the card can be animated without re-rasterizing.
+
+    card: (256, 256, 3) uint8 the still card (cat on paper, with its border).
+    cat: (256, 256, 3) uint8 the cat on paper, without the border.
+    cover: (256, 256) bool pixels the cat covers.
+    eyes: (256, 256) bool visible eye and pupil pixels, where lids are painted.
+    """
+
+    card: np.ndarray
+    cat: np.ndarray
+    cover: np.ndarray
+    eyes: np.ndarray
+
+
+def _border(card: np.ndarray) -> None:
+    card[2:4, 2:-2] = card[-4:-2, 2:-2] = FRAME_RGB
+    card[2:-2, 2:4] = card[2:-2, -4:-2] = FRAME_RGB
+
+
+@lru_cache(maxsize=1)
+def _paper() -> np.ndarray:
+    """The portrait's paper ground: warm paper with a cool glow behind the head."""
+    gy, gx = np.mgrid[0:PORTRAIT_SIZE, 0:PORTRAIT_SIZE] / PORTRAIT_SIZE
+    paper = PAPER + (np.asarray((0.80, 0.86, 0.84), np.float32) - PAPER) * (
+        np.exp(-((gx - 0.5) ** 2 + (gy - 0.42) ** 2) / 0.12)[..., None] * 0.35)
+    return paper.astype(np.float32)
+
+
 @lru_cache(maxsize=24)
-def portrait(npc_id: str) -> np.ndarray:
-    """The 256×256 dialogue portrait: a three-quarter view, warm rim light, paper ground."""
+def portrait_layers(npc_id: str) -> PortraitLayers:
+    """The cat's dialogue portrait layers: a three-quarter view, warm rim light, paper ground."""
     mesh = catmesh.cat_mesh(npc_id, LOD0)
     pose = mesh.cats[0][0]["pose"]
     # Every head in the actor, so twins share the frame.
@@ -121,30 +166,71 @@ def portrait(npc_id: str) -> np.ndarray:
     tall = float(hy.max() - hy.min())
     centre = (float((hx.max() + hx.min()) / 2), float(hy.max() - tall * 0.95))
     span = max(tall * 2.5, float(hx.max() - hx.min()) * 1.35)
-    gy, gx = np.mgrid[0:PORTRAIT_SIZE, 0:PORTRAIT_SIZE] / PORTRAIT_SIZE
-    paper = PAPER + (np.asarray((0.80, 0.86, 0.84), np.float32) - PAPER) * (
-        np.exp(-((gx - 0.5) ** 2 + (gy - 0.42) ** 2) / 0.12)[..., None] * 0.35)
-    image, _mask = rasterize(mesh, _pose_weights(mesh), PORTRAIT_SIZE, PORTRAIT_SIZE, yaw=0.55, pitch=0.12,
-                             frame=(centre, span), background=paper.astype(np.float32))
-    card = np.clip(image * 255 + 0.5, 0, 255).astype(np.uint8)
-    card[2:4, 2:-2] = card[-4:-2, 2:-2] = (151, 133, 103)
-    card[2:-2, 2:4] = card[2:-2, -4:-2] = (151, 133, 103)
-    card.setflags(write=False)
-    return card
+    image, mask, parts = rasterize(mesh, _pose_weights(mesh), PORTRAIT_SIZE, PORTRAIT_SIZE, yaw=0.55,
+                                   pitch=0.12, frame=(centre, span), background=_paper(), parts=True)
+    cat = np.clip(image * 255 + 0.5, 0, 255).astype(np.uint8)
+    card = cat.copy()
+    _border(card)
+    layers = PortraitLayers(card, cat, mask, np.isin(parts, (catmesh.EYE, catmesh.PUPIL)))
+    for array in layers:
+        array.setflags(write=False)
+    return layers
 
 
-@lru_cache(maxsize=8)
-def portrait_at(npc_id: str, side: int) -> np.ndarray | None:
-    """The portrait at side×side for the dialogue panel, or None for a speaker without one."""
+def portrait(npc_id: str) -> np.ndarray:
+    """The 256×256 still dialogue card (uint8, read-only, shared with the layer cache)."""
+    return portrait_layers(npc_id).card
+
+
+def lidded(cat: np.ndarray, eyes: np.ndarray, closed: float) -> np.ndarray:
+    """The cat with its lids lowered over a `closed` fraction (0–1) of each eye.
+
+    Works column by column on each vertical run of eye pixels: the top part takes the
+    fur colour just above the eye, slightly shaded, and an ink line marks the lid's edge.
+    Fully closed, that line follows the eye's lower rim: the soft ◡ of a content cat.
+    """
+    if closed <= 0 or not eyes.any():
+        return cat
+    out = cat.astype(np.float32)
+    for x in np.flatnonzero(eyes.any(axis=0)):
+        edges = np.diff(np.concatenate(([0], eyes[:, x].astype(np.int8), [0])))
+        for top, end in zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)):
+            # At least a pixel, so even a far, foreshortened eye shows its lid half-closed.
+            k = max(1, int(round(closed * (end - top))))
+            # The lid is the fur just above the eye, a touch darker so it reads as a fold.
+            out[top:top + k, x] = out[max(0, top - 1), x] * 0.92
+            edge = top + k - 1
+            # A two-pixel ink lash line, mostly ink so it holds against dark coats too.
+            out[max(top, edge - 1):edge + 1, x] = out[max(top, edge - 1):edge + 1, x] * 0.25 + INK * 255 * 0.75
+    return np.clip(out + 0.5, 0, 255).astype(np.uint8)
+
+
+@lru_cache(maxsize=2)
+def portrait_rig(npc_id: str, side: int) -> PortraitRig | None:
+    """The animated portrait at side×side for the dialogue panel, or None for a speaker without one.
+
+    Only one cat speaks at a time; two rigs cover a scene handed back and forth.
+    Raises ValueError for a side outside 1..PORTRAIT_SIZE: larger would only upscale the
+    render, and portrait_bytes_bound sizes rigs at PORTRAIT_SIZE.
+    """
+    if not 1 <= side <= PORTRAIT_SIZE:
+        raise ValueError(f"portrait side {side} outside 1..{PORTRAIT_SIZE}")
     from .actors import roster
     if npc_id not in roster():
         return None
-    card = portrait(npc_id)
-    if card.shape[0] != side:
-        from .imageops import resize_rgb
-        card = np.ascontiguousarray(resize_rgb(card, side, side))
-        card.setflags(write=False)
-    return card
+    from .imageops import resize_rgb
+    layers = portrait_layers(npc_id)
+    paper = np.clip(_paper() * 255 + 0.5, 0, 255).astype(np.uint8)
+    border = np.zeros((PORTRAIT_SIZE, PORTRAIT_SIZE, 1), np.uint8)
+    border[2:4, 2:-2] = border[-4:-2, 2:-2] = border[2:-2, 2:4] = border[2:-2, -4:-2] = 255
+
+    def scaled(image):
+        return resize_rgb(image, side, side)
+
+    cats = {lid: scaled(lidded(layers.cat, layers.eyes, lid)) for lid in LIDS}
+    cover_ = scaled(layers.cover.astype(np.uint8)[..., None] * 255)[..., 0] / 255.0
+    weight = scaled(border)[..., 0] / 255.0
+    return PortraitRig(scaled(paper), cats, cover_, FRAME_RGB, weight)
 
 
 def impostor(npc_id: str, view_yaw: float = 0.6, height_px: int = 96):
@@ -172,6 +258,15 @@ def impostor(npc_id: str, view_yaw: float = 0.6, height_px: int = 96):
     return rgba, span, height_m, float(pos[:, 1].min())
 
 
+def portrait_bytes_bound() -> int:
+    """Bytes the portrait caches hold now: the shared paper ground, layers per cached cat,
+    and each rig at the largest side portrait_rig allows."""
+    layers = PORTRAIT_SIZE ** 2 * (3 + 3 + 1 + 1)  # card, cat, cover, eyes
+    paper = _paper.cache_info().currsize * PORTRAIT_SIZE ** 2 * 3 * 4  # float32 RGB
+    return (paper + portrait_layers.cache_info().currsize * layers
+            + portrait_rig.cache_info().currsize * PortraitRig.bytes_for(PORTRAIT_SIZE))
+
+
 def clear_caches() -> None:
-    portrait.cache_clear()
-    portrait_at.cache_clear()
+    portrait_layers.cache_clear()
+    portrait_rig.cache_clear()

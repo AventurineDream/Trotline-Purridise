@@ -1212,10 +1212,31 @@ software frame, mostly for its boat's faces.
 
 **Portraits.** `catart.portrait(npc_id)` renders a 256×256 three-quarter view
 with a warm rim light, ink outline, paper ground and frame. It is rendered on
-first need and kept in a 24-entry LRU, which is more than a lake's cats, hosts
-and travelers. Twins share the frame. The dialogue panel shows the portrait at
+first need and kept in a 24-entry LRU (`catart.portrait_layers`, which also
+keeps the cat's coverage and eye pixels), more than a lake's cats, hosts and
+travelers. Twins share the frame. The dialogue panel shows the portrait at
 the left, 96–176 px, whenever the frame is at least 640 px wide, and wraps the
 text beside it. Chart pins wear each cat's base coat colour, ringed in ink.
+
+**Animated portraits.** In the Celeste manner, the speaker is alive in its frame.
+`catart.portrait_rig(npc_id, side)` scales the layers to the panel with open,
+half and closed lids (closed lids are a soft ink ◡), and `portraitmotion` warps
+only the cat, about the bottom of the card so its feet stay planted, over the
+still paper and border. Nothing is re-rasterized: a frame is a small bilinear
+warp, posed at 20 steps a second and memoized between steps. What moves:
+
+- **Idle:** a slow breath (a touch of stretch), a slow sway, and a blink every
+  few seconds, sometimes doubled, at a rhythm seeded by the cat.
+- **Talking:** each new line opens with a little stretch, then small
+  squash-and-stretch hops for as long as the line takes to say (30 characters a
+  second, 0.5–3.2 s), settling back to breathing.
+- **Mood,** read from the line's punctuation: `?` cocks the head, `!` opens with
+  a happy squint and livelier hops, and an ellipsis lowers the lids halfway and
+  slows the hops.
+
+The session advances two clocks while the box is open, `UIState.dialogue_s` and
+`dialogue_line_s` (reset on each new line), so frames are reproducible. Reduced
+motion holds the still card; an ellipsis line keeps its half-lowered lids.
 
 **The Skipper.** `skipper.py` draws two dusk-brown tabby paws with cream mitts
 in the cockpit frame:

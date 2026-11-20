@@ -468,6 +468,10 @@ class UIState:
     conversation: object = None
     dialogue_content: object = None
     dialogue_from: str = "play"
+    # Seconds the conversation has been open, and the current line on screen; the session
+    # advances both and the portrait animates from them (portraitmotion).
+    dialogue_s: float = 0.0
+    dialogue_line_s: float = 0.0
     # V1-34 Settle In: whether the Skipper is settling, and the HUD's prompt for it.
     settling: bool = False
     settle_prompt: str = ""
@@ -901,14 +905,23 @@ class UI:
         cw, ch = self.cell(size)
         margin = 16
         width = min(w - 24, 1000)
-        # The speaker's portrait sits at the left when the frame has room (V1-29).
-        from .catart import portrait_at
+        # The speaker's portrait sits at the left when the frame has room (V1-29), and breathes,
+        # blinks and bobs as it speaks (portraitmotion).
+        from .catart import portrait_rig
+        from .botidentity import format_text
+        from .portraitmotion import portrait_motion
+        text = format_text(node['text'], state)
         side = min(176, max(96, h // 4))
-        portrait = portrait_at(chat.npc_id, side) if w >= 640 else None
+        rig = portrait_rig(chat.npc_id, side) if w >= 640 else None
+        portrait = None
+        if rig is not None:
+            v2 = getattr(state, "v2", {})
+            reduced = bool(isinstance(v2, dict) and v2.get("settings", {}).get("reduced_motion", False))
+            portrait = rig.frame(portrait_motion(chat.npc_id, text, ui.dialogue_s, ui.dialogue_line_s,
+                                                 reduced_motion=reduced))
         inset = side + margin if portrait is not None else 0
         cols = max(8, (width - margin*2 - inset) // cw)
-        from .botidentity import format_text
-        lines = textwrap.wrap(format_text(node['text'], state), cols)
+        lines = textwrap.wrap(text, cols)
         choices = node.get('choices', [])
         rows = lines + ['']
         colors = [INK] * len(lines) + [DIM]
