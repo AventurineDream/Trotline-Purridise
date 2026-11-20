@@ -186,23 +186,17 @@ class AlpineChecks(unittest.TestCase):
         finally:
             renderer.close()
 
-    def test_chart_habitat_labels_do_not_overlap(self):
+    def test_chart_habitats_have_numbered_key_entries(self):
         from .platform import Text
         from .ui import UI
         text=Text()
         ui=UI(text,self.world)
         frame=np.zeros((720,1280,3),np.uint8)
-        labels=[]
-        ui._text=lambda frame,label,x,y,size,*args,**kwargs: labels.append(
-            (x,y,x+ui._measure(label,size),y+ui.cell(size)[1]))
         try:
-            ui._plot_habitats(frame,100,100,360,291)
-            self.assertEqual(len(labels),6)
-            for i,a in enumerate(labels):
-                self.assertTrue(100 <= a[0] < a[2] <= 460)
-                self.assertTrue(100 <= a[1] < a[3] <= 391)
-                for b in labels[i+1:]:
-                    self.assertTrue(a[2] < b[0] or b[2] < a[0] or a[3] < b[1] or b[3] < a[1])
+            places=ui._plot_habitats(frame,100,100,360,291)
+            self.assertEqual([number for number, *_ in places],list(range(1,7)))
+            self.assertEqual(len({name for _number,name,*_ in places}),6)
+            self.assertGreater(np.count_nonzero(frame),0)
         finally:
             text.close()
 

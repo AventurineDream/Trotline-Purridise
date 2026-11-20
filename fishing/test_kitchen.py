@@ -289,7 +289,7 @@ class KitchenChecks(unittest.TestCase):
                 state.drive(1, 0, 0, self.world)
                 self.assertNotEqual(move.call_args.args[:2], (state.x, state.z))
         state.v2['buff'] = None
-        self.assertEqual(comfort.gust_factor(state, 'snow_mist'), 1)
+        self.assertEqual(comfort.gust_factor(state, 'snow_mist'), 0.5)
 
     def test_pie_queues_extra_dream_despite_unread_and_rested_then_consumes_once(self):
         state = self.state
@@ -423,7 +423,7 @@ class KitchenChecks(unittest.TestCase):
         state = self.state
         self.buff('pecan_chowder')
         self.buff('pan_fritters')
-        self.assertEqual(comfort.fuel_factor(state), 1)
+        self.assertEqual(comfort.fuel_factor(state), 0.5)
         self.assertTrue(comfort.has_buff(state, 'quick_haul'))
         state.v2['pantry']['future_item'] = {'keep': True}
         state.v2['buff']['future'] = 42
@@ -457,7 +457,7 @@ class KitchenChecks(unittest.TestCase):
         other.advance_bulk(600)
         self.assertEqual(state.rng.s, other.rng.s)
         self.assertEqual([x.to_json() for x in state.lines], [x.to_json() for x in other.lines])
-        self.assertEqual(comfort.fuel_factor(state), 1)
+        self.assertEqual(comfort.fuel_factor(state), 0.5)
         self.assertEqual(comfort.begin_haul(state, line), 1)
 
     def test_kitchen_panels_fit_both_fonts_all_sizes_and_do_not_mutate_save(self):

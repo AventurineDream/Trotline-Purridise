@@ -1135,7 +1135,8 @@ class State:
         weather = weather_at(self)
         if not self.anchored and weather == "snow_mist" and "wind_steady" not in self.boat.traits:
             heading, wind = wind_at(self.game_minutes, self)
-            push = wind * .015 * math.sin(self.anim * .7) * dt * comfort.gust_factor(self, weather)
+            push = wind * .015 * math.sin(self.anim * .7) * dt * comfort.gust_factor(
+                self, weather, using_sail=self.sail_raised)
             self._move(self.x + math.sin(heading) * push, self.z + math.cos(heading) * push, world)
         self.traveled += math.hypot(self.x-old_x,self.z-old_z)
         self._maybe_snag(world)

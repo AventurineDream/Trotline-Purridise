@@ -168,8 +168,8 @@ def expansion_checks(briar,software=False):
             raise AssertionError("Cedar save did not reload on the correct lake")
         if session.change_lake("briar") is not None:
             raise AssertionError("return travel failed")
-        if [r.kind for r in shop_rows(state,4)]!=["boat"]*len(BOATS)+["trolling_motor","fuel"]:
-            raise AssertionError("Boats tab includes unrelated shop rows")
+        if [r.kind for r in shop_rows(state,4)]!=["fuel"]+["boat"]*len(BOATS)+["trolling_motor"]:
+            raise AssertionError("Boats tab does not surface fuel before the boat list")
 
     # Motor use costs fuel; sailing under the same simulated clock does not.
     state=State.new(briar,seed=62)

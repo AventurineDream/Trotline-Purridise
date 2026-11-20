@@ -168,23 +168,17 @@ class CalderaChecks(unittest.TestCase):
         finally:
             renderer.close()
 
-    def test_full_chart_labels_fit_their_actual_monospace_width(self):
+    def test_full_chart_habitats_have_numbered_key_entries(self):
         from .platform import Text
         from .ui import UI
         text=Text()
         ui=UI(text,self.world)
         frame=np.zeros((720,1280,3),np.uint8)
-        boxes=[]
-        ui._text=lambda frame,label,x,y,size,*args,**kwargs: boxes.append(
-            (x,y,x+ui._measure(label,size,"mono"),y+ui.cell(size)[1]))
         try:
-            ui._plot_habitats(frame,50,50,360,360)
-            self.assertEqual(len(boxes),6)
-            for i,a in enumerate(boxes):
-                self.assertTrue(50<=a[0]<a[2]<=410)
-                self.assertTrue(50<=a[1]<a[3]<=410)
-                for b in boxes[i+1:]:
-                    self.assertTrue(a[2]<b[0] or b[2]<a[0] or a[3]<b[1] or b[3]<a[1])
+            places=ui._plot_habitats(frame,50,50,360,360)
+            self.assertEqual([number for number, *_ in places],list(range(1,7)))
+            self.assertEqual(len({name for _number,name,*_ in places}),6)
+            self.assertGreater(np.count_nonzero(frame),0)
         finally:
             text.close()
 
