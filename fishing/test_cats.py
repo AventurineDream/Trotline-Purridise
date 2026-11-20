@@ -9,12 +9,14 @@ import unittest
 import numpy as np
 
 from . import actors, catart, catmesh, skipper
+from .botidentity import format_text
 from .catmesh import FUR_PARTS, LOD0, LOD1, PATTERNS, POSES
 from .content import _BOAT_PAINT_IDS, ContentError, load_content, load_content_v2, validate_content_v2
 from .data import CONTENT_V2_RAW, PAINT
 from .dialogue import HAIL_RANGE_M, HAIL_SPEED_MPS, nearby_npc
 from .narrative import DAY_NPCS
 from .npcs import NPC, active_npcs
+from .portraitmotion import REST, portrait_motion
 from .sim import State
 from .world import World
 
@@ -420,8 +422,8 @@ class Portraits(unittest.TestCase):
         self.assertFalse(first.flags.writeable)
         self.assertIs(catart.portrait("grandmother_whiskers"), first)
         self.assertGreater(int(np.abs(first.astype(int) - catart.portrait("doc_barnaby").astype(int)).sum()), 10**6)
-        self.assertIsNone(catart.portrait_at("not_a_cat", 128))
-        self.assertEqual(catart.portrait_at("doc_barnaby", 128).shape, (128, 128, 3))
+        self.assertIsNone(catart.portrait_rig("not_a_cat", 128))
+        self.assertEqual(catart.portrait_rig("doc_barnaby", 128).frame(REST).shape, (128, 128, 3))
 
     def test_impostors_crop_to_the_cat_with_feet_on_the_bottom_row(self):
         sprite, width_m, height_m, base_m = catart.impostor("elder_moss")
@@ -453,7 +455,9 @@ class Portraits(unittest.TestCase):
                              conversation=SimpleNamespace(npc_id="grandmother_whiskers", node_id=node, selected=0))
             ui.draw(frame, state, screen)
             side = min(176, max(96, 720 // 4))
-            portrait = catart.portrait_at("grandmother_whiskers", side)
+            line = format_text(ui.narrative_content.dialogue[node]["text"], state)
+            pose = portrait_motion("grandmother_whiskers", line, screen.dialogue_s, screen.dialogue_line_s)
+            portrait = catart.portrait_rig("grandmother_whiskers", side).frame(pose)
             found = [(y, x) for y in range(720 - side) for x in range(0, 640, 4)
                      if np.array_equal(frame[y, x:x + 8], portrait[0, :8])
                      and np.array_equal(frame[y + side - 1, x:x + 8], portrait[-1, :8])]

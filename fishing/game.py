@@ -438,6 +438,7 @@ class Session:
         self.ui.conversation = conversation
         self.ui.dialogue_from = self.ui.mode
         self.ui.mode = "dialogue"
+        self.ui.dialogue_s = self.ui.dialogue_line_s = 0.0  # the portrait starts from rest
 
     def _remember_book_page(self):
         """Opening a page records its rumor; drawing the book never saves it."""
@@ -906,6 +907,9 @@ class Session:
 
     def _dialogue_keys(self, keys, dt):
         chat = self.conversation
+        # The portrait's clocks (portraitmotion) run while the box is open.
+        self.ui.dialogue_s += dt
+        self.ui.dialogue_line_s += dt
         if self._skip_stage(keys):
             return
         if "esc" in keys.pressed and not (chat is not None and chat.in_scene(self._npc_content)):
@@ -932,7 +936,10 @@ class Session:
                 select = True
                 break
         if select:
+            line = (chat.npc_id, chat.node_id)
             more = chat.advance(self.state, self._npc_content)
+            if (chat.npc_id, chat.node_id) != line:
+                self.ui.dialogue_line_s = 0.0  # a new line: the speaker talks it with a fresh bounce
             if chat.finished_scene:
                 chat.finished_scene = False
                 self.save()  # a scene's effects and its claim are written together (06 §3.3)
