@@ -237,7 +237,7 @@ class NebulaSky(unittest.TestCase):
         self.assertEqual(state.to_json(), before)
         self.assertEqual(state.rng.s, rng)
 
-    def test_hud_names_the_band_and_the_chart_names_each_habitat_once(self):
+    def test_hud_names_the_band_and_chart_keys_each_habitat_once(self):
         from .platform import Text
         from .ui import UI, UIState
         text = Text()
@@ -250,16 +250,12 @@ class NebulaSky(unittest.TestCase):
         try:
             ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play", has_save=True))
             self.assertTrue(any(label.startswith("RISING  /  ") for label in drawn))
-            boxes = []
-            ui._text = lambda frame, label, x, y, size, *args, **kwargs: boxes.append(
-                (label, x, y, x+ui._measure(label, size, "mono"), y+ui.cell(size)[1]))
-            ui._plot_habitats(np.zeros((720, 1280, 3), np.uint8), 50, 50, 360, 360)
-            self.assertEqual(len(boxes), 8)
-            self.assertEqual(len({box[0] for box in boxes}), 8)
-            for i, a in enumerate(boxes):
-                self.assertTrue(50 <= a[1] < a[3] <= 410 and 50 <= a[2] < a[4] <= 410)
-                for b in boxes[i+1:]:
-                    self.assertTrue(a[3] < b[1] or b[3] < a[1] or a[4] < b[2] or b[4] < a[2])
+            ui._text = original
+            chart = np.zeros((720, 1280, 3), np.uint8)
+            places = ui._plot_habitats(chart, 50, 50, 360, 360)
+            self.assertEqual([number for number, *_ in places],list(range(1,9)))
+            self.assertEqual(len({name for _number,name,*_ in places}),8)
+            self.assertGreater(np.count_nonzero(chart),0)
         finally:
             text.close()
 

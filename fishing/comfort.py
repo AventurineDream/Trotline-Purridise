@@ -265,8 +265,14 @@ def consume_buff(state):
 
 
 def fuel_factor(state):
+    """Return the active-mode and dish multiplier for litres burned per game hour.
+
+    Cozy and Old Salt provide 2× and 1.5× fuel economy; dish effects multiply
+    that economy's corresponding burn factor. This query does not mutate state.
+    """
+    factor = 0.5 if mode(state.v2) == "cozy" else (2.0 / 3.0)
     dish = active_buff(state)
-    return dish.value if dish and dish.effect == "fuel_saver" else 1.0
+    return factor * dish.value if dish and dish.effect == "fuel_saver" else factor
 
 
 def scout_range_factor(state, weather):
@@ -274,9 +280,22 @@ def scout_range_factor(state, weather):
     return dish.value if dish and dish.effect == "steady_scout" and weather != "snow_mist" else 1.0
 
 
-def gust_factor(state, weather):
-    return 0.0 if weather == "snow_mist" and has_buff(state, "steady_scout") else 1.0
+def gust_factor(state, weather, *, using_sail=False):
+    """Scale snow-mist drift without reducing wind-driven sailing.
 
+    Args:
+        state: Current save state, used to read mode and picnic effects.
+        weather: Current weather identifier.
+        using_sail: Whether the sail is raised.
+
+    Returns:
+        A multiplier for the boat's snow-mist gust displacement.
+    """
+    if weather == "snow_mist" and has_buff(state, "steady_scout"):
+        return 0.0
+    if mode(state.v2) == "cozy" and not using_sail:
+        return 0.5
+    return 1.0
 
 def fog_radius(state):
     dish = active_buff(state)

@@ -107,6 +107,9 @@ retained particle histories and do not change fishing or quest outcomes.
 
 A moving boat leaves a wake, and fish rise on the open water. When a hook takes a fish, a ring spreads on that spot and a flagged cork stands up on the line. The chart and the corner list show which lines are soaking, which have fish, and which are getting tired. With the depth finder, idling tells you what you would bait there. The lake has a voice: lapping water, the motor or the rowboat's oar strokes, wind when you sail or it rains, birds at the edge of the day, frogs after dark, and a splash with the strike. M mutes it.
 
+The full chart uses numbered habitat icons and a side key. Residents, your boat,
+Bot's weather tip, and line states use keyed symbols instead of names over the water.
+
 Weather blends over an hour on the lake, including changes at midnight. Cloud
 cover, rain, mist, water chop, and lighting fade together; the sun and moon
 follow continuous orbits across midnight and fade at the horizon. The sky uses
@@ -245,7 +248,7 @@ The game loads only the bundled `fishing/assets/cedar.npz` and `cedar.json`, abo
 
 ## Boats and fuel
 
-The **Boats** tab at either landing sells boats and fuel. New powered boats include a full tank, and switching to a boat you already own is free. Each powered boat keeps its own fuel; switching cannot refill a tank. The rowboat has no fuel tank.
+At either landing, the Boats tab's **first row** refuels the active powered boat. New powered boats include a full tank, and switching to a boat you already own is free. Each powered boat keeps its own fuel; switching cannot refill a tank. The rowboat has no fuel tank.
 
 | Boat | Purchase | Tank | Character |
 | --- | ---: | ---: | --- |
@@ -258,15 +261,15 @@ All four models have their own complete hull collision footprint and draft. A wi
 
 **Q** raises or lowers the daysailer's sail. Raising it lifts the anchor. **A/D** steers, while the sail trims to the wind. A reach across the wind is fastest; the boat cannot sail straight into the wind, so tack or use the auxiliary. The HUD shows wind direction, wind speed, and sail status. **Space** anchors and lowers the sail. **Shift** idles the auxiliary; a raised sail keeps providing wind power.
 
-**Sailing burns no fuel.** Powered travel uses fuel according to the engine, boat, throttle, and lake clock. A lowered throttle uses less fuel, and idling or anchoring does not consume it. Fuel costs **$1.40 per litre**, sold in up-to-five-litre fills, limited by tank space and available cash. Empty tanks stop motor thrust, but the daysailer can keep sailing and the rowboat can keep rowing.
+**Sailing burns no fuel.** Powered travel uses fuel according to the engine, boat, throttle, and lake clock. Burn is **half the boat's table rate in Cozy** and **two-thirds in Old Salt**; an active fuel-saving dish further reduces it. A lowered throttle uses less fuel, and idling or anchoring does not consume it. Fuel costs **$1.40 per litre**, sold in up-to-five-litre fills, limited by tank space and available cash. Empty tanks stop motor thrust, but the daysailer can keep sailing and the rowboat can keep rowing.
 
 The rowboat runs on oars without fuel. You can fit an optional **$350 9.9 hp electric trolling motor** with an **18 kWh battery**. Charging costs **$0.35 per kWh**, up to **5 kWh per landing visit**. Leave and return to charge again; the oars still work when the battery is empty.
 
-If stranded, lower the sail and idle, then press **R** for a tow to the current
-landing. A tow takes one game hour. It is **free in Cozy**; in **Old Salt** it
-costs the smaller of your cash and **$25 + 2% of the active boat's price**.
-Any shortfall is waived, including at $0. A small emergency fuel reserve keeps
-an empty wallet from trapping the player. Deployed lines keep soaking in place.
+If you run out away from a landing, idle the boat (lower the sail if raised)
+and press **R** to tow back to the current landing. A tow takes one game hour.
+It is **free in Cozy**; in **Old Salt** it costs the smaller of your cash and
+**$25 + 2% of the active boat's price**. Any shortfall is waived, including at
+$0. Deployed lines keep soaking in place.
 
 ## On the water
 

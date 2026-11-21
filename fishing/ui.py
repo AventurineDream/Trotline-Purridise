@@ -128,7 +128,7 @@ _ZONE_LABELS = {
 _LAKE_LABELS = {"briar": "Little Briar Lake", "cedar": "Cedar Creek Lake"}
 _STATUS_LABELS = {
     "available": "Available",
-    "active": "Active",
+    "active": "Accepted",
     "ready": "Ready",
     "completed": "Completed",
 }
@@ -382,6 +382,30 @@ def quest_journal_details(state, content, quest_id: str) -> dict:
     }
 
 
+def _active_hud_quest(state, content):
+    """Choose the first accepted quest for this lake and its next useful status."""
+    for quest_id in journal_quest_ids(state, content):
+        quest = content.quests.get(quest_id)
+        progress = state.narrative.quests.get(quest_id)
+        if (quest is None or progress is None or progress.status not in ("active", "ready")
+                or quest.get("lake_id") != state.lake_id):
+            continue
+        details = quest_journal_details(state, content, quest_id)
+        summary = details["progress"]
+        objective = quest.get("objective")
+        if progress.status == "active" and "kind" in quest:
+            summary = details["objective"].removeprefix("Story — ")
+        elif (progress.status == "active" and isinstance(objective, dict)
+              and objective.get("type") == "line_scout"):
+            if summary == "No qualifying line set yet.":
+                summary = (f"Set the {objective['hook_count']}-hook line; "
+                           "send Bot (B) to scout.")
+            elif "Bot report pending" in summary:
+                summary = "Line set · send Bot (B) to report."
+        return details["title"], summary
+    return None
+
+
 @dataclass
 class Row:
     label: str
@@ -494,6 +518,10 @@ def comfort_controls(viewport):
 
 
 def shop_rows(state, tab: int) -> list[Row]:
+    """Build the selectable rows for one zero-based landing-shop tab.
+
+    Returns rows in display order without mutating the game state.
+    """
     if tab == 7:
         from .botidentity import rows
         return rows(state, state._world)
@@ -582,6 +610,15 @@ def shop_rows(state, tab: int) -> list[Row]:
                     True, "paint", f"{slot}:{pid}",
                 ))
     if tab==4:
+        if state.boat_id != "rowboat" and state.boat.tank > 0:
+            missing = state.boat.tank - state.fuel
+            amount = min(5.0, missing, max(0.0, state.money) / FUEL_PRICE)
+            rows.append(Row(
+                f"Fuel  {state.fuel:.1f}/{state.boat.tank:.0f} L",
+                f"{dollars(amount * FUEL_PRICE)} / {amount:.1f} L",
+                "Refuel here; if stranded, call a tow back to this landing.",
+                missing > 0.001, "fuel",
+            ))
         for model in fleet.shop_boats():
             owned = model.id in state.owned_boats
             locked = fleet.shop_error(state, state.lake_id, model.id)
@@ -624,12 +661,6 @@ def shop_rows(state, tab: int) -> list[Row]:
             else:
                 rows.append(Row("Oars", "ready", "W/S row forward or reverse; A/D steer. No fuel needed.",
                                 False, "oars"))
-        elif state.boat.tank>0:
-            missing = state.boat.tank-state.fuel
-            amount = min(5.0,missing,max(0.0,state.money)/FUEL_PRICE)
-            rows.append(Row(f"Fuel  {state.fuel:.1f}/{state.boat.tank:.0f} L",
-                            f"{dollars(amount*FUEL_PRICE)} / {amount:.1f} L",
-                            "Buy up to five litres. Tanks stay with each owned boat.",missing>0.001,"fuel"))
     elif tab==5:
         for lake_id,lake in LAKES.items():
             here = lake_id==state.lake_id
@@ -1405,13 +1436,31 @@ class UI:
         lw = max(int(205*unit)+34, self._measure(clock,clock_size,"serif")+34,
                  self._measure(self.world.name.upper(),small,"sans")+34, self._measure(meta,small,"sans")+34)
         lh = int(92*unit)+10
+        meta_y = m+int(71*unit)
+        hud_quest = _active_hud_quest(state, self.narrative_content)
+        if hud_quest is not None:
+            # The tracker may widen the panel, but never past 42% of the screen.
+            quest_title = "QUEST · " + hud_quest[0]
+            quest_progress = hud_quest[1]
+            content_width = max(self._measure(quest_title, small, "sans"),
+                                self._measure(quest_progress, small, "sans"))
+            lw = max(lw, min(int(w*.42), content_width+32))
+            quest_title = self._trim(quest_title, small, lw-32, "sans")
+            quest_progress = self._trim(quest_progress, small, lw-32, "sans")
+            quest_y = meta_y+self.cell(small)[1]+max(2,int(3*unit))
+            progress_y = quest_y+self.cell(small)[1]+max(1,int(2*unit))
+            lh = max(lh, progress_y+self.cell(small)[1]+10-m)
+        lw = min(w-2*m, lw)
         self._panel(frame,m,m,lw,lh,HUD_PANEL_ALPHA)
         if getattr(self, "_hud_rects", None) is None:
             self._hud_rects = []
         self._hud_rects.append((m, m, lw, lh))
         self._text(frame,self.world.name.upper(),m+16,m+int(11*unit),small,GOLD,False,"sans")
         self._text(frame,clock,m+16,m+int(31*unit),clock_size,INK,False,"serif")
-        self._text(frame,meta,m+16,m+int(71*unit),small,DIM,False,"sans")
+        self._text(frame,meta,m+16,meta_y,small,DIM,False,"sans")
+        if hud_quest is not None:
+            self._text(frame,quest_title,m+16,quest_y,small,GOLD,False,"sans")
+            self._text(frame,quest_progress,m+16,progress_y,small,INK,False,"sans")
         zone = self.world.zone_name(self.world.zone_at(state.x, state.z))
         zone_width = self._measure(zone,size+4,"serif")
         rx = w-m-max(int(194*unit),zone_width+32)
@@ -1452,7 +1501,12 @@ class UI:
             fuel = f"FUEL  {state.fuel:.1f} / {state.boat.tank:.0f} L"
             self._text(frame,fuel,rx+16,m+int(111*unit),small,
                        WARN if state.fuel<state.boat.tank*0.15 else DIM,False,"sans")
-        if state.boat.power=="sail":
+        if state.boat.fuelled and state.boat.tank > 0 and state.fuel < state.boat.tank * 0.15:
+            level = "EMPTY" if state.fuel <= 0.001 else "LOW FUEL"
+            recovery = self._controls(ui, "R tow · Boats", "Call tow · Boats")
+            label = self._trim(f"{level} · {recovery}", small, rw - 32)
+            self._text(frame, label, rx + 16, m + int(131 * unit), small, WARN, False, "sans")
+        elif state.boat.power == "sail":
             wind,wind_speed = wind_at(state.game_minutes+state.minute_acc, state)
             coming_from = (wind+np.pi)%(2*np.pi)
             direction = ("N","NE","E","SE","S","SW","W","NW")[int(coming_from/(np.pi/4)+0.5)%8]
@@ -1599,13 +1653,19 @@ class UI:
     def _map(self, frame, state, ui: UIState, big=True):
         h, w = frame.shape[:2]
         chart = self.world.map_rgb
-        mw = int(w * 0.62)
+        margin = max(12, min(28, w // 40))
+        gap = max(10, w // 80)
+        available_width = w - 2 * margin - gap
+        mw = int(available_width * 0.62)
         mh = int(mw * chart.shape[0] / chart.shape[1])
-        if mh > int(h * 0.78):
-            mh = int(h * 0.78)
+        if mh > int(h * 0.70):
+            mh = int(h * 0.70)
             mw = int(mh * chart.shape[1] / chart.shape[0])
-        x = (w - mw) // 2
-        y = int(h * 0.10)
+        # The chart sits left so place names and symbols live in a side key, not over water.
+        x, y = margin, int(h * 0.10)
+        key_x = x + mw + gap
+        key_w = w - margin - key_x
+        key_h = h - y - margin
         map_key = (id(chart), mw, mh)
         scaled = self._map_image_cache.get(map_key)
         if scaled is None:
@@ -1647,12 +1707,27 @@ class UI:
             # Fish and tired fish last, so a neighbouring hook never covers their shape.
             for _on_top, kind, u, v in sorted(markers, key=lambda m: m[0]):
                 self._marker(frame, kind, x + u, y + v)
-        self._plot_habitats(frame, x, y, mw, mh)
         sonar_cells = sonar.overlay(state, self.world)
         self._plot_sonar(frame, sonar_cells, x, y, mw, mh)
-        self._plot_trinidad_cove(frame, x, y, mw, mh, labels=True)
-        self._plot_invitation(frame, state, x, y, mw, mh)
-        self._plot_npcs(frame, state, x, y, mw, mh, labels=True)
+        marker_size = max(8, min(12, h // 60))
+        places = self._plot_habitats(frame, x, y, mw, mh, marker_size)
+        badge_radius = max(14, marker_size + 6) // 2
+        protected_markers = [
+            (px, py, badge_radius) for _number, _name, px, py in places
+        ]
+        if self.world.id == "cedar":
+            anchor = self.world.anchors.get("cedar:trinidad_cove")
+            if anchor is not None:
+                number = len(places) + 1
+                u, v = self.world.map_pixel(anchor.x, anchor.z, mw, mh)
+                self._draw_map_badge(frame, x + u, y + v, number, marker_size)
+                places.append((number, anchor.name, x + u, y + v))
+                protected_markers.append((x + u, y + v, badge_radius))
+        tip_marker = self._plot_invitation(frame, state, x, y, mw, mh)
+        if tip_marker is not None:
+            protected_markers.append(tip_marker)
+        residents = self._plot_npcs(frame, state, x, y, mw, mh, large=True,
+                                    protected=protected_markers)
         self._plot_boat(frame, state, x, y, mw, mh, radius=4)
         self._plot_bot(frame, state, x, y, mw, mh)
         size = self._size(frame, "small")
@@ -1660,50 +1735,99 @@ class UI:
         self._backed(frame, self.world.name, x, top, size, INK)
         close_hint = self._controls(ui, "Tab closes the chart", "B closes the chart")
         self._backed(frame, close_hint, x + mw - self._measure(close_hint, size, "mono"), top, size, DIM)
-        self._chart_legend(frame, state, x, y + mh + 12, w - 16, size, bool(sonar_cells))
+        self._map_key(frame, state, key_x, y, key_w, key_h, places, residents,
+                      bool(sonar_cells))
 
     def legend_items(self, state, sonar_bands=False) -> list[tuple[str, str]]:
         """(marker kind, words) for the chart key. Every kind differs in shape, not only
         colour, so the key reads with any colour vision (V1-43)."""
         from .botidentity import name as bot_name
         items = [("fish", "fish on"), ("tired", "tired fish"), ("soak", "soaking line"),
-                 ("cat", "cat"), ("bot", bot_name(state)), ("boat", "you")]
+                 ("cat", "cat"), ("bot", bot_name(state)), ("tip", bot_name(state) + "'s weather tip"),
+                 ("boat", "you")]
         if sonar_bands:
             items.append(("sonar", "sonar depth"))
         return items
 
-    def _chart_legend(self, frame, state, x, y, right, size, sonar_bands) -> int:
-        """Draws the key as marker + words, wrapping inside [x, right). Returns the bottom."""
-        row_h = self.cell(size)[1]
-        gap = max(14, int(size * 1.4))
-        swatch = max(14, int(size * 1.2))
-        rows, row, width = [], [], 0
-        for kind, words in self.legend_items(state, sonar_bands):
-            item_w = swatch + 6 + self._measure(words, size, "mono")
-            if row and x + width + gap + item_w > right:
-                rows.append((row, width))
-                row, width = [], 0
-            width += (gap if row else 0) + item_w
-            row.append((kind, words, item_w))
-        if row:
-            rows.append((row, width))
-        pad = max(4, size // 3)
-        for index, (items, width) in enumerate(rows):
-            ry = y + index * (row_h + pad)
-            self._round_fill(frame, x - pad, ry - pad // 2, width + pad * 2, row_h + pad,
-                             TEXT_BACKING, TEXT_BACKING_ALPHA)
-            cx = x
-            for kind, words, item_w in items:
-                self._marker(frame, kind, cx + swatch // 2, ry + row_h // 2, legend=True)
-                self._text(frame, words, cx + swatch + 6, ry, size, DIM, False)
-                cx += item_w + gap
-        return y + len(rows) * (row_h + pad)
+    def _map_key(self, frame, state, x, y, width, height, places, residents, sonar_visible):
+        """Explain the chart's numbered places, resident pins and marker shapes in a side panel.
+
+        `places` holds (number, name, ...) tuples from `_plot_habitats`; `residents` holds
+        (name, coat rgb) pairs from `_plot_npcs`. Residents are omitted when the full list
+        would push the marker legend off the panel.
+        """
+        self._panel(frame, x, y, width, height, 0.88)
+        size = max(8, min(13, frame.shape[0] // 60))
+        row_h = max(12, self.cell(size)[1] + 2)
+        pad = max(8, min(14, width // 14))
+        left = x + pad
+        text_w = max(1, width - 2 * pad - 22)
+        title_size = min(16, size + 2)
+        cursor = y + 8
+        self._text(frame, "CHART KEY", left, cursor, title_size, GOLD, False, "sans")
+        cursor += self.cell(title_size)[1] + 3
+        legend = self.legend_items(state, sonar_visible)
+        available_rows = max(0, (y + height - 8 - cursor) // row_h)
+        fixed_rows = 1 + len(places) + 1 + len(legend)
+        show_residents = bool(residents) and fixed_rows + 1 + len(residents) <= available_rows
+        marker_size = max(8, min(10, size))
+        self._text(frame, "PLACES", left, cursor, size, GOLD, False, "sans")
+        cursor += row_h
+        for number, name, *_ in places:
+            self._draw_map_badge(frame, left + marker_size // 2 + 2,
+                                 cursor + row_h // 2, number, marker_size)
+            self._text(frame, self._trim(name, size, text_w, "sans"),
+                       left + 22, cursor, size, INK, False, "sans")
+            cursor += row_h
+        if show_residents:
+            self._text(frame, "RESIDENTS", left, cursor, size, GOLD, False, "sans")
+            cursor += row_h
+            for name, pin in residents:
+                self._shape(frame, "disc", left + 7, cursor + row_h // 2, 3, pin)
+                self._text(frame, self._trim(name, size, text_w, "sans"),
+                           left + 22, cursor, size, INK, False, "sans")
+                cursor += row_h
+        self._text(frame, "MARKERS", left, cursor, size, GOLD, False, "sans")
+        cursor += row_h
+        for kind, words in legend:
+            if cursor + row_h > y + height - 4:
+                break
+            self._marker(frame, kind, left + 7, cursor + row_h // 2, legend=True)
+            self._text(frame, self._trim(words, size, text_w, "sans"),
+                       left + 22, cursor, size, DIM, False, "sans")
+            cursor += row_h
+
+    def _draw_map_badge(self, frame, x, y, number, size):
+        """Draw a numbered habitat icon whose matching name appears in the chart key."""
+        diameter = max(14, size + 6)
+        radius = diameter // 2
+        self._round_fill(frame, x - radius, y - radius, diameter, diameter, GOLD, 1.0)
+        inner = diameter - 4
+        inner_radius = inner // 2
+        self._round_fill(frame, x - inner_radius, y - inner_radius, inner, inner,
+                         (17, 31, 32), 1.0)
+        number_size = max(8, min(size, inner - 2))
+        self._center(frame, str(number), x, y - self.cell(number_size)[1] // 2,
+                     number_size, GOLD, "sans")
+
+    def _draw_tip_halo(self, frame, cx, cy, radius):
+        """Outline Bot's weather-tip mark without obscuring the chart beneath."""
+        radius = max(3, int(radius))
+        thickness = max(1, radius // 6)
+        side = radius * 2 + 1
+        inner = side - thickness * 2
+        self._fill(frame, cx - radius, cy - radius, side, thickness, GOLD, 1.0)
+        self._fill(frame, cx - radius, cy + radius - thickness + 1,
+                   side, thickness, GOLD, 1.0)
+        self._fill(frame, cx - radius, cy - radius + thickness,
+                   thickness, inner, GOLD, 1.0)
+        self._fill(frame, cx + radius - thickness + 1, cy - radius + thickness,
+                   thickness, inner, GOLD, 1.0)
 
     def _plot_sonar(self, frame, cells, x, y, mw, mh):
         for cell in cells:
             u, v = self.world.map_pixel(cell.x, cell.z, mw, mh)
             self._dot(frame, x + u, y + v, 1, SONAR_BAND_COLORS[min(cell.band, len(SONAR_BAND_COLORS) - 1)])
-
     def _plot_invitation(self, frame, state, x, y, mw, mh):
         mark = getattr(state, "v2", {}).get("calendar", {}).get("invitation_mark")
         if (not isinstance(mark, dict) or mark.get("lake_id") != self.world.id
@@ -1712,86 +1836,89 @@ class UI:
         if any(type(mark.get(key)) not in (int, float) or not math.isfinite(mark[key]) for key in ("x", "z")):
             return
         u, v = self.world.map_pixel(mark["x"], mark["z"], mw, mh)
-        self._dot(frame, x + u, y + v, 5, GOLD)
-        self._dot(frame, x + u, y + v, 2, INK)
+        radius = max(11, min(16, mw // 40)) if mw >= 400 else 8
+        self._draw_tip_halo(frame, x + u, y + v, radius)
+        return (x + u, y + v, radius)
+    def _plot_habitats(self, frame, x, y, mw, mh, marker_size=None):
+        """Badge every habitat with its number; the names live in the chart key.
 
-    def _plot_habitats(self, frame, x, y, mw, mh):
-        size = self._size(frame, "small")
-        occupied = []
-        # A Nebula current lane is a chain of circles; name it once, mid-lane.
+        `marker_size` is the badge text size in pixels (defaults from frame height).
+        Returns (number, name, badge x, badge y) per habitat, in zone order.
+        """
         chains = {}
         for zone, cx, cz, _radius in self.world.zones:
             chains.setdefault(zone, []).append((cx, cz))
-        labels = [(zone, *points[len(points)//2], None) for zone, points in chains.items()]
-        for zone, cx, cz, _radius in labels:
-            # Preserve the established charts apart from Briar's new passage.
-            if not self.world.placeholder and not self.world.generated and zone != "reeds":
-                continue
+        marker_size = max(8, min(12, frame.shape[0] // 60)) if marker_size is None else marker_size
+        places = []
+        for number, (zone, points) in enumerate(chains.items(), 1):
+            cx, cz = points[len(points) // 2]
             u, v = self.world.map_pixel(cx, cz, mw, mh)
-            label = self._trim(self.world.zone_name(zone), size, mw * 0.42)
-            width = len(label) * self.cell(size)[0]
-            tx = max(x, min(x + u + 6, x + mw - width))
-            ty = max(y, min(y + v + 6, y + mh - self.cell(size)[1]))
-            if self.world.generated:
-                width = self._measure(label, size, "mono")
-                height = self.cell(size)[1]
-                # Search near the habitat first. A bounded chart-row fallback
-                # keeps long canonical names inside the map and off each other.
-                offsets = (6, -height-6, height+8, -2*height-10, 2*height+12,
-                           -3*height-14, 3*height+16)
-                candidates = [(x+u+dx, y+v+dy) for dy in offsets
-                              for dx in (6, -width-6, -width/2)]
-                candidates.extend((px, py) for py in range(int(y), int(y+mh-height)+1, height+4)
-                                  for px in (x, x+mw-width, x+(mw-width)/2))
-                for px, py in candidates:
-                    tx = max(x, min(x+mw-width, px))
-                    ty = max(y, min(y+mh-height, py))
-                    box = (tx, ty, tx+width, ty+height)
-                    if all(box[2]+4 < old[0] or old[2]+4 < box[0]
-                           or box[3]+3 < old[1] or old[3]+3 < box[1] for old in occupied):
-                        break
-                occupied.append(box)
-            self._text(frame, label, tx, ty, size, INK)
+            self._draw_map_badge(frame, x + u, y + v, number, marker_size)
+            places.append((number, self.world.zone_name(zone), x + u, y + v))
+        return places
 
-    def _plot_trinidad_cove(self, frame, x, y, mw, mh, labels=False):
+    def _plot_trinidad_cove(self, frame, x, y, mw, mh):
         if self.world.id != "cedar":
             return
         anchor = self.world.anchors.get("cedar:trinidad_cove")
         if anchor is None:
             return
         u, v = self.world.map_pixel(anchor.x, anchor.z, mw, mh)
-        color = (240, 198, 112)
-        self._shape(frame, "diamond ring", x + u, y + v, 5 if labels else 4, color)
-        if labels:
-            size = self._size(frame, "small")
-            label = anchor.name
-            width = len(label) * self.cell(size)[0]
-            tx = max(x, min(x + u + 7, x + mw - width))
-            ty = max(y, min(y + v + 6, y + mh - self.cell(size)[1]))
-            self._text(frame, label, tx, ty, size, color)
+        self._shape(frame, "diamond ring", x + u, y + v, 4, (240, 198, 112))
 
-    def _plot_npcs(self, frame, state, x, y, mw, mh, labels=False):
+    def _plot_npcs(self, frame, state, x, y, mw, mh, large=False, protected=()):
+        """Pin each resident cat on the chart in its coat colour.
+
+        `large` draws the full-chart pin size; `protected` lists (x, y, radius) frame-pixel
+        markers that a pin must not cover, so it steps aside from them. Returns
+        (name, coat rgb) pairs for the chart key.
+        """
         from .actors import roster
-        color = (128, 206, 240)
+        fallback = (128, 206, 240)
         cats = roster()
+        residents = []
+        radius = 3 if large else 2
+        obstacles = [
+            (cx, cy, marker_radius + radius + 3)
+            for cx, cy, marker_radius in protected
+        ]
+        directions = ((0, -1), (1, 0), (0, 1), (-1, 0),
+                      (1, -1), (1, 1), (-1, 1), (-1, -1))
         for npc in state.npcs:
             if npc.anchor.lake_id != self.world.id:
                 continue
             u, v = self.world.map_pixel(npc.anchor.x, npc.anchor.z, mw, mh)
+            pin_x, pin_y = x + u, y + v
+            collisions = [
+                clearance for cx, cy, clearance in obstacles
+                if (pin_x - cx) ** 2 + (pin_y - cy) ** 2 < clearance ** 2
+            ]
+            if collisions:
+                min_x, max_x = x + radius + 1, x + mw - radius - 2
+                min_y, max_y = y + radius + 1, y + mh - radius - 2
+                moved = False
+                for distance in (max(18, max(collisions) + 2),
+                                 max(26, max(collisions) + 10),
+                                 max(34, max(collisions) + 18)):
+                    for dx, dy in directions:
+                        candidate_x = max(min_x, min(max_x, pin_x + dx * distance))
+                        candidate_y = max(min_y, min(max_y, pin_y + dy * distance))
+                        if all((candidate_x - cx) ** 2 + (candidate_y - cy) ** 2
+                               >= clearance ** 2
+                               for cx, cy, clearance in obstacles):
+                            pin_x, pin_y = candidate_x, candidate_y
+                            moved = True
+                            break
+                    if moved:
+                        break
             # Each pin wears its cat's coat, ringed so pale coats read on the chart (V1-29),
             # and is round so no colour vision mistakes it for a fish or the Bot (V1-43).
-            radius = 3 if labels else 2
             row = cats.get(npc.id)
             pin = (tuple(int(c * 255 + 0.5) for c in row["appearance"]["colors"]["base"])
-                   if row is not None else color)
-            self._shape(frame, "disc", x + u, y + v, radius, pin)
-            if labels:
-                size = self._size(frame, "small")
-                label = self._trim(npc.name, size, mw)
-                width = len(label) * self.cell(size)[0]
-                tx = max(x, min(x + u + 6, x + mw - width))
-                ty = max(y, min(y + v + 6, y + mh - self.cell(size)[1]))
-                self._text(frame, label, tx, ty, size, color)
+                   if row is not None else fallback)
+            self._shape(frame, "disc", pin_x, pin_y, radius, pin)
+            residents.append((npc.name, pin))
+        return residents
 
     def _plot_boat(self, frame, state, x, y, mw, mh, radius):
         u, v = self.world.map_pixel(state.x, state.z, mw, mh)
@@ -1846,6 +1973,9 @@ class UI:
             self._shape(frame, "disc", x, y, 4 if legend else 3, (200, 162, 118))
         elif kind == "bot":
             self._shape(frame, "triangle", x, y, 5 if legend else 4, (255, 148, 48))
+        elif kind == "tip":
+            # Hollow, so the numbered place badge under a tip stays readable.
+            self._draw_tip_halo(frame, x, y, 6 if legend else 11)
         elif kind == "boat":
             self._dot(frame, x - 2, y, 3, (236, 224, 180))
             self._dot(frame, x + 5, y, 1, (232, 196, 110))
@@ -2023,9 +2153,9 @@ class UI:
         buttons = comfort_controls((w, h))
         if ui.mode == "new_mode":
             title, labels, selected = "Choose your pace", ("Cozy", "Old Salt"), ui.new_mode_i
-            body = ("Cozy: free tow and no needs penalties. Naps are always optional.\n"
-                    "Old Salt: Drowsy at 16 hours awake; a safe catnap after 20. Peckish after 24 hours slows boats. Tow: $25 + 2% of boat price, capped by cash.\n"
-                    "Change mode any time in Settings.")
+            body = ("Cozy: half fuel burn, half gust drift with sail down, free tow, no needs penalties. Naps optional.\n"
+                    "Old Salt: 2/3 base fuel burn; Drowsy at 16h, safe nap at 20h, Peckish at 24h. Tow: $25 + 2% boat price, cash-capped.\n"
+                    "Change mode in Settings.")
         elif ui.mode == "needs":
             energy = ui.needs_kind == "energy"
             title = "A little rest?" if energy else "A bite to eat?"
@@ -2128,8 +2258,13 @@ class UI:
         margin = max(12, int(26 * unit))
         size = max(11, int(h / 60))
         label = " · ".join(labels)
-        y = margin + int(92 * unit) + 18
         width = self._measure(label, size) + 24
+        # Sit below the HUD panels in this column: the quest tracker makes the clock
+        # panel taller than its old fixed int(92*unit)+10, and a fixed offset covered it.
+        y = margin
+        for rx, ry, rw, rh in getattr(self, "_hud_rects", ()):
+            if rx < margin + width and margin < rx + rw:
+                y = max(y, ry + rh + 8)
         self._panel(frame, margin, y, width, self._render(label, size, GOLD, "sans").shape[0] + 16, .8)
         self._text(frame, label, margin + 12, y + 6, size, GOLD, False, "sans")
 

@@ -1,9 +1,11 @@
 """Mode invariants, needs timelines, catnap, dreams and never-stranding tow."""
 
 from copy import deepcopy
+import math
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -46,6 +48,40 @@ class ComfortChecks(unittest.TestCase):
         before = state.to_json()
         self.assertIsNotNone(state.catnap(self.world, forced=True))
         self.assertEqual(state.to_json(), before)
+
+    def test_mode_fuel_economy_changes_actual_burn(self):
+        def burn(mode):
+            state = State.new(self.world, seed=42014)
+            state.x, state.z = self.world.anchors["briar:deep"].position
+            state.anchored = False
+            state.throttle = state.throttle_setting = 1.0
+            comfort.change_mode(state.v2, mode)
+            before = state.fuel
+            state.drive(10.0, 0.0, 0.0, self.world)
+            return before - state.fuel
+
+        cozy_burn = burn("cozy")
+        old_salt_burn = burn("old_salt")
+        self.assertGreater(cozy_burn, 0.0)
+        self.assertAlmostEqual(old_salt_burn / cozy_burn, 4.0 / 3.0)
+
+    def test_cozy_halves_unsailed_snow_mist_gust_drift(self):
+        anchor = self.world.anchors["briar:deep"]
+
+        def drift(mode):
+            state = State.new(self.world, seed=42014)
+            state.x, state.z = anchor.position
+            state.anchored = False
+            state.anim = 1.0
+            comfort.change_mode(state.v2, mode)
+            with patch("fishing.sim.weather_at", return_value="snow_mist"), \
+                    patch("fishing.sim.wind_at", return_value=(0.0, 10.0)):
+                state.drive(1.0, 0.0, 0.0, self.world)
+            return math.hypot(state.x - anchor.x, state.z - anchor.z)
+
+        self.assertAlmostEqual(drift("cozy"), drift("old_salt") * 0.5)
+        cozy = State.new(self.world, seed=42014)
+        self.assertEqual(comfort.gust_factor(cozy, "snow_mist", using_sail=True), 1.0)
 
     def test_old_salt_timeline_at_sixteen_twenty_and_twenty_four_hours(self):
         state = self.state

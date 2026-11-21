@@ -52,6 +52,8 @@ the save is overwritten; selecting a mode saves the new morning immediately.
 No penalties of any kind. Naps and meals exist as **positive choices** (§4). Bot
 never warns, only invites. The tow (R) is free.
 
+Powered-boat fuel burn is **0.5× the boat's table rate in Cozy** and **2/3× in Old Salt**; an active fuel-saving dish multiplies that burn. Cozy also halves snow-mist gust drift while the sail is lowered; raised sails keep full wind.
+
 ### 2.2 Old Salt (opt-in)
 
 For players who want light routine. It is still never stranding, never losing.

@@ -12,6 +12,7 @@ from .sim import Catch, State
 from .npcs import active_npcs
 from .narrative import DAY_NPCS
 from .quests import chain as quest_chain
+from .ui import quest_journal_details
 from .world import World
 
 
@@ -87,7 +88,11 @@ class DialogueChecks(unittest.TestCase):
         self.assertEqual([toast[0] for toast in restored.toasts].count(note), 0)
 
     def test_hail_decline_accept_persistence(self):
-        q = self.state.narrative.quests[self.npc.quest_id]
+        quest_id = "q01_tea_leaves_deep_holes"
+        grandma = next(npc for npc in self.state.npcs if npc.id == "grandmother_whiskers")
+        self.state.x, self.state.z = grandma.anchor.position
+        q = self.state.narrative.quests[quest_id]
+        self.session.save()
         self.key('c'); self.assertEqual(self.session.ui.mode, 'dialogue')
         self.assertEqual(q.status, 'available')
         self.key('c'); self.key('2')
@@ -96,10 +101,13 @@ class DialogueChecks(unittest.TestCase):
         self.key('esc'); self.key('c'); self.key('space'); self.key('1')
         self.assertEqual(q.status, 'active')
         accepted = q.accepted_game_minute
-        self.session.save()
         restored = State.load(self.path, self.world)
-        self.assertEqual(restored.narrative.quests[self.npc.quest_id].status, 'active')
-        self.assertEqual(restored.narrative.quests[self.npc.quest_id].accepted_game_minute, accepted)
+        loaded = restored.narrative.quests[quest_id]
+        self.assertEqual(loaded.status, 'active')
+        self.assertEqual(loaded.accepted_game_minute, accepted)
+        details = quest_journal_details(restored, self.session._npc_content, quest_id)
+        self.assertEqual(details["status"], "Accepted")
+        self.assertIn("No qualifying line set yet", details["progress"])
         self.key('return'); self.key('c')
         self.assertTrue(self.session.conversation.node_id.endswith(':progress'))
 

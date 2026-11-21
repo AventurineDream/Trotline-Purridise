@@ -5,11 +5,32 @@ from .data import BAIT_BY_ID, BAIT_RECIPES, DISHES, PANTRY
 
 
 def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_meta=None):
+    """Render a shop tab or the full pantry and cooking surface.
+
+    Args:
+        renderer: UI painter with font metrics and panel primitives.
+        frame: RGB drawing target in pixels.
+        state: Current game state to display.
+        ui: Menu state; ``mode == "shop"`` selects the landing-shop panel.
+        menu_rows: Optional alternate rows for the Bot shop.
+        menu_title: Optional title override.
+        menu_meta: Optional status-line override.
+
+    Returns:
+        None. Draws into ``frame`` and updates ``ui.kitchen_hitboxes``.
+    """
     from .ui import DIM, GOLD, INK, WARN, comfort_controls
     h, w = frame.shape[:2]
-    x = y = 12
-    width, height = w - 24, h - 24
-    renderer._round_fill(frame, x, y, width, height, (17, 31, 32), 1)
+    if ui.mode == 'shop':
+        width, height = int(w * .70), int(h * .80)
+        x, y = (w - width) // 2, (h - height) // 2
+        renderer._panel(frame, x, y, width, height, .96)
+        panel_bottom = y + height - 24
+    else:
+        x = y = 12
+        width, height = w - 24, h - 24
+        renderer._round_fill(frame, x, y, width, height, (17, 31, 32), 1)
+        panel_bottom = h - 24
     head, body, small = (renderer._size(frame, key) for key in ('head', 'body', 'small'))
     def text(value, tx, ty, size, color=INK):
         renderer._text(frame, value, tx, ty, size, color, False, 'sans')
@@ -102,8 +123,8 @@ def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_me
         foot = renderer._controls(ui, 'Up / Down choose · A/D tabs · Enter · Esc',
                                   'Up / Down choose · Left / Right tabs · A · B')
     foot_lines, foot_h = renderer._comfort_lines(foot, small, width - 32)
-    foot_y = h - 24 - len(foot_lines) * foot_h
-    detail_h = min(104, max(48, int(h * .22)))
+    foot_y = panel_bottom - len(foot_lines) * foot_h
+    detail_h = min(104, max(48, int(height * .22)))
     list_bottom = foot_y - detail_h - 12
     row_h = renderer._render('Mg', body, INK, 'sans').shape[0] + 8
     visible = max(1, (list_bottom - top) // row_h)

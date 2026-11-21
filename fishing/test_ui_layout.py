@@ -10,8 +10,8 @@ from . import uiscreens
 from .platform import Text, find_font
 from .sim import State
 from .ui import (
-    DIM, SPECIES, UI, UIState, _GAMEPAD_HELP_CONTROLS, _help_title,
-    _prompt_for_device, _toast_for_device, help_pages,
+    DIM, GOLD, SPECIES, UI, UIState, _GAMEPAD_HELP_CONTROLS, _help_title,
+    _prompt_for_device, _toast_for_device, help_pages, shop_rows,
 )
 from .world import World
 
@@ -206,6 +206,185 @@ class GuideLayoutChecks(unittest.TestCase):
                             self.assertLessEqual(y + th, height)
             ui._text = text_draw
 
+
+    def test_kitchen_and_bot_tabs_use_the_standard_shop_panel(self):
+        world = World()
+        state = State.new(world, seed=52)
+        ui = UI(self.text, world)
+        original_panel = ui._panel
+        panels = []
+
+        def panel(frame, x, y, width, height, alpha):
+            panels.append((x, y, width, height))
+            original_panel(frame, x, y, width, height, alpha)
+
+        ui._panel = panel
+        expected = (192, 72, 896, 576)
+        for tab in (6, 7):
+            with self.subTest(tab=tab):
+                panels.clear()
+                frame = np.zeros((720, 1280, 3), np.uint8)
+                ui.draw(frame, state, UIState(mode="shop", shop_tab=tab))
+                self.assertEqual(panels, [expected])
+
+    def test_active_quest_tracker_shows_the_next_step_below_the_clock(self):
+        from . import calendar
+        from .data import clock_string
+
+        world = World()
+        state = State.new(world, seed=53)
+        state.narrative.quests["q01_tea_leaves_deep_holes"].status = "active"
+        ui = UI(self.text, world)
+        records = []
+        original_text = ui._text
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            records.append((label, int(y)))
+            return original_text(frame, label, x, y, size, color, shadow, family)
+
+        ui._text = text
+        ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play"))
+        clock = calendar.day_name(state.game_minutes)[:3] + " " + clock_string(state.game_minutes)
+        quest_title = next((y for label, y in records if label.startswith("QUEST · Tea Leaves")), None)
+        quest_step = next((y for label, y in records if label.startswith("Set the 12-hook line")), None)
+        quest_step_text = next(label for label, _y in records
+                               if label.startswith("Set the 12-hook line"))
+        clock_y = next(y for label, y in records if label == clock)
+        self.assertIsNotNone(quest_title)
+        self.assertIsNotNone(quest_step)
+        self.assertTrue(quest_step_text.endswith("to scout."), quest_step_text)
+        self.assertGreater(quest_title, clock_y)
+        self.assertGreater(quest_step, quest_title)
+
+    def test_comfort_status_sits_below_the_quest_tracker(self):
+        """A picnic buff or Old Salt needs label never covers the quest's next step."""
+        from .data import DISHES
+
+        world = World()
+        state = State.new(world, seed=53)
+        state.narrative.quests["q01_tea_leaves_deep_holes"].status = "active"
+        state.v2["settings"]["mode"] = "old_salt"
+        state.v2.setdefault("needs", {}).update({"awake_h": 17.0, "since_meal_h": 1000.0})
+        dish = next(d for d in DISHES.values() if d.minutes and d.effect != "weather_invitation")
+        state.v2["buff"] = {"dish": dish.id, "until_active_minutes": 10_000_000}
+        ui = UI(self.text, world)
+        panels, texts = [], []
+        original_panel, original_text = ui._panel, ui._text
+
+        def panel(frame, x, y, width, height, *args, **kwargs):
+            panels.append((int(x), int(y), int(width), int(height)))
+            return original_panel(frame, x, y, width, height, *args, **kwargs)
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            image = ui._render(label, size, color, family)
+            texts.append((label, int(x), int(y), image.shape[1], image.shape[0], len(panels)))
+            return original_text(frame, label, x, y, size, color, shadow, family)
+
+        ui._panel, ui._text = panel, text
+        ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play"))
+        status = next(t for t in texts if t[0] == "Drowsy · Peckish · Picnic")
+        step = next(t for t in texts if t[0].startswith("Set the 12-hook line"))
+        status_panel = panels[status[5] - 1]  # _comfort_status draws its panel, then the label
+        for rx, ry, rw, rh in ui._hud_rects:
+            overlaps = (status_panel[0] < rx + rw and rx < status_panel[0] + status_panel[2]
+                        and status_panel[1] < ry + rh and ry < status_panel[1] + status_panel[3])
+            self.assertFalse(overlaps, (status_panel, (rx, ry, rw, rh)))
+        self.assertGreaterEqual(status_panel[1], step[2] + step[4])
+
+    def test_chart_uses_numbered_icons_and_a_side_key(self):
+        world = World()
+        state = State.new(world, seed=54)
+        state.v2["calendar"]["invitation_mark"] = {
+            "lake_id": world.id, "x": -175.0, "z": -115.0, "until_game_minutes": 120,
+        }
+        willow = SimpleNamespace(
+            id="willow", name="Willow",
+            anchor=SimpleNamespace(lake_id=world.id, x=-175.0, z=-115.0),
+        )
+        state.npcs = (*state.npcs, willow)
+        ui = UI(self.text, world)
+        records = []
+        original_text = ui._text
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            records.append((label, int(x), int(y), size, family))
+            return original_text(frame, label, x, y, size, color, shadow, family)
+
+        frame = np.zeros((720, 1280, 3), np.uint8)
+        ui._text = text
+        ui.draw(frame, state, UIState(mode="map"))
+        labels = [record[0] for record in records]
+        self.assertIn("Lily cove", labels)
+        self.assertTrue(any(label.endswith("weather tip") for label in labels), labels)
+        margin = max(12, min(28, frame.shape[1] // 40))
+        gap = max(10, frame.shape[1] // 80)
+        map_width = int((frame.shape[1] - 2 * margin - gap) * 0.62)
+        map_height = int(map_width * world.map_rgb.shape[0] / world.map_rgb.shape[1])
+        if map_height > int(frame.shape[0] * 0.70):
+            map_height = int(frame.shape[0] * 0.70)
+            map_width = int(map_height * world.map_rgb.shape[1] / world.map_rgb.shape[0])
+        map_right = margin + map_width
+        map_y = int(frame.shape[0] * 0.10)
+        mark_u, mark_v = world.map_pixel(-175.0, -115.0, map_width, map_height)
+        marker_x, marker_y = margin + mark_u, map_y + mark_v
+        number_region = frame[marker_y - 4:marker_y + 5, marker_x - 4:marker_x + 5]
+        self.assertGreater(np.count_nonzero(np.all(number_region == GOLD, axis=2)), 0)
+        halo_radius = max(11, min(16, map_width // 40))
+        np.testing.assert_array_equal(frame[marker_y, marker_x + halo_radius], GOLD)
+        key_x = map_right + gap
+        names = {world.zone_name(zone) for zone, _x, _z, _radius in world.zones}
+        names.update(npc.name for npc in state.npcs if npc.anchor.lake_id == world.id)
+        boxes = []
+        for label, x, y, size, family in records:
+            if label not in names:
+                continue
+            self.assertGreaterEqual(x, key_x, label)
+            width = ui._measure(label, size, family)
+            height = ui.cell(size)[1]
+            boxes.append((label, x, y, x + width, y + height))
+        for index, first in enumerate(boxes):
+            for second in boxes[index + 1:]:
+                overlap = (first[1] < second[3] and second[1] < first[3]
+                           and first[2] < second[4] and second[2] < first[4])
+                self.assertFalse(overlap, f"{first[0]!r} overlaps {second[0]!r}")
+        icons = [label for label, x, _y, _size, _family in records
+                 if x < map_right and label.isdigit()]
+        self.assertEqual(len(icons), len({zone for zone, _x, _z, _radius in world.zones}))
+
+        state.npcs = tuple(npc for npc in state.npcs if npc is not willow)
+        without_willow = np.zeros_like(frame)
+        ui._text = original_text
+        ui.draw(without_willow, state, UIState(mode="map"))
+        icon_radius = max(14, min(12, frame.shape[0] // 60) + 6) // 2 + 2
+        icon_slice = (
+            slice(marker_y - icon_radius, marker_y + icon_radius + 1),
+            slice(marker_x - icon_radius, marker_x + icon_radius + 1),
+        )
+        np.testing.assert_array_equal(frame[icon_slice], without_willow[icon_slice])
+
+    def test_boats_tab_puts_current_fuel_in_the_first_row(self):
+        state = State.new(World(), seed=55)
+        rows = shop_rows(state, 4)
+        self.assertEqual(rows[0].kind, "fuel")
+        self.assertIn("Refuel here", rows[0].blurb)
+
+
+    def test_empty_fuel_hud_keeps_the_tow_recovery_hint_visible(self):
+        world = World()
+        state = State.new(world, seed=56)
+        state.fuel = 0.0
+        ui = UI(self.text, world)
+        labels = []
+        original_text = ui._text
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            labels.append(label)
+            return original_text(frame, label, x, y, size, color, shadow, family)
+
+        ui._text = text
+        ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play"))
+        warning = next((label for label in labels if label.startswith("EMPTY ·")), "")
+        self.assertIn("R tow", warning)
     def test_species_journal_details_reflow_inside_the_panel_at_minimum_size(self):
         world = World()
         ui = UI(self.text, world)

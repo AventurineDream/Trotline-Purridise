@@ -508,18 +508,32 @@ def _play(world: World):
 
 
 def chart(dest: str) -> int:
+    """Write the clean lake chart and side key as a PNG, without the gameplay HUD.
+
+    Args:
+        dest: Output file path.
+
+    Returns:
+        Zero after writing and printing the output path.
+
+    Side effects:
+        Creates or overwrites ``dest``.
+
+    Raises:
+        Propagates rendering and file I/O errors.
+    """
     from .platform import Text
+    from .ui import UIState
     world = World()
     text = Text()
-    ui = UI(text, world)
-    rgb = np.repeat(np.repeat(world.map_rgb, 2, axis=0), 2, axis=1)
-    frame = rgb.copy()
-    state = State.new(world, seed=1)
-    ui._plot_boat(frame, state, 0, 0, frame.shape[1], frame.shape[0], radius=4)
-    for name, x, z, _r in world.zones:
-        u, v = world.map_pixel(x, z, frame.shape[1], frame.shape[0])
-        ui._text(frame, name, u + 4, v - 8, 14, (236, 228, 206))
-    write_png(dest, frame)
+    try:
+        ui = UI(text, world)
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+        state = State.new(world, seed=1)
+        ui._map(frame, state, UIState(mode="map"))
+        write_png(dest, frame)
+    finally:
+        text.close()
     print(dest)
     return 0
 

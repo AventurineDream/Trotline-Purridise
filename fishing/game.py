@@ -942,7 +942,10 @@ class Session:
                 self.ui.dialogue_line_s = 0.0  # a new line: the speaker talks it with a fresh bounce
             if chat.finished_scene:
                 chat.finished_scene = False
-                self.save()  # a scene's effects and its claim are written together (06 §3.3)
+                self.save()  # A scene's effects and claim are written together (06 §3.3).
+            elif choices:
+                # A quest choice must be durable before the journal can be reopened.
+                self.save()
             if not more:
                 self._close_dialogue()
                 if chat.trip:
