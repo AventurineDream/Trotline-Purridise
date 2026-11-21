@@ -147,7 +147,11 @@ def tick(state, world, dt: float) -> str | None:
     return sound
 
 
-def faces(state) -> list[Face]:
+def appearance(state) -> dict:
+    """Bot's saved look as botmesh.faces takes it: shell, collar stage, knot and collar_visible.
+
+    The lake mesh and the dialogue portrait (botportrait) both read it, so they agree.
+    """
     v2 = getattr(state, "v2", {})
     settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
     profile = v2.get("profile", {}) if isinstance(v2, dict) else {}
@@ -156,8 +160,16 @@ def faces(state) -> list[Face]:
     collar_visible = collar_visible and collar.get("stage", "none") != "none"
     shell = profile.get("shell", "tin")
     shell = shell if isinstance(shell, str) and shell in BOT_SHELLS else "tin"
-    pose = dict(shell=shell, stage=collar.get("stage", "none"), knot=collar.get("knot"),
-                anim=float(state.anim), reduced_motion=bool(settings.get("reduced_motion", False)))
+    return dict(shell=shell, stage=collar.get("stage", "none"), knot=collar.get("knot"),
+                collar_visible=bool(collar_visible))
+
+
+def faces(state) -> list[Face]:
+    v2 = getattr(state, "v2", {})
+    settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
+    pose = appearance(state)
+    collar_visible = pose.pop("collar_visible")
+    pose.update(anim=float(state.anim), reduced_motion=bool(settings.get("reduced_motion", False)))
     if state.bot_phase == "home":
         eye, right, up, forward = _boat_basis(state)
         if state.boat.handcrafted:

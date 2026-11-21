@@ -13,6 +13,9 @@ portrait frames (which also lets the rig's memo skip most redraws). Every frame 
 reproducible in tests and screenshots, and both clocks at zero give the rest pose. Reduced
 motion holds the rest pose; only a mood's static lids remain, since a still half-lid is
 expression rather than movement.
+
+Each speaker moves in a Style: cats by default, and Bot (botportrait), whose card is the
+same rig with his lamp shutter as the lids, in his own stiffer, tin one.
 """
 
 from __future__ import annotations
@@ -56,6 +59,43 @@ CURIOUS_EASE_S = 0.3
 BRIGHT_GRIN_S = 0.45     # a bright line opens with a happy squint (closed, smiling lids)
 
 LIDS = (0.0, 0.5, 1.0)   # lid states catart renders: open, half, closed
+
+
+@dataclass(frozen=True)
+class Style:
+    """How one kind of speaker moves; the defaults are the cats' (the constants above).
+
+    Attributes:
+        breath: Idle stretch amplitude. sway_hz, sway_rad: the idle lean's rate and size.
+        talk_hz, talk_stretch, talk_squash: hops a second while speaking, their stretch,
+            and the share of a hop spent squashed below rest as it lands.
+        pop_stretch, pop_hz, pop_decay: the line-start "hup".
+        blink_slot_s, double_blink_chance: one blink per slot, sometimes doubled.
+    """
+
+    breath: float = BREATH_STRETCH
+    sway_hz: float = SWAY_HZ
+    sway_rad: float = SWAY_RAD
+    talk_hz: float = TALK_HZ
+    talk_stretch: float = TALK_STRETCH
+    talk_squash: float = TALK_SQUASH
+    pop_stretch: float = POP_STRETCH
+    pop_hz: float = POP_HZ
+    pop_decay: float = POP_DECAY
+    blink_slot_s: float = BLINK_SLOT_S
+    double_blink_chance: float = DOUBLE_BLINK_CHANCE
+
+
+CAT = Style()
+# Bot is a tin deckhand (bot.py, botmesh): he does not breathe, and tin does not squash.
+# He rides the bow, so his card rocks a little more and a little faster than a seated
+# cat's sway; his literal, word-at-a-time lines get one stiff nod per word or so; a line
+# opens with a quick, chime-like ping; and his lamp shutter blinks on a slower cycle,
+# never doubled.
+BOT = Style(breath=0.0, sway_hz=0.18, sway_rad=math.radians(1.6), talk_hz=2.4, talk_stretch=0.028,
+            talk_squash=0.0, pop_stretch=0.03, pop_hz=6.0, pop_decay=12.0, blink_slot_s=5.0,
+            double_blink_chance=0.0)
+SPEAKER_STYLES = {"bot": BOT}  # every other speaker is a cat
 
 
 @dataclass(frozen=True)
@@ -108,18 +148,19 @@ def _smooth(x: float) -> float:
     return x * x * (3 - 2 * x)
 
 
-def blink(t: float, seed: int) -> float:
+def blink(t: float, seed: int, style: Style = CAT) -> float:
     """Lid closure from blinking at time t (s): 0 open, rising to 1 mid-blink.
 
-    Time is cut into BLINK_SLOT_S slots; each holds one blink at a pseudo-random
-    offset (and sometimes a second just after), so blinks never sync across cats.
+    Time is cut into the style's blink slots; each holds one blink at a pseudo-random
+    offset (and sometimes a second just after), so blinks never sync across speakers.
     """
     if t <= 0:
         return 0.0
-    n = int(t // BLINK_SLOT_S)
-    start = n * BLINK_SLOT_S + 0.3 + (BLINK_SLOT_S - 1.0) * _hash01(seed, n)
+    slot = style.blink_slot_s
+    n = int(t // slot)
+    start = n * slot + 0.3 + (slot - 1.0) * _hash01(seed, n)
     starts = [start]
-    if _hash01(seed + 1, n) < DOUBLE_BLINK_CHANCE:
+    if _hash01(seed + 1, n) < style.double_blink_chance:
         starts.append(start + DOUBLE_BLINK_GAP_S)
     for s in starts:
         u = (t - s) / BLINK_S
@@ -138,7 +179,8 @@ def portrait_motion(npc_id: str, text: str, dialogue_s: float, line_s: float, *,
     """The portrait's pose for this frame.
 
     Args:
-        npc_id: The speaker; seeds the blink rhythm and sway phase.
+        npc_id: The speaker; picks its Style (SPEAKER_STYLES, else a cat's) and seeds the
+            blink rhythm and sway phase.
         text: The line on screen, already formatted; sets mood and talk length.
         dialogue_s: Seconds the conversation has been open (idle breath, sway, blinks).
         line_s: Seconds the current line has been on screen (talk bounce, pop, mood ease).
@@ -154,26 +196,28 @@ def portrait_motion(npc_id: str, text: str, dialogue_s: float, line_s: float, *,
     dialogue_s = math.floor(max(0.0, dialogue_s) * PORTRAIT_FPS) / PORTRAIT_FPS
     line_s = math.floor(max(0.0, line_s) * PORTRAIT_FPS) / PORTRAIT_FPS
     seed = _seed(npc_id)
+    style = SPEAKER_STYLES.get(npc_id, CAT)
     phase = (seed & 0xFFFF) / 65535.0 * math.tau
-    stretch = 1.0 + BREATH_STRETCH * math.sin(math.tau * BREATH_HZ * dialogue_s)
-    # Centred on upright and zero at t=0, so a conversation opens on the rest pose; the cat's
-    # seed varies the sway's size a little so neighbours don't rock identically.
-    tilt = SWAY_RAD * math.sin(math.tau * SWAY_HZ * dialogue_s) * (0.8 + 0.2 * math.cos(phase))
+    stretch = 1.0 + style.breath * math.sin(math.tau * BREATH_HZ * dialogue_s)
+    # Centred on upright and zero at t=0, so a conversation opens on the rest pose; the
+    # speaker's seed varies the sway's size a little so neighbours don't rock identically.
+    tilt = style.sway_rad * math.sin(math.tau * style.sway_hz * dialogue_s) * (0.8 + 0.2 * math.cos(phase))
 
     talk = talk_seconds(text)
     if line_s < talk + TALK_EASE_S:
         energy = {"bright": 1.5, "wistful": 0.6}.get(feel, 1.0)
-        hz = TALK_HZ * (1.15 if feel == "bright" else 0.8 if feel == "wistful" else 1.0)
+        hz = style.talk_hz * (1.15 if feel == "bright" else 0.8 if feel == "wistful" else 1.0)
         # Eased in from rest (the "hup" leads) and settled out after the line is said.
         envelope = _smooth(line_s / 0.1) * (1.0 - _smooth((line_s - talk) / TALK_EASE_S))
         hop = abs(math.sin(math.pi * hz * line_s))
-        # Stretched at the top of a hop, a little squashed as it lands.
-        stretch += TALK_STRETCH * energy * envelope * (hop - TALK_SQUASH * (1.0 - hop))
-    stretch += POP_STRETCH * math.exp(-POP_DECAY * line_s) * math.sin(math.tau * POP_HZ * line_s)
+        # Stretched at the top of a hop, squashed by the style's share as it lands.
+        stretch += style.talk_stretch * energy * envelope * (hop - style.talk_squash * (1.0 - hop))
+    stretch += (style.pop_stretch * math.exp(-style.pop_decay * line_s)
+                * math.sin(math.tau * style.pop_hz * line_s))
     if feel == "curious":
         tilt += CURIOUS_TILT * _smooth(line_s / CURIOUS_EASE_S)
 
-    closure = max(static_lid, blink(dialogue_s, seed))
+    closure = max(static_lid, blink(dialogue_s, seed, style))
     if feel == "bright" and 0.0 < line_s < BRIGHT_GRIN_S:
         closure = 1.0
     return Motion(tilt=tilt, stretch=stretch, lid=_quantize_lid(closure))

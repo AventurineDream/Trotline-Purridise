@@ -441,17 +441,26 @@ class Story(StoryPlay):
         self.press("x")
         chat = self.session.conversation
         self.assertEqual(chat.node_id, "scene:story_c4_knot")
-        # He speaks it in his own name, with no cat's portrait.
-        from .botidentity import name
+        # He speaks it in his own name, with his own portrait: the shell and collar he wears.
+        from .botidentity import format_text, name
+        from .botportrait import BOT, look
+        from .catart import portrait_rig
         from .platform import Text
+        from .portraitmotion import portrait_motion
         from .ui import UI
         text = Text()
         self.addCleanup(text.close)
-        renderer, drawn = UI(text, self.world), []
+        renderer, drawn, blits = UI(text, self.world), [], []
         renderer._text = lambda frame, s, *args, **kw: drawn.append(s)
-        renderer._blit_rgb = lambda *args: self.fail("a portrait for Bot")
+        renderer._blit_rgb = lambda frame, image, x, y: blits.append(image)
         renderer._dialogue(np.zeros((720, 1280, 3), np.uint8), self.state, self.session.ui)
         self.assertEqual(drawn[0], name(self.state))
+        self.assertEqual(len(blits), 1)
+        ui = self.session.ui
+        pose = portrait_motion(BOT, format_text(chat.node(self.content)["text"], self.state), ui.dialogue_s,
+                               ui.dialogue_line_s)
+        expected = portrait_rig(BOT, blits[0].shape[0], look(self.state)).frame(pose)
+        np.testing.assert_array_equal(blits[0], expected)
         self.session.tick(Keys(), 0.05)
         self.assertIs(self.session.conversation, chat)  # not closed and reopened from its start
         self.press("2")  # "Bow"

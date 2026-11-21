@@ -7,7 +7,8 @@ stripes and points stay crisp at portrait size.
 
 A dialogue portrait is rendered once into layers (paper, cat, coverage, eyes);
 `portrait_rig` scales them to the panel with open, half and closed lids so
-portraitmotion can animate the card per frame without rasterizing again.
+portraitmotion can animate the card per frame without rasterizing again. Bot's
+layers come from botportrait, which shares this module's light and ink.
 """
 
 from __future__ import annotations
@@ -96,25 +97,43 @@ def rasterize(mesh: catmesh.CatMesh, weights: dict, width: int, height: int, *, 
                          + mesh.along[ct[:, 2]] * cw[:, 2, 0])
                 colour[pick] = catmesh.coat_rgb(look, coat, cn, part[pick], along)
     emit = lerp(glow[:, None])[:, 0]
-    l = np.asarray(light, np.float32)
-    l /= np.linalg.norm(l)
-    # Two-sided normals: thin attire and ears face either way.
-    facing = np.where((n @ -forward)[:, None] < 0, -n, n)
-    diffuse = np.clip(facing @ l, 0, 1)
-    edge = np.clip(1 - np.abs(facing @ -forward), 0, 1) ** 2.5
-    warm = np.asarray((1.0, 0.82, 0.55), np.float32)
-    shade = (ambient + (1 - ambient) * diffuse)[:, None] * colour + warm * (edge * rim)[:, None] * 0.6
-    shade = shade * (1 - emit[:, None]) + colour * emit[:, None] * 1.15
-    out[covered] = np.clip(shade, 0, 1)
-    # A hand-ink outline where the silhouette meets the paper.
-    edge_px = covered & ~(np.roll(covered, 1, 0) & np.roll(covered, -1, 0) & np.roll(covered, 1, 1)
-                          & np.roll(covered, -1, 1))
-    out[edge_px] = out[edge_px] * 0.45 + INK * 0.55
+    out[covered] = shade(n, colour, emit, forward, light, rim, ambient)
+    ink_outline(out, covered)
     if parts:
         part_img = np.full(height * width, -1, np.int16)
         part_img[np.sort(pixels)] = part
         return out, covered, part_img.reshape(height, width)
     return out, covered
+
+
+def shade(n, colour, emit, forward, light=(0.45, 0.75, 0.55), rim=0.55, ambient=0.55):
+    """Lit 0–1 RGB for covered pixels: two-sided diffuse, a warm rim and self-glow.
+
+    Args:
+        n: (N, 3) unit normals; colour: (N, 3) 0–1 base colour; emit: (N,) 0–1 glow.
+        forward: The view direction from `_view`; light: direction toward the light.
+        rim: Strength of the warm edge light; ambient: the floor of the diffuse term.
+
+    Returns:
+        (N, 3) float RGB clipped to 0–1. Shared with botportrait so Bot is lit like the cats.
+    """
+    l = np.asarray(light, np.float32)
+    l = l / np.linalg.norm(l)  # not in place: a float32 array argument would be normalized too
+    # Two-sided normals: thin attire and ears face either way.
+    facing = np.where((n @ -forward)[:, None] < 0, -n, n)
+    diffuse = np.clip(facing @ l, 0, 1)
+    edge = np.clip(1 - np.abs(facing @ -forward), 0, 1) ** 2.5
+    warm = np.asarray((1.0, 0.82, 0.55), np.float32)
+    lit = (ambient + (1 - ambient) * diffuse)[:, None] * colour + warm * (edge * rim)[:, None] * 0.6
+    lit = lit * (1 - emit[:, None]) + colour * emit[:, None] * 1.15
+    return np.clip(lit, 0, 1)
+
+
+def ink_outline(out: np.ndarray, covered: np.ndarray) -> None:
+    """Darken, in place, a hand-ink outline where the (H, W) silhouette meets the paper."""
+    edge_px = covered & ~(np.roll(covered, 1, 0) & np.roll(covered, -1, 0) & np.roll(covered, 1, 1)
+                          & np.roll(covered, -1, 1))
+    out[edge_px] = out[edge_px] * 0.45 + INK * 0.55
 
 
 def _pose_weights(mesh, wave=0.0):
@@ -206,20 +225,27 @@ def lidded(cat: np.ndarray, eyes: np.ndarray, closed: float) -> np.ndarray:
 
 
 @lru_cache(maxsize=2)
-def portrait_rig(npc_id: str, side: int) -> PortraitRig | None:
+def portrait_rig(npc_id: str, side: int, look=None) -> PortraitRig | None:
     """The animated portrait at side×side for the dialogue panel, or None for a speaker without one.
 
-    Only one cat speaks at a time; two rigs cover a scene handed back and forth.
+    Bot ("bot") is drawn by botportrait from `look`, a botportrait.Look (DEFAULT_LOOK
+    when None), so a new shell or collar is a new rig. A cat's rig ignores `look`; pass
+    it only for Bot, or the same cat is cached under a second key. Only one speaker
+    talks at a time; two rigs cover a scene handed back and forth.
     Raises ValueError for a side outside 1..PORTRAIT_SIZE: larger would only upscale the
     render, and portrait_bytes_bound sizes rigs at PORTRAIT_SIZE.
     """
     if not 1 <= side <= PORTRAIT_SIZE:
         raise ValueError(f"portrait side {side} outside 1..{PORTRAIT_SIZE}")
-    from .actors import roster
-    if npc_id not in roster():
-        return None
+    from . import botportrait
+    if npc_id == botportrait.BOT:
+        layers = botportrait.portrait_layers(look or botportrait.DEFAULT_LOOK)
+    else:
+        from .actors import roster
+        if npc_id not in roster():
+            return None
+        layers = portrait_layers(npc_id)
     from .imageops import resize_rgb
-    layers = portrait_layers(npc_id)
     paper = np.clip(_paper() * 255 + 0.5, 0, 255).astype(np.uint8)
     border = np.zeros((PORTRAIT_SIZE, PORTRAIT_SIZE, 1), np.uint8)
     border[2:4, 2:-2] = border[-4:-2, 2:-2] = border[2:-2, 2:4] = border[2:-2, -4:-2] = 255
@@ -259,14 +285,17 @@ def impostor(npc_id: str, view_yaw: float = 0.6, height_px: int = 96):
 
 
 def portrait_bytes_bound() -> int:
-    """Bytes the portrait caches hold now: the shared paper ground, layers per cached cat,
-    and each rig at the largest side portrait_rig allows."""
+    """Bytes the portrait caches hold now: the shared paper ground, layers per cached cat
+    and per cached Bot look, and each rig at the largest side portrait_rig allows."""
+    from . import botportrait
     layers = PORTRAIT_SIZE ** 2 * (3 + 3 + 1 + 1)  # card, cat, cover, eyes
     paper = _paper.cache_info().currsize * PORTRAIT_SIZE ** 2 * 3 * 4  # float32 RGB
-    return (paper + portrait_layers.cache_info().currsize * layers
-            + portrait_rig.cache_info().currsize * PortraitRig.bytes_for(PORTRAIT_SIZE))
+    held = portrait_layers.cache_info().currsize + botportrait.portrait_layers.cache_info().currsize
+    return paper + held * layers + portrait_rig.cache_info().currsize * PortraitRig.bytes_for(PORTRAIT_SIZE)
 
 
 def clear_caches() -> None:
+    from . import botportrait
     portrait_layers.cache_clear()
+    botportrait.portrait_layers.cache_clear()
     portrait_rig.cache_clear()
