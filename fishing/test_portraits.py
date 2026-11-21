@@ -190,6 +190,8 @@ class BotPortrait(unittest.TestCase):
         tin = botportrait.portrait_layers(botportrait.DEFAULT_LOOK).card.astype(int)
         duck = botportrait.portrait_layers(botportrait.Look("duck", "none")).card.astype(int)
         self.assertGreater(int(np.abs(tin - duck).sum()), 10**6)
+        bow = botportrait.portrait_layers(botportrait.Look("tin", "bow")).card.astype(int)
+        self.assertGreater(int((np.abs(tin - bow).sum(axis=2) > 60).sum()), 200)  # the bow shows on his front
 
     def test_memory_bound_covers_his_layers(self):
         self.rig.frame(Motion(stretch=1.01))

@@ -112,11 +112,13 @@ def shade(n, colour, emit, forward, light=(0.45, 0.75, 0.55), rim=0.55, ambient=
     Args:
         n: (N, 3) unit normals; colour: (N, 3) 0–1 base colour; emit: (N,) 0–1 glow.
         forward: The view direction from `_view`; light: direction toward the light.
+        rim: Strength of the warm edge light; ambient: the floor of the diffuse term.
 
-    Shared with botportrait so Bot's card is lit like the cats'.
+    Returns:
+        (N, 3) float RGB clipped to 0–1. Shared with botportrait so Bot is lit like the cats.
     """
     l = np.asarray(light, np.float32)
-    l /= np.linalg.norm(l)
+    l = l / np.linalg.norm(l)  # not in place: a float32 array argument would be normalized too
     # Two-sided normals: thin attire and ears face either way.
     facing = np.where((n @ -forward)[:, None] < 0, -n, n)
     diffuse = np.clip(facing @ l, 0, 1)
@@ -226,10 +228,10 @@ def lidded(cat: np.ndarray, eyes: np.ndarray, closed: float) -> np.ndarray:
 def portrait_rig(npc_id: str, side: int, look=None) -> PortraitRig | None:
     """The animated portrait at side×side for the dialogue panel, or None for a speaker without one.
 
-    Cats come from their rig. Bot ("bot") comes from botportrait in `look`, his
-    botportrait.Look (DEFAULT_LOOK when None), so a new shell or collar is a new rig;
-    cats take look=None. Only one speaker talks at a time; two rigs cover a scene
-    handed back and forth.
+    Bot ("bot") is drawn by botportrait from `look`, a botportrait.Look (DEFAULT_LOOK
+    when None), so a new shell or collar is a new rig. A cat's rig ignores `look`; pass
+    it only for Bot, or the same cat is cached under a second key. Only one speaker
+    talks at a time; two rigs cover a scene handed back and forth.
     Raises ValueError for a side outside 1..PORTRAIT_SIZE: larger would only upscale the
     render, and portrait_bytes_bound sizes rigs at PORTRAIT_SIZE.
     """
