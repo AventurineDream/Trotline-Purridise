@@ -15,6 +15,9 @@ WOOL = (.72, .20, .28)
 DARK = (.10, .14, .17)
 LAMP = (1., .66, .18)
 MAX_FACES = 1024
+# Face part ids: 0 still, 1–3 the scouting joints (propeller or star, legs or wings),
+# EYE the lamp and glint the dialogue portrait shutters. No joint moves EYE.
+EYE = 4
 
 
 def rotation(axis, angle):
@@ -137,9 +140,13 @@ class Builder:
 
 def _eye(b, x, y, z, radius, trim):
     b.torus((x,y,z), (radius,radius), .006, trim, plane='z', segments=12)
+    # The lamp and its glint are tagged EYE so the dialogue portrait can shutter them
+    # (botportrait); the trim ring stays the socket the shutter closes inside.
+    part, b.part = b.part, EYE
     b.quad(((x-radius*.70,y-radius*.65,z+.004),(x+radius*.70,y-radius*.65,z+.004),
             (x+radius*.70,y+radius*.65,z+.004),(x-radius*.70,y+radius*.65,z+.004)),LAMP,(0,0,1),1.)
     b.box((x+.010,y+.009,z+.006),(.010,.014,.003),(.98,.96,.77),glow=.8)
+    b.part = part
 
 
 def _propeller(b, pivot, trim):
@@ -226,8 +233,10 @@ def local_mesh(shell_id='tin', style='none'):
         b.ellipsoid((0,.32,.085),(.09,.09,.085),body)
         b.box((0,.290,.178),(.125,.035,.095),trim)
         for side in (-1,1):
+            part, b.part = b.part, EYE  # the duck's painted eyes take the portrait's lids too
             b.ellipsoid((side*.048,.35,.153),(.017,.020,.010),DARK,8,4)
             b.ellipsoid((side*.048,.355,.161),(.006,.007,.004),(.97,.97,.90),6,3)
+            b.part = part
             b.joint(2 if side<0 else 3,(side*.13,.18,-.035),(0,0,1),4.,side*.25)
             b.ellipsoid((side*.14,.18,-.045),(.025,.075,.10),body,8,4)
             b.part=0
@@ -277,9 +286,18 @@ def local_mesh(shell_id='tin', style='none'):
     return b.finish()
 
 
+def collar_style(stage='none', knot=None, collar_visible=True):
+    """The local_mesh collar style for a collar stage, chosen knot and visibility setting."""
+    if not collar_visible or stage == 'none':
+        return 'none'
+    if stage == 'loose':
+        return 'loose'
+    return knot if knot in ('square', 'bow', 'sailors_hitch') else 'loop'
+
+
 def faces(origin, right, up, forward, *, shell='tin', stage='none', knot=None,
           collar_visible=True, scale=1., anim=0., scouting=False, reduced_motion=False, sway=0.):
-    style = 'none' if not collar_visible or stage=='none' else 'loose' if stage=='loose' else knot if knot in ('square','bow','sailors_hitch') else 'loop'
+    style = collar_style(stage, knot, collar_visible)
     if style == 'loose' and sway:
         style = f'loose@{max(-1., min(1., sway)):.2f}'
     mesh = local_mesh(shell,style)

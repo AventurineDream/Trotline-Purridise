@@ -1,4 +1,4 @@
-"""Animated dialogue portraits: the motion's timing and moods, the rig's frames, and the session clocks."""
+"""Animated dialogue portraits: the motion's timing and moods, the rig's frames, Bot's card, and the session clocks."""
 
 from pathlib import Path
 import tempfile
@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from . import catart
+from . import botportrait, catart
 from .game import Keys, Session
 from .portraitmotion import (BREATH_STRETCH, BRIGHT_GRIN_S, PORTRAIT_FPS, REST, TALK_EASE_S, Motion, PortraitRig,
                              mood, portrait_motion, talk_seconds)
@@ -15,6 +15,8 @@ from .world import World
 
 CAT = "grandmother_whiskers"
 LINE = "The herons were out early on the flats this morning, and so was I."
+BOT = botportrait.BOT
+BOT_LINE = "The marker is visible. It is a brass ring on a post. It is pointing up."
 
 
 def _frames(npc_id, text, seconds, *, reduced=False, line_start=0.0):
@@ -123,6 +125,79 @@ class Rig(unittest.TestCase):
         self.assertGreaterEqual(catart.portrait_bytes_bound(), held)
         with self.assertRaises(ValueError):
             catart.portrait_rig(CAT, catart.PORTRAIT_SIZE + 1)
+
+
+class BotPortrait(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        catart.clear_caches()
+        cls.rig = catart.portrait_rig(BOT, 176, botportrait.DEFAULT_LOOK)
+
+    def test_bot_opens_at_rest_and_holds_still_under_reduced_motion(self):
+        self.assertEqual(portrait_motion(BOT, BOT_LINE, 0.0, 0.0), REST)
+        self.assertEqual(set(_frames(BOT, BOT_LINE, 12, reduced=True)), {REST})
+
+    def test_tin_nods_as_he_speaks_without_squashing_or_breathing(self):
+        talk = talk_seconds(BOT_LINE)
+        poses = _frames(BOT, BOT_LINE, talk + TALK_EASE_S + 3)
+        speaking = [p.stretch for p in poses[: int(talk * 60)]]
+        after = poses[int((talk + TALK_EASE_S + 0.6) * 60):]
+        self.assertGreater(max(speaking) - 1, 0.02)
+        self.assertGreater(min(speaking), 0.995)  # tin does not squash as a nod lands
+        self.assertLess(max(abs(p.stretch - 1) for p in after), 1e-4)  # nor breathe once he has said it
+        tilts = [p.tilt for p in after]
+        self.assertGreater(max(tilts) - min(tilts), 0.01)  # still rocking with the bow, not frozen
+
+    def test_his_lamp_shutter_blinks_slower_than_a_cat_and_never_doubles(self):
+        def starts(npc_id):
+            shut = [p.lid == 1.0 for p in _frames(npc_id, "Hm.", 60, line_start=-10)]
+            return [i for i, (before, now) in enumerate(zip(shut, shut[1:])) if now and not before]
+
+        bot, cat = starts(BOT), starts(CAT)
+        self.assertGreaterEqual(len(bot), 6)
+        self.assertLess(len(bot), len(cat))
+        self.assertGreater(min(b - a for a, b in zip(bot, bot[1:])), 30)  # half a second at least
+
+    def test_rest_matches_his_still_card(self):
+        from .imageops import resize_rgb
+        still = resize_rgb(botportrait.portrait_layers(botportrait.DEFAULT_LOOK).card, 176, 176).astype(int)
+        self.assertLess(np.abs(self.rig.frame(REST).astype(int) - still).mean(), 1.0)
+
+    def test_the_shutter_closes_over_his_lamp_only(self):
+        open_ = self.rig.frame(REST).astype(int)
+        shut = self.rig.frame(Motion(lid=1.0)).astype(int)
+        changed = np.abs(open_ - shut).sum(axis=2) > 24
+        self.assertGreater(changed.sum(), 30)
+        ys, xs = np.nonzero(botportrait.portrait_layers(botportrait.DEFAULT_LOOK).eyes)
+        scale = 176 / catart.PORTRAIT_SIZE
+        cy, cx = np.nonzero(changed)
+        self.assertGreaterEqual(cy.min(), ys.min() * scale - 2)
+        self.assertLessEqual(cy.max(), ys.max() * scale + 2)
+        self.assertGreaterEqual(cx.min(), xs.min() * scale - 2)
+        self.assertLessEqual(cx.max(), xs.max() * scale + 2)
+        # The glowing lamp goes dim behind the shutter (the antenna's lamp is not an eye).
+        self.assertLess(shut[changed].sum(), open_[changed].sum() * 0.8)
+
+    def test_his_card_wears_the_saved_shell_and_collar(self):
+        state = State.new(World(), seed=87)
+        self.assertEqual(botportrait.look(state), botportrait.DEFAULT_LOOK)
+        profile = state.v2["profile"]
+        profile["shell"] = "duck"
+        profile["collar"].update(stage="retied", knot="bow")
+        self.assertEqual(botportrait.look(state), botportrait.Look("duck", "bow"))
+        state.v2["settings"]["collar_visible"] = False
+        self.assertEqual(botportrait.look(state), botportrait.Look("duck", "none"))
+        tin = botportrait.portrait_layers(botportrait.DEFAULT_LOOK).card.astype(int)
+        duck = botportrait.portrait_layers(botportrait.Look("duck", "none")).card.astype(int)
+        self.assertGreater(int(np.abs(tin - duck).sum()), 10**6)
+
+    def test_memory_bound_covers_his_layers(self):
+        self.rig.frame(Motion(stretch=1.01))
+        layers = botportrait.portrait_layers(botportrait.DEFAULT_LOOK)
+        held = sum(a.nbytes for a in layers) + self.rig.nbytes() + catart._paper().nbytes
+        self.assertGreaterEqual(catart.portrait_bytes_bound(), held)
+        with self.assertRaises(ValueError):
+            catart.portrait_rig(BOT, catart.PORTRAIT_SIZE + 1, botportrait.DEFAULT_LOOK)
 
 
 class SessionClocks(unittest.TestCase):

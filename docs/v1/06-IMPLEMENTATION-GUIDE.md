@@ -1238,6 +1238,24 @@ The session advances two clocks while the box is open, `UIState.dialogue_s` and
 `dialogue_line_s` (reset on each new line), so frames are reproducible. Reduced
 motion holds the still card; an ellipsis line keeps its half-lowered lids.
 
+**Bot's portrait.** Bot gets the same card. `botportrait` rasterizes his
+procedural shell (`botmesh.local_mesh`) with the cats' view, light, rim and ink,
+once per look: his saved shell and collar style, as `bot.appearance` gives them
+to the lake mesh. A new shell or a retied collar is a new look. The two most
+recent looks are cached, which covers both sides of a swap. His lamp and its
+glint, and the duck shell's painted eyes, are tagged `botmesh.EYE`, so the lids
+close as a shutter over the lamp; fully shut, it is the same ink ◡. He moves in
+his own `portraitmotion.Style`:
+
+- **Idle:** no breath and no squash, because he is tin. He rocks a little more
+  than a cat sways, since he rides the bow.
+- **Talking:** one stiff nod per word or so, and each line opens with a quick,
+  chime-like ping.
+- **Blinks:** his shutter blinks on a slower cycle and never doubles.
+
+Moods, reduced motion, the clocks and the 256 px guard are shared with the cats.
+His layers count in `portrait_bytes_bound`.
+
 **The Skipper.** `skipper.py` draws two dusk-brown tabby paws with cream mitts
 in the cockpit frame:
 
@@ -1641,7 +1659,7 @@ When `pro_06` is done, the prologue is done and chapter one opens: `story.chapte
 **Bot's scenes.**
 - **Where the step ends.** The two "notice" steps end where Bot notices, not at a hail. `story_c3_cold` ("The cold moves.") and `story_c4_clear` ("The marker is visible.") are Bot scenes that turn their step in on the spot.
 - **The knot.** `story_c4_knot` plays at the marker, before the reading. Bot asks for help, and the Skipper chooses one of the three knots. A scene choice may carry a `knot`, validated against `bot.json`, which `botidentity.choose_knot` ties. Then `story_c4_tied` ("It adjusts.") plays. The scene can't be left without a knot.
-- **The speaker.** A scene's speaker may be `bot`, whose name in the panel is his saved name, with no portrait. A scene is read through wherever its speaker is, so the "cat has left" check skips scenes: Bot is never on a lake's roster.
+- **The speaker.** A scene's speaker may be `bot`, whose name in the panel is his saved name, beside his own portrait (his current shell and collar; see Bot's portrait above). A scene is read through wherever its speaker is, so the "cat has left" check skips scenes: Bot is never on a lake's roster.
 
 **The collar beats (`02 §13`).**
 - The wool collar is tied when chapter one is turned in (part 2).

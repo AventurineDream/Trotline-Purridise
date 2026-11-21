@@ -906,13 +906,15 @@ class UI:
         margin = 16
         width = min(w - 24, 1000)
         # The speaker's portrait sits at the left when the frame has room (V1-29), and breathes,
-        # blinks and bobs as it speaks (portraitmotion).
+        # blinks and bobs as it speaks (portraitmotion). Bot's wears his current shell and collar.
         from .catart import portrait_rig
         from .botidentity import format_text
+        from .botportrait import BOT, look
         from .portraitmotion import portrait_motion
         text = format_text(node['text'], state)
         side = min(176, max(96, h // 4))
-        rig = portrait_rig(chat.npc_id, side) if w >= 640 else None
+        bot_look = look(state) if chat.npc_id == BOT else None
+        rig = portrait_rig(chat.npc_id, side, bot_look) if w >= 640 else None
         portrait = None
         if rig is not None:
             v2 = getattr(state, "v2", {})
