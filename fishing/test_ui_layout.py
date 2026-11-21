@@ -256,6 +256,41 @@ class GuideLayoutChecks(unittest.TestCase):
         self.assertGreater(quest_title, clock_y)
         self.assertGreater(quest_step, quest_title)
 
+    def test_comfort_status_sits_below_the_quest_tracker(self):
+        """A picnic buff or Old Salt needs label never covers the quest's next step."""
+        from .data import DISHES
+
+        world = World()
+        state = State.new(world, seed=53)
+        state.narrative.quests["q01_tea_leaves_deep_holes"].status = "active"
+        state.v2["settings"]["mode"] = "old_salt"
+        state.v2.setdefault("needs", {}).update({"awake_h": 17.0, "since_meal_h": 1000.0})
+        dish = next(d for d in DISHES.values() if d.minutes and d.effect != "weather_invitation")
+        state.v2["buff"] = {"dish": dish.id, "until_active_minutes": 10_000_000}
+        ui = UI(self.text, world)
+        panels, texts = [], []
+        original_panel, original_text = ui._panel, ui._text
+
+        def panel(frame, x, y, width, height, *args, **kwargs):
+            panels.append((int(x), int(y), int(width), int(height)))
+            return original_panel(frame, x, y, width, height, *args, **kwargs)
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            image = ui._render(label, size, color, family)
+            texts.append((label, int(x), int(y), image.shape[1], image.shape[0], len(panels)))
+            return original_text(frame, label, x, y, size, color, shadow, family)
+
+        ui._panel, ui._text = panel, text
+        ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play"))
+        status = next(t for t in texts if t[0] == "Drowsy · Peckish · Picnic")
+        step = next(t for t in texts if t[0].startswith("Set the 12-hook line"))
+        status_panel = panels[status[5] - 1]  # _comfort_status draws its panel, then the label
+        for rx, ry, rw, rh in ui._hud_rects:
+            overlaps = (status_panel[0] < rx + rw and rx < status_panel[0] + status_panel[2]
+                        and status_panel[1] < ry + rh and ry < status_panel[1] + status_panel[3])
+            self.assertFalse(overlaps, (status_panel, (rx, ry, rw, rh)))
+        self.assertGreaterEqual(status_panel[1], step[2] + step[4])
+
     def test_chart_uses_numbered_icons_and_a_side_key(self):
         world = World()
         state = State.new(world, seed=54)

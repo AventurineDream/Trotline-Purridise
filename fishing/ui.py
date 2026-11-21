@@ -2241,8 +2241,13 @@ class UI:
         margin = max(12, int(26 * unit))
         size = max(11, int(h / 60))
         label = " · ".join(labels)
-        y = margin + int(92 * unit) + 18
         width = self._measure(label, size) + 24
+        # Sit below the HUD panels in this column: the quest tracker makes the clock
+        # panel taller than its old fixed int(92*unit)+10, and a fixed offset covered it.
+        y = margin
+        for rx, ry, rw, rh in getattr(self, "_hud_rects", ()):
+            if rx < margin + width and margin < rx + rw:
+                y = max(y, ry + rh + 8)
         self._panel(frame, margin, y, width, self._render(label, size, GOLD, "sans").shape[0] + 16, .8)
         self._text(frame, label, margin + 12, y + 6, size, GOLD, False, "sans")
 
