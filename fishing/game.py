@@ -1959,9 +1959,9 @@ class Session:
     def _skipper_type(self, keys, physical: set) -> None:
         """Type into the name from this frame's physical key presses, in press order.
 
-        Letters, digits, space, minus, apostrophe and period type; Backspace deletes. Enter or
-        Esc ends typing and tidies the name with clean_name. Up and Down end it too and move the
-        row. Left and Right cycle the suggested names, so a gamepad can name the cat.
+        Letters, digits, space, minus, apostrophe and period type; Backspace deletes. Physical Return,
+        Esc, Up and Down end typing; gamepad A, B and d-pad directions retain those controls. Remapped
+        keyboard actions are ignored while typing. Only the gamepad's left/right d-pad cycles suggestions.
         """
         ui = self.ui
         draft = ui.skipper_look
@@ -1977,16 +1977,19 @@ class Session:
             if name != draft["name"]:
                 draft["name"] = name
                 ui.skipper_changed_at = ui.skipper_clock
-        if keys.pressed & {"return", "esc", "up", "down"}:
+        gamepad = set(getattr(keys, "gamepad_pressed", ()))
+        end_keys = {"return", "esc", "up", "down"}
+        if physical & end_keys or gamepad & end_keys:
             draft["name"] = skipperlook.clean_name(draft["name"])
             ui.skipper_typing = False
             ui.skipper_fresh = False
-            if keys.pressed & {"up", "down"}:
-                ui.skipper_i = (ui.skipper_i + (1 if "down" in keys.pressed else -1)) % len(skipperlook.ROWS)
+            direction_keys = (physical | gamepad) & {"up", "down"}
+            if direction_keys:
+                ui.skipper_i = (ui.skipper_i + (1 if "down" in direction_keys else -1)) % len(skipperlook.ROWS)
             return
-        if "left" in keys.pressed:
+        if "left" in gamepad:
             self._skipper_change("name", -1)
-        elif "right" in keys.pressed:
+        elif "right" in gamepad:
             self._skipper_change("name", 1)
 
     def _skipper_change(self, key: str, step: int) -> None:

@@ -38,6 +38,7 @@ def tap(session, *names, dt: float = 0.05, held=(), device: str = "keyboard") ->
     keys = Keys(pressed=names, held=held)
     keys.device = device
     if device == "gamepad":
+        keys.gamepad_pressed, keys.gamepad_held = set(names), set(held) | set(names)
         keys.physical_keyboard_pressed, keys.physical_keyboard_held = set(), set()
     session.tick(keys, dt)
 
@@ -168,6 +169,36 @@ class SkipperCreatorTests(unittest.TestCase):
         type_letters(self.session, "m")  # the first key replaces the selected name
         self.assertEqual(self.look()["name"], "M")
 
+
+    def test_rebound_keyboard_select_does_not_end_name_typing(self):
+        from .gamepad import set_key_binding
+        self.open_from_pause()
+        self.session.state.v2["settings"]["key_bindings"] = set_key_binding(None, "select", "e")
+        tap(self.session, "return")
+        for key in ("e", "v", "e"):
+            keys = Keys(pressed={key}, held={key})
+            keys.device = "keyboard"
+            keys.keyboard_pressed = {key}
+            keys.keyboard_held = {key}
+            keys.keyboard_press_order = [key]
+            self.session.tick(keys, 0.05)
+        self.assertEqual(self.look()["name"], "Eve")
+        self.assertTrue(self.session.ui.skipper_typing)
+
+    def test_rebound_left_action_does_not_cycle_suggested_names_while_typing(self):
+        from .gamepad import set_key_binding
+        self.open_from_pause()
+        self.session.state.v2["settings"]["key_bindings"] = set_key_binding(None, "steer_left", "e")
+        tap(self.session, "return")
+        for key in ("e", "v", "e"):
+            keys = Keys(pressed={key}, held={key})
+            keys.device = "keyboard"
+            keys.keyboard_pressed = {key}
+            keys.keyboard_held = {key}
+            keys.keyboard_press_order = [key]
+            self.session.tick(keys, 0.05)
+        self.assertEqual(self.look()["name"], "Eve")
+        self.assertTrue(self.session.ui.skipper_typing)
     def test_keyboard_q_and_e_turn_the_card_while_held_but_not_while_typing(self):
         self.open_from_pause()
         tap(self.session, "e", held=("e",), dt=0.5)

@@ -672,6 +672,50 @@ class Skipper(unittest.TestCase):
         # It still looks at the cats: left of centre at the start, right at the end.
         self.assertLess(yaws[0] * yaws[-1], 0.0)
 
+    def test_the_figure_fades_head_attention_when_two_cats_cancel(self):
+        from . import skipperview
+        figure = skipperview.SkipperFigure()
+        figure.actor = _skipper_actor()
+        cats = [SimpleNamespace(anchor=SimpleNamespace(x=x, z=0.0, lake_id="briar")) for x in (-6.0, 6.0)]
+        state = SimpleNamespace(npcs=cats, lake_id="briar", speed=0.0, steer=0.0, anim=0.0)
+        figure.actor.yaw = 0.0
+        yaws, blends = [], []
+        for i in range(601):
+            figure.actor.x, figure.actor.z = -3.0 + i * 0.01, 0.0
+            params = figure.params(state, True)
+            yaws.append(params["head_yaw"])
+            blends.append(params["blend"])
+        self.assertLess(float(np.abs(np.diff(yaws)).max()), 0.02)
+        self.assertLess(float(np.abs(np.diff(blends)).max()), 0.02)
+        self.assertAlmostEqual(yaws[300], 0.0, places=6)
+        self.assertAlmostEqual(blends[300], 1.0, places=6)
+
+
+    def test_generated_hull_figure_feet_stand_just_above_each_actual_deck(self):
+        from . import boatfamilies, boat
+        from . import skipperview
+        for boat_id, model in boat.BOATS.items():
+            if model.handcrafted:
+                continue
+            spec = boatfamilies.SPECS[boat_id]
+            state = SimpleNamespace(boat_id=boat_id, boat=model, v2={})
+            cam = SimpleNamespace(
+                eye_to_world=lambda p, eye=model.eye_height: np.asarray(p) + np.asarray((0.0, eye, 0.0)),
+                forward=np.asarray((0.0, 0.0, 1.0), np.float32))
+            figure = skipperview.SkipperFigure()
+            actor = figure.place(state, cam)
+            faces = boatfamilies.npc_faces(boat_id, 0.0, 0.0, 0.0)
+            deck = np.asarray(spec.deck_color, np.float32)
+            candidates = []
+            for face in faces:
+                if face.normal[1] <= 0.99 or not np.allclose(face.color, deck, atol=1e-5):
+                    continue
+                extent = np.ptp(face.pts[:, (0, 2)], axis=0)
+                candidates.append((float(extent[0] * extent[1]), float(face.pts[:, 1].mean())))
+            with self.subTest(boat=boat_id):
+                self.assertTrue(candidates, "generated hull has a deck face in its authored deck colour")
+                deck_y = max(candidates)[1]
+                self.assertAlmostEqual(actor.y, deck_y + 0.02, places=5)
     def test_hauling_is_transient_and_never_saved(self):
         import tempfile
         state = self._state("jon", hauling=True)

@@ -219,7 +219,7 @@ def _int_seed(actor: Actor) -> int:
 
 
 def pose_state(actor: Actor, player_x: float | None, player_z: float | None, anim: float, reduced_motion: bool,
-               *, gesture: float | None = None, steer: float = 0.0) -> dict:
+               *, gesture: float | None = None, steer: float = 0.0, attention: float = 1.0) -> dict:
     """This frame's animation parameters for one actor: the single source for cat.vert and `animate`.
 
     Args:
@@ -234,6 +234,9 @@ def pose_state(actor: Actor, player_x: float | None, player_z: float | None, ani
         gesture: Overrides the distance blend (0-1): the Skipper's wave-back and the
             creator's hello.
         steer: -1..1 helm input; turns the wheel and leans the body (the Skipper).
+        attention: 0-1 scale on the head's turn toward the point: the Skipper lowers it
+            when cats on opposite sides pull its look both ways, so the head eases to
+            centre instead of snapping across. Cats always pass 1.
 
     Returns:
         A dict of floats (angles in radians, lengths in metres at size 1) plus
@@ -253,7 +256,8 @@ def pose_state(actor: Actor, player_x: float | None, player_z: float | None, ani
     # The angle from the cat's facing to the player, clamped to a comfortable turn; a player
     # straight behind is out of sight, so the head eases back rather than snapping across.
     bearing = (math.atan2(dx, dz) - actor.yaw + math.pi) % math.tau - math.pi
-    track = max(-1.1, min(1.1, bearing)) * near * (1.0 - catmotion.smooth((abs(bearing) - 2.3) / 0.6))
+    track = (max(-1.1, min(1.1, bearing)) * near * min(max(float(attention), 0.0), 1.0)
+             * (1.0 - catmotion.smooth((abs(bearing) - 2.3) / 0.6)))
     t = 0.0 if reduced_motion else float(anim)
     live = 0.0 if reduced_motion else 1.0
     seed = _int_seed(actor)

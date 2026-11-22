@@ -23,9 +23,26 @@ import numpy as np
 from . import actors, catart, catmesh, catmotion, skipperlook
 from .dialogue import HAIL_SPEED_MPS
 
-# Feet in the level eye frame (metres): the cockpit floor under the eye, measured from
-# each hull's faces (software._boat_faces). A boat not listed stands 0.95 m below the eye.
+# Measured eye-local cockpit floors for the four hand-built meshes; generated hulls
+# use their authored deck height from boatfamilies.SPECS instead.
 FLOOR = {"jon": -0.96, "rowboat": -0.88, "sail": -1.0, "pontoon": -0.92}
+
+
+def _floor_offset(state) -> float:
+    """Feet height in the eye frame, metres: measured for hand-built hulls, authored deck for generated."""
+    boat_id = getattr(state, "boat_id", "")
+    if boat_id in FLOOR:
+        return FLOOR[boat_id]
+    model = getattr(state, "boat", None)
+    if model is not None:
+        from .boatfamilies import SPECS
+        if boat_id == "log_raft":
+            # Its deck is the top face of six logs, not SPECS["log_raft"].deck.
+            return float(model.half_beam / 6.0 + 0.04 - model.eye_height + 0.02)
+        spec = SPECS.get(boat_id)
+        if spec is not None:
+            return float(spec.deck - model.eye_height + 0.02)
+    return -0.95
 SEED = 0.4242          # the Skipper's idle rhythm (actors seed range 0-1)
 WAVE_BACK_M = 20.0     # dialogue.HAIL_RANGE_M: close enough to talk is close enough to wave
 SHARE_M = 3.0          # cats within a few metres of the nearest share the Skipper's attention
@@ -59,7 +76,7 @@ class SkipperFigure:
             self.actor = actors.Actor("skipper", look["name"], 0.0, 0.0, 0.0, 0.0, None, {}, [], SEED,
                                       appearance=appearance)
             self._key = key
-        floor = FLOOR.get(getattr(state, "boat_id", ""), -0.95)
+        floor = _floor_offset(state)
         foot = boat_cam.eye_to_world(np.array([0.0, floor, 0.0], np.float32))
         forward = np.asarray(boat_cam.forward, np.float32)
         actor = self.actor
@@ -90,22 +107,30 @@ class SkipperFigure:
             dx, dz = anchor.x - actor.x, anchor.z - actor.z
             near.append((dx, dz, math.hypot(dx, dz)))
         target, distance = None, math.inf
+        attention = 0.0
         if near:
             distance = min(d for _, _, d in near)
             vx = vz = 0.0
+            weight_sum = 0.0
             for dx, dz, d in near:
                 if d > 1e-6:
                     w = math.exp(-(d - distance) / SHARE_M)
                     vx, vz = vx + w * dx / d, vz + w * dz / d
+                    weight_sum += w
             norm = math.hypot(vx, vz)
+            attention = min(norm / weight_sum, 1.0) if weight_sum else 0.0
             if norm > 1e-6:
-                reach = max(distance, 1.0)  # at least a metre out, so the bearing stays well defined
-                target = (actor.x + vx / norm * reach, actor.z + vz / norm * reach)
+                dx, dz = vx / norm, vz / norm
+            else:
+                # Opposing cats cancel to the forward direction; attention fades to zero.
+                dx, dz = math.sin(actor.yaw), math.cos(actor.yaw)
+            reach = max(distance, 1.0)
+            target = (actor.x + dx * reach, actor.z + dz * reach)
         slow = 1.0 - catmotion.smoother((abs(float(getattr(state, "speed", 0.0))) - 0.5 * HAIL_SPEED_MPS)
                                         / (0.5 * HAIL_SPEED_MPS))
         wave = (1.0 - catmotion.smoother((distance - (WAVE_BACK_M - 6.0)) / 6.0)) * slow if target else 0.0
         return actors.pose_state(actor, *(target or (None, None)), float(getattr(state, "anim", 0.0)), reduced_motion,
-                                 gesture=wave, steer=float(getattr(state, "steer", 0.0)))
+                                 gesture=wave, steer=float(getattr(state, "steer", 0.0)), attention=attention)
 
 
 # --- The creator's preview card -------------------------------------------------
