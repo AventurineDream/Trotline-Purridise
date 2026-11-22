@@ -41,13 +41,16 @@ def _view(yaw, pitch):
 
 
 def rasterize(mesh: catmesh.CatMesh, weights: dict, width: int, height: int, *, yaw=0.6, pitch=0.18,
-              frame=None, light=(0.45, 0.75, 0.55), rim=0.55, background=None, ambient=0.55, parts=False):
+              frame=None, light=(0.45, 0.75, 0.55), rim=0.55, background=None, ambient=0.55, parts=False,
+              posed=None):
     """(RGB float image, alpha mask) of one posed actor from a fixed view.
 
     With parts=True a third value is returned: the (height, width) int16 mesh part id
     of each pixel, -1 where nothing covers it (the portrait finds its eyes this way).
+    `posed` is an optional (positions, normals) pair from actors.animate that replaces
+    the blend of `weights`: an animated frame (the Skipper creator's live preview).
     """
-    pos, nrm = mesh.blend(weights)
+    pos, nrm = mesh.blend(weights) if posed is None else posed
     rgb, glow = catmesh.paint(mesh)
     right, up, forward = _view(yaw, pitch)
     sx, sy, depth = pos @ right, pos @ up, pos @ forward
@@ -137,10 +140,11 @@ def ink_outline(out: np.ndarray, covered: np.ndarray) -> None:
 
 
 def _pose_weights(mesh, wave=0.0):
-    base = mesh.cats[0][0]["pose"]
-    if base == "wave" or wave <= 0:
+    """Blend weights for a mesh's idle pose and `wave` (0-1) of its gesture pose."""
+    base, gesture = catmesh.slots(mesh)
+    if gesture is None or wave <= 0:
         return {base: 1.0}
-    return {base: 1.0 - wave, "wave": wave}
+    return {base: 1.0 - wave, gesture: wave}
 
 
 class PortraitLayers(NamedTuple):

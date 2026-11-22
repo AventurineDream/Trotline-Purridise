@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+import json
 import math
 
 import numpy as np
@@ -26,16 +27,50 @@ LOD0, LOD1 = 0, 1
 TORSO, HEAD, MUZZLE, NOSE, EYE, EAR, INNER_EAR, WHISKER = 0, 1, 2, 3, 4, 5, 6, 7
 ARM_UPPER, FOREARM, PAW, LEG, FOOT, TAIL = 8, 9, 10, 11, 12, 13
 ATTIRE, PROP, GLOW, RUFF, FOREARM_WAVE, PAW_WAVE, PUPIL = 14, 15, 16, 17, 18, 19, 20
-# Rig channels for procedural motion, shared with shaders/cat.vert.
-RIG_BODY, RIG_HEAD, RIG_EAR, RIG_TAIL, RIG_WAVE, RIG_TORSO = 0, 1, 2, 3, 4, 5
+# Rig channels for procedural motion, shared with shaders/cat.vert. A vertex's rig value is
+# its channel plus RIG_STRIDE times its cat's index in the actor (Pebble, Pip's twin, is 1),
+# so each cat turns its head and works its arms about its own pivots.
+RIG_BODY, RIG_HEAD, RIG_EAR, RIG_TAIL, RIG_WAVE, RIG_TORSO, RIG_EAR_R, RIG_EYE, RIG_ARM = 0, 1, 2, 3, 4, 5, 6, 7, 8
+RIG_STRIDE = 16
+HEAD_CHANNELS = (RIG_HEAD, RIG_EAR, RIG_EAR_R, RIG_EYE)
 HEAD_ATTIRE = ("cap", "spectacles", "goggles")
 HEAD_PARTS = (HEAD, MUZZLE, NOSE, EYE, EAR, INNER_EAR, WHISKER, PUPIL)
 HEAD_SCALE = 1.15  # a big, friendly head
+# Authored idle poses (npcs.json). Each has a gesture pose it blends to as the player comes
+# near: sitters and crafters wave, the helmsman waves from the wheel, a napper rouses and
+# looks up. A waving cat is already mid-gesture.
 POSES = ("sit_fish", "nap_curl", "wave", "craft", "helm")
+GESTURES = {"sit_fish": "wave", "craft": "wave", "helm": "helm_wave", "nap_curl": "nap_rouse", "wave": None}
+LYING = ("nap_curl", "nap_rouse")
+STANDING = ("helm", "helm_wave")
 PATTERNS = ("solid", "tabby", "mackerel", "calico", "tortoiseshell", "tuxedo", "point", "spotted", "bicolor")
-# Neck pivot (head turn) and right elbow (wave) in the cat frame at size 1.
-NECK = np.array([0.0, 0.40, 0.02], np.float32)
-EYE_CENTRE = np.array([0.042, 0.488, 0.098], np.float32)
+
+
+@dataclass(frozen=True)
+class Pivots:
+    """One cat's motion pivots in one built pose, in the actor frame (metres, posed size).
+
+    neck: head turn, nod and tilt; elbow: the right forearm's wave and reel; arm,
+    arm_axis: the arms' work rotation (shoulders and x for sitters, the wheel's hub and
+    z at the helm); head_up: the head's up axis (blinks close along it); eye_open: the
+    pose's 0-1 eye opening; seat: the weight-shift pivot under the cat; yaw: the cat's
+    turn within the actor (radians; Pebble sits a little turned).
+    """
+
+    neck: np.ndarray
+    elbow: np.ndarray
+    arm: np.ndarray
+    arm_axis: np.ndarray
+    head_up: np.ndarray
+    eye_open: float
+    seat: np.ndarray
+    yaw: float
+
+    def moved(self, rot: np.ndarray, offset: np.ndarray, yaw: float) -> "Pivots":
+        """These pivots for a cat placed in the actor by `rot` (3×3), `offset` and `yaw`."""
+        return Pivots(self.neck @ rot.T + offset, self.elbow @ rot.T + offset, self.arm @ rot.T + offset,
+                      self.arm_axis @ rot.T, self.head_up @ rot.T, self.eye_open, self.seat @ rot.T + offset,
+                      self.yaw + yaw)
 
 
 @dataclass(frozen=True)
@@ -51,7 +86,7 @@ class CatMesh:
     triangles: np.ndarray    # (m, 3) int32
     tags: np.ndarray         # (n,) attire item index, or -1
     rig: np.ndarray          # (n,) float32 rig channel (RIG_*)
-    elbow: dict              # pose -> right elbow pivot (3,), for the wave
+    pivots: dict             # pose -> (Pivots, ...) one per cat, for the motion in shaders/cat.vert
     cats: tuple              # ((look, first vertex, end vertex), ...): Pip & Pebble share an actor
 
     @property
@@ -119,6 +154,21 @@ POSE_JOINTS = {
                   elbow_r=(-0.12, 0.49, 0.10), wrist_r=(-0.08, 0.50, 0.21),
                   tail=((0.0, 0.31, -0.10), (0.02, 0.16, -0.20), (0.05, 0.02, -0.26), (0.10, 0.16, -0.34)),
                   prop=((0.0, 0.50, 0.24), (0.0, 0.3, 0.95))),
+    # Gesture poses (GESTURES): never authored, only blended to as the player comes near.
+    # At the helm, the left paw keeps the wheel and the right waves high; the tail lifts.
+    "helm_wave": _pose(torso=((0.0, 0.47, 0.0), 0.05), head=((0.0, 0.725, 0.03), -0.05, 0.0),
+                       hip=(0.07, 0.34, -0.01), knee=(0.08, 0.19, 0.04), ankle=(0.08, 0.045, -0.02),
+                       shoulder=(0.095, 0.585, 0.03), elbow_l=(0.12, 0.49, 0.10), wrist_l=(0.08, 0.50, 0.21),
+                       elbow_r=(-0.16, 0.645, 0.05), wrist_r=(-0.15, 0.765, 0.08),
+                       tail=((0.0, 0.31, -0.10), (0.02, 0.30, -0.22), (0.06, 0.42, -0.28), (0.04, 0.55, -0.22)),
+                       prop=((0.0, 0.50, 0.24), (0.0, 0.3, 0.95))),
+    # A napper roused: still curled, the head lifted off the paws, eyes half open.
+    "nap_rouse": _pose(torso=((0.0, 0.11, -0.02), 1.42), head=((0.0, 0.20, 0.17), -0.10, 0.10),
+                       hip=(0.07, 0.07, -0.14), knee=(0.10, 0.05, -0.02), ankle=(0.08, 0.03, 0.06),
+                       shoulder=(0.08, 0.10, 0.10), elbow_l=(0.09, 0.05, 0.18), wrist_l=(0.05, 0.035, 0.27),
+                       elbow_r=(-0.09, 0.05, 0.18), wrist_r=(-0.05, 0.035, 0.27),
+                       tail=((0.0, 0.08, -0.22), (0.20, 0.02, -0.30), (0.26, 0.02, 0.10), (0.06, 0.08, 0.30)),
+                       eyes_open=0.75, prop=((0.0, 0.03, 0.27), (0.0, 0.0, 1.0))),
 }
 
 
@@ -328,7 +378,7 @@ def _scaled(p, size):
 
 
 def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
-    """One cat in one pose: (positions, normals, part, along, triangles, tags, right elbow)."""
+    """One cat in one pose: (positions, normals, part, along, triangles, tags, Pivots)."""
     j = POSE_JOINTS[pose]
     size = float(look["size"])
     build_ = float(look["build"])
@@ -351,14 +401,14 @@ def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
         return np.stack([widen, np.ones_like(widen), widen * 0.96], -1)
 
     # Legs shorten the sitting height for Munchkins and lift the standing body.
-    lift = (legs - 1.0) * (0.12 if pose == "helm" else 0.03)
+    lift = (legs - 1.0) * (0.12 if pose in STANDING else 0.03)
     centre = _scaled((tcx, tcy + lift, tcz), s)
     p, n, f, a = _ellipsoid(centre, torso_r, torso_rot, *c["body"], shape=pear)
     out.add(p, n, f, TORSO, a)
     if coat == "long":
         # A neck ruff where the long coat gathers.
         ruff_c = _scaled(np.array(j["head"][0]) + (0.0, -0.075, -0.01), s)
-        if pose == "nap_curl":
+        if pose in LYING:
             ruff_c = _scaled((0.0, 0.10, 0.13), s)
         p, n, f, a = _ellipsoid(ruff_c, (0.10 * s * build_, 0.055 * s, 0.095 * s * build_),
                                 _rot(pitch=tpitch * 0.5), *c["small"])
@@ -443,13 +493,19 @@ def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
         out.add(p, n, f, PAW if side > 0 else PAW_WAVE, a)
         if side < 0:
             elbow_pivot = elbow
+    # The arms work about the shoulders' line when sitting and about the wheel's hub at the helm.
+    sx, sy, sz = j["shoulder"]
+    arm_pivot, arm_axis = _scaled((0.0, sy + lift, sz), s), np.array([1.0, 0.0, 0.0], np.float32)
+    if pose in STANDING:
+        arm_pivot = _scaled(j["prop"][0], s) + np.array([0, lift * s, 0], np.float32)
+        arm_axis = np.asarray(j["prop"][1], np.float32) / np.float32(np.linalg.norm(j["prop"][1]))
 
     # Hind legs: a haunch along hip→knee, a shin to the ankle, the foot forward.
     for side in (1, -1):
         hip = _scaled((side * j["hip"][0], j["hip"][1], j["hip"][2]), s)
         knee = _scaled((side * j["knee"][0], j["knee"][1], j["knee"][2]), s)
         ankle = _scaled((side * j["ankle"][0], j["ankle"][1], j["ankle"][2]), s)
-        if pose == "helm":
+        if pose in STANDING:
             hip, knee = hip + np.array([0, lift * s, 0]), knee + np.array([0, lift * s * 0.5, 0])
         thigh = knee - hip
         length = max(np.linalg.norm(thigh), 1e-6)
@@ -470,7 +526,7 @@ def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
     # Tail: a swept tube along the pose's cage; bob and none are short.
     tail_kind = look["tail"]
     length = {"long": 1.0, "plume": 1.0, "bob": 0.28, "none": 0.08}[tail_kind]
-    cage = [_scaled(p, s) + np.array([0, lift * s if pose != "nap_curl" else 0, 0]) for p in j["tail"]]
+    cage = [_scaled(p, s) + np.array([0, lift * s if pose not in LYING else 0, 0]) for p in j["tail"]]
     pts = _bezier(cage, c["tail"])
     if length < 1.0:
         # Keep the sample count (so poses share topology) on a shorter curve.
@@ -487,7 +543,12 @@ def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
             lod=lod, counts=c, pose=pose)
     _prop(out, look, j, s, lift, lod, counts=c)
     pos, nrm, part, along, tris, tags = out.arrays()
-    return pos, nrm, part, along, tris, tags, (np.zeros(3, np.float32) if elbow_pivot is None else elbow_pivot)
+    pivots = Pivots(neck=(head_c + (np.array([0.0, -0.07, -0.02], np.float32) * hs) @ head_rot.T).astype(np.float32),
+                    elbow=np.asarray(elbow_pivot, np.float32), arm=np.asarray(arm_pivot, np.float32),
+                    arm_axis=arm_axis.astype(np.float32),
+                    head_up=(head_rot @ np.array([0.0, 1.0, 0.0])).astype(np.float32), eye_open=eyes,
+                    seat=np.zeros(3, np.float32), yaw=0.0)
+    return pos, nrm, part, along, tris, tags, pivots
 
 
 def _attire(out, look, j, s, build_, fluff, lift, head_c, head_rot, torso_rot, torso_c, radii_torso, lod, counts,
@@ -498,7 +559,7 @@ def _attire(out, look, j, s, build_, fluff, lift, head_c, head_rot, torso_rot, t
         return head_c + (np.asarray(local, np.float32) * hs) @ head_rot.T
 
     neck = _scaled(np.array(j["head"][0]) + (0.0, -0.085, -0.005), s) + np.array([0, lift * s, 0], np.float32)
-    if pose == "nap_curl":
+    if pose in LYING:
         neck = _scaled((0.0, 0.11, 0.12), s)
     for index, item in enumerate(look["attire"]):
         out.tag = index
@@ -614,8 +675,15 @@ def _prop(out, look, j, s, lift, lod, counts):
 # --- Assembly and caching -------------------------------------------------------
 
 def _poses_for(look) -> tuple[str, ...]:
-    """The cat's own idle pose, plus the wave it blends to as the player comes near."""
-    return (look["pose"],) if look["pose"] == "wave" else (look["pose"], "wave")
+    """The cat's own idle pose, plus the gesture it blends to as the player comes near."""
+    gesture = GESTURES[look["pose"]]
+    return (look["pose"],) if gesture is None else (look["pose"], gesture)
+
+
+def slots(mesh: "CatMesh") -> tuple[str, str | None]:
+    """A mesh's (idle, gesture) pose keys; gesture is None for a cat already waving."""
+    pose = mesh.cats[0][0]["pose"]
+    return pose, GESTURES[pose]
 
 
 def _assemble(look: dict, lod: int) -> CatMesh:
@@ -623,21 +691,20 @@ def _assemble(look: dict, lod: int) -> CatMesh:
     if "twin" in look:
         looks.append((look["twin"], np.array([-0.26 * look["size"], 0.0, 0.04], np.float32), 0.35))
     poses = _poses_for(look)
-    positions, normals, elbows = {}, {}, {}
+    positions, normals, pivots = {}, {}, {}
     coat, coat_n, part, along, tris, tags, rig, cats = [], [], [], [], [], [], [], []
     count = 0
     for index, (cat_look, offset, yaw) in enumerate(looks):
         rot = _rot(yaw=yaw)
-        for pose in poses:
-            # The twin keeps its own idle pose alongside the first cat's, and waves too.
-            own = cat_look["pose"] if pose == look["pose"] else pose
-            p, n, _pa, _al, _tr, _tg, elbow = build(cat_look, own, lod)
+        for slot, pose in enumerate(poses):
+            # The twin keeps its own idle pose and blends to that pose's own gesture.
+            own = cat_look["pose"] if slot == 0 else (GESTURES[cat_look["pose"]] or cat_look["pose"])
+            p, n, _pa, _al, _tr, _tg, cat_pivots = build(cat_look, own, lod)
             positions.setdefault(pose, []).append(p @ rot.T + offset)
             normals.setdefault(pose, []).append(n @ rot.T)
-            if index == 0:
-                elbows[pose] = elbow @ rot.T + offset
+            pivots.setdefault(pose, []).append(cat_pivots.moved(rot.astype(np.float32), offset, yaw))
         p, n, pa, al, tr, tg, _ = build(cat_look, "sit_fish", lod)
-        rig.append(_rig(cat_look, pa, tg))
+        rig.append(_rig(cat_look, pa, tg, p) + RIG_STRIDE * index)
         coat.append(p @ rot.T + offset)
         coat_n.append(n @ rot.T)
         part.append(pa)
@@ -650,17 +717,25 @@ def _assemble(look: dict, lod: int) -> CatMesh:
                    {k: np.concatenate(v).astype(np.float32) for k, v in normals.items()},
                    np.concatenate(coat).astype(np.float32), np.concatenate(coat_n).astype(np.float32),
                    np.concatenate(part), np.concatenate(along), np.concatenate(tris).astype(np.int32),
-                   np.concatenate(tags), np.concatenate(rig).astype(np.float32), elbows, tuple(cats))
+                   np.concatenate(tags), np.concatenate(rig).astype(np.float32),
+                   {k: tuple(v) for k, v in pivots.items()}, tuple(cats))
 
 
-def _rig(look, part, tags):
+def _rig(look, part, tags, pos):
+    """Each vertex's rig channel (RIG_*) for one cat; `pos` is its sit pose, which sides the ears."""
     rig = np.full(len(part), RIG_BODY, np.float32)
     head_items = [i for i, item in enumerate(look["attire"]) if item["kind"] in HEAD_ATTIRE]
     on_head = np.isin(part, HEAD_PARTS) | ((part == ATTIRE) & np.isin(tags, head_items)) | (
         (part == GLOW) & np.isin(tags, head_items))
     rig[on_head] = RIG_HEAD
-    rig[(part == EAR) | (part == INNER_EAR)] = RIG_EAR
+    ear = (part == EAR) | (part == INNER_EAR)
+    rig[ear & (pos[:, 0] >= 0)] = RIG_EAR
+    rig[ear & (pos[:, 0] < 0)] = RIG_EAR_R
+    rig[(part == EYE) | (part == PUPIL)] = RIG_EYE
     rig[part == TAIL] = RIG_TAIL
+    # The left arm, the right upper arm and whatever the paws hold work together (cast, page, wheel).
+    held = (part == PROP) | ((part == GLOW) & (tags < 0) & (look["prop"] == "tablet"))
+    rig[np.isin(part, (ARM_UPPER, FOREARM, PAW)) | held] = RIG_ARM
     rig[(part == FOREARM_WAVE) | (part == PAW_WAVE)] = RIG_WAVE
     rig[part == TORSO] = RIG_TORSO
     return rig
@@ -668,33 +743,59 @@ def _rig(look, part, tags):
 
 # Both LODs of every resident actor, with a few spare for portraits.
 MESH_CACHE = 32
+# The Skipper's look and the creator's draft (both LODs), keyed by the look itself.
+LOOK_CACHE = 6
 _largest = [0]
+
+
+def _freeze(mesh: CatMesh) -> CatMesh:
+    # Cached meshes are shared by actors, portraits and both renderers: keep them read-only.
+    for value in (mesh.coat, mesh.coat_normals, mesh.part, mesh.along, mesh.triangles, mesh.tags, mesh.rig,
+                  *mesh.positions.values(), *mesh.normals.values()):
+        value.setflags(write=False)
+    _largest[0] = max(_largest[0], mesh.nbytes)
+    return mesh
 
 
 @lru_cache(maxsize=MESH_CACHE)
 def _cached(npc_id: str, lod: int) -> CatMesh:
     from .content import load_content_v2
 
-    mesh = _assemble(load_content_v2().roster[npc_id]["appearance"], lod)
-    # Cached meshes are shared by actors, portraits and both renderers: keep them read-only.
-    for value in (mesh.coat, mesh.coat_normals, mesh.part, mesh.along, mesh.triangles, mesh.tags, mesh.rig,
-                  *mesh.positions.values(), *mesh.normals.values(), *mesh.elbow.values()):
-        value.setflags(write=False)
-    _largest[0] = max(_largest[0], mesh.nbytes)
-    return mesh
+    return _freeze(_assemble(load_content_v2().roster[npc_id]["appearance"], lod))
 
 
 def cat_mesh(npc_id: str, lod: int = LOD0) -> CatMesh:
+    """The cached mesh of roster cat `npc_id` (Pip & Pebble's is one mesh) at `lod`."""
     return _cached(npc_id, lod)
 
 
+@lru_cache(maxsize=LOOK_CACHE)
+def _look_cached(key: str, lod: int) -> CatMesh:
+    return _freeze(_assemble(json.loads(key), lod))
+
+
+def look_mesh(look: dict, lod: int = LOD0) -> CatMesh:
+    """The cached mesh for an appearance that is not in the roster (the Skipper's).
+
+    Args:
+        look: An npcs.json-style appearance (skipperlook.appearance builds one).
+        lod: LOD0 or LOD1.
+
+    Returns:
+        A read-only CatMesh shared by every caller asking for an equal look.
+    """
+    return _look_cached(json.dumps(look, sort_keys=True), lod)
+
+
 def cache_bytes_bound() -> int:
-    """An upper bound on the mesh cache: its entries times the largest mesh built."""
-    return _cached.cache_info().currsize * _largest[0]
+    """An upper bound on both mesh caches: their entries times the largest mesh built."""
+    return (_cached.cache_info().currsize + _look_cached.cache_info().currsize) * _largest[0]
 
 
 def clear_caches() -> None:
+    """Drop every cached mesh (tests and memory checks start from empty)."""
     _cached.cache_clear()
+    _look_cached.cache_clear()
 
 
 # --- Coat patterns: the reference for shaders/cat.frag ---------------------------
@@ -864,10 +965,10 @@ VERTEX_ATTRIBUTES = ("in_pos_a", "in_pos_b", "in_nrm_a", "in_nrm_b", "in_coat", 
 
 
 def vertex_block(mesh: CatMesh) -> np.ndarray:
-    """(n, 25) float32 vertices in VERTEX_FORMAT: the idle pose, the wave pose and the paint."""
-    pose = mesh.cats[0][0]["pose"]
+    """(n, 25) float32 vertices in VERTEX_FORMAT: the idle pose, its gesture pose and the paint."""
+    pose, gesture = slots(mesh)
     pos_a, nrm_a = mesh.positions[pose], mesh.normals[pose]
-    pos_b, nrm_b = mesh.positions.get("wave", pos_a), mesh.normals.get("wave", nrm_a)
+    pos_b, nrm_b = mesh.positions.get(gesture, pos_a), mesh.normals.get(gesture, nrm_a)
     rgb, glow = paint(mesh)
     return np.concatenate([pos_a, pos_b, nrm_a, nrm_b, mesh.coat, mesh.coat_normals, rgb, mesh.part[:, None],
                            mesh.along[:, None], glow[:, None], mesh.rig[:, None]], 1).astype(np.float32)
