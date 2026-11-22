@@ -24,8 +24,8 @@ Run from the repository root. Record the exact command and the last line of outp
 | --- | --- | --- |
 | `python -m fishing --selftest --software` | `selftest ok` expected | Headless. |
 | `python -m fishing --selftest` | `selftest ok` expected | Native renderer; needs an OpenGL context. |
-| `python -m fishing --smoke` | `window ok ...` line, exit 0 | Real window. Runs a 5-second throttle sequence, a 12x midnight crossing, two boat purchases with fuel-free sailing, and Cedar and Briar lake swaps. Writes `shots/window*.png` and `shots/midnight.png` under the repository's `shots/` folder. OpenGL only: there is no `--software` form. |
-| `python -m fishing --check-save --save <scratch>` | `migrated=yes` for a v1 save | Copy an old `saves/briar.json` to the scratch path first. The backup must sit beside it. |
+| `python -m fishing --smoke` | `window ok ...` line, exit 0 | Real window, run from the repository root. Runs a 5-second throttle sequence, a 12x midnight crossing, two boat purchases with fuel-free sailing, and Cedar and Briar lake swaps. Writes `shots/window*.png` and `shots/midnight.png` relative to the working directory. Uses the OpenGL window; `--software` has no effect here. |
+| `XDG_DATA_HOME=<scratch> python -m fishing --check-save` | `migrated=yes` for a v1 save | Put an old `saves/briar.json` in the clone root first. Set `XDG_DATA_HOME` to a scratch folder, or this checks the real save location. The migrated save and its `backup/` folder go under that scratch folder. `--save PATH` skips the legacy migration and prints `migrated=no`. |
 | `python -m unittest discover` | all tests pass | About 20 to 25 minutes on CI-class hardware. |
 | `ruff check .` | `All checks passed!` | Rules in `ruff.toml`. |
 
