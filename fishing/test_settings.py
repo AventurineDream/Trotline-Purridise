@@ -14,6 +14,7 @@ from .gamepad import KEY_NAMES, normalize_key_bindings
 from .platform import Input, SCAN, find_font
 from .savepaths import merge_v2_defaults
 from .sim import Hook, SetLine, State
+from .test_skipper_creator import finish_creator
 from .ui import UI, UIState, TEXT_SIZE_SCALES
 from .world import World
 
@@ -273,6 +274,7 @@ class SettingsChecks(unittest.TestCase):
         # The new mode choice defaults to Cozy; select Old Salt explicitly.
         session.tick(Keys(pressed={"right"}), 0)
         session.tick(Keys(pressed={"return"}), 0)
+        finish_creator(session)  # Done starts the morning, carrying these preferences
         self.assertEqual(session.state.v2["settings"], settings)
         self.assertEqual(session.state.v2["mode"], "old_salt")
         self.assertFalse(session.state.v2["profile"]["collar"]["visible"])

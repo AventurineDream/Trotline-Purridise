@@ -130,22 +130,19 @@ class SoftwareRenderer:
         from .actors import ActorCache
         self.actor_cache = ActorCache(world)
         self._actor_paint: dict = {}
+        from .skipperview import SkipperFigure
+        self.skipper = SkipperFigure()
+        self._skipper_paint = None  # (mesh, (rgb, glow)) of the look last drawn
 
     def _actors(self, cam, state, light):
         """Resident cats as Gouraud-lit meshes over the frame, their boats as faces (V1-29)."""
-        from .actors import LOD1_RANGE, animate, pose_state, roster
+        from .actors import LOD1_RANGE, pose_state, roster
         from .catmesh import LOD0, LOD1, paint
-        from .raster import cover
         actors = self.actor_cache.sync(getattr(state, "npcs", ()) or (), roster())
         live = {(actor.npc_id, lod) for actor in actors for lod in (LOD0, LOD1)}
         for key in [key for key in self._actor_paint if key not in live]:
             del self._actor_paint[key]
         reduced = bool(state.v2.get("settings", {}).get("reduced_motion", False))
-        sun = np.asarray(light["sun"], np.float32)
-        amb = 0.70 + (0.18 - 0.70) * light["night"] + light["moon_i"] * 0.17 + light.get("starlight", 0.0) * light["night"] * 0.22
-        warm = np.asarray((1.0, 0.91, 0.73), np.float32) * 0.55 * light["sun_i"]
-        rim_c = np.asarray((1.0, 0.82, 0.55), np.float32) * 0.18 * (1.0 - light["night"] * 0.6)
-        fog_c = np.asarray(light["horizon"], np.float32)
         for actor in actors:
             distance = math.hypot(actor.x - cam.x, actor.z - cam.z)
             # _faces culls past 170 m face by face; a whole boat that far is skipped at once.
@@ -157,42 +154,69 @@ class SoftwareRenderer:
             mesh = actor.mesh(lod)
             if (actor.npc_id, lod) not in self._actor_paint:
                 self._actor_paint[actor.npc_id, lod] = paint(mesh)
-            rgb, glow = self._actor_paint[actor.npc_id, lod]
-            pos, nrm = animate(mesh, pose_state(actor, state.x, state.z, state.anim, reduced))
-            world_pts = actor.local_to_world(pos)
-            pts = cam.world_to_cam(world_pts)
-            if pts[:, 2].max() < 0.25:
-                continue
-            with np.errstate(divide="ignore", invalid="ignore"):
-                sx, sy, zz = cam.cam_to_screen(pts)
-            pixels, owner, bary, depth = cover(sx, sy, zz, mesh.triangles, self.w, self.h, near=0.22)
-            flat_z = self.z.reshape(-1)
-            nearer = depth < flat_z[pixels]
-            if not nearer.any():
-                continue
-            pixels, owner, bary, depth = pixels[nearer], owner[nearer], bary[nearer], depth[nearer]
-            # Light each vertex as cat.frag does, two-sided, then blend across the triangle.
-            n = (actor.local_to_world(nrm) - actor.local_to_world(np.zeros((1, 3), np.float32)))
-            n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-6)
-            view = cam.eye - world_pts
-            view /= np.maximum(np.linalg.norm(view, axis=1, keepdims=True), 1e-6)
-            facing = (n * view).sum(1, keepdims=True)
-            n = np.where(facing < 0, -n, n)
-            diffuse = np.clip(n @ sun, 0.0, 1.0)[:, None]
-            rim = (1.0 - np.abs(facing)) ** 3
-            lit = rgb * (amb + warm * diffuse) + rim_c * rim
-            lit = lit + (rgb * 1.15 - lit) * np.clip(glow, 0.0, 1.0)[:, None]
-            tri = mesh.triangles[owner]
-            colour = (lit[tri[:, 0]] * bary[:, 0:1] + lit[tri[:, 1]] * bary[:, 1:2] + lit[tri[:, 2]] * bary[:, 2:3])
-            fog = float(np.clip(1.0 - math.exp(-distance * (1 / 380.0 + light.get("mist", 0.0) / 250.0)), 0.0, 0.82))
-            fog *= float(comfort.fog_factor(state, distance))
-            colour = colour * (1.0 - fog) + fog_c * fog
-            self.col.reshape(-1, 3)[pixels] = np.clip(colour, 0.0, 1.0)
-            flat_z[pixels] = depth
+            self._cat(cam, actor, mesh, self._actor_paint[actor.npc_id, lod],
+                      pose_state(actor, state.x, state.z, state.anim, reduced), distance, state, light)
+
+    def _skipper(self, cam, state, light):
+        """The Skipper's own rig at the helm, for views off the eye (skipperview.SkipperFigure)."""
+        from .catmesh import LOD0, paint
+        actor = self.skipper.place(state, cam.boat)
+        mesh = actor.mesh(LOD0)
+        if self._skipper_paint is None or self._skipper_paint[0] is not mesh:
+            self._skipper_paint = (mesh, paint(mesh))
+        reduced = bool(state.v2.get("settings", {}).get("reduced_motion", False))
+        distance = math.hypot(actor.x - cam.x, actor.z - cam.z)
+        self._cat(cam, actor, mesh, self._skipper_paint[1], self.skipper.params(state, reduced), distance, state,
+                  light)
+
+    def _cat(self, cam, actor, mesh, painted, params, distance, state, light):
+        """One posed cat mesh, Gouraud-lit as cat.frag lights it, depth-tested into the frame."""
+        from .actors import animate
+        from .raster import cover
+        rgb, glow = painted
+        sun = np.asarray(light["sun"], np.float32)
+        amb = 0.70 + (0.18 - 0.70) * light["night"] + light["moon_i"] * 0.17 + light.get("starlight", 0.0) * light["night"] * 0.22
+        warm = np.asarray((1.0, 0.91, 0.73), np.float32) * 0.55 * light["sun_i"]
+        rim_c = np.asarray((1.0, 0.82, 0.55), np.float32) * 0.18 * (1.0 - light["night"] * 0.6)
+        fog_c = np.asarray(light["horizon"], np.float32)
+        pos, nrm = animate(mesh, params)
+        world_pts = actor.local_to_world(pos)
+        pts = cam.world_to_cam(world_pts)
+        if pts[:, 2].max() < 0.25:
+            return
+        with np.errstate(divide="ignore", invalid="ignore"):
+            sx, sy, zz = cam.cam_to_screen(pts)
+        pixels, owner, bary, depth = cover(sx, sy, zz, mesh.triangles, self.w, self.h, near=0.22)
+        flat_z = self.z.reshape(-1)
+        nearer = depth < flat_z[pixels]
+        if not nearer.any():
+            return
+        pixels, owner, bary, depth = pixels[nearer], owner[nearer], bary[nearer], depth[nearer]
+        # Light each vertex as cat.frag does, two-sided, then blend across the triangle.
+        n = (actor.local_to_world(nrm) - actor.local_to_world(np.zeros((1, 3), np.float32)))
+        n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-6)
+        view = cam.eye - world_pts
+        view /= np.maximum(np.linalg.norm(view, axis=1, keepdims=True), 1e-6)
+        facing = (n * view).sum(1, keepdims=True)
+        n = np.where(facing < 0, -n, n)
+        diffuse = np.clip(n @ sun, 0.0, 1.0)[:, None]
+        rim = (1.0 - np.abs(facing)) ** 3
+        lit = rgb * (amb + warm * diffuse) + rim_c * rim
+        lit = lit + (rgb * 1.15 - lit) * np.clip(glow, 0.0, 1.0)[:, None]
+        tri = mesh.triangles[owner]
+        colour = (lit[tri[:, 0]] * bary[:, 0:1] + lit[tri[:, 1]] * bary[:, 1:2] + lit[tri[:, 2]] * bary[:, 2:3])
+        fog = float(np.clip(1.0 - math.exp(-distance * (1 / 380.0 + light.get("mist", 0.0) / 250.0)), 0.0, 0.82))
+        fog *= float(comfort.fog_factor(state, distance))
+        colour = colour * (1.0 - fog) + fog_c * fog
+        self.col.reshape(-1, 3)[pixels] = np.clip(colour, 0.0, 1.0)
+        flat_z[pixels] = depth
 
     def actor_memory(self) -> dict:
         from .actors import memory_report
         paint = sum(rgb.nbytes + glow.nbytes for rgb, glow in self._actor_paint.values())
+        if self._skipper_paint is not None:
+            mesh, (rgb, glow) = self._skipper_paint
+            paint += mesh.nbytes + rgb.nbytes + glow.nbytes
         return memory_report(self.actor_cache, paint_bytes=paint)
 
     def _paws(self, cam, state, light):
@@ -202,8 +226,6 @@ class SoftwareRenderer:
         pos, nrm, rgb, tris = paw_mesh(state, bool(state.v2.get("settings", {}).get("reduced_motion", False)))
         if not len(tris):
             return
-        if cam.boat is not None:  # in a staged view the paws stay on the tiller
-            pos = cam.world_to_cam(cam.boat.eye_to_world(pos))
         with np.errstate(divide="ignore", invalid="ignore"):
             sx, sy, zz = cam.cam_to_screen(pos)
         pixels, owner, bary, depth = cover(sx, sy, zz, tris, self.w, self.h, near=0.22)
@@ -221,8 +243,9 @@ class SoftwareRenderer:
     def _skipper_reflection(self, cam, state, light, water):
         """A soft stamp of the Skipper's mirrored head on calm water at idle (V1-29)."""
         from .raster import cover
-        from .skipper import SILHOUETTE, head_silhouette, shows_reflection
-        if not shows_reflection(state, light):
+        from .skipper import head_silhouette, shows_reflection, silhouette_rgb
+        # Off the eye the Skipper stands in the boat, and a floating head beyond the bow would be a second one.
+        if cam.boat is not None or not shows_reflection(state, light):
             return
         pos, _nrm, _rgb, tris = head_silhouette(state)
         pts = cam.world_to_cam(pos * np.array((1.0, -1.0, 1.0), np.float32))
@@ -231,7 +254,7 @@ class SoftwareRenderer:
         pixels = cover(sx, sy, zz, tris, self.w, self.h, near=0.3)[0]
         pixels = pixels[water.reshape(-1)[pixels]]
         col = self.col.reshape(-1, 3)
-        col[pixels] = col[pixels] * 0.6 + SILHOUETTE * 0.4
+        col[pixels] = col[pixels] * 0.6 + silhouette_rgb(state) * 0.4
 
     def _sync_buoy(self, state):
         bid = state.look_paint["buoy"]
@@ -289,7 +312,10 @@ class SoftwareRenderer:
             boat = [Face(cam.boat.eye_to_world(f.pts), cam.boat.eye_to_world(f.normal) - cam.boat.eye, f.color,
                          "world", f.emissive) for f in boat]
         self._faces(cam, boat, light, boat=True)
-        self._paws(cam, state, light)
+        if cam.boat is None:
+            self._paws(cam, state, light)
+        else:  # a staged view sees the Skipper standing at the helm, not floating paws
+            self._skipper(cam, state, light)
         from .bot import faces as bot_faces
         self._faces(cam, bot_faces(state), light, boat=False)
         from .ambient import faces as ambient_faces

@@ -51,6 +51,7 @@ from .content import load_content
 from .game import Keys, Session
 from .legendary import LEGENDARY_DATA
 from .sim import Catch, Hook, SetLine, State
+from .test_skipper_creator import finish_creator
 from .world import World
 
 AMBIENCE_BAND = (-35.0, -24.0)
@@ -314,6 +315,7 @@ class Cues(unittest.TestCase):
         session = self.session(State.new(self.world, seed=35))
         session.ui.mode, session.ui.new_mode_i = "new_mode", 0
         session.tick(Keys(pressed={"return"}), 0.05)
+        finish_creator(session)
         self.assertEqual(session.stage.stage_id, "pro_01")
         self.assertIn("motif_briar", session.cues)
         self.assert_captioned(session, session.cues)

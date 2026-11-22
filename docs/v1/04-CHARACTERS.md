@@ -25,6 +25,20 @@ ch. N)" or "(needs Flathead travel)" means `requires`. "Any Briar zone" means
 
 ---
 
+## 0. The Skipper — you
+
+- **Ids:** `v2.skipper` in the save; `{Skipper}` in any line is the chosen name
+  (default "Skipper").
+- **Look:** chosen in the Skipper creator at a new game, and changed any time from
+  the pause menu: pattern (the nine coat patterns), coat, markings and bib colours,
+  eyes, ears, tail, fur, a hat or spectacles, neckwear and a jacket from the cats'
+  shared attire kit. A save from before the creator wears the default dusk-brown
+  tabby. Size, build and leg length stay at the rig's 1.0 so the view from the eye,
+  the paws on the tiller and the Skipper's place in every cockpit stay true.
+- **On the water:** seen in first person as paws in the chosen coat and a head in
+  calm-water reflections; from the chase camera, standing at the helm, glancing at
+  nearby cats and waving back to one in hailing range.
+
 ## 1. Bot — the tin deckhand
 
 - **Ids:** `bot`. Plate: *Deckhand Unit 04*; name `Word-###` (`03 §7`).

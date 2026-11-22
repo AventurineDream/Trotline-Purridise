@@ -2,8 +2,10 @@
 from copy import deepcopy
 from dataclasses import replace
 import hashlib
+import math
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 
 import numpy as np
@@ -54,20 +56,126 @@ class ShellGeometryChecks(unittest.TestCase):
                 hashes.add(hashlib.sha256(mesh.points.tobytes()).hexdigest())
             self.assertEqual(len(hashes),5)
 
-    def test_home_is_stationary_scouting_animates_and_reduced_motion_stops_the_rig(self):
+    def test_home_idles_still_under_reduced_motion_moves_otherwise_and_scouting_keeps_its_rig(self):
         state=State.new(self.world,seed=4618)
         for shell in BOT_SHELLS:
             state.v2['profile']['shell']=shell
             state.bot_phase='home'
-            state.anim=0.;home=bot._points(bot.faces(state))
-            state.anim=.18;np.testing.assert_array_equal(home,bot._points(bot.faces(state)))
+            state.v2['settings']['reduced_motion']=True
+            state.anim=0.;still=bot._points(bot.faces(state))
+            state.anim=37.;np.testing.assert_array_equal(still,bot._points(bot.faces(state)),shell)
+            state.v2['settings']['reduced_motion']=False
+            state.anim=12.5;first=bot._points(bot.faces(state))
+            np.testing.assert_array_equal(first,bot._points(bot.faces(state)),shell)
+            decks,lamps=set(),set()
+            for t in np.arange(0.,60.,.5):
+                state.anim=float(t)
+                faces=bot.faces(state)
+                decks.add(bot._points(faces).tobytes())
+                lamps.add(b''.join(f.pts.tobytes() for f in faces if float(f.color[0])>.9 and float(f.color[2])<.3))
+            self.assertGreaterEqual(len(decks),4,shell)
+            self.assertGreaterEqual(len(lamps),4,shell)
             state.bot_phase='out';state.bot_x=30.;state.bot_z=30.
             state.anim=0.;first=bot._points(bot.faces(state))
             state.anim=.18;second=bot._points(bot.faces(state))
             self.assertFalse(np.array_equal(first,second),shell)
-            state.v2['settings']['reduced_motion']=True
-            state.anim=0.;first=bot._points(bot.faces(state))
-            state.anim=.18;np.testing.assert_array_equal(first,bot._points(bot.faces(state)))
+            state.bot_phase='home'
+            state.v2['settings']['reduced_motion']=False
+
+    def test_idle_pose_keeps_normals_unit_leaves_the_cache_alone_and_moves_only_its_parts(self):
+        for shell in BOT_SHELLS:
+            mesh=botmesh.local_mesh(shell,'loop')
+            before=mesh.points.tobytes()
+            self.assertTrue(mesh.head,shell)
+            points,normals=botmesh._posed(mesh,botmesh.Idle(yaw=.4,pitch=-.2,flick=(1.,1.)))
+            self.assertEqual(before,mesh.points.tobytes())
+            np.testing.assert_allclose(np.linalg.norm(normals,axis=-1),1.,atol=1e-5)
+            changed=np.any(points!=mesh.points,axis=(1,2))
+            body=~np.isin(mesh.parts,mesh.head_parts)
+            self.assertFalse(changed[body].any(),shell)
+            self.assertTrue(changed[np.isin(mesh.parts,mesh.head_parts)].any(),shell)
+            points,_=botmesh._posed(mesh,botmesh.Idle(blink=1.))
+            changed=np.any(points!=mesh.points,axis=(1,2))
+            self.assertTrue(changed[mesh.parts==botmesh.EYE].any(),shell)
+            self.assertFalse(changed[mesh.parts!=botmesh.EYE].any(),shell)
+            lamp=points[mesh.parts==botmesh.EYE].reshape(-1,3)
+            self.assertLess(float(np.ptp(lamp[:,1])),float(np.ptp(mesh.points[mesh.parts==botmesh.EYE].reshape(-1,3)[:,1])))
+
+    def test_idle_pose_is_the_rest_pose_under_reduced_motion_and_bounded_otherwise(self):
+        for shell in BOT_SHELLS:
+            mesh=botmesh.local_mesh(shell,'loop')
+            self.assertTrue(np.array_equal(botmesh._posed(mesh,botmesh.Idle())[0],mesh.points))
+        for seed in (1,2,3):
+            for t in np.arange(0.,30.,.25):
+                pose=bot.idle_pose(float(t),seed,False)
+                self.assertLessEqual(abs(pose.yaw),botmesh.YAW_LIMIT)
+                self.assertLessEqual(abs(pose.pitch),botmesh.PITCH_LIMIT)
+                self.assertLessEqual(pose.hum,.003)
+                self.assertEqual(bot.idle_pose(float(t),seed,True),botmesh.Idle())
+
+    def _cat_at(self, state, origin, rest_right, rest_forward, lateral, ahead, npc=None):
+        """A cat placed `lateral` metres along the rest frame's right and `ahead` along its forward."""
+        npc = npc or SimpleNamespace(anchor=SimpleNamespace(x=0.,z=0.))
+        npc.anchor.x=float(origin[0]+rest_right[0]*lateral+rest_forward[0]*ahead)
+        npc.anchor.z=float(origin[2]+rest_right[2]*lateral+rest_forward[2]*ahead)
+        return npc
+
+    def test_idle_watches_a_cat_in_range_and_fades_out_between_20_and_25_metres(self):
+        state=State.new(self.world,seed=4618)
+        eye,right,_up,forward=bot._boat_basis(state)
+        origin=eye+right*.34-np.array((0,.49,0),np.float32)+forward*2.24
+        rest_right,rest_forward=-right,-forward
+        state.npcs=(self._cat_at(state,origin,rest_right,rest_forward,5.,0.),)
+        yaw,pitch,weight=bot._watch(state,origin,rest_right,rest_forward)
+        self.assertAlmostEqual(weight,1.)
+        self.assertGreater(yaw,1.)
+        self.assertAlmostEqual(pitch,0.)
+        state.npcs=(self._cat_at(state,origin,rest_right,rest_forward,40.,0.),)
+        self.assertEqual(bot._watch(state,origin,rest_right,rest_forward)[2],0.)
+        state.npcs=(self._cat_at(state,origin,rest_right,rest_forward,0.,-3.),)
+        self.assertEqual(bot._watch(state,origin,rest_right,rest_forward)[2],0.)
+
+    def test_head_yaw_moves_smoothly_as_a_cat_sweeps_from_15_to_30_metres_and_as_two_cats_trade_places(self):
+        state=State.new(self.world,seed=4618)
+        eye,right,_up,forward=bot._boat_basis(state)
+        origin=eye+right*.34-np.array((0,.49,0),np.float32)+forward*2.24
+        rest_right,rest_forward=-right,-forward
+        def head_yaw(npcs):
+            state.npcs=npcs
+            return bot.idle_pose(10.,7,False,bot._watch(state,origin,rest_right,rest_forward)).yaw
+        cat=self._cat_at(state,origin,rest_right,rest_forward,0.,0.)
+        steps=np.arange(1500)*.01
+        yaws=[]
+        for d in 15.+steps:
+            self._cat_at(state,origin,rest_right,rest_forward,.8*d,.6*d,cat)
+            yaws.append(head_yaw((cat,)))
+        self.assertLess(float(np.max(np.abs(np.diff(yaws)))),.02)
+        left=self._cat_at(state,origin,rest_right,rest_forward,-.8*18,.6*18)
+        right_cat=self._cat_at(state,origin,rest_right,rest_forward,.8*22,.6*22)
+        trade=[]
+        for step in steps[:400]:
+            d_left,d_right=18.+step,22.-step
+            self._cat_at(state,origin,rest_right,rest_forward,-.8*d_left,.6*d_left,left)
+            self._cat_at(state,origin,rest_right,rest_forward,.8*d_right,.6*d_right,right_cat)
+            trade.append(head_yaw((left,right_cat)))
+        self.assertLess(float(np.max(np.abs(np.diff(trade)))),.02)
+
+    def test_home_rig_rows_match_the_face_builder_with_idle_and_cats_in_view(self):
+        from .bot import HomeRig
+        renderer=LakeRenderer.__new__(LakeRenderer)
+        state=State.new(self.world,seed=4618)
+        rig=HomeRig()
+        for shell in BOT_SHELLS:
+            state.v2['profile']['shell']=shell
+            eye,right,_up,forward=bot._boat_basis(state)
+            origin=eye+right*.34-np.array((0,.49,0),np.float32)+forward*2.24
+            state.npcs=(self._cat_at(state,origin,-right,-forward,6.,4.),)
+            for reduced in (False,True):
+                state.v2['settings']['reduced_motion']=reduced
+                for anim in np.arange(0.,20.,.7):
+                    state.anim=float(anim)
+                    expected=renderer._pack_faces(bot.faces(state))
+                    np.testing.assert_allclose(rig.rows(state,renderer._pack_faces),expected,atol=2e-5,err_msg=(shell,reduced,anim))
             state.v2['settings']['reduced_motion']=False
 
     def test_rendering_and_repeated_shell_switches_preserve_state_and_rng(self):

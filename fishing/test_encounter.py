@@ -6,7 +6,8 @@ from unittest.mock import patch
 
 import numpy as np
 
-from . import encounter
+from . import encounter, skipper, skipperlook
+from .catmesh import PATTERNS
 from .caldera import reflection_strength
 from .content import load_content
 from .game import Keys, Session
@@ -46,7 +47,7 @@ class Scene(unittest.TestCase):
             sprite = encounter.fish_sprite(legendary_id)
             self.assertEqual(sprite.shape, (encounter.SPRITE[1], encounter.SPRITE[0], 4))
             self.assertGreater(int((sprite[:, :, 3] > 0).sum()), 3000, legendary_id)
-            photo = encounter.photo(legendary_id, 240, 150)
+            photo = encounter.photo(legendary_id, 240, 150, (0.72, 0.57, 0.44))
             self.assertEqual(photo.shape, (150, 240, 3))
             self.assertFalse(photo.flags.writeable)
 
@@ -256,9 +257,21 @@ class Drawn(unittest.TestCase):
         state = self.state()
         for size in ((1280, 720), (640, 360), (480, 270)):
             page = self.draw(state, "card", 0.0, size)
-            photo = encounter.photo("caldera_fire_lizard", 64, 40)
+            photo = encounter.photo("caldera_fire_lizard", 64, 40, skipper.mitt_rgb(state))
             self.assertGreater(int((page == np.asarray((232, 224, 200), np.uint8)).all(axis=2).sum()), 1000, size)
             self.assertIsNotNone(photo)
+
+    def test_the_photo_shows_the_paw_of_the_skipper_the_player_dressed(self):
+        state = self.state()
+        default = encounter.photo("caldera_fire_lizard", 240, 150, skipper.mitt_rgb(state))
+        # A tuxedo in ink wears white mitts: the paw on the gunwale turns pale, the rest stays.
+        look = skipperlook.cycle(skipperlook.saved(state), "pattern",
+                                 PATTERNS.index("tuxedo") - PATTERNS.index(skipperlook.DEFAULT["pattern"]))
+        state.v2["skipper"] = skipperlook.cycle(look, "base", [n for n, _c in skipperlook.COAT_SWATCHES].index("Ink"))
+        tuxedo = encounter.photo("caldera_fire_lizard", 240, 150, skipper.mitt_rgb(state))
+        paw = default[int(150 * 0.86), int(240 * 0.13)].astype(int), tuxedo[int(150 * 0.86), int(240 * 0.13)].astype(int)
+        self.assertGreater(int(paw[1].sum()) - int(paw[0].sum()), 60)
+        np.testing.assert_array_equal(default[:100], tuxedo[:100])
 
     def test_the_legendary_page_in_the_book_carries_its_photo(self):
         from .bookview import ENTRY_IDS

@@ -212,6 +212,70 @@ class SaveV2Checks(unittest.TestCase):
         migrated = merge_v2_defaults(None, saved)
         self.assertEqual(migrated["settings"]["haul_speed"], "normal")
 
+    def test_saves_without_a_skipper_migrate_to_the_default_look_and_keep_it(self):
+        from .skipperlook import DEFAULT
+        _original, migrated, state = self.migrate_fixture("mid_game.json")
+        self.assertEqual(migrated["v2"]["skipper"], DEFAULT)
+        self.assertEqual(state.v2["skipper"], DEFAULT)
+        # A v2 save written before the Skipper look existed loads with the default and saves it.
+        raw = self.read(self.save_path)
+        del raw["v2"]["skipper"]
+        self.save_path.write_text(json.dumps(raw), encoding="utf-8")
+        _world, state, has_save = load_game_save(self.save_path, State, World)
+        self.assertTrue(has_save)
+        self.assertEqual(state.v2["skipper"], DEFAULT)
+        self.assertFalse(state.v2["skipper"]["created"])
+        state.save(self.save_path)
+        self.assertEqual(self.read(self.save_path)["v2"]["skipper"], DEFAULT)
+
+    def test_a_chosen_skipper_roundtrips_and_names_the_skipper_in_bot_lines(self):
+        from .botidentity import format_text
+        from .skipperlook import cycle
+        self.migrate_fixture("mid_game.json")
+        _world, state, _has = load_game_save(self.save_path, State, World)
+        look = cycle(cycle(state.v2["skipper"], "pattern", 2), "body", 1)
+        state.v2["skipper"] = dict(look, name="Mochi", created=True)
+        state.save(self.save_path)
+        _world, loaded, _has = load_game_save(self.save_path, State, World)
+        self.assertEqual(loaded.v2["skipper"], state.v2["skipper"])
+        self.assertEqual(format_text("Morning, {Skipper}.", loaded), "Morning, Mochi.")
+
+    def test_malformed_skipper_fields_fall_back_one_by_one_and_unknown_fields_survive(self):
+        from .skipperlook import DEFAULT
+        saved = {"skipper": {
+            "name": "  Captain <Purr>!!  ", "created": "yes", "pattern": "plaid",
+            "colors": {"base": [0.1, 0.2, 0.3], "secondary": "red", "accent": [1.5, 0, 0], "future": 1},
+            "eyes": [True, 0.5, 0.5], "ears": "folded", "tail": "propeller", "coat": "long",
+            "attire": [{"kind": "cap", "color": [0.2, 0.2, 0.5]}, {"kind": "goggles"},
+                       {"kind": "parka", "color": [0.5, 0.5, 0.5]}, {"kind": "jetpack"}, "scarf",
+                       {"kind": "oilskin", "color": [0.9, 0.8, 0.1]}],
+            "future_field": {"kept": True}}}
+        look = merge_v2_defaults(None, saved)["skipper"]
+        self.assertEqual(look["name"], "Captain Purr")
+        self.assertIs(look["created"], False)
+        self.assertEqual(look["pattern"], DEFAULT["pattern"])
+        self.assertEqual(look["colors"]["base"], [0.1, 0.2, 0.3])
+        self.assertEqual(look["colors"]["secondary"], DEFAULT["colors"]["secondary"])
+        self.assertEqual(look["colors"]["accent"], DEFAULT["colors"]["accent"])
+        self.assertEqual(look["colors"]["future"], 1)
+        self.assertEqual(look["eyes"], DEFAULT["eyes"])
+        self.assertEqual((look["ears"], look["tail"], look["coat"]), ("folded", DEFAULT["tail"], "long"))
+        # One item per slot (head, neck, body): the first of each wins, unknown kinds drop.
+        self.assertEqual([item["kind"] for item in look["attire"]], ["cap", "parka"])
+        self.assertEqual(look["future_field"], {"kept": True})
+        for name in ("", "!!!", "1234", None, 7):
+            self.assertEqual(merge_v2_defaults(None, {"skipper": {"name": name}})["skipper"]["name"],
+                             DEFAULT["name"])
+        self.assertEqual(merge_v2_defaults(None, {"skipper": "tabby"})["skipper"], DEFAULT)
+        # Unhashable values (a hand-edited save) fall back too, rather than raising and
+        # setting the whole save aside as corrupt.
+        odd = merge_v2_defaults(None, {"skipper": {
+            "pattern": ["tuxedo"], "ears": {"tufted": 1}, "tail": ["plume"], "coat": [],
+            "attire": [{"kind": ["cap"]}, {"kind": {"scarf": 1}}, {"kind": "oilskin"}]}})["skipper"]
+        self.assertEqual((odd["pattern"], odd["ears"], odd["tail"], odd["coat"]),
+                         (DEFAULT["pattern"], DEFAULT["ears"], DEFAULT["tail"], DEFAULT["coat"]))
+        self.assertEqual([item["kind"] for item in odd["attire"]], ["oilskin"])
+
     def test_unknown_fields_survive_at_root_narrative_line_catch_and_v2_levels(self):
         self.migrate_fixture("mid_game.json")
         raw = self.read(self.save_path)

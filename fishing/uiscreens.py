@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from . import comfort
+from . import comfort, skipperlook
 from .data import BAIT_RECIPES, DISHES, PANTRY
 from .sim import Catch, Hook, SetLine, State
 from .ui import HELP_N, SHOP_TABS, SPECIES, UIState
@@ -58,6 +58,16 @@ def haul_state(world, dyslexia_font, *, fish=False, shiny=False, text_size=LARGE
     state.lines = [SetLine("std", "worm", state.x + 6, state.z + 6,
                            state.x + 44, state.z + 10, "flats", hooks)]
     return state
+
+def skipper_look(name: str = "Mochi") -> dict:
+    """A Skipper look that uses most creator rows (a calico in a cap, a scarf and a parka)."""
+    return skipperlook.normalize({"skipper": {
+        "name": name, "pattern": "calico", "ears": "tufted", "tail": "plume", "coat": "long",
+        "colors": {"base": [0.88, 0.54, 0.22], "secondary": [0.20, 0.20, 0.22], "accent": [0.95, 0.94, 0.91]},
+        "eyes": [0.48, 0.74, 0.30],
+        "attire": [{"kind": "cap", "color": [0.16, 0.22, 0.40]}, {"kind": "scarf", "color": [0.72, 0.20, 0.20]},
+                   {"kind": "parka", "color": [0.93, 0.74, 0.16]}],
+    }})
 
 
 def screens(ui, world, dyslexia_font, text_size=LARGEST_TEXT):
@@ -171,6 +181,14 @@ def screens(ui, world, dyslexia_font, text_size=LARGEST_TEXT):
     add("keyboard controls", base, UIState(mode="settings", settings_page="keys", key_binding_i=0))
     add("keyboard controls scrolled", base, UIState(
         mode="settings", settings_page="keys", key_binding_i=29))
+    # The Skipper creator: from the pause menu, a look with most rows in use; typing its name; and
+    # the same creator as a new morning's (Done there starts the game).
+    add("your skipper", base, UIState(mode="skipper", skipper_origin="pause", skipper_look=skipper_look(),
+                                      skipper_i=1))
+    add("your skipper typing", base, UIState(mode="skipper", skipper_origin="pause",
+                                             skipper_look=skipper_look("Mo"), skipper_i=0, skipper_typing=True))
+    add("your skipper new morning", base, UIState(mode="skipper", skipper_origin="new",
+                                                  skipper_look=skipper_look()))
     for page in range(HELP_N):
         add(f"help page {page + 1}", base, UIState(mode="help", help_page=page))
     return screens

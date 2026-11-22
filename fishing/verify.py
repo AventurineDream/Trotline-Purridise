@@ -20,6 +20,7 @@ except ImportError:  # Windows: the resource module is Unix-only
 import numpy as np
 
 from . import detail as detail_tiers
+from . import skipperlook
 from .camera import Camera
 from .data import PAINT, SPECIES
 from .dialogue import Conversation
@@ -843,6 +844,10 @@ def window_smoke():
                 keys = Keys()
                 elapsed=now-start
                 if session.ui.mode in {"title", "new_mode"} and elapsed>=0.4:
+                    keys = Keys(pressed={"return"})
+                elif session.ui.mode == "skipper" and elapsed>=0.4:
+                    # The smoke run keeps the default look: Done is the creator's last row.
+                    session.ui.skipper_i = len(skipperlook.ROWS)-1
                     keys = Keys(pressed={"return"})
                 elif 0.4<=elapsed<1.5 and session.ui.mode=="play":
                     keys = Keys(held={"w"})

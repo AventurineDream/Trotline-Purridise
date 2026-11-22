@@ -24,6 +24,7 @@ from .quests import scene_state
 from .savepaths import load_game_save
 from .sim import State
 from .story import due_scene, hail_scene, resume, scene_conversation
+from .test_skipper_creator import finish_creator
 from .world import World
 
 SCRIPT = Path(__file__).resolve().parents[1] / "docs" / "v1" / "05-SCRIPT.md"
@@ -51,6 +52,7 @@ class Prologue(unittest.TestCase):
     def new_morning(self):
         self.session.ui.mode, self.session.ui.new_mode_i = "new_mode", 0
         self.press("return")
+        finish_creator(self.session)
         self.state, self.world = self.session.state, self.session.world
 
     def reload(self):

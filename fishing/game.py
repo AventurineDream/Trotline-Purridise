@@ -34,7 +34,7 @@ from .guardian import maybe_start_sighting, pause_sighting_clock
 from .haul import haul_cadence
 from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_rumor
 from .book import take_dream_clue
-from . import comfort
+from . import comfort, skipperlook
 from . import encounter
 from . import soundscape
 from . import detail as detail_tiers
@@ -64,6 +64,8 @@ THIRD_PERSON_DISTANCE = 6.0  # world units behind the boat
 THIRD_PERSON_ELEVATION = 2.2  # world units above the pilot's eye
 
 CAPTION_SECONDS = 2.4  # the shortest a sound caption shows; longer ones hold to be read
+# The Skipper creator's card turns this fast while Q/E or LB/RB is held (radians per second).
+SKIPPER_TURN_RATE = 2.4
 
 
 def _save_target(root: Path, override: str | Path | None) -> tuple[Path, bool]:
@@ -163,6 +165,7 @@ class Session:
         self.whale_wait = 0.0
         self._whale_recorded = False
         self._replays = self._saved_pending()
+        self._skipper_hint_shown = False  # the pause-menu hint for an uncreated Skipper: once a session
 
     def _saved_pending(self) -> set:
         """Scenes (and the credits) left pending in the save: they replay, and can be skipped."""
@@ -649,7 +652,8 @@ class Session:
         if mode!="title" and keys.held & {"shift","rshift"}:
             self.state.throttle_setting = 0.0
             self.state.throttle = 0.0
-        if "m" in keys.pressed and mode != "title":
+        # Typing a Skipper name uses M as a letter, so the mute key waits until the name is set.
+        if "m" in keys.pressed and mode != "title" and not (mode == "skipper" and self.ui.skipper_typing):
             self.state.muted = not self.state.muted
         if mode == "title":
             self._title_keys(keys, dt)
@@ -704,6 +708,8 @@ class Session:
             self._settings_keys(keys, dt)
         elif mode == "help":
             self._help_keys(keys, dt)
+        elif mode == "skipper":
+            self._skipper_keys(keys, dt)
 
     def _title_keys(self, keys, dt):
         options = title_options(self.ui.has_save)
@@ -737,6 +743,10 @@ class Session:
                     self.state.catch_up(now=self._continue_catchup_at)
                     self._title_catchup_pending = False
                 self.ui.mode = "play"
+                if not self._skipper_hint_shown and not skipperlook.saved(self.state)["created"]:
+                    # Once per session, and only a hint: the save plays on without the creator.
+                    self._skipper_hint_shown = True
+                    self.state.toast("Dress your Skipper: Esc, then Your Skipper.")
             elif choice == "New morning":
                 self.ui.confirm_new = True
             else:
@@ -769,33 +779,19 @@ class Session:
         if not select:
             return
         if choosing_mode:
-            selected = comfort.MODES[self.ui.new_mode_i]
-            previous = deepcopy(self.state.v2["settings"])
-            if self.world.id != "briar":
-                self.world = World("briar")  # a new game opens at Briar Landing (05 §1)
-            state = State.new(self.world)
-            state.v2["settings"] = previous
-            comfort.change_mode(state.v2, selected)
-            state.v2["profile"]["collar"]["visible"] = previous.get("collar_visible", True)
-            begin_prologue(state)
-            self.state = state
-            self._replays = set()
-            self._attach_quest_manager()
-            self._title_catchup_pending = False
-            self.ui = UIState(mode="play", input_device=self.ui.input_device,
-                              dialogue_content=self._npc_content)
-            self.save()
-        else:
-            kind, later = self.ui.needs_kind, self.ui.comfort_i == 1
-            self.ui.mode = "play"
-            if later:
-                comfort.snooze(self.state.v2, kind)
-            elif kind == "energy":
-                self.state.anchored = True
-                self._start_catnap()
-            elif self.state.v2["pantry"].get("kibble", 0):
-                kitchen.snack(self.state)
-            self.save()
+            # The creator comes before the first morning: its Done starts the game (_close_skipper).
+            self._open_skipper("new")
+            return
+        kind, later = self.ui.needs_kind, self.ui.comfort_i == 1
+        self.ui.mode = "play"
+        if later:
+            comfort.snooze(self.state.v2, kind)
+        elif kind == "energy":
+            self.state.anchored = True
+            self._start_catnap()
+        elif self.state.v2["pantry"].get("kibble", 0):
+            kitchen.snack(self.state)
+        self.save()
 
     def _start_catnap(self, *, forced=False):
         if not self.world_running():
@@ -1767,6 +1763,8 @@ class Session:
                 error = self.state.cycle_scale()
                 if error:
                     self.ui.note = error
+            elif choice == "Your Skipper":
+                self._open_skipper("pause")
             elif choice == "Settings":
                 self.ui.settings_page = "main"
                 self.ui.settings_i = 0
@@ -1895,6 +1893,182 @@ class Session:
                 self.save()
             else:
                 self.ui.capturing_key = True
+
+    # --- The Skipper creator (skipperlook; drawn by ui._skipper) ---------------------
+
+    def _open_skipper(self, origin: str) -> None:
+        """Open the Skipper creator on a draft of the saved look. Nothing is saved until Done.
+
+        Args:
+            origin: "new" while the morning's pace is chosen (Done starts the game, Esc returns
+                to the pace choice) or "pause" (Done saves and returns to the pause menu, Esc
+                discards the draft).
+
+        Side effects:
+            Sets the creator's UI fields and the mode to "skipper". The clock restarts at 0, so
+            the card's motion is the same on every opening.
+        """
+        ui = self.ui
+        ui.skipper_origin = origin
+        ui.skipper_look = skipperlook.saved(self.state)
+        ui.skipper_i = 0
+        ui.skipper_typing = False
+        ui.skipper_fresh = False
+        ui.skipper_clock = 0.0
+        ui.skipper_changed_at = -99.0
+        ui.skipper_turn = 0.0
+        ui.mode = "skipper"
+
+    def _skipper_keys(self, keys, dt: float) -> None:
+        """Rows, typing, the card's turn and the exits: Enter or Space on Done saves, Esc leaves.
+
+        Typed letters come from the physical keyboard, not from `pressed`: that set also carries
+        the gamepad's A ("e" and "return") and the letters bound to menu actions.
+        """
+        ui = self.ui
+        if self.focused:
+            ui.skipper_clock += dt
+        physical = set(getattr(keys, "physical_keyboard_pressed", keys.pressed))
+        if ui.skipper_typing:
+            self._skipper_type(keys, physical)
+            self._skipper_turn(keys, dt, ui.skipper_typing)
+            return
+        if "esc" in keys.pressed:
+            self._close_skipper(confirm=False)
+            return
+        count = len(skipperlook.ROWS)
+        if keys.tap("up", dt):
+            ui.skipper_i = (ui.skipper_i - 1) % count
+        elif keys.tap("down", dt):
+            ui.skipper_i = (ui.skipper_i + 1) % count
+        key = skipperlook.ROWS[ui.skipper_i][0]
+        step = int(keys.tap("right", dt)) - int(keys.tap("left", dt))
+        if step and key != "done":
+            self._skipper_change(key, step)
+        if keys.pressed & {"return", "space"}:
+            if key == "done":
+                self._close_skipper(confirm=True)
+                return
+            if key == "name":
+                ui.skipper_typing = True
+                ui.skipper_fresh = True
+            else:
+                self._skipper_change(key, 1)
+        self._skipper_turn(keys, dt, ui.skipper_typing)
+
+    def _skipper_type(self, keys, physical: set) -> None:
+        """Type into the name from this frame's physical key presses, in press order.
+
+        Letters, digits, space, minus, apostrophe and period type; Backspace deletes. Physical Return,
+        Esc, Up and Down end typing; gamepad A, B and d-pad directions retain those controls. Remapped
+        keyboard actions are ignored while typing. Only the gamepad's left/right d-pad cycles suggestions.
+        """
+        ui = self.ui
+        draft = ui.skipper_look
+        ordered = [key for key in getattr(keys, "physical_keyboard_press_order", ()) if key in physical]
+        typed = [key for key in ordered + sorted(physical - set(ordered))
+                 if key == "backspace" or key in skipperlook.NAME_KEYS]
+        if typed:
+            # Entering the name selects it, so the first key typed replaces it and a new name is
+            # never glued onto the old one. Enter or Esc with nothing typed keeps the old name.
+            current = "" if ui.skipper_fresh else draft["name"]
+            ui.skipper_fresh = False
+            name = skipperlook.type_name(current, typed)
+            if name != draft["name"]:
+                draft["name"] = name
+                ui.skipper_changed_at = ui.skipper_clock
+        gamepad = set(getattr(keys, "gamepad_pressed", ()))
+        end_keys = {"return", "esc", "up", "down"}
+        if physical & end_keys or gamepad & end_keys:
+            draft["name"] = skipperlook.clean_name(draft["name"])
+            ui.skipper_typing = False
+            ui.skipper_fresh = False
+            direction_keys = (physical | gamepad) & {"up", "down"}
+            if direction_keys:
+                ui.skipper_i = (ui.skipper_i + (1 if "down" in direction_keys else -1)) % len(skipperlook.ROWS)
+            return
+        if "left" in gamepad:
+            self._skipper_change("name", -1)
+        elif "right" in gamepad:
+            self._skipper_change("name", 1)
+
+    def _skipper_change(self, key: str, step: int) -> None:
+        """Move row `key` one option (skipperlook.cycle). The card waves only if the look changed."""
+        ui = self.ui
+        changed = skipperlook.cycle(ui.skipper_look, key, step)
+        if changed != ui.skipper_look:
+            ui.skipper_look = changed
+            ui.skipper_changed_at = ui.skipper_clock
+
+    def _skipper_turn(self, keys, dt: float, typing: bool) -> None:
+        """Turn the card while a turn key is held, at SKIPPER_TURN_RATE radians per second.
+
+        Q and E turn it from the keyboard, not while typing. The gamepad's shoulders arrive as
+        "g" (LB) and "c" (RB) with no physical key behind them. Its A also sends "e", so "e"
+        turns only when the keyboard sent it.
+        """
+        held = set(getattr(keys, "physical_keyboard_held", keys.held))
+        direction = 0
+        if not typing:
+            direction += ("e" in held) - ("q" in held)
+        if "c" in keys.held and "c" not in held:
+            direction += 1
+        if "g" in keys.held and "g" not in held:
+            direction -= 1
+        if direction:
+            self.ui.skipper_turn = (self.ui.skipper_turn + direction * SKIPPER_TURN_RATE * dt) % (2 * math.pi)
+
+    def _close_skipper(self, *, confirm: bool) -> None:
+        """Leave the creator: Done (confirm) keeps the draft, Esc discards it.
+
+        A "new" creator starts the game on Done, with the look in the new state before its
+        prologue begins. Esc goes back to the pace choice. A "pause" creator saves the look on
+        Done and returns to the pause menu; Esc returns there and changes nothing.
+
+        Args:
+            confirm: True for Done, False for Esc.
+
+        Side effects:
+            Saves the game (pause origin, Done) or starts a new one (new origin, Done).
+        """
+        ui = self.ui
+        origin = ui.skipper_origin
+        draft = ui.skipper_look or skipperlook.saved(self.state)
+        ui.skipper_look, ui.skipper_typing = None, False
+        look = skipperlook.normalize({"skipper": {**draft, "created": True}}) if confirm else None
+        if origin == "new":
+            if confirm:
+                self._start_new_game(comfort.MODES[ui.new_mode_i], look)
+            else:
+                ui.mode = "new_mode"
+            return
+        if confirm:
+            self.state.v2["skipper"] = look
+            self.save()
+        ui.mode = "pause"
+
+    def _start_new_game(self, mode: str, look: dict) -> None:
+        """Begin a new morning in `mode`, wearing the Skipper's `look`, and save it.
+
+        The player's settings and the collar's visibility carry over from the title. The
+        prologue starts here, after the creator, as it did when the pace was chosen.
+        """
+        previous = deepcopy(self.state.v2["settings"])
+        if self.world.id != "briar":
+            self.world = World("briar")  # a new game opens at Briar Landing (05 §1)
+        state = State.new(self.world)
+        state.v2["settings"] = previous
+        comfort.change_mode(state.v2, mode)
+        state.v2["profile"]["collar"]["visible"] = previous.get("collar_visible", True)
+        state.v2["skipper"] = look
+        begin_prologue(state)
+        self.state = state
+        self._replays = set()
+        self._attach_quest_manager()
+        self._title_catchup_pending = False
+        self.ui = UIState(mode="play", input_device=self.ui.input_device,
+                          dialogue_content=self._npc_content)
+        self.save()
 
     def _help_keys(self, keys, dt):
         if "esc" in keys.pressed or "h" in keys.pressed:

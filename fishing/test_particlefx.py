@@ -110,15 +110,17 @@ class ParticleFxChecks(unittest.TestCase):
             return self.render(state, anim).astype(int)
 
     def test_depth_is_unchanged_with_particles_on(self):
+        # Each moment is compared with itself without particles: the cats and Bot idle with
+        # the clock, so the scene's own depth moves between moments, but particles add none.
         for weather in ("fair", "drizzle"):
             state = self.state()
-            self.render(state, 0.0, weather)
-            with_particles = self.renderer.read_depth()
-            self.render(state, 37.0, weather)
-            self.assertEqual(with_particles, self.renderer.read_depth())
-            with patch.object(self.fx, "draw", lambda *a, **k: None):
-                self.render(state, 0.0, weather)
-            self.assertEqual(with_particles, self.renderer.read_depth())
+            for anim in (0.0, 37.0):
+                self.render(state, anim, weather)
+                with_particles = self.renderer.read_depth()
+                with patch.object(self.fx, "draw", lambda *a, **k: None):
+                    self.render(state, anim, weather)
+                with self.subTest(weather=weather, anim=anim):
+                    self.assertEqual(with_particles, self.renderer.read_depth())
 
     def test_no_gl_objects_are_created_per_frame(self):
         state = self.state()

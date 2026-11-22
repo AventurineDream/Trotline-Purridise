@@ -548,7 +548,7 @@ class BookView:
             photo_w = min(int(self.w * 0.40), 340)
             top = self.y + self.u.cell(self.head)[1] + 8
             if top + photo_w * 0.8 < self.bottom:
-                photo_frame(self.u, self.frame, sid, self.x + self.w - photo_w, top, photo_w,
+                photo_frame(self.u, self.frame, self.state, sid, self.x + self.w - photo_w, top, photo_w,
                             photo_caption(sid, page["records"][-1]))
                 width = self.w - photo_w - 24
         index, count = self.paginated(sid.replace("_", " ").title(), values, width)

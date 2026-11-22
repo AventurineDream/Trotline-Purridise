@@ -224,12 +224,13 @@ def _photo_palette(lake_id: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 @lru_cache(maxsize=6)
-def photo(legendary_id: str, width: int, height: int) -> np.ndarray:
+def photo(legendary_id: str, width: int, height: int, paw_rgb: tuple[float, float, float]) -> np.ndarray:
     """The book's photo of a legendary at the surface beside the boat, RGB8 (read-only, cached).
 
     A strip of far shore over the lake's water, the fish in the middle with the rings it left,
     its glow if it has one, and the gunwale with the Skipper's paw in the corner, toned
-    like an old print."""
+    like an old print. `paw_rgb` is the mitt's 0-1 RGB (skipper.mitt_rgb), so the photo shows
+    the Skipper the player dressed; it is part of the cache key."""
     from .fishmesh import _species_rows
     from .imageops import resize_rgb
 
@@ -273,7 +274,7 @@ def photo(legendary_id: str, width: int, height: int) -> np.ndarray:
     edge = np.abs(yy - (0.86 - 0.22 * xx)) < 0.012
     image[np.broadcast_to(edge, (height, width))] = (0.55, 0.42, 0.28)
     paw = ((xx - 0.13) / 0.075) ** 2 + ((yy - 0.86) / 0.06) ** 2 <= 1.0
-    image[np.broadcast_to(paw, (height, width))] = (0.72, 0.57, 0.44)
+    image[np.broadcast_to(paw, (height, width))] = paw_rgb
     # Toned like an old print: warm, a little faded, darker at the corners.
     grey = image.mean(axis=2, keepdims=True)
     image = image * 0.72 + grey * np.asarray((1.06, 0.98, 0.84), np.float32) * 0.28

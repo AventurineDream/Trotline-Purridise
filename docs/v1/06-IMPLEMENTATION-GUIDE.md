@@ -178,6 +178,11 @@ their new ids, rather than starting a second ledger.
                                    "menu_left": "left", "menu_right": "right",
                                    "select": "return", "alternate_select": "space",
                                    "cancel": "esc"}},
+    "skipper": {"name": "Skipper", "created": false, "pattern": "tabby",
+                "colors": {"base": [0.66, 0.54, 0.40], "secondary": [0.33, 0.25, 0.17],
+                           "accent": [0.93, 0.90, 0.84]},
+                "eyes": [0.86, 0.70, 0.22], "ears": "pointed", "tail": "long",
+                "coat": "short", "attire": []},
     "reward_claims": {"story": [], "legendary_record": [], "book_stage_up": []}
   }
 }
@@ -216,6 +221,10 @@ build and remains serialized until a recognized boat is selected.
   Existing valid assigned names survive; old out-of-range placeholders such as
   `Copper-000` are repaired once. Unlocks: Cedar is
   open. Guardian sightings carry over.
+- **The Skipper's look:** a save without `v2.skipper` (every v1 save, and v2 saves
+  from before the creator) gets the default dusk-brown tabby with `created: false`.
+  `skipperlook.normalize` repairs a malformed entry field by field (name, pattern,
+  each colour, ears, tail, fur, one attire item per slot) and keeps unknown fields.
 - Historical book thresholds are seeded into `book_stage_up` as
   `<species id>:<stage>` claim keys during migration or normalization. Loading
   never replays their toasts or grants their rewards. New catch transitions
@@ -233,7 +242,8 @@ build and remains serialized until a recognized boat is selected.
   two-element list (Python `IndexError`). Its `"skipper_name": "Barnaby"`
   contradicted the unnamed Skipper and collided with Doc Barnaby. Its tow formula
   `150 + 0.15 × value` is replaced by `02 §2.2`. Its QA checklist was pre-ticked
-  without any test existing. Do not copy any of it.
+  without any test existing. Do not copy any of it. (Since the Skipper creator, the
+  player's chosen name lives in `v2.skipper.name`; there is still no `skipper_name`.)
 
 ## 4. Clock and pause
 
@@ -402,16 +412,21 @@ current lake needs.
 - **Coat patterns** are evaluated in a fragment shader from object-space noise and
   masks (no per-cat textures). The software renderer uses per-vertex colors.
 - **Animation:** vertex-shader procedural motion (breathing, tail sway, ear
-  flicks, head turn toward the player within 40 m), plus 5 authored poses blended
-  by weight: sit-fish, nap-curl, wave, paint/read/whittle (prop-driven), and stand
-  at the helm.
+  twitches, blinks, weight shifts, head look-at toward the player within 40 m and
+  glances at points of interest), seeded per cat, plus 5 authored poses: sit-fish,
+  nap-curl, wave, paint/read/whittle (prop-driven), and stand at the helm. Each
+  pose blends into a gesture (a wave, a wave from the wheel, a rouse from the
+  nap) as the player approaches, and work poses loop a work cycle (cast and
+  reel, brush strokes, page turns, sips).
 - **Portraits:** each cat's portrait is rendered offscreen once per lake load from
   its model (3/4 view, warm rim light, paper-tone background) at 256×256 and
   shown in dialogue. The cache holds only the current lake's cats + hosts +
   travelers.
-- **Skipper:** first-person paws (two hands with fur pattern from a fixed Skipper
-  palette) on the tiller, oars and the line during the haul. A reflection of the
-  Skipper's head silhouette in calm water at idle (reflection pass only).
+- **Skipper:** the player's cat is chosen in the Skipper creator (pattern, coat
+  colours, eyes, ears, tail, fur, attire from the shared kit, name) and saved in
+  `v2.skipper`. In first person: paws in the saved coat on the tiller, oars and
+  the line during the haul, and a reflection of the head silhouette in calm water
+  at idle (reflection pass only). Off the eye: the whole rig at the helm.
 
 ### 6.3 Fish (156) — `fishmesh.py`
 
@@ -867,13 +882,14 @@ the title row so the inherited three-line quest overview remains intact.
 
 `botmesh.py` builds Classic Tin, green Frog, yellow Duck, copper Sub and violet/
 teal Astral shells from boxes, ellipsoids, swept rods and rings. The shared wool
-collar has raised stitches, a loose loop and the three saved knots. Home poses
-stay fixed on each existing boat's bow. Scouting drives shell-specific propeller,
-webbed-foot, wing or crystal joints; reduced motion freezes decorative motion
+collar has raised stitches, a loose loop and the three saved knots. Home, Bot sits on
+his perch on each existing boat's bow and idles (below). Scouting drives shell-specific propeller,
+webbed-foot, wing or crystal joints; reduced motion freezes all idle and decorative motion
 without changing scout travel. Unknown future shell IDs fall back visually to
 Tin without rewriting the saved identity.
 
 Twelve immutable local meshes bound the cache; transformed faces are temporary.
+
 The largest variant is 802 quads, below the existing 500 KB dynamic-buffer budget
 alongside the player boat. No texture atlas, extra framebuffer, actor history or
 per-lake resource is added. `Face.emissive=None` preserves legacy material
@@ -881,6 +897,15 @@ inference; new actor faces use explicit zero or a 0–1 night-emission strength.
 This keeps yellow Duck enamel from being classified as a lamp, and makes Astral
 chrome/freckles glow in both OpenGL and software. The existing vertex stride and
 buffer sizes stay intact.
+
+**Bot's deck idle.** At home his head turns toward the cats near him (a blend that is full within
+20 m and gone by 25 m, so a cat drifting past never snaps the head), otherwise it glances about the
+lake; his lamp shutters every few seconds, his antenna or frog ears flick, and he hums up to 3 mm.
+`botmesh.Idle` is that pose, `bot.idle_pose` computes it from the clock and his name, and
+`botmesh.faces` applies it to the cached rest mesh. `bot.HomeRig` caches the packed rest rows per
+placement and `botmesh.posed_rows` applies the same pose to them in NumPy each frame.
+The head parts (`HEAD`, the lamp, the antenna and the ears) turn about a neck pivot, with their normals. Scouting keeps its own joint
+motion; reduced motion holds him still.
 
 Shell palette, chime ID and caption are validated `bot.json` fields. The legacy
 scouting API still emits `bot`; playback resolves that cue to the current shell,
@@ -1155,9 +1180,15 @@ quest ids to these rows; see "Implemented roster and schedule (V1-30)".
 - Deformed ellipsoids and swept tubes for the head, muzzle, ears, torso, arms,
   legs and a Bézier tail, plus eyes with pupils and whiskers.
 - The attire kit and props are built on the same frame.
-- Every pose shares one triangle list. The mesh carries the idle pose and the
-  wave pose, the neutral coat frame for the pattern, and per-vertex part, rig
-  channel, attire tag and distance along the part.
+- Every pose shares one triangle list. The mesh carries two pose slots, the idle
+  pose and its gesture (`catmesh.GESTURES`: sit_fish and craft wave, helm waves
+  from the wheel as `helm_wave`, nap_curl rouses as `nap_rouse`), the neutral coat
+  frame for the pattern, and per-vertex part, rig channel, attire tag and
+  distance along the part.
+- The rig channel is the part's channel plus 16 × the cat's index in the actor,
+  and each pose has per-cat `Pivots` (neck, elbow, arm pivot and axis, seat,
+  head-up and eye-open directions). Pip & Pebble each turn about their own neck
+  and elbow, where Pebble's head and forearm used to detach about Pip's.
 
 LOD0 has 2,052–2,672 triangles (median 2,320) and LOD1 642–874 (median 750);
 Pip & Pebble have 4,464 and 1,404. LOD1 is a little over the guide's 600
@@ -1173,16 +1204,31 @@ least 97% of samples. The software renderer paints per vertex from the same
 function.
 
 **Motion.** `shaders/cat.vert` and `actors.animate` are twins, and `test_cats`
-checks them against each other by transform feedback. Each frame:
+checks them against each other by transform feedback (positions at atol 2e-4, and
+normals) for one cat of every pose and prop, the twins, and the Skipper's look mesh
+with its wave-back override and steering lean, at blink and work-cycle moments.
+`actors.pose_state` computes every parameter as a pure function of the clock
+(`state.anim`), the player's position and the actor's seed; `catmotion` holds the
+seeded schedules and `actors.shader_uniforms` hands the result to the shader. Pip &
+Pebble are one actor, so they share a seed and keep the same rhythm. Each frame:
 
-- The torso breathes and the tail sways.
-- The ears flick about every seven seconds.
-- Within 40 m the head turns toward the player, clamped to ±1.1 rad.
-- Between 40 m and 30 m the idle pose blends into a wave, and the waving forearm
-  swings about the elbow.
+- The chest breathes, the weight shifts, and a layered tail sway ends in a tip
+  flick, at a rhythm and amplitude seeded by the cat.
+- Each ear twitches on its own schedule and perks toward a near player; the eyes
+  blink every few seconds, sometimes twice.
+- Within 40 m the head turns toward the player, clamped to ±1.1 rad, and eases
+  back to centre as the player passes behind the cat rather than snapping across.
+  Otherwise the head glances between seeded points of interest.
+- Between 40 m and 30 m the idle pose blends into its gesture with a smootherstep,
+  so every vertex moves without a jump; the waving forearm swings about its elbow
+  in bursts.
+- Work poses loop their cycle: a rod is cast (wind-up, whip, settle), reeled and
+  jigged; craft cats stroke a brush, turn a page, whittle, sip or tap; a helm cat
+  makes small corrections at the wheel.
 
-Under Reduced Motion the cats hold still. `actors.pose_state` computes the
-parameters, and `actors.shader_uniforms` hands them to the shader.
+Under Reduced Motion every clock-driven term is zero, so the cats hold still. The
+distance-driven parts (the gesture blend, the head turn, the ear perk and the
+greeting tilt) still follow the player.
 
 **Actors.** `actors.place` puts each present NPC in the world:
 
@@ -1200,9 +1246,9 @@ unchanged.
 **GL renderer.** `glrender` gives the 14 actor slots fixed GPU reserves: both
 LODs in one indexed buffer, the boat, and an impostor layer in the foliage
 atlas. LOD0 draws within 40 m and LOD1 within 120 m. Beyond that a cylindrical
-billboard is cropped to the cat's silhouette, feet on its base. No GPU object
-is created after build. Boats draw at every range, and cats also draw into the
-reflection pass.
+billboard is cropped to the cat's silhouette, feet on its base. A fifteenth slot,
+with no boat or impostor, holds the Skipper's rig. No GPU object is created after
+build. Boats draw at every range, and cats also draw into the reflection pass.
 
 **Software renderer.** Cats are Gouraud-lit meshes, LOD0 within 12 m and LOD1
 to 120 m. They are rasterised with `raster.cover`, a vectorised many-triangle
@@ -1256,8 +1302,19 @@ his own `portraitmotion.Style`:
 Moods, reduced motion, the clocks and the 256 px guard are shared with the cats.
 His layers count in `portrait_bytes_bound`.
 
-**The Skipper.** `skipper.py` draws two dusk-brown tabby paws with cream mitts
-in the cockpit frame:
+**The Skipper.** The player's cat is the shared rig wearing the look saved in
+`v2.skipper` (`skipperlook`): name, pattern, the three coat colours, eyes, ears,
+tail, fur, and one head, neck and body item from the attire kit with its colour.
+`skipperlook.normalize` repairs the entry field by field on every load (`savepaths.merge_v2_defaults`),
+so a save without one gets the default dusk-brown tabby and unknown fields survive.
+`created` is true once the player has finished the creator. Size, build, legs and
+whiskers are fixed at 1.0: the first-person camera height, the paw grips and the
+Skipper's place in each cockpit are set for a size-1 cat. `botidentity.format_text`
+fills `{Skipper}` with the chosen name.
+
+In first person, `skipper.py` draws two paws in the cockpit frame, painted by
+`catmesh.coat_rgb` from the matching vertices of the rig's own forearm and paw,
+so a tuxedo has white mitts on black arms and a tabby has ringed arms:
 
 - **Tiller boats:** on the tiller. Where a boat's tiller sits behind the eye,
   the paw holds a tiller extension instead.
@@ -1268,9 +1325,22 @@ in the cockpit frame:
 - **Wheel boats:** no paws outside the haul.
 
 On calm water (no rain, little mist), at idle and not hauling, the GL reflection
-pass alone draws a dark silhouette of the Skipper's head. It is placed so its
-mirror image, ears pointing down, lies on the water past the bow. The software
-renderer stamps the same mirrored shape onto its water pixels.
+pass alone draws a silhouette of the Skipper's head, the base coat in shadow with
+the chosen ears. It is placed so its mirror image, ears pointing down, lies on the
+water past the bow. The software renderer stamps the same mirrored shape onto its
+water pixels.
+
+Off the eye (the third-person chase camera and staged views), `skipperview.SkipperFigure`
+stands the whole rig at the helm in place of the paws and the head silhouette:
+feet on the cockpit floor (the measured `skipperview.FLOOR` for the four hand-built
+hulls; generated hulls use their actual deck height from `boatfamilies`—`SPECS` for
+most, the top of the six logs for the raft), facing the bow,
+leaning with the steering, turning its head toward nearby cats and waving back when the
+boat idles within hailing range. It blends the cats' directions and fades head attention
+as opposing looks cancel, so neither head-turn nor wave snaps when two cats trade places.
+Every boat uses the helm pose; seated
+tiller and oar poses are not built. Both renderers draw it through the same
+`pose_state` and `cat.vert` path as the 52 cats, and it reflects in GL.
 
 **Memory.** `actors.memory_report` adds up the resident meshes and boats, the
 mesh-cache bound, the portrait caches, the GPU slot reserves and software paint
@@ -1286,14 +1356,17 @@ bound passes 150 MiB. It reports the result as `cat_actor_memory`.
   `cats-patterns.png` and `cats-lod.png` (LOD0, LOD1 and impostor).
 - `world-<lake>-<npc>-{approach,hail,close}-<backend>.png` and `cats-world.png`
   for the resident cats on Briar and Cedar.
-- `skipper.png` and `reflection-{idle,moving}-<backend>.png`.
+- `skipper.png`, `reflection-{idle,moving}-<backend>.png` and
+  `skipper-{default,custom}-{jon,pontoon}-{chase,front}-<backend>.png` (the rig at
+  the helm, waving to a cat 12 m off).
 - `dialogue-portrait-<lake>.png` and `chart-pins-<lake>.png`.
 - `benchmark.json`: triangle counts, mesh and portrait timings, the world
   placements, a 20-cat cache run that must stay within 14 actors and 150 MiB,
-  the hailing cases, and the wave and Reduced Motion checks.
+  the hailing cases, and the wave and Reduced Motion checks for the cats and the
+  Skipper.
 
-The capture fails if the lineup is not 52 cats, if Reduced Motion moves a cat,
-if hailing changes, or if it passes 3 GB.
+The capture fails if the lineup is not 52 cats, if Reduced Motion moves a cat or
+the Skipper, if hailing changes, or if it passes 3 GB.
 
 ## Implemented roster and schedule (V1-30)
 
@@ -1886,7 +1959,7 @@ This part covers #65's encounter scene, the book's photo frame, the Zero-G Winch
 | Its name | 3.6–4.4 | The name comes up over the letterbox. |
 
 - **The book page.** The scene is followed by a page that holds for 3 s or until a key: the photo in its print border, the weight and the record number, the teller's story, and "Released back to the water. The book keeps the record." Bot stays silent during the scene and says his line with the release (05 §5.4).
-- **The photo (`encounter.photo`).** It is drawn from the legendary, not captured from the screen, so nothing new is saved. It shows a strip of far shore over the lake's water, the fish at the surface with the rings it left and its glow, and the gunwale with the Skipper's paw, toned like an old print. The legendary's page in the book shows it beside the records, captioned with the lake and the hour of the latest one.
+- **The photo (`encounter.photo`).** It is drawn from the legendary, not captured from the screen, so nothing new is saved. It shows a strip of far shore over the lake's water, the fish at the surface with the rings it left and its glow, and the gunwale with the Skipper's paw, toned like an old print. The paw wears the saved look's mitt colour (`skipper.mitt_rgb`, the same rig sampling as the first-person paws), so the photo shows the Skipper the player dressed now, not when the fish was caught. The legendary's page in the book shows it beside the records, captioned with the lake and the hour of the latest one.
 - **The idle.** The fish is rasterized once per legendary, seen a little from above (about 100 ms, cached for four). Its idle is `fishmesh.idle_mesh`'s motion applied as a per-column warp, so a frame costs no more than a blit: the body wave runs from snout to tail and grows toward it, seen through the view's tilt, and the whole fish bobs at half the wave's rate.
 - **Skipping.** The first time each legendary is met, nothing skips or hurries the scene: Esc, other keys and holding E are ignored. When the scene ends, the page saves `presented: true` on the legendary's book page. After that, Esc (B) or any key but E skips to the book page, and holding E plays the scene three times as fast. An Instant haul goes straight to the summary, except for a legendary's first scene, which still plays before the summary.
 - **Zero-G Winch (02 §9).** With the winch owned, every legendary haul plays the winch variant. The winch drum, with its luminous rims, takes the line straight up without a sway. Its hum is steady and higher, captioned "The winch hums, steady." The fish floats clear of the water over a teal glow. The Nebula Weaver needs the winch, so it always plays this way.
@@ -2093,7 +2166,7 @@ V1-42 (#70) reviewed every lake as key art and fixed what the review found.
 - **The bow light** (`common.glsl` `lamp`, `mesh.frag`, software water and banks). It lit everything in a hard-edged cone with a flat tan wash, added after shading, so the landing at night turned into a beige block. It now has a soft cone edge and an inverse-square falloff. It lights a surface in its own colour, more where the surface faces the bow.
 - **Night readability** (`weather.lighting_at`, `mesh.frag`). The night horizon and night cloud horizon are a moonlit blue (fog takes the same colour), so the shoreline keeps an edge against the sky. The night ambient floor rises a little.
 - **The caldera walls** (`mesh.frag`, software terrain). Crater's colour came from horizontal-plane noise, so its cliffs showed flat grey columns. Steep faces now read as layered tuff and basalt in irregular horizontal strata, with joints.
-- **The Skipper's reflection** (`skipper.SILHOUETTE`). Near-black read as a hole in the water, or a dark creature standing on it. It is now the dusk-brown coat in shadow.
+- **The Skipper's reflection** (now `skipper.silhouette_rgb`). Near-black read as a hole in the water, or a dark creature standing on it. It is now the saved coat's base colour in shadow (the dusk-brown tabby by default).
 - **Software water.** The broad sun sheen (from 44 degrees off) and a 7 m band of shore foam added at 72%, which also covered the slip, blew the water out to white around a docked boat. The sheen is now tight and gentle. The foam is the GL water's thin lap line, and none in the slip.
 
 **Tests** (`test_beauty.py`):
@@ -2152,6 +2225,8 @@ A neighbouring hook never covers a fish or a cross.
 - The pause menu reaches everything that has no pad button: the Book, the Livewell, raising and lowering the sail (on a sailing boat), calling a tow, and the time speed. It is built from `pause_options(state)`.
 - A refused tow stays in the menu and says why. The time speed changes in place.
 - The gamepad help page says where each of these lives, in place of "no pad button yet".
+
+**Your Skipper** (`skipperlook.py`, `skipperview.py`, `ui._skipper`, `Session._skipper_keys`). The creator is a full-screen mode, `skipper`. It opens from the pause menu ("Your Skipper") and from a new morning's pace, where Done starts the game and Esc returns to the pace. Up/Down (or W/S) moves between rows and Left/Right (or A/D) changes the value; Enter, Space or A picks a row. Enter on the Name row starts typing, and the first key typed replaces the name; Enter or Esc ends typing, and with nothing typed the old name stays. Q/E or LB/RB turn the card. Esc or B leaves without saving (while typing, it only ends typing). Done saves to `state.v2["skipper"]` and sets `created`. The card is a pure function of the creator's clock and turn, and reduced motion holds it still. Body proportions (size, build, legs) are not offered: they would move the first-person camera, the paw grips and the boat scale. Continue on an uncreated Skipper hints once per session.
 
 **Caption timing** (`reading.py`). Toasts and sound captions hold long enough to read: a second to notice, then 14 characters a second, never under their old hold and never over 9 s.
 
