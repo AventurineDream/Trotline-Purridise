@@ -7,6 +7,7 @@ the nearest line, or a short way ahead, and B calls him back.
 from __future__ import annotations
 
 import math
+import zlib
 
 import numpy as np
 
@@ -15,6 +16,9 @@ from . import comfort
 from . import calendar
 from .data import BOT_SHELLS
 from .botmesh import WOOL as _COLLAR_WOOL
+from . import botidentity, catmotion
+from .botmesh import Idle, PITCH_LIMIT, YAW_LIMIT
+from . import botmesh
 
 _PHASES = ("home", "go", "out", "back")
 # Feet position in the level boat frame: starboard, up, forward of the eye.
@@ -25,6 +29,12 @@ _PERCH = {
     "rowboat": (0.0, -0.36, 1.05),
 }
 _SPEED = 7.5  # metres per real second
+# Bot's home idle borrows the cats' glance and blink helpers. A cat this close in the water
+# draws his eye; with none in range he glances about the lake like a pilot at the wheel.
+_WATCH_RANGE = 25.0  # metres
+_WATCH_FULL = 20.0  # metres within which a cat draws his head fully
+_FRONT_SLACK = 0.6  # metres ahead of the head where the front fade starts
+_GLANCE_POSE = "helm"
 
 
 def reset(state) -> None:
@@ -165,22 +175,18 @@ def appearance(state) -> dict:
 
 
 def faces(state) -> list[Face]:
+    """Bot's faces this frame. At home, the idle rig (head, lamp, flicks, hum); scouting, his joint motion."""
     v2 = getattr(state, "v2", {})
     settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
     pose = appearance(state)
     collar_visible = pose.pop("collar_visible")
     pose.update(anim=float(state.anim), reduced_motion=bool(settings.get("reduced_motion", False)))
     if state.bot_phase == "home":
-        eye, right, up, forward = _boat_basis(state)
-        if state.boat.handcrafted:
-            lx, ly, lz = _PERCH[state.boat_id]
-        else:
-            from .boatfamilies import perch
-            lx, ly, lz = perch(state.boat)
-        origin = eye + right * lx + up * ly + forward * lz
-        # Look back at the skipper so the lamp is in view.
-        return _mesh(origin, -right, up, -forward, bob=0.0,
-                     collar_visible=collar_visible, **pose)
+        origin, rest_right, up, rest_forward = _home_frame(state)
+        idle = idle_pose(pose["anim"], _seed(state), pose["reduced_motion"],
+                         _watch(state, origin, rest_right, rest_forward))
+        return _mesh(origin, rest_right, up, rest_forward, bob=idle.hum,
+                     collar_visible=collar_visible, idle=idle, **pose)
     y = 0.05 + (0.0 if pose["reduced_motion"] else math.sin(state.anim * 5.0) * 0.018)
     origin = np.array([state.bot_x, y, state.bot_z], np.float32)
     facing = np.array([math.sin(state.bot_yaw), 0.0, math.cos(state.bot_yaw)], np.float32)
@@ -196,23 +202,165 @@ def faces(state) -> list[Face]:
     return mesh
 
 
+def _home_frame(state):
+    """Bot's perch at home: (origin, right, up, forward) of the rest pose, bob-free.
+
+    Rest facing is back at the skipper, so the lamp is in view; the idle turns from there.
+    Pure in the boat and its perch; the clock plays no part.
+    """
+    eye, right, up, forward = _boat_basis(state)
+    if state.boat.handcrafted:
+        lx, ly, lz = _PERCH[state.boat_id]
+    else:
+        from .boatfamilies import perch
+        lx, ly, lz = perch(state.boat)
+    origin = eye + right * lx + up * ly + forward * lz
+    return origin, -right, up, -forward
+
+
+def idle_pose(anim: float, seed: int, reduced_motion: bool, look=None) -> Idle:
+    """Bot's home idle at clock `anim` (seconds): head turn, lamp shutter, flicks and hum.
+
+    A pure function of its arguments, so the same clock and seed give the same pose. seed: a
+    stable integer per Bot (see _seed). look: (yaw, pitch, weight) from `_watch`, or None to
+    glance about the lake only. The head blends from the glance (weight 0) to the cats' bearing
+    (weight 1), so a cat drifting in or out of range moves it smoothly. reduced_motion: the rest
+    pose, all zero. Returns an Idle; hum is metres of body lift, at most 3 mm.
+    """
+    if reduced_motion:
+        return Idle()
+    glance_yaw, glance_pitch, _roll = catmotion.glance(anim, seed, _GLANCE_POSE)
+    yaw, pitch = glance_yaw, glance_pitch
+    if look is not None:
+        look_yaw, look_pitch, weight = look
+        # Watching a cat keeps a little of the glance, so the head never freezes on him.
+        cat_yaw, cat_pitch = look_yaw + .15 * glance_yaw, look_pitch + .15 * glance_pitch
+        yaw = weight * cat_yaw + (1. - weight) * glance_yaw
+        pitch = weight * cat_pitch + (1. - weight) * glance_pitch
+    yaw = max(-YAW_LIMIT, min(YAW_LIMIT, yaw))
+    pitch = max(-PITCH_LIMIT, min(PITCH_LIMIT, pitch))
+    hum = .0015 * (1. - math.cos(math.tau * anim / 2.6 + math.tau * catmotion.hash01(seed, 0, 41)))
+    flicks = (catmotion.ear(anim, seed, -1), catmotion.ear(anim, seed, 1))
+    return Idle(yaw, pitch, catmotion.blink(anim, seed), flicks, hum)
+
+
+def _seed(state) -> int:
+    """A stable per-Bot integer for his idle helpers: the same name blinks and glances the same way."""
+    return zlib.crc32(botidentity.name(state).encode("utf-8"))
+
+
+def _watch(state, origin, right, forward):
+    """The cats Bot's head is drawn to: (yaw, pitch, weight), with weight 0 when none is near.
+
+    Every cat within `_WATCH_RANGE` counts by a distance fade (full to 20 m, none at 25 m) times
+    a front fade (none once it is more than 0.6 m behind the rig, where the head cannot turn).
+    The yaw is the weight-averaged bearing, measured from the rest facing about a point 0.6 m
+    ahead of the head so it stays continuous through the fade. Nothing here picks a nearest cat,
+    so two cats trading places cannot jump the head. weight = min(1, sum of cat weights).
+    origin: Bot's world position; right/forward: the rest frame's horizontal axes (local +x, +z).
+    """
+    total = 0.0
+    yaw_sum = 0.0
+    for npc in getattr(state, "npcs", ()) or ():
+        anchor = getattr(npc, "anchor", None)
+        if anchor is None:
+            continue
+        dx = float(anchor.x) - float(origin[0])
+        dz = float(anchor.z) - float(origin[2])
+        dist = math.hypot(dx, dz)
+        if dist >= _WATCH_RANGE:
+            continue
+        lx = dx * float(right[0]) + dz * float(right[2])
+        lz = dx * float(forward[0]) + dz * float(forward[2])
+        weight = (1.0 - catmotion.smoother((dist - _WATCH_FULL) / (_WATCH_RANGE - _WATCH_FULL)))
+        weight *= catmotion.smoother((lz + _FRONT_SLACK) / _FRONT_SLACK)
+        if weight <= 0.0:
+            continue
+        total += weight
+        yaw_sum += weight * math.atan2(lx, lz + _FRONT_SLACK)
+    if total <= 0.0:
+        return 0.0, 0.0, 0.0
+    return yaw_sum / total, 0.0, min(1.0, total)
+
+
+class HomeRig:
+    """Bot's home pose as packed GL rows: the rest pose cached per placement, re-posed per frame.
+
+    The rest rows are rebuilt only when the perch, the boat or the look (shell, collar) changes,
+    so a still boat costs a cache hit. The idle (head, lamp, flicks, hum) and the cats he watches
+    are applied each frame by `botmesh.posed_rows` in NumPy, so no face is built per frame.
+    """
+
+    def __init__(self):
+        self._key = None
+        self._rows = None
+        self._mesh = None
+
+    def rows(self, state, pack) -> np.ndarray:
+        """This frame's packed home rows (6 per face). pack: the renderer's Face-list packer."""
+        pose = appearance(state)
+        collar_visible = pose.pop("collar_visible")
+        origin, right, up, forward = _home_frame(state)
+        basis = np.stack((right, up, forward), axis=1).astype(np.float32)
+        style = botmesh.collar_style(pose["stage"], pose["knot"], collar_visible)
+        key = (origin.tobytes(), basis.tobytes(), pose["shell"], style)
+        if key != self._key:
+            self._rows = pack(botmesh.faces(origin, right, up, forward, shell=pose["shell"],
+                                            stage=pose["stage"], knot=pose["knot"],
+                                            collar_visible=collar_visible))
+            self._mesh = botmesh.local_mesh(pose["shell"], style)
+            self._key = key
+        v2 = getattr(state, "v2", {})
+        settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
+        idle = idle_pose(float(state.anim), _seed(state), bool(settings.get("reduced_motion", False)),
+                         _watch(state, origin, right, forward))
+        if idle == Idle():
+            return self._rows
+        return botmesh.posed_rows(self._rows, self._mesh, origin, basis, idle)
+
+
 def checks(world) -> None:
-    """Headless: he launches, reports, returns, and the deck pose does not breathe."""
+    """Headless: he launches, reports and returns; his deck idle holds still under reduced motion,
+    is a pure function of the clock, and moves without it while his lamp keeps facing the skipper."""
     from .sim import State
 
     state = State.new(world, seed=3)
+    settings = state.v2["settings"]
+    settings["reduced_motion"] = True
     state.anim = 0.0
     home = _points(faces(state))
     state.anim = 37.0
     if not np.array_equal(home, _points(faces(state))):
-        raise AssertionError("Bot moved on the deck while the boat was still")
+        raise AssertionError("Bot moved on the deck with reduced motion on")
     eye = np.array([state.x, state.boat.eye_height, state.z], np.float32)
-    amber = [f for f in faces(state) if float(f.color[0]) > 0.9 and float(f.color[2]) < 0.3]
-    if not amber:
-        raise AssertionError("Bot has no lamp")
-    center = amber[0].pts.mean(axis=0)
-    if float(np.dot(amber[0].normal, eye - center)) <= 0.2:
+
+    def lamp(mesh):
+        amber = [f for f in mesh if float(f.color[0]) > 0.9 and float(f.color[2]) < 0.3]
+        if not amber:
+            raise AssertionError("Bot has no lamp")
+        return amber[0]
+
+    def sees_skipper(face):
+        return float(np.dot(face.normal, eye - face.pts.mean(axis=0))) > 0.2
+
+    if not sees_skipper(lamp(faces(state))):
         raise AssertionError("Bot's lamp faces away from the skipper")
+    settings["reduced_motion"] = False
+    state.anim = 37.0
+    first = _points(faces(state))
+    if not np.array_equal(first, _points(faces(state))):
+        raise AssertionError("Bot's idle is not a pure function of the clock")
+    lamps, decks = set(), set()
+    for t in np.arange(0.0, 60.0, 0.5):
+        state.anim = float(t)
+        mesh = faces(state)
+        face = lamp(mesh)
+        if not sees_skipper(face):
+            raise AssertionError("Bot's lamp faces away from the skipper while he idles")
+        lamps.add(face.pts.tobytes())
+        decks.add(_points(mesh).tobytes())
+    if len(lamps) < 4 or len(decks) < 4:
+        raise AssertionError("Bot's deck idle does not move over a minute")
     rowboat = State.new(world, seed=4)
     rowboat.boat_id = "rowboat"
     rowboat.owned_boats.append("rowboat")
@@ -370,11 +518,12 @@ def _report(state, world) -> str:
 
 
 def _mesh(origin, right, up, facing, bob: float, scale: float = 1.0,
-          collar_visible: bool = True, **pose) -> list[Face]:
+          collar_visible: bool = True, idle=None, **pose) -> list[Face]:
+    """Shell faces at `origin` lifted by `bob` metres. `idle` is the home pose; None is the scouting rig."""
     from .botmesh import faces as shell_faces
     origin = np.asarray(origin, np.float32) + np.array((0., bob, 0.), np.float32)
     return shell_faces(origin, right, up, facing, scale=scale,
-                       collar_visible=collar_visible, **pose)
+                       collar_visible=collar_visible, idle=idle, **pose)
 
 
 def sound_kind(state, kind):
