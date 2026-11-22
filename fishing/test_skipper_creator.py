@@ -169,7 +169,6 @@ class SkipperCreatorTests(unittest.TestCase):
         type_letters(self.session, "m")  # the first key replaces the selected name
         self.assertEqual(self.look()["name"], "M")
 
-
     def test_rebound_keyboard_select_does_not_end_name_typing(self):
         from .gamepad import set_key_binding
         self.open_from_pause()
@@ -199,6 +198,7 @@ class SkipperCreatorTests(unittest.TestCase):
             self.session.tick(keys, 0.05)
         self.assertEqual(self.look()["name"], "Eve")
         self.assertTrue(self.session.ui.skipper_typing)
+
     def test_keyboard_q_and_e_turn_the_card_while_held_but_not_while_typing(self):
         self.open_from_pause()
         tap(self.session, "e", held=("e",), dt=0.5)

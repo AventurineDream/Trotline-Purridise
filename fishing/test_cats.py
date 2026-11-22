@@ -690,7 +690,6 @@ class Skipper(unittest.TestCase):
         self.assertAlmostEqual(yaws[300], 0.0, places=6)
         self.assertAlmostEqual(blends[300], 1.0, places=6)
 
-
     def test_generated_hull_figure_feet_stand_just_above_each_actual_deck(self):
         from . import boatfamilies, boat
         from . import skipperview
@@ -716,6 +715,7 @@ class Skipper(unittest.TestCase):
                 self.assertTrue(candidates, "generated hull has a deck face in its authored deck colour")
                 deck_y = max(candidates)[1]
                 self.assertAlmostEqual(actor.y, deck_y + 0.02, places=5)
+
     def test_hauling_is_transient_and_never_saved(self):
         import tempfile
         state = self._state("jon", hauling=True)
