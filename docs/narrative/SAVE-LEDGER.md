@@ -6,17 +6,20 @@ without it loads twelve available quests, no Ripples, seed `0`, no NPC selection
 no notes or claims, no Guardian sighting, and zero active-play minutes.
 
 `State.narrative` is a `NarrativeState`. Each canonical quest ID maps to a
-`QuestProgress` with `status`, `progress`, `accepted_game_minute` and `declined`.
+`QuestProgress` with `status`, `progress`, `accepted_game_minute`, `declined`, and the V1-31 fields `completed_game_minute`, `turned_in_by` and `acknowledged`.
 Declining can be recorded while leaving status `available`. Progress stores finite
 JSON values, including counters, namespaced zones, source line UUIDs and set-time
-properties. The ledger also stores unique Ripple IDs, `schedule_seed`, paired
-`day_npc_by_lake`/`schedule_day_by_lake` entries, `bot_notes`, `reward_claims`,
-`guardian_seen`, and `active_play_game_minutes`.
+properties. The ledger also stores unique Ripple IDs, `schedule_seed`, the legacy V3
+`day_npc_by_lake`/`schedule_day_by_lake` pairs, `bot_notes`, `bot_reactions`, and
+`bot_journal` (at most 40 lines). `reward_claims` holds quest IDs plus `<quest>:accept`
+keys for on-accept gifts, and the ledger stores `guardian_seen` and
+`active_play_game_minutes`.
 
-Saved daytime NPC IDs are `elder_moss`, `pip_pebble`, `willow`, `silas` on Briar
+Legacy V3 daytime NPC IDs are `elder_moss`, `pip_pebble`, `willow`, `silas` on Briar
 and `captain_maeve`, `sparky`, `quill`, `dr_alder`, `patch` on Cedar. A selection
-requires a valid ID for that lake and a non-negative integer day. This ticket
-stores choices; Ticket 5 will compute them from game time using the saved seed.
+requires a valid ID for that lake and a non-negative integer day. The shipped build
+computes presence from `schedule_seed` and the game day (`fishing/npcs.py`; see
+NPC-SCHEDULE.md). A stored pair applies only to the day it was saved on.
 
 Malformed optional fields fall back independently; valid fishing data and valid
 ledger siblings survive. Unknown quest/Ripple IDs are ignored. A completed quest
@@ -40,7 +43,7 @@ and reports without a line association. Free-water scouts have no target UUID.
 The active-play clock measures the actual positive game-clock delta in online
 simulation and tow actions, including effective-rate limits and bulk advances.
 Frozen updates and `catch_up` add no active-play minutes. Lake travel keeps the
-same shared ledger; offscreen NPC selection and quest evaluation are later work.
+same shared ledger. NPC presence is derived from the save (`fishing/npcs.py`), not stored offscreen.
 
 Run the persistence regressions with `python -m unittest fishing.test_narrative -v`.
 They also run through the existing `python -m fishing --selftest` entry point.

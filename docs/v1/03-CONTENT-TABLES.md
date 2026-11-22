@@ -266,7 +266,7 @@ be bought at Flathead or Crater and carried back. Later species tables may add t
 `max(parent_a_match, parent_b_match)` for every species, including fallback.
 
 All five waters now have their ordinary fish rosters; the three new landscapes
-remain flat systems maps. Recipes needing roe, ember
+are generated terrain (`lakes.json` `environment`), not flat placeholder maps. Recipes needing roe, ember
 grubs or stardust depend on stock at the later lakes; later specialty pantry
 items likewise arrive with their hosts. Their recipes are defined here so the
 matching lake/content tickets can enable them without changing cooking rules.
@@ -279,8 +279,8 @@ legendary (`02 §7.2`).
 
 | id | Name | Lake · zone | Window | Weather | Bait | Other gate | lb | Kind | Clue teller |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| old_lantern | Old Lantern | briar · `area: landing_edge`: a line whose midpoint is 50–150 m from the Briar Landing slip (just outside the existing no-line zone, `sim.py` 46 m slip radius / 50 m landing zone) | 20:00–24:00 | any | lantern_liver | Spotlight owned and on | 38 | caught | Grandmother Whiskers |
-| lily_queen | The Lily Queen | briar · lilies or reeds | 05:00–08:00 | mist or rain | queens_breakfast | Ch. 1 complete | 14 | caught | Willow |
+| old_lantern | Old Lantern | briar · `area: landing_edge`: a line whose midpoint is 50–150 m from the Briar Landing slip (just outside the existing no-line zone, `sim.py` 46 m slip radius / 50 m landing zone) | 20:00–24:00 | any | lantern_liver | Spotlight owned | 38 | caught | Grandmother Whiskers |
+| lily_queen | The Lily Queen | briar · lilies or reeds | 05:00–08:00 | mist or drizzle | queens_breakfast | Ch. 1 complete | 14 | caught | Willow |
 | spillway_monster | The Spillway Monster | cedar · `area: marked_pool` (inside cedar:rocks) | 20:00–04:00 | any | shad | Heavy line only. **No other gate; day-one** | 95 | caught | Doc Barnaby |
 | channel_leviathan | The Channel Leviathan | cedar · inlet | 22:00–02:00 | rain within the last 6 game h | pecan_smoked_shad | Ch. 2 complete | 120 | caught | Hank Mudpaw |
 | whiskered_guardian | The Whiskered Guardian | cedar · deep | 18:00–20:00 | any | — | Existing: any 8 of the 10 V3 Ripples | — | witnessed | Quill |
@@ -294,7 +294,7 @@ legendary (`02 §7.2`).
 
 Weather scheduling: once a legendary is eligible, the planner must produce a window
 where its required weather overlaps its clock window within **3 game days**
-(`02 §3.6`, tested by V1-16). Areas such as `landing_edge` and `marked_pool` are
+(`02 §3`, rule 6, tested by V1-16). Areas such as `landing_edge` and `marked_pool` are
 named regions defined in `lakes.json` (`06 §5`). The validator checks that each
 one contains water where a line can legally be set.
 
@@ -396,7 +396,7 @@ knots share one rig; these cosmetic assets preserve identity and progression.
 
 Internal zone ids are shared habitat archetypes (existing `landing, inlet, flats,
 lilies, cypress, rocks, deep, open`, plus new `reeds, springs, current`). Each lake
-supplies display labels (existing pattern: `CEDAR_ZONES`).
+supplies display labels (existing pattern: `CEDAR_ZONES`). `shore` (labelled Bank) is the non-fishing shoreline id.
 
 | id | briar | cedar | flathead | crater | nebula |
 | --- | --- | --- | --- | --- | --- |
@@ -405,7 +405,7 @@ supplies display labels (existing pattern: `CEDAR_ZONES`).
 | flats | North flats | Upper lake flats | Gravel flats | Pumice shelf | Stardust shoals |
 | lilies | Lily cove | Clear Creek coves | Pondweed bay | Moss gardens | Zero-G lily drifts |
 | cypress | Cypress shore | Flooded shoreline | Larch snags | Drowned pines | Crystal kelp forest |
-| rocks | South rocks | Dam riprap (Marked Pool) | Gravel reefs | Obsidian cliffs (cinder isle) | Meteor reefs |
+| rocks | South rocks | Dam riprap | Gravel reefs | Obsidian cliffs (cinder isle) | Meteor reefs |
 | deep | Deep hole | Southern basin | Glacial trench | Cobalt deep | Void well |
 | open | Open water | Cedar open water | Big open water | Caldera open | Nebula open |
 | reeds | Reed Passage (new) | — | — | — | Light-reeds |
@@ -438,8 +438,8 @@ supplies display labels (existing pattern: `CEDAR_ZONES`).
 
 
 V1-16 copies Briar/Cedar §8 Lake Days and all §3 legendary weather/clock requirements into
-validated `content_v2/calendar.json`. Briar/Cedar modifiers are active now;
-future legendary weather rows prepare forecasts without unlocking their worlds. Game-day
+validated `content_v2/calendar.json`. Lake Day modifiers are active on all five lakes, each
+only while its lake is fished. Legendary weather rows feed the forecast planner and do not unlock worlds (chapters do: `lakes.json` `unlock_chapter`). Game-day
 weekday boundaries are 06:00. Cookout gifts contain one host-specialty pantry
 item or Kibble Tin, chosen reproducibly, with at most one claim per lake each
 Sunday; no fish is spent when that item's pantry slot is full.

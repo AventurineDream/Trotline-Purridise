@@ -210,7 +210,7 @@ seeded weather plan with the legendary coverage guarantee, the Sunday cookout
 event (cats gather; bring a fish to get a pantry gift), Bot's weather invitation
 (once per day, only when true), and the journal week view.
 **Acceptance:** over 1,000 seeded weeks, every legendary's weather window occurs
-within 3 game days of eligibility (the single bound in `02 §3.6`). Lake Day multipliers apply only on their day.
+within 3 game days of eligibility (the single bound in `02 §3`, rule 6). Lake Day multipliers apply only on their day.
 The plan is reproducible after reload and lake switches.
 **Depends on:** V1-01, V1-23 (lake list; stub with briar/cedar first).
 

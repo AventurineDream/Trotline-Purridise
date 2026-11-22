@@ -45,12 +45,12 @@ and recorded in the decision log below.
 | D9 | **Shinies:** 1/64, standard species only, saved at catch, tracker pity at 50, 3× price, Treasured by default | It is a measurable rule. Unique legendaries can't have fair shiny odds |
 | D10 | **The Nebula is the night sky's reflection, reached from Crater**, not "a far-off galaxy" | It gives a diegetic, gentle way to get there and ties the finale to the chapter 4 discovery |
 | D11 | **Crater Caldera is a lake**; "Reservoir" is dropped. Flathead and Crater are fictionalized and procedural (no park or survey data) | It fixes a factual error and avoids data and licensing work |
-| D12 | **Visible NPCs** (a procedural cat rig) and **illustrated fish cards** are core scope | Today NPCs are invisible anchor points. A 52-cat game needs to show its cats |
+| D12 | **Visible NPCs** (a procedural cat rig) and **illustrated fish cards** are core scope | NPCs were invisible anchor points at review time; the cat rig (`catmesh.py`) now draws them. A 52-cat game needs to show its cats |
 | D13 | **The haul view** (running the line hook by hook) is the signature interaction | The existing check menu is the least expressive moment of the loop |
 | D14 | **Hail stays at 20 m below 3 knots** (implemented), not Gemini's 15 m | It keeps shipped behavior |
 | D15 | **Offline soak stays** (existing). Needs and NPC timers don't run offline | The second review proposed no offline time at all, which would remove a shipped cozy feature |
 | D16 | **Bot is "he"** (existing canon) with a plate *Deckhand Unit 04* + `Word-###`; prefix "Pebble" → "Rivet" | It reconciles V3's "Deckhand Unit 04" with Gemini's procedural names, and avoids the clash with the cat Pebble |
-| D17 | **Gamepad support is in scope** | Gemini promised a Right Bumper hail; there's no pad support today |
+| D17 | **Gamepad support is in scope** | Gemini promised a Right Bumper hail; the build had no pad support at review time (now `fishing/gamepad.py`) |
 | D18 | **Player-facing title: *Trotline Purridise***; Little Briar is the first lake | It resolves the title ambiguity both earlier reviews flagged |
 | D19 | **Memory target ≤ 2.6 GB peak**, with the hard cap at 3 GB as today | The owner wants depth that "approaches" 3 GB; headroom protects against driver variance |
 
@@ -80,8 +80,8 @@ behavior. **Major** means players would feel it or implementers would diverge.
 6. **[Major] The script covers about 5% of what's needed.** No connected story,
    two sample quests, five host greetings. → `05` is complete for the story, the
    hosts, Bot and all 45 water-cats.
-7. **[Major] NPCs and fish are invisible.** The build has no cat models and no fish
-   art, so 52 cats and 156 fish would be text. → D12, `06 §6`.
+7. **[Major] NPCs and fish were invisible.** At review time the build had no cat models and no fish
+   art, so 52 cats and 156 fish would have been text (both now exist: `catmesh.py`, `fishart.py`). → D12, `06 §6`.
 8. **[Major] The core interaction is thin.** "Set, wait, check menu" doesn't carry
    50 hours. → split baiting, the haul view, Lake Days, recipes and watch cards
    (`02 §1`).
@@ -153,7 +153,7 @@ behavior. **Major** means players would feel it or implementers would diverge.
    all parametric by design; protect that, and resist hand-authored one-offs.
 2. **Memory** with 5 lake palettes, portraits and card caches: enforce the LRUs
    and the per-subsystem benchmark accounting from the first art ticket.
-3. **Content transcription drift** across 108 quests: the validator and a scripted
+3. **Content transcription drift** across 111 quests: the validator and a scripted
    playthrough test per lake are mandatory (V1-32, V1-33).
 4. **Software-renderer parity:** every visual ticket must keep `--selftest
    --software` green, because CI runs it.

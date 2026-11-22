@@ -31,7 +31,7 @@ ch. N)" or "(needs Flathead travel)" means `requires`. "Any Briar zone" means
   (default "Skipper").
 - **Look:** chosen in the Skipper creator at a new game, and changed any time from
   the pause menu: pattern (the nine coat patterns), coat, markings and bib colours,
-  eyes, ears, tail, fur, a hat or spectacles, neckwear and a jacket from the cats'
+  eyes, ears, tail, fur, a hat, spectacles or goggles, neckwear and a jacket from the cats'
   shared attire kit. A save from before the creator wears the default dusk-brown
   tabby. Size, build and leg length stay at the rig's 1.0 so the view from the eye,
   the paws on the tiller and the Skipper's place in every cockpit stay true.
@@ -44,6 +44,7 @@ ch. N)" or "(needs Flathead travel)" means `requires`. "Any Briar zone" means
 - **Ids:** `bot`. Plate: *Deckhand Unit 04*; name `Word-###` (`03 §7`).
 - **Look:** the shell changes (`03 §7`); the copper-ring eye, brass ears and the wool
   collar (from ch. 1) are on every shell.
+- **Idle:** on the bow he watches the nearest cats: his head turns to any within 25 m, and his antenna and ears flick while he waits.
 - **Wants:** to be useful, and to understand why the Skipper looks at the water so
   long. By the end he does it too.
 - **Contradiction:** precise about numbers and hopeless about feelings. He reports
@@ -162,7 +163,7 @@ briar:inlet → `ks_silas` Tiny birdhouse.
 day · open. *Wants* someone to agree that swimming cats are perfectly normal.
 *Contradiction:* swims everywhere, and hates rain on her ears.
 **A** `wc_marigold_a` *Swim Buddy*: `travel_distance` 200 m in briar:open →
-`ripple_11`. **B** `wc_marigold_b` *Rainy-Day Ears*: `wait_weather` rain in any
+`ripple_11`. **B** `wc_marigold_b` *Rainy-Day Ears*: `wait_weather` drizzle in any
 Briar zone → `ks_marigold` Swim cap.
 
 **Old Gus** (`old_gus`) — Manx · punt · day · rocks. Retired ferryman.

@@ -72,6 +72,12 @@ Money, catches, gear, boats and the journal come with you.
 - **Bot (B)**: five shells and five tools, including the Wave Chime (**G**) and the Zero-G Winch.
 - **Legendaries**: twelve in all. Ten can be caught and two are witnessed, the Whiskered Guardian and the Star-Whale. Trophy replicas hang on boats with a trophy rail.
 
+### Your Skipper
+
+**New morning** asks for a pace, then opens the Skipper creator. Choose a row with **W/S** and change it with **A/D**. The rows are name, pattern, coat, markings, bib and mitts, eyes, ears, tail, fur, hat and specs, hat colour, neckwear, neckwear colour, jacket and jacket colour. On the name row, typing edits the name. **Q** and **E** turn the Skipper (gamepad **LB** and **RB**). **Done** starts the morning, and **Esc** goes back to the pace choice.
+
+In play, **Pause → Your Skipper** reopens the creator. Done saves and returns to the game; Esc cancels without saving.
+
 ### Where your save lives
 
 The game saves to `save.json` in your per-user app-data folder, not the install
@@ -141,7 +147,7 @@ To set up a fresh clone and check it first, run `sh scripts/setup.sh` (on Window
 ./play.sh --detail auto       # choose the highest tier that fits free memory
 ./play.sh --detail low        # lower-memory systems and the lightest GPU effects
 ./play.sh --detail high       # larger baked textures, shadows and scene targets
-./play.sh --detail ultra      # upper tier; peak target 2.6 GiB RSS + GPU
+./play.sh --detail ultra      # upper tier; peak target 2,600 MiB RSS + GPU
 ./play.sh --detail standard   # pin the balanced tier
 ./play.sh --selftest --software
 ./play.sh --smoke             # real window, sailing, purchases, weather, and lake changes
@@ -169,15 +175,15 @@ up Old Lantern encounter**, and **Reset in-memory session**. The legendary
 fixture requires Little Briar, no deployed lines, a held line, and enough
 bait-box capacity; it uses the authored Old Lantern requirements and real hook.
 
-The benchmark writes `shots/benchmark.json`, records peak process RAM and DRM-reported GPU memory, and fails if their combined bytes reach 3,000,000,000. Its 1,200-frame run checks all five lakes and boats, eight shop tabs, four help pages, every fish and cat model, 12 quest journal entries, and all twelve dialogue givers across four quest states. It exercises weather, fuel and battery, paint, buoys, audio, a legendary scene and catchability, while checking per-subsystem memory and fixed geometry. Results depend on the graphics driver and other applications running on the computer.
+The benchmark writes `shots/benchmark.json`, records peak process RAM and DRM-reported GPU memory, and fails if their combined bytes reach 3,000,000,000. Its 1,200-frame run checks all five lakes and boats, eight shop tabs, all 24 help pages, every fish and cat model, 12 quest journal entries, and all twelve dialogue givers across four quest states. It exercises weather, fuel and battery, paint, buoys, audio, a legendary scene and catchability, while checking per-subsystem memory and fixed geometry. Results depend on the graphics driver and other applications running on the computer.
 
 During play the window and lake share one OpenGL context. The window check reads the pixels submitted to the actual window and verifies that presenting a frame does not corrupt subsequent lake frames. Headless screenshots use a separate standalone context.
 
-The original source is preserved in `backups/original-2026-10-13.tar.gz`; the version before the two-lake expansion is in `backups/before-two-lakes-2026-10-13.tar.gz`. Older saves keep their money, fish, lines, gear, and records. They start with the owned jon boat and a full starter fuel tank; the new boats must be purchased. The active lake, owned boats, fuel tanks, rowboat battery, and its charge allowance for the current landing visit are saved. Engines resume at idle and sails resume lowered.
+The `backups/` folder, which holds the original-source archives, is git-ignored and not part of this repository. Older saves keep their money, fish, lines, gear, and records. They start with the owned jon boat and a full starter fuel tank; the new boats must be purchased. The active lake, owned boats, fuel tanks, rowboat battery, and its charge allowance for the current landing visit are saved. Engines resume at idle and sails resume lowered.
 
 ## Modes and catnap
 
-New Game asks you to choose **Cozy** (default) or **Old Salt**. You can switch
+New morning asks you to choose a pace, **Cozy** (default) or **Old Salt**, then opens the Skipper creator. You can switch
 any time in Pause → Settings. Cozy applies no needs penalties. Entering either
 mode clears the routine counters; entering Old Salt starts them at zero.
 
@@ -252,12 +258,14 @@ At either landing, the Boats tab's **first row** refuels the active powered boat
 
 | Boat | Purchase | Tank | Character |
 | --- | ---: | ---: | --- |
-| 12 ft Jon boat | Starting boat | 12 L | Nimble tiller boat with the original handling |
-| 12 ft Daysailer | $650 | 6 L | Wind power, a small auxiliary motor, and a wider cockpit |
-| 15 ft Pontoon | $1,450 | 36 L | Broad deck, bimini canopy, helm console, slower turns, and 40 lb extra livewell space |
-| 10 ft Plastic Rowboat | $325 | — | Oars by default; an optional electric trolling motor is available |
+| Aluminum Jon Boat (12 ft) | Starting boat | 12 L | Light and nimble tiller boat with the original handling |
+| Cat-Rigged Daysailer (12 ft) | $650 | 6 L | Wind power uses no fuel; a small auxiliary motor |
+| Classic Pontoon (15 ft) | $1,450 | 36 L | Wide deck, sheltered helm, hammock, slower turns, and 40 lb extra livewell space |
+| Reinforced Rowboat (10 ft) | $325 | — | Blue plastic hull; oars by default, with an optional electric trolling motor |
 
-All four models have their own complete hull collision footprint and draft. A wider boat needs more clearance. Motor and livewell upgrades stay with your equipment; motor upgrades improve the jon boat and pontoon, while the daysailer's auxiliary remains small. Sell enough fish before changing to a boat with a smaller livewell.
+This table lists the four original boats. The other twenty are sold in the same Boats tab, in eight families; each boat's price, tank and burn rate are in `fishing/assets/content_v2/boats.json`.
+
+All four models have their own complete hull collision footprint and draft. A wider boat needs more clearance. Motor and livewell upgrades stay with your equipment; motor upgrades improve every tiller boat (the jon boat, pontoon, River Runner Skiff and Duck Hunter Jon), while the daysailer's auxiliary remains small. Sell enough fish before changing to a boat with a smaller livewell.
 
 **Q** raises or lowers the daysailer's sail. Raising it lifts the anchor. **A/D** steers, while the sail trims to the wind. A reach across the wind is fastest; the boat cannot sail straight into the wind, so tack or use the auxiliary. The HUD shows wind direction, wind speed, and sail status. **Space** anchors and lowers the sail. **Shift** idles the auxiliary; a raised sail keeps providing wind power.
 
@@ -316,7 +324,7 @@ Each caught legendary gets a calm five-second reveal on its first haul; later
 reveals can be skipped or hurried. The camera stays anchored and the catch is
 still released. Its illustrated Book entry keeps the record and the Trophies
 shelf shows a gold replica. The Fire-Lizard's page says “NOT A FISH!”; the
-Zero-G Winch gives the Nebula Weaver a floating-line variant.
+Zero-G Winch gives every legendary haul a floating-line variant.
 
 Standard catches now have a **1 in 64** shiny chance, rolled once and saved on
 the catch. After five catches of a species (**Verified**), its Book entry offers
@@ -330,8 +338,7 @@ Shinies use their variant palette and **✦** labels, sell for **3×** normal va
 and start **Treasured**, so bulk sale keeps them until you remove that mark.
 Shiny Trophy credit is awarded when you Keep or Release the fish. A hooked
 shiny that gets away leaves no Trophy and returns its reserved pity progress.
-Released or sold shinies remain recorded on the book's Trophy shelf. A mounting
-hook is ready for boats with the future trophy rail trait.
+Released or sold shinies remain recorded on the book's Trophy shelf. On that shelf, **F** hangs the selected replica on the current boat's rail, or takes it down. Only boats with a trophy rail take replicas: Deep-V Bass Skiff, Classic Mahogany Runabout, Small Sloop, Triple-Hull Party Barge, Lake Houseboat, Nebula Cruiser and Celestial Flagship.
 
 Release W or S and the throttle stays where you set it. The HUD shows forward,
 reverse, or idle and the lever percentage. Dropping the anchor resets the lever
@@ -354,7 +361,7 @@ blue/channel catfish and Saturday daytime bass in open water or rocks. Forecasts
 survive reloading and lake travel, and Watch cards show the next rare-weather
 opportunity (story and gear requirements still apply).
 
-On Sunday from 5–8 PM, meet all six current lake friends at the landing. Open
+On Sunday from 5–8 PM, meet the lake friends at the landing: six on Briar and Cedar, none yet on the other lakes. Open
 **Kitchen**, choose **Share a fish at the Sunday cookout**, then confirm a fish
 for one pantry gift per lake that Sunday. Chat with each friend from the same
 menu. Shiny, Treasured, protected and legendary fish stay safe. Bot automatically
@@ -370,5 +377,4 @@ the chapter-four marker enables his saved knot choice. Settings can hide the
 collar without changing the story. Bot's name also appears on Continue and in
 the book. All five shells now have procedural models, with the wool collar and saved
 knot, moving scout parts and distinct captioned chimes. Astral glows at night.
-Reduced motion freezes decorative joints. Individual tool effects follow in
-their dedicated tickets.
+Reduced motion freezes decorative joints.

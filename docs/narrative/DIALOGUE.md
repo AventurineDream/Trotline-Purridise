@@ -20,10 +20,10 @@ and persists the declined flag. Both survive the existing save format. Active,
 ready and completed quests use their authored state-specific entry nodes.
 A departing scheduled giver closes the conversation; quest state is retained.
 
-Ticket 7 owns objective evaluation and Ticket 8 owns atomic turn-ins/rewards.
-Until then, the ready turn-in action closes with a truthful availability notice,
-keeps readiness and money unchanged, and never displays the payout response.
-No event evaluator, rewards or new fishing mechanics are introduced here.
+Ticket 7 (objective evaluation, `quests.py`) and Ticket 8 (turn-ins) are implemented.
+A ready quest is turned in to its giver, or to the lake's host for another cat's quest
+(`turn_in_at_host`). `_claim_and_pay` latches the claim in `reward_claims` first, then
+credits cash and any unique Ripple in the same save (`dialogue.py`).
 The contract was read from the authoritative private Drive file (modified
 2026-10-16T22:39:29.832Z); its hailing and offer rules agree with the merged
 repository mirror. No design-source change was needed.

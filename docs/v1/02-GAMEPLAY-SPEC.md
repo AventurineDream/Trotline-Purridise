@@ -277,7 +277,7 @@ non-Treasured fish and says so. It never discards silently.
   with an active favorable condition and offers to mark it. If nothing is
   favorable, he says nothing. Automatic invitations run only after active world
   time advances. The manual kitchen request shares the daily allowance;
-  Freshwater Tacos retain their one extra invitation that day.
+  Smoky Bass Tacos retain their one extra invitation that day.
 
 ---
 
@@ -505,11 +505,11 @@ an occasional letter via Pounce: at most 1 per game day, flavor plus a hint.
 
 | Kind | Count | Reward |
 | --- | --- | --- |
-| Story steps (5 chapters × 3) | 15 | Chapter rewards (§13) |
+| Story steps (prologue + 5 chapters × 3) | 18 | Chapter rewards (§13) |
 | Host errands | 5 (`q01_tea_leaves_deep_holes`, `q02_lonely_star_current` existing and unchanged + 3 new) | Cash only (dish cards come from chapters, §4.3) |
 | Water-cat quest A | 44 (10 existing) | Cash + a unique **Ripple** |
 | Water-cat quest B | 44 | Cash + a **Keepsake** (boat decoration, `03 §9`) |
-| **Total** | **108** | |
+| **Total** | **111** | |
 
 Quest B unlocks the game day after quest A is turned in.
 
@@ -529,7 +529,7 @@ Quest B unlocks the game day after quest A is turned in.
 
 ### 12.3 Objective types
 
-Existing (keep semantics from `docs/narrative/CONTENT.md`): `line_scout`,
+Existing (keep semantics from `docs/narrative/CONTENT.md`): `line_set`, `line_scout`,
 `line_check`, `line_scout_check`, `anchor_idle`, `scout_report`,
 `fish_livewell`, `travel_distance`, `visit_zones`, `visit_sequence`.
 

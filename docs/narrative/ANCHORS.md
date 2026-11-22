@@ -78,7 +78,7 @@ travel menus and player start/docking positions keep using the existing landing.
 ## Validation
 
 `validate_anchors(world)` rejects wrong-zone or non-navigable points, blocked
-full-hull approaches for any of the four player boats, approaches beyond the
+full-hull approaches for any boat model in `boat.BOATS` (24 in the shipped data), approaches beyond the
 hail radius, and water NPCs inside the landing exclusion. It never relocates a
 site. It is invoked by regressions rather than on every frame or startup.
 

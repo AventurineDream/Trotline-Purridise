@@ -44,7 +44,7 @@ Use a **disposable save** for every pass: launch with `--save <scratch>` (for ex
 ### Settings, input, gamepad, accessibility
 - [ ] Open Pause → Settings; inspect Cozy/Old Salt, Camera view, and available input/accessibility/audio controls. **Expect:** first person is default; third person is a steady, level chase view; authored story staging keeps priority.
 - [ ] Try keyboard and, if available, controller navigation. **Expect:** mappings match on-screen hints; hints follow the last-used device; releasing a menu direction before driving does not leave steering stuck.
-- [ ] Change text size, font, reduced motion, haul speed, colorblind markers, captions and volumes where present. **Expect:** readable differences, reduced-motion presentation, non-color-only markers and relevant captions.
+- [ ] Change text size, the dyslexia-friendly font, reduced motion, haul speed, captions and volumes where present. **Expect:** readable differences, reduced-motion presentation, non-color-only markers and relevant captions.
 - [ ] **Boundary:** while steering/throttle is held, move focus away and back. **Expect:** pending input/menu repeat clears on focus loss; held controls follow current keyboard state as documented.
 
 ### Save, reload, resume

@@ -4,7 +4,8 @@
 quest givers, twelve independently available quests, cash and Ripple rewards,
 and the complete dialogue graph. `fishing.content.load_content()` validates the
 whole bundle before returning `NarrativeContent` indexes named `npcs`, `quests`,
-`rewards`, and `dialogue`. It resolves its default path relative to the module,
+`rewards`, and `dialogue`, then adds the V1.0 `cats`, `ripples`, `keepsakes`, and
+`scenes` from `content_v2` (`merge_quests_v2`). It resolves its default path relative to the module,
 not the process working directory. Each call returns a fresh bundle.
 
 Run `python -m fishing.content` to validate the shipped data, or pass a candidate
@@ -49,8 +50,9 @@ wording is aligned to the later contract where the earlier script is stale:
 
 The Drive sources are retained as read; this ticket does not rewrite them or the
 normative contract. The bundle records these adaptations explicitly. The older
-specification's schedule formula is not implemented here; Ticket 5 must use the
-contract's `floor(game_minutes / 1440)` rule, with clock zero at 06:00.
+specification's schedule formula is not implemented here; Ticket 5 used the
+contract's `floor(game_minutes / 1440)` rule, with clock zero at 06:00. V1-30 later
+replaced its single rotating NPC with the day and night encounter model (`fishing/npcs.py`).
 
 ## Stable IDs and future consumers
 
@@ -94,11 +96,12 @@ start greater than end wraps midnight. They are local clock values, not elapsed
 `State.game_minutes`: the latter starts at 06:00. Durations are game minutes,
 distance is game metres, and cash is whole game dollars. Reward definitions
 contain only cash plus an optional unique Ripple. Host quests award no Ripple.
-There are no quest prerequisites, consumption costs, physical items or unlocks.
+There are no quest prerequisites, consumption costs, physical items or unlocks at
+Ticket 3 scope; the V1.0 quests in `content_v2` add `requires`, unlocks and tools.
 
 This document originally described Ticket 3's definitions and validation.
 Tickets 4–8 have since added actors, schedules, hailing, event adapters, progress
-evaluation and contract-supported turn-in rewards. Guardian behavior remains
-with its roadmap ticket. Existing fishing data and assets are unchanged. The full
+evaluation and contract-supported turn-in rewards. The Guardian sighting is in
+`fishing/guardian.py`. Existing fishing data and assets are unchanged by this ticket. The full
 software self-test includes `fishing.test_content`, so the existing required
 `gameplay-tests` workflow validates the content through its normal path.

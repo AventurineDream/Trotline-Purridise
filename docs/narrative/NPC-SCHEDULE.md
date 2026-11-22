@@ -1,40 +1,39 @@
 # NPC presence and game-time rotation
 
-Ticket #5 implements §3 of the [approved contract](V3-QUEST-IMPLEMENTATION-CONTRACT.md).
-The authoritative Drive contract remains unchanged.
+Presence is derived from the save by `fishing/npcs.py` (02 §11.3, V1-30). Nothing is
+stored per lake beyond the saved `schedule_seed` and the legacy V3 pair described in
+SAVE-LEDGER.md. This file describes the shipped build. The V3 contract's §3 model (one
+rotating NPC per lake, `V3-QUEST-IMPLEMENTATION-CONTRACT.md`) is not what ships.
 
-A session exposes two immutable `state.npcs` actors for the active world: its
-permanent host and one rotating NPC. Their positions come from the chart-checked
-anchor table. The large chart labels them in blue; the minimap marks their sites.
-The landing shop identifies the permanent supplier and remains available all day.
-Grandmother's anchor is Briar Landing; Doc's narrative anchor stays at his marina,
-separate from the existing Cedar landing shop and travel menu.
+Each lake's host (Grandmother Whiskers, Doc Barnaby, Captain Huckleberry, Sora and
+Professor Astra-9) stays at its landing anchor all day (`cast().hosts`).
 
-The saved `schedule_seed` defaults to integer 0. For each loaded lake, the ledger
-stores `selection_day = max(0, floor(game_minutes / 1440))` and the daytime ID at
-`pool[(schedule_seed + selection_day) % len(pool)]`:
+A game day runs 06:00 to 06:00 on the game clock: game minute 0 is 06:00.
 
-- Briar: Elder Moss, Pip & Pebble, Willow, Silas.
-- Cedar: Captain Maeve, Sparky, Quill, Dr. Alder, Patch.
+- **Day, 06:00–20:00:** three encounters per lake. They come from a seeded
+  permutation of the lake's day pool, walked round-robin, so every encounter appears
+  at least once in any three consecutive days (`day_encounters`).
+- **Night, 20:00–04:00:** one encounter per lake, from the seeded night pool, which
+  rotates by day (`night_encounter`).
 
-Game minute 0 is 06:00. Selection rolls at 1440, 2880, etc., rather than at
-midnight. Briar replaces the selected daytime actor with Master Cinder during
-[20:00, 04:00); the same daytime actor returns at 04:00 until the next 06:00.
-Cedar keeps its selected actor through the night.
+Each lake has seven day encounters. Night pools: Briar has Master Cinder alone;
+Cedar alternates Hank Mudpaw and Señora Luz; Crater, Flathead and Nebula each alternate
+two cats (Nyx and Fumi; Torvald and Elk-Ears Eli; Orion-Cat and Twinkle).
 
-The session refreshes after real game-clock advancement, on save, and when its
-state or loaded lake changes. This covers Continue's offline catch-up, new games,
-1x/12x ticks, menus that advance time, and lake travel. An unloaded lake retains
-only its saved selection metadata. Returning computes the current interval
-directly, without constructing its world while offscreen, replaying skipped
-schedules, evaluating quests, or granting rewards. Fishing RNG is never used.
-Runtime actors are not serialized; saved seed/day/ID reconstruct them.
+Pinned cats: `pinned()` keeps present the `talk_to` cat of an active quest's current
+step, and the giver of a quest that is ready for turn-in, whatever the pool says.
 
-`python -m unittest fishing.test_npcs fishing.test_narrative -v` exercises exact
-night/dawn/day boundaries, both ordered pools, nondefault seeds, save/reload,
-legacy saves, offline time, real session ticks, permanent landing shops and lake
-travel. `npc_checks()` is called from the full software self-test, so the required
-`gameplay-tests` CI job executes these regressions as well.
+Travelers: Postmaster Pounce visits one unlocked lake a day, 08:00–16:00
+(`pounce_lake`). Tinker Thistle moors at the player's lake on Saturdays, 10:00–18:00.
+The Sunday cookout gathers a lake's cast on its landing piers (`_cookout_anchor`).
 
-Hailing, branching dialogue, quest evaluation and rewards remain assigned to
-subsequent roadmap tickets.
+Presence depends only on the saved seed, the lake, the game day and the pins. It never
+uses fishing RNG, evaluates quests or reads the computer clock, so offline catch-up and
+lake travel give the same result.
+
+`npc_checks()` (`fishing/test_npcs.py`) runs from `python -m fishing --selftest --software`.
+`python -m unittest fishing.test_npcs fishing.test_narrative -v` runs the same
+regressions directly.
+
+Hailing and branching dialogue (DIALOGUE.md) and quest evaluation (`quests.py`) use
+this presence list.

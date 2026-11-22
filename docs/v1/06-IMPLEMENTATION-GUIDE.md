@@ -63,11 +63,11 @@ fishing/assets/content_v2/
   lakes.json         # 5 lakes: labels, zones, Lake Days, weather sets, palettes
   npcs.json          # 52 cats in 51 rows: role, lake, boat, appearance (V1-29),
                      # schedule slot, anchor and quest ids (V1-30)
-  quests.json        # 96 new quests (15 story + 3 host + 34 quest A + 44 quest B);
-                     # 108 in total with the 12 in narrative_v1.json. V1-31 ships
-                     # the schema and engine; V1-32 authors Briar and Cedar's 24,
-                     # V1-33 the other lakes and V1-34 the story
-  dialogue/*.json    # one file per lake + story.json + bot.json + system.json
+  quests.json        # 99 new quests (18 story: prologue + five chapters; 3 host;
+                     # 34 quest A; 44 quest B); 111 in total with the 12 in
+                     # narrative_v1.json. V1-31 ships the schema and engine; V1-32
+                     # authors Briar and Cedar's 24, V1-33 the other lakes and V1-34 the story
+  # Cat greetings, lines and stories live in quests.json; the V3 script in narrative_v1.json. No dialogue/ folder.
   book.json          # rumors, legendary stories, folk names
   ripples.json       # Ripples 11–44 (V1-32 ships 11–17)
   keepsakes.json     # 44, one per water-cat (V1-32 ships Briar and Cedar's 17)
@@ -80,11 +80,10 @@ tickets. Each lake's declared `species_count` is checked against its species IDs
 and the reciprocal lake memberships in `species.json`.
 
 `fishing/assets/narrative_v1.json` stays as-is and is loaded **in addition**. The
-current v2 gameplay loader handles the separate species, bait, boat, and lake
-tables above; it does not load v2 narrative rows. When those narrative rows are
-introduced, their loader must reject ids that collide with a v1 id unless the
-row is marked `"extends": "<v1 id>"` (used for quest-B links and recopied V3
-lines).
+v2 loader also reads `quests.json`, `npcs.json` and the story scenes (V1-31 on),
+and `content.py` joins them to the V3 bundle when loading. A v2 row whose id
+collides with a v1 id is rejected unless it is marked `"extends": "<v1 id>"` (used
+for quest-B links and recopied V3 lines).
 
 **Validation** (extend `content.py`, keep its collect-all-errors style): unique
 ids; every reference resolves; numbers finite and in range; every lake has ≥ 2
@@ -93,7 +92,7 @@ its lake (cross-lake objectives allowed and listed explicitly); every dialogue
 graph reachable and acyclic; every `[F]` line has a condition key and exactly
 one declared fallback (`[U]` sibling, `silent` or `report`, `05 §0`); every
 objective uses only the fields in `02 §12.3`; the 12 V3 quest ids appear only as
-`extends` targets, never as new rows; v1 + v2 total 108 quests; species counts per lake match `03 §1` (36/36/34/34/34, total 144). Run
+`extends` targets, never as new rows; v1 + v2 quest rows total 111 (not counted by `content.py`); species counts per lake match `03 §1` (36/36/34/34/34, total 144). Run
 with `python -m fishing.content`.
 
 ## 3. Save v2
@@ -156,14 +155,19 @@ their new ids, rather than starting a second ledger.
     "recipes": [], "dishes_known": [],
     "boat_extras": {"<boat id>": {"paint": {}}},
     "book": {"species": {"bluegill": {"found": [], "shiny": 0, "since_shiny": 3}},
-             "tracked": null, "title": "fishypedia", "dream_clue": null},
+             "tracked": null, "title": "fishypedia", "dream_clue": null,
+             "dream_queue": [], "titles_seen": ["fishypedia"]},
     "legendaries": {"spillway_monster": {"records": [], "clues": ["teller"]}},
-    "story": {"chapter": 0, "steps": {}, "scenes_seen": [], "pending_rewards": [],
-              "scene_states": {}},
-    "npcs": {"letters": [], "talk_days": {}},
+    "story": {"chapter": 0, "completed_chapters": [], "steps": {}, "scenes_seen": [],
+              "pending_rewards": [], "scene_states": {}},
+    "npcs": {"letters": [], "talk_days": {}, "stories": {}},
+    "bot_tools": {},
     "keepsakes": [], "ripples_v2": [], "unlocks": [],
     "calendar": {"weather_windows": {}},
-    "settings": {"text_size": 1, "haul_speed": "normal", "reduced_motion": false,
+    "settings": {"mode": "cozy", "text_size": 1, "dyslexia_font": false,
+                  "reduced_motion": false, "haul_speed": "normal", "captions": true,
+                  "volumes": {"master": 1.0, "music": 1.0, "ambience": 1.0, "sfx": 1.0},
+                  "collar_visible": true, "third_person": false,
                   "key_bindings": {"throttle_up": "w", "throttle_down": "s",
                                    "steer_left": "a", "steer_right": "d",
                                    "idle": "shift", "idle_right": "rshift",
@@ -216,8 +220,9 @@ build and remains serialized until a recognized boat is selected.
   Mode is `cozy`. Story chapter is 0, but the **prologue is marked seen** for any
   save with catches, so a veteran isn't asked to set a first line. Existing
   counts derive the book stage at 0/1/3/5/10 catches; a saved zone, bait and band
-  seed the first `found` condition. The Bot name uses a private `sim.RNG` fork of the
-  schedule seed: one of the twelve `bot.json` prefixes plus suffix 011–999.
+  seed the first `found` condition. The Bot name is drawn from a private RNG seeded by
+  the SHA-256 of the schedule seed (`botidentity.generated_name`): one of the twelve
+  `bot.json` prefixes plus suffix 011–999.
   Existing valid assigned names survive; old out-of-range placeholders such as
   `Copper-000` are repaired once. Unlocks: Cedar is
   open. Guardian sightings carry over.
@@ -356,7 +361,7 @@ build and remains serialized until a recognized boat is selected.
   release.
 - **Weather windows:** `calendar.py` pre-plans each lake's weather for the next 7
   game days from the seed. The planner guarantees the single 3-game-day bound in
-  `02 §3.6` / `03 §3`, then blends with the existing weather system.
+  `02 §3`, rule 6 / `03 §3`, then blends with the existing weather system.
 - **Named areas and waypoints:** `lakes.json` defines circles or polygons with ids
   (`marked_pool`, `landing_edge`, `reed_edge_1..3`, `drift_buoy_1..3`,
   `practice_buoy_1..4`, `lamp_buoy_1..3`, `survey_marker`, `calm_reflection`, the
@@ -433,8 +438,9 @@ current lake needs.
 - **Parametric fish:** a body profile (length:depth ratio, back and belly curves),
   head shape, mouth, fins (dorsal count and shape, adipose, tail fork), barbels,
   scale pattern (plain, spots, bars, stripes, mottled, vermiculate), and palette.
-  Defined per species in `species.json` (`look`), with family presets (catfish,
-  bass, sunfish, trout, gar, sucker, minnow, pike, sculpin, eel, cosmic).
+  Defined per species in `species.json` (`look`), with the fifteen family presets in
+  `fishmesh.FAMILY_PRESETS`: bass, catfish, cosmic, eel, gar, minnow, pike, ray,
+  salamander, sculpin, sturgeon, sucker, sunfish, trout, whale.
 - **Haul mesh:** about 1.5k triangles, generated on demand and cached per lake
   (LRU, 64 entries).
 - **Fish card illustration:** a 512×256 "field-guide watercolor" render: the fish
@@ -532,16 +538,17 @@ with an LRU; the `--benchmark` run logs per-subsystem estimates
 ## 8. Performance targets
 
 - GPU path: 60 fps at 1440×810 on mid-range integrated graphics (existing class
-  of target). The benchmark reports p50 and p95 frame time. It fails if p50 is
-  over 16.7 ms (60 fps) or p95 is over 20 ms. That 3.3 ms of tolerance covers GC
-  and driver hitches, not a lower target.
+  of target). The benchmark reports p50 and p95 frame time against 16.7 ms (60 fps)
+  and 20 ms. It records both without failing the run (`verify.py`): the numbers are
+  for review on the target hardware, since the 3.3 ms of tolerance covers GC and driver
+  hitches, not a lower target.
 - Lake load: ≤ 6 s on GPU, ≤ 15 s on software.
 - Software renderer: ≥ 20 fps at 640×360 with cats as impostors.
 
 ## 9. Testing
 
 - **Unit tests** per new module (`test_book.py`, `test_comfort.py`,
-  `test_legendary.py`, `test_calendar.py`, `test_lakegen.py`, `test_catmesh.py`,
+  `test_legendary.py`, `test_calendar.py`, `test_lakegen.py`, `test_cats.py`,
   `test_fishmesh.py`, `test_save_v2.py`, `test_gamepad.py`).
 - **Determinism:** the same seed gives the same schedule, Bot name, shiny sequence
   and weather plan across reloads and lake switches.
@@ -735,7 +742,7 @@ CPU fallback supplies a simpler moon/star mirror.
 `python -m fishing --shots PATH --caldera [--software]` records fog, clearing,
 noon, sunset, clear night, springs, isle, survey dock and chart. It checks capture
 hulls and records full first-frame load, 60 warmed frames, RSS, resource counts,
-finite native colors and all34 real-map catchability witnesses.
+finite native colors and all 34 real-map catchability witnesses.
 [Issue54 evidence](../issue-54/README.md) documents measured Mesa/CPU limits and
 the remaining hardware-GPU load measurement.
 
@@ -1396,7 +1403,7 @@ They are at least 45 m apart, so hail circles never overlap, and outside the 50 
   - a `talk_to` cat of an active quest's objective or steps;
   - the giver of a quest waiting to be turned in.
 
-  The story's chapter steps arrive in a later ticket and add their `talk_to` cats through `npcs.pinned`.
+  The story's chapter steps are quests too, so `npcs.pinned` covers their `talk_to` cats with the same rule.
 - **Travelers.** Postmaster Pounce moors at one unlocked lake a day, 08:00–16:00. The lake is a seeded pick, in lake order, among the lakes `travel_unlocked` opens. Tinker Thistle moors at the player's lake every Saturday, 10:00–18:00.
 - **Sunday cookout (17:00–20:00).** A lake's host and all its encounters stand on the landing's two piers, alternating sides, host first. On Cedar this is the public landing, not Doc's marina, so the cookout can be joined where `at_landing` applies. Cookout chat lines are still those of `calendar.json`.
   - Every place is beside the docked stretch of the slip, from 2.6 m in, spaced to fit the slip. A boat docked alongside a cat hails that cat, which cookout chats and `attend_event` need.
@@ -1465,7 +1472,7 @@ The validator requires this set, and `test_quests_v2` checks every area holds le
 | Event | Emitted when | Steps it advances |
 | --- | --- | --- |
 | `catch.resolved` | A catch is kept or released, including a forced release at the hook. It carries the hook's position, bait, weight, hour and cold band. | `catch_species` |
-| `legendary.witnessed` | A legendary is witnessed. The Whiskered Guardian's sighting emits it (V1-32); the other watches arrive with V1-36. | `catch_species` |
+| `legendary.witnessed` | A legendary is witnessed. `legendary.record_witnessed` emits it for the Whiskered Guardian (V1-32) and the other witnessed legendaries (V1-36). | `catch_species` |
 | `book.stage_up` | A book entry reaches a new stage. | `book_stage` |
 | `cook_dish` | A dish is cooked. | `cook_dish` |
 | `catnap.complete` | A nap ends; it carries the zone. | `catnap` |
@@ -1623,13 +1630,13 @@ V1-33 does for the three later lakes what V1-32 did for Briar and Cedar. It tran
 
 - **Telling.** The first hail of a game day tells the next part, after the greeting and before the quest's own node.
 - **Saving.** A part counts as heard only once its node is shown, so closing the conversation on the greeting keeps the part for the next hail. Progress is saved as `v2.npcs.stories.<cat> = {heard, day}`, and the story ends after its last part.
-- **Use.** Captain Huckleberry tells the Whopper in three parts (`05 §4.3`). `dialogue.story_heard` is what Huckleberry's Whopper's gate, heard on 3 different days, will read in V1-36.
+- **Use.** Captain Huckleberry tells the Whopper in three parts (`05 §4.3`). `dialogue.story_heard` is what the Whopper's gate reads (V1-36), heard on 3 different days.
 - **Quests are counted separately.** His errand and Bjorn's quest A count their own hails (`talk_to`, `distinct_days: 3`). The story is told once, whichever comes first.
 - **The acceptance day counts.** A quest taken from the very cat its `distinct_days` step needs counts that day's hail (`quests.count_todays_hail`). The hail came before the acceptance, so the step would otherwise miss it. Huckleberry's errand is therefore ready on the day his story ends. Bjorn's quest, taken from Bjorn, counts only hails to Huckleberry.
 
-**Still waiting on other tickets.**
+**Gated on later tickets (now shipped).**
 
-- **Legendaries.** Six quests B record a legendary, which can only be hooked from V1-36 on: Old Silverhead, the Glacial Phantom, Huckleberry's Whopper, the Obsidian Gar, the Caldera Fire-Lizard and the Nebula Weaver.
+- **Legendaries.** Six quests B record a legendary, which can only be hooked from V1-36 on (shipped): Old Silverhead, the Glacial Phantom, Huckleberry's Whopper, the Obsidian Gar, the Caldera Fire-Lizard and the Nebula Weaver.
 - **Chapters.** Ember's and Juno's quests B need chapters 4 and 5 finished (V1-34).
 - **Silent progress lines.** Those two quests are ready at the next hail after acceptance, so their generic progress line is never shown.
 
@@ -2117,7 +2124,7 @@ The run starts from a seeded Cozy save, so each protected category is non-empty 
 
 **Determinism** (`test_determinism.py`). For one seed, the NPC schedule over three days, the Bot's name, a 240-roll shiny sequence and a week of hourly weather plans match across a save and reload (through `load_game_save`) and across lake switches. A different seed gives a different plan.
 
-**Running it.** `python3 -m unittest discover` runs both new suites. CI's `gameplay-tests` job runs that suite, then the narrative tests, then the software self-test, all inside its 15-minute limit.
+**Running it.** `python3 -m unittest discover` runs both new suites. CI's `gameplay-tests` job runs that suite, then the narrative tests, then the software self-test, all inside its 25-minute `timeout-minutes` (`.github/workflows/validation.yml`).
 
 **Self-test coverage.** `--selftest` ends with `verify.coverage_checks`, the same scope list as the benchmark, without its frame loop. It renders one frame on each of the five lakes, and each lake must be non-flat. It builds all 156 fish cards and their haul meshes, and all 52 roster cat models. It draws every shop tab, help page and book tab once, and the Old Lantern encounter scene once. It checks from the forecast alone that the eight weather states are reached, and that the map has 24 boats. Any miss raises `AssertionError`. The pass takes about 25 seconds on the software renderer, and prints one `coverage ok` line with the counts.
 
@@ -2140,7 +2147,7 @@ V1-40 (#68) makes the offline release (02 §20). The package runs without Python
 
 V1-41 (#69) writes help for every system in 02 and adds glyph tables built from the player's own bindings (02 §16–§17).
 
-**Pages.** The help has 22 pages, and `HELP_N` is their count. The four original pages keep indices 0 to 3, which the smoke test and the field-guide checks rely on. `FIRST HOUR` follows, then one page for each system: lakes and travel, the book, shinies and trophies, cats and hailing, quests and story, the week and cookout, kitchen and galley, cozy and old salt, catnaps and rested, Bot and his tools, legendaries, settings and captions, and where saves live. The last four pages are generated: two `KEYBOARD` pages and two `GAMEPAD` pages.
+**Pages.** The help has 24 pages, and `HELP_N` is their count. The first five keep indices 0 to 4 (ON THE WATER, TROT LINES, THE LANDING, BOATS AND OTHER WATERS, BAIT SECTIONS), which the smoke test and the field-guide checks rely on. `FIRST HOUR` (5) follows, then fourteen system pages (6–19): lakes and travel, the book, the chart, shinies and trophies, cats and hailing, quests and story, the week and cookout, kitchen and galley, cozy and old salt, catnaps and rested, Bot and his tools, legendaries, settings and captions, and where saves live. The last four pages (20–23) are generated: two `KEYBOARD` pages and two `GAMEPAD` pages.
 
 **Glyph tables** (`ui.help_pages(saved_bindings)`). The keyboard pages read `normalize_key_bindings(settings["key_bindings"])` at draw time, so a rebound key appears on its row. Each row holds two actions. The gamepad pages are built from `BUTTON_ACTIONS` plus the Y tap and hold. The page count does not depend on the bindings, so `HELP_N` is fixed.
 
