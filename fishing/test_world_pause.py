@@ -59,7 +59,7 @@ class WorldPauseChecks(unittest.TestCase):
         self.assertEqual(self.session.ui.mode, "dialogue")
         modes = (
             "dialogue", "shop", "journal", "book", "map", "pause", "help",
-            "settings", "kitchen", "scene", "well", "setbait", "check", "haul", "title",
+            "settings", "kitchen", "scene", "well", "setbait", "check", "haul", "title", "skipper",
         )
 
         for mode in modes:

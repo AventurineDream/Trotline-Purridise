@@ -18,6 +18,7 @@ from .game import Keys, Session
 from .quests import scene_state
 from .sim import State
 from . import test_prologue
+from .test_skipper_creator import finish_creator
 from .test_story import StoryPlay
 from .world import World
 
@@ -122,6 +123,7 @@ class Playthrough(StoryPlay):
     def play_prologue(self):
         self.session.ui.mode, self.session.ui.new_mode_i = "new_mode", 0
         self.press("return")
+        finish_creator(self.session)
         self.state, self.world = self.session.state, self.session.world
         self.assertEqual(self.session.conversation.node_id, "scene:pro_01")
         self.opened_by = "auto"

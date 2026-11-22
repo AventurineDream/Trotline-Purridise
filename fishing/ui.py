@@ -57,7 +57,7 @@ from .boat import (
 from .lakes import LAKES, LAKE_ZONE_NAMES, travel_lock_reason
 from .data import weight_string
 from .weather import wind_at
-from . import comfort, detail
+from . import comfort, detail, skipperlook
 
 INK = (238, 233, 216)
 DIM = (169, 183, 175)
@@ -505,6 +505,16 @@ class UIState:
     stage_skip: bool = False  # a replayed scene's staging can be skipped with Esc (B)
     vignette: dict | None = None  # the story moment's card: {"kind", "detail", "t"} (V1-35)
     credits_rise: float = math.inf
+    # The Skipper creator (skipperlook): the draft look and its row, whether the name is being
+    # typed, the creator's own clock (advanced by frame dt, never by wall time), and the card.
+    skipper_i: int = 0
+    skipper_origin: str = "pause"  # "new": Done starts the morning; "pause": Done returns to the pause menu
+    skipper_look: dict | None = None
+    skipper_typing: bool = False
+    skipper_fresh: bool = False  # the name is selected on entry: the first typed key replaces it
+    skipper_clock: float = 0.0  # UI seconds the creator has been open
+    skipper_changed_at: float = -99.0  # the clock at the last change; far past, so no wave on open
+    skipper_turn: float = 0.0  # the player's turn of the card, radians
 
 
 def comfort_controls(viewport):
@@ -709,7 +719,7 @@ def check_rows(state, line_index: int) -> list[Row]:
 def pause_options(state) -> list[str]:
     """The pause menu. It also reaches every action that has no pad button of its own, so
     a player on a gamepad can do everything a keyboard player can (V1-43)."""
-    items = ["Resume", "Book", "Livewell"]
+    items = ["Resume", "Book", "Livewell", "Your Skipper"]
     boat = getattr(state, "boat", None)
     if getattr(boat, "sail_speed", 0):
         items.append("Lower the sail" if getattr(state, "sail_raised", False) else "Raise the sail")
@@ -850,6 +860,8 @@ class UI:
                 self._keybindings(frame, state, ui)
             else:
                 self._settings(frame, state, ui)
+        elif mode == "skipper":
+            self._skipper(frame, state, ui)
         elif mode == "help":
             self._help(frame, ui, state)
         elif mode == "credits":
@@ -2718,6 +2730,88 @@ class UI:
             self._text(frame, line, x + m, foot_y, small, DIM, shadow=False)
             foot_y += small_h + 2
 
+    def _skipper(self, frame, state, ui: UIState):
+        """The Skipper creator (skipperlook): settings-style rows on the left, the card on the right.
+
+        A full-screen mode, so the play HUD stays off and the world is frozen behind it. The card is
+        skipperview.preview, a pure function of the UI clock, the turn and reduced motion, so the same
+        state always draws the same frame. Reads `ui` only; the key handling lives in game.Session.
+        """
+        from . import skipperview
+        h, w = frame.shape[:2]
+        self._fill(frame, 0, 0, w, h, (6, 8, 8), 0.35)
+        look = ui.skipper_look or skipperlook.normalize({})
+        rows = skipperlook.ROWS
+        ui.skipper_i = _clamp(ui.skipper_i, len(rows))
+        head, body, small = (self._size(frame, key) for key in ("head", "body", "small"))
+        head_h, body_h, small_h = self.cell(head)[1], self.cell(body)[1], self.cell(small)[1]
+        m = max(14, min(24, int(w * 0.025)))
+        pw = min(w - 20, max(int(w * 0.74), 760))
+        foot_lines = _phrase_lines(self._skipper_foot(ui), max(12, (pw - 2 * m) // self.cell(small)[0]))
+        foot_h = len(foot_lines) * (small_h + 2)
+        row_h = body_h + max(4, int(h * 0.008))
+        rows_top_offset = m + head_h + 14
+        available = h - 24 - (2 * m + rows_top_offset + foot_h + 12)
+        visible = max(1, min(len(rows), available // max(1, row_h)))
+        start = _window(ui.skipper_i, len(rows), visible)
+        ph = 2 * m + head_h + 14 + visible * row_h + foot_h + 12
+        x, y = (w - pw) // 2, (h - ph) // 2
+        self._panel(frame, x, y, pw, ph, 0.96)
+        self._text(frame, "YOUR SKIPPER", x + m, y + m, head, INK)
+        list_top = y + rows_top_offset
+        # The rows keep the left 60% of the panel; the card takes the rest, beside them.
+        left = int((pw - 2 * m) * 0.6)
+        value_w = int(left * 0.45)
+        for offset, (key, label) in enumerate(rows[start:start + visible]):
+            index = start + offset
+            ry = list_top + offset * row_h
+            selected = index == ui.skipper_i
+            if selected:
+                self._fill(frame, x + m - 4, ry - 1, left + 8, row_h, (46, 42, 28), 0.86)
+            # A dimmed row changes nothing the cat wears right now (skipperlook.row_enabled).
+            color = GOLD if selected else (INK if skipperlook.row_enabled(look, key) else DIM)
+            value = skipperlook.value_label(look, key)
+            if key == "name" and ui.skipper_typing:
+                value, color = look["name"] + "_", GOLD
+            prefix = "> " if selected else "  "
+            self._text(frame, prefix + self._trim(label, body, left - value_w - 12), x + m, ry, body, color,
+                       shadow=False)
+            if value:
+                value = self._trim(value, body, value_w)
+                width = self._measure(value, body, "mono")
+                value_x = x + m + left - width
+                if key == "name" and ui.skipper_typing and ui.skipper_fresh:
+                    # Selected on entry: the first key typed replaces the name (game._skipper_type). A box in
+                    # the row-highlight colour would vanish on the selected row, so the box is gold with the
+                    # dark row tone as ink. It stays inside the row's right edge.
+                    self._fill(frame, value_x - 4, ry - 1, width + 8, body_h + 2, GOLD, 1.0)
+                    color = (46, 42, 28)
+                self._text(frame, value, value_x, ry, body, color, shadow=False)
+        col_x = x + m + left + m
+        col_w = x + pw - m - col_x
+        block = visible * row_h
+        # A square card as tall as the rows, never wider than its column (240-360 px at normal sizes).
+        side = max(8, min(360, col_w, block))
+        settings = state.v2.get("settings", {}) if isinstance(getattr(state, "v2", None), dict) else {}
+        card = skipperview.preview(look, ui.skipper_clock, ui.skipper_turn, side,
+                                   bool(settings.get("reduced_motion", False)),
+                                   ui.skipper_clock - ui.skipper_changed_at)
+        self._blit_rgb(frame, card, col_x + (col_w - side) // 2, list_top + (block - side) // 2)
+        foot_y = y + ph - m - foot_h
+        for line in foot_lines:
+            self._text(frame, line, x + m, foot_y, small, DIM, shadow=False)
+            foot_y += small_h + 2
+
+    def _skipper_foot(self, ui: UIState) -> str:
+        """The creator's control hints for the device, the typing state and where Done returns."""
+        if ui.skipper_typing:
+            return self._controls(ui, "Type a name  ·  Backspace deletes  ·  Enter or Esc sets it",
+                                  "D-pad changes the name  ·  A or B sets it")
+        back = ("Esc back", "B back") if ui.skipper_origin == "new" else ("Esc cancels", "B cancels")
+        return self._controls(
+            ui, f"W/S choose  ·  A/D change  ·  Enter picks  ·  Q/E turn  ·  Done saves  ·  {back[0]}",
+            f"D-pad choose  ·  D-pad change  ·  A picks  ·  LB/RB turn  ·  Done saves  ·  {back[1]}")
+
     def _caption(self, frame, state, ui: UIState):
         v2 = getattr(state, "v2", {})
         settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
@@ -3218,6 +3312,8 @@ _GAMEPAD_TUTORIAL_PROMPTS = {
 _GAMEPAD_TUTORIAL_TOASTS = {
     "Stop the boat and press F to set a trotline.":
         "Stop the boat and press X to set a trotline.",
+    "Dress your Skipper: Esc, then Your Skipper.":
+        "Dress your Skipper: Start, then Your Skipper.",
     "Anchor and press T to let time run. E checks a line.":
         "After setting a line, wait for a bite; A checks it.",
     "Nose into the landing and press E to sell.":
@@ -3381,6 +3477,41 @@ def _window(index: int, count: int, visible: int) -> int:
         return 0
     start = index - visible // 2
     return max(0, min(start, count - visible))
+
+
+def _phrase_lines(text: str, cells: int) -> list[str]:
+    """Lay a hint out in lines of at most `cells` characters, breaking only between phrases.
+
+    The phrases of a hint are joined by "  ·  ". A phrase stays whole on one line, so "Done" is
+    never left at the end of a line with "saves" on the next. A phrase longer than a line on its
+    own is word-wrapped, since nothing else can fit it.
+
+    Args:
+        text: the hint, phrases separated by "  ·  ".
+        cells: the line width in character cells (panel width over the small font's cell width).
+
+    Returns:
+        The lines top to bottom; an empty list for empty text.
+    """
+    separator = "  ·  "
+    lines: list[str] = []
+    line = ""
+    for phrase in text.split(separator):
+        if len(phrase) > cells:
+            if line:
+                lines.append(line)
+                line = ""
+            lines.extend(textwrap.wrap(phrase, cells))
+            continue
+        trial = phrase if not line else line + separator + phrase
+        if len(trial) <= cells:
+            line = trial
+        else:
+            lines.append(line)
+            line = phrase
+    if line:
+        lines.append(line)
+    return lines
 
 
 def _fit(img: np.ndarray, tw: int, th: int) -> np.ndarray:

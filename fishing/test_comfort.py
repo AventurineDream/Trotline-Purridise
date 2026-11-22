@@ -17,6 +17,7 @@ from .game import Keys, Session
 from .haul import haul_cadence
 from .platform import Input, Text
 from .sim import Catch, Hook, RNG, SetLine, State
+from .test_skipper_creator import finish_creator
 from .ui import UI, UIState, comfort_controls
 from .world import World
 
@@ -218,7 +219,7 @@ class ComfortChecks(unittest.TestCase):
         state.catnap(self.world)
         before = deepcopy(state.v2["needs"])
         state.lines = [SetLine("std", "worm", 0, 0, 12, 0, "flats", [Hook(True)])]
-        for mode in ("pause", "settings", "journal", "new_mode", "needs", "catnap", "haul"):
+        for mode in ("pause", "settings", "journal", "new_mode", "needs", "catnap", "haul", "skipper"):
             self.session.ui.mode = mode
             self.session.ui.nap_timer = 20
             self.session.tick(Keys(), .25)
@@ -244,6 +245,7 @@ class ComfortChecks(unittest.TestCase):
         self.session.tick(Keys(pressed={"return"}), 0)
         self.session.tick(Keys(pressed={"right"}), 0)
         self.session.tick(Keys(pressed={"return"}), 0)
+        finish_creator(self.session)
         self.assertEqual(comfort.mode(self.session.state.v2), "old_salt")
         self.assertEqual(comfort.mode(State.load(self.path, self.world).v2), "old_salt")
 
@@ -255,7 +257,8 @@ class ComfortChecks(unittest.TestCase):
             with self.subTest(mode=mode):
                 self.session.ui.mode = "new_mode"
                 self.session.ui.new_mode_i = index
-                self.session.tick(Keys(pressed={"return"}), 0)
+                self.session.tick(Keys(pressed={"return"}), 0)  # the pace; the creator
+                finish_creator(self.session)  # Done starts the morning
                 state = self.session.state
                 npc = state.npcs[0]
                 state.x, state.z = npc.anchor.position
@@ -272,6 +275,8 @@ class ComfortChecks(unittest.TestCase):
         keys = Input()
         keys.viewport, keys.mouse_click = (480, 270), (x + 4, y + 4)
         self.session.tick(keys, 0)
+        self.assertEqual(self.session.ui.mode, "skipper")  # the pace is chosen; the creator comes next
+        finish_creator(self.session)
         self.assertEqual(comfort.mode(self.session.state.v2), "old_salt")
         self.session.ui.mode = "pause"
         keys = Input()

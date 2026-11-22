@@ -14,6 +14,7 @@ from .quests import scene_state
 from .render import Renderer
 from .savepaths import load_game_save
 from .sim import State
+from .test_skipper_creator import finish_creator
 from .weather import lighting_at
 from .world import World
 
@@ -91,6 +92,7 @@ class InTheSession(unittest.TestCase):
     def new_morning(self):
         self.session.ui.mode, self.session.ui.new_mode_i = "new_mode", 0
         self.session.tick(Keys(pressed={"return"}), 0.05)
+        finish_creator(self.session)
 
     def test_a_new_game_stages_the_arrival_then_returns_the_view(self):
         self.new_morning()

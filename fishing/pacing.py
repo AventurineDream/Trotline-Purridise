@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 import math
 import statistics
 
-from . import bottools, calendar
+from . import bottools, calendar, skipperlook
 from .data import BAIT_BY_ID, LINE_TIERS, SPECIES_BY_ID, fish_value
 from .sim import HeldLine, State, species_rates
 from .world import World
@@ -389,9 +389,13 @@ def first_catch(seed: int) -> dict:
         session = Session(world, Path(folder) / "save.json", State.new(world, seed=seed), False)
         session.ui.mode, session.ui.new_mode_i = "new_mode", 0
         session.tick(Keys(pressed={"return"}), 0.05)
+        session.ui.skipper_i = len(skipperlook.ROWS) - 1  # the creator: keep the default look, Done
+        session.tick(Keys(pressed={"return"}), 0.05)
         state, world = session.state, session.world
         state.rng = RNG(seed)
-        steps = {"choose a pace": 4.0}
+        # The creator: a look down the rows and a turn of the card, then Done. A player who
+        # dresses at length is lingering by choice, as with the pause menu, so the budget counts a glance.
+        steps = {"choose a pace": 4.0, "dress the Skipper": 20.0}
         steps["arrival scenes"] = _read_dialogue(session)
         spot = _first_line_spot(state, world)
         if spot is None:
@@ -459,6 +463,8 @@ def prompt_density(seed: int, game_hours: int = 24) -> dict:
             world = World("briar")
             session = Session(world, Path(folder) / "save.json", State.new(world, seed=seed), False)
             session.ui.mode, session.ui.new_mode_i = "new_mode", 0
+            session.tick(Keys(pressed={"return"}), 0.05)
+            session.ui.skipper_i = len(skipperlook.ROWS) - 1  # the creator: keep the default look, Done
             session.tick(Keys(pressed={"return"}), 0.05)
             state, world = session.state, session.world
             state.rng = RNG(seed)
