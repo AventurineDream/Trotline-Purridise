@@ -2,7 +2,7 @@
 
 Use a **disposable save** for every pass: launch with `--save <scratch>` (for example, a temporary path outside the repository). Never point QA at the normal save. This checklist describes intended play, not implementation internals; leave unclear or unavailable features unmarked and note what build was used.
 
-## Smoke pass (about 60–90 minutes)
+## Smoke pass (about 60–90 minutes; non-starter boat access may add time)
 
 ### Clean start, title, prologue
 - [ ] **Precondition:** disposable save path does not exist. Launch a new game. **Expect:** title/start flow is legible; Cozy is the default, and the prologue introduces the Skipper, Bot, and starter jon boat without requiring prior knowledge.
@@ -41,6 +41,16 @@ Use a **disposable save** for every pass: launch with `--save <scratch>` (for ex
 - [ ] Review chapter objectives, Watch cards and any legendary rumors available in this save. **Expect:** clues and current requirements are distinguishable; do not assume a gated encounter is ready merely from seeing its story.
 - [ ] With a valid legendary catch on a line, check its first haul and a repeat. **Expect:** a calm 4–6-second first reveal that cannot be skipped until it completes; later reveals can be skipped or hurried. The book shows a framed photo and a cosmetic trophy; legendaries are always released, including Fire-Lizard and Zero-G Winch variants.
 
+### Animation overhaul and custom Skipper (PR #135)
+- [ ] **New game and live creator:** use the disposable save, start a new game, type a distinct name (for example, “Mochi”), and choose a visibly different coat/pattern and attire. Turn the preview and wait for its hello wave. **Expect:** the name is editable and the first key replaces the selected old name; the preview wears the chosen look, turns, and waves; Done keeps the draft and starts the prologue.
+- [ ] **Pause editor and persistence:** open Pause → Your Skipper, make a temporary change, and press Escape; reopen and confirm it was discarded. Make a second change, choose Done, save and reload the scratch save. **Expect:** only the confirmed look and name persist.
+- [ ] **First-person paws:** choose a tuxedo with an Ink coat and white bib/mitts, then inspect the visible paw(s) for the current hull. **Expect:** coat/pattern and mitt colours match the chosen look; attire colours are not painted onto the paws, so check attire on the preview or chase-camera figure. Use a rowboat with oars if both paws need to be visible.
+- [ ] **Generated non-starter boat in chase view:** buy or use a disposable save that owns a generated non-starter hull (for example, River Runner or Mahogany Runabout); set Camera view to Third Person. Sail and steer. **Expect:** the Skipper stands at the helm with feet on the deck (not floating or below it), wears the saved look, and leans with steering.
+- [ ] **Attention and greeting:** in the chase view, idle near a cat, then move away; if two cats are nearby, pass between them. **Expect:** the Skipper looks toward nearby cats, eases attention when their directions oppose, and waves when close and slow, without a visible snap.
+- [ ] **Reduced motion:** enable Reduced motion and watch an NPC, Bot, and the Skipper off the eye. **Expect:** clock-driven idle holds still; distance-driven attention and greeting can still respond.
+- [ ] **Old-save migration (optional):** make a copy of a pre-creator v2 save without `v2.skipper` and launch only the copy. **Expect:** the default dusk-brown tabby is added, the one-time Continue hint appears, and the original save remains untouched.
+- [ ] **Controller (if available):** use a gamepad to navigate/change a row, start name entry, finish/cancel it, and turn the preview. **Expect:** A/B and d-pad keep their controls; keyboard letter bindings do not interrupt physical name typing.
+
 ### Settings, input, gamepad, accessibility
 - [ ] Open Pause → Settings; inspect Cozy/Old Salt, Camera view, and available input/accessibility/audio controls. **Expect:** first person is default; third person is a steady, level chase view; authored story staging keeps priority.
 - [ ] Try keyboard and, if available, controller navigation. **Expect:** mappings match on-screen hints; hints follow the last-used device; releasing a menu direction before driving does not leave steering stuck.
@@ -77,7 +87,7 @@ Use a **disposable save** for every pass: launch with `--save <scratch>` (for ex
 - [ ] **Set up Old Lantern encounter:** in Little Briar, bring deployed lines aboard, retain a held line, and make room for 12 bait pieces; activate the command. Expect the authored Old Lantern line at its required site/time with spotlight and the real legendary hook evaluator, not a fabricated catch. If fixture setup cannot meet an invariant, it must explain why without corrupting the save state.
 - [ ] **Reset in-memory session:** activate **Reset in-memory session**. Choose Cancel and verify current money/progress remain. Open the prompt again, explicitly choose Reset. Expect the confirmation to close into a fresh Little Briar session. Close/relaunch using the same scratch save; expect no file deletion or reset from Devmode.
 
-## Recorded pass and final rebased verification — 2026-11-13
+## Historical verification — 2026-11-13
 
 The checklist remains reusable; unchecked boxes are not claims of a complete
 manual playthrough. The real-window replay below was captured on the pass2
@@ -130,3 +140,11 @@ worktree before its rebase, based at `6ae08f3`. The final PR integrates with
 - **Not established:** the final rebased window was not replayed; audio was not
   auditioned by ear, physical-controller operation was not tested, and a natural
   unlock/story playthrough was not completed.
+
+## PR #135 review record — code head `f544b7e`, 2026-11-21
+
+**Human play pass: pending.** The PR review asks for a human pass of the new-game flow, typed Skipper name, and a non-starter boat in chase camera. No human play session has been performed by the agent; leave all boxes in the feature section unchecked until Aven records the pass.
+
+- **Code head validated:** `f544b7e` is a formatting-only follow-up to behavior head `0f0f67c`. On `0f0f67c`, `python -m unittest discover` passed 935 tests (1 skipped), `fishing.test_narrative` passed 37, `python -m fishing --selftest --software` passed, and native/software `--cats` shots passed. After spacing cleanup at `f544b7e`, `py_compile` and `unittest fishing.test_cats.Skipper fishing.test_skipper_creator` passed (29 tests).
+- **GitHub validation:** the applicable `gameplay-tests`, `windows-tests`, package, smoke, and `second-review-pass` jobs passed on code head `f544b7e` at the time recorded. Conditional macOS/Windows package jobs were skipped.
+- **Review scope:** the remaining required verification is the human play pass above. Merge remains Aven's decision.
