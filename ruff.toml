@@ -1,0 +1,21 @@
+# Lint policy for CI (.github/workflows/validation.yml) and local runs (`ruff check .`).
+# Only errors that are almost always real bugs are enforced: syntax and runtime-breaking
+# mistakes, plus shadowed or invalid constructs. Style rules are off, because the codebase
+# is dense and a formatting sweep would bury the real findings. Widening the set needs a
+# separate cleanup commit that fixes every finding it adds.
+# F821 (undefined name) and F401/F841 are not enforced: ruff flags the deliberate
+# `del renderer, state, ...` in the shot modules' `finally` blocks as undefined names
+# inside their closures, and the unused-import and unused-variable findings are harmless
+# but numerous.
+
+[lint]
+select = [
+    "E9",   # syntax and I/O errors
+    "F63",  # invalid comparisons with literals
+    "F7",   # misplaced statements (return/yield outside function, etc.)
+    "F402", # loop variable shadows an import
+    "F541", # f-string without placeholders
+    "F601", # dictionary key literal repeated with different values
+    "F632", # `is` comparison with a literal
+    "F811", # redefinition of an unused name
+]
