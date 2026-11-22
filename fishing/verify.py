@@ -775,7 +775,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             "checks":["fixed anchored depth","matching camera projections","eleven UI modes, including dialogue",
                       f"all {len(LAKE_ORDER)} lakes with repeated renderer release and rebuild",
                       f"all {len(BOATS)} boats on every lake, and raised sails",
-                      f"eight shop tabs, four help pages, {len(SPECIES)} fish and 12 quest journal entries",
+                      f"eight shop tabs, {HELP_N} help pages, {len(SPECIES)} fish and 12 quest journal entries",
                       "twelve dialogue givers and four saved quest statuses","changing fuel and battery gauges",
                       f"every forecast weather state ({len(WEATHER_STATES)}), with 12x midnight fades",
                       "five heavy lines and fifteen buoys",

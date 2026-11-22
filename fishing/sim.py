@@ -1317,10 +1317,10 @@ class State:
         return None
 
     def mount_shiny_trophy(self, species_id: str, *, boat_id: str | None = None) -> str | None:
-        """Hook for trophy-rail fittings: mount a remembered shiny replica.
+        """Mount a remembered shiny replica on a boat's trophy rail.
 
         This cosmetic does not consume the catch or its book record. The fleet
-        renderer can read boat_extras[boat_id]['shiny_trophies'] when rails ship.
+        renderer draws boat_extras[boat_id]['shiny_trophies'] through rail_trophies().
         """
         boat_id = self.boat_id if boat_id is None else boat_id
         if boat_id not in self.owned_boats or boat_id not in BOATS:

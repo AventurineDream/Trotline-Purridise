@@ -106,7 +106,7 @@ def pinned(state, content) -> frozenset:
 
     These are a `talk_to` cat in an active quest's objective or steps, and the giver
     of a quest waiting to be turned in, which needs its giver present.
-    The story's chapter steps arrive later and add their `talk_to` cats here.
+    Story chapter steps are V1.0 quests too, so their current `talk_to` cat pins here.
     """
     pins = set()
     for quest_id, progress in state.narrative.quests.items():

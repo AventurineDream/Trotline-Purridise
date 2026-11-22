@@ -38,7 +38,7 @@ LEGENDARY_DATA: dict[str, dict[str, Any]] = {
         "weathers": (),
         "bait": "lantern_liver",
         "gate_type": "spotlight",
-        "gate_desc": "Bow spotlight owned and on",
+        "gate_desc": "Bow spotlight owned",
     },
     "lily_queen": {
         "id": "lily_queen",

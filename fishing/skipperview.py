@@ -21,7 +21,7 @@ import math
 import numpy as np
 
 from . import actors, catart, catmesh, catmotion, skipperlook
-from .dialogue import HAIL_SPEED_MPS
+from .dialogue import HAIL_RANGE_M, HAIL_SPEED_MPS
 
 # Measured eye-local cockpit floors for the four hand-built meshes; generated hulls
 # use their authored deck height from boatfamilies.SPECS instead.
@@ -44,7 +44,7 @@ def _floor_offset(state) -> float:
             return float(spec.deck - model.eye_height + 0.02)
     return -0.95
 SEED = 0.4242          # the Skipper's idle rhythm (actors seed range 0-1)
-WAVE_BACK_M = 20.0     # dialogue.HAIL_RANGE_M: close enough to talk is close enough to wave
+WAVE_BACK_M = HAIL_RANGE_M  # close enough to talk is close enough to wave
 SHARE_M = 3.0          # cats within a few metres of the nearest share the Skipper's attention
 
 

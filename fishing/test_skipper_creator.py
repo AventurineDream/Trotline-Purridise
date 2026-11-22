@@ -210,6 +210,17 @@ class SkipperCreatorTests(unittest.TestCase):
         tap(self.session, "e", held=("e",), dt=0.5)  # a letter now
         self.assertEqual(self.session.ui.skipper_turn, turn)
 
+    def test_shift_held_while_typing_keeps_the_throttle(self):
+        # Players hold Shift out of habit for a capital; outside typing, Shift idles the boat.
+        self.state.throttle_setting = self.state.throttle = 0.5
+        self.open_from_pause()
+        tap(self.session, "return")  # start typing
+        tap(self.session, "b", held=("shift", "b"))
+        self.assertEqual((self.state.throttle_setting, self.state.throttle), (0.5, 0.5))
+        tap(self.session, "return")  # the name is set; Shift idles again
+        tap(self.session, held=("shift",))
+        self.assertEqual((self.state.throttle_setting, self.state.throttle), (0.0, 0.0))
+
     # --- the two origins --------------------------------------------------------------
     def test_a_new_morning_starts_only_after_the_creator_is_done(self):
         session = self.session

@@ -165,7 +165,7 @@ class Session:
         self.whale_wait = 0.0
         self._whale_recorded = False
         self._replays = self._saved_pending()
-        self._skipper_hint_shown = False  # the pause-menu hint for an uncreated Skipper: once a session
+        self._skipper_hint_shown = False  # the Continue toast nudging an uncreated Skipper: once a session
 
     def _saved_pending(self) -> set:
         """Scenes (and the credits) left pending in the save: they replay, and can be skipped."""
@@ -649,11 +649,13 @@ class Session:
         mode = self.ui.mode
         if mode not in DRIVING:
             keys = MenuKeys(keys)
-        if mode!="title" and keys.held & {"shift","rshift"}:
+        # Typing a Skipper name uses Shift for capitals and M as a letter, so neither idles
+        # the throttle nor mutes until the name is set.
+        typing = mode == "skipper" and self.ui.skipper_typing
+        if mode!="title" and not typing and keys.held & {"shift","rshift"}:
             self.state.throttle_setting = 0.0
             self.state.throttle = 0.0
-        # Typing a Skipper name uses M as a letter, so the mute key waits until the name is set.
-        if "m" in keys.pressed and mode != "title" and not (mode == "skipper" and self.ui.skipper_typing):
+        if "m" in keys.pressed and mode != "title" and not typing:
             self.state.muted = not self.state.muted
         if mode == "title":
             self._title_keys(keys, dt)

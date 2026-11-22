@@ -571,7 +571,7 @@ def shop_rows(state, tab: int) -> list[Row]:
     elif tab == 2:
         if state.motor < len(MOTORS) - 1:
             nxt = MOTORS[state.motor + 1]
-            rows.append(Row(nxt["name"], dollars(nxt["price"]), "Upgrades the jon boat and pontoon; the daysailer keeps its small auxiliary.", True, "motor"))
+            rows.append(Row(nxt["name"], dollars(nxt["price"]), "Upgrades every tiller boat; sail, oar and console boats keep their own power.", True, "motor"))
         else:
             rows.append(Row(MOTORS[-1]["name"], "aboard", "Nothing bigger fits this hull.", False, "motor"))
         if state.well_tier < len(WELLS) - 1:
