@@ -15,8 +15,9 @@ from the start. Completing chapter 2 opens Flathead, chapter 3 opens Crater,
 and chapter 4 opens Nebula; pull every line and return to the landing before
 travelling. Flathead now has a procedural alpine landscape, snow mist, larch
 and spruce, and Glacial Peak Outpost. Crater now has a steep caldera, obsidian
-cinder isle, thermal springs and a clear-night sky mirror. Nebula still uses a
-driveable flat map while its landscape and the new waters' neighbors are developed. All 144 standard fish are now authored
+cinder isle, thermal springs and a clear-night sky mirror. Nebula now has its own
+generated lagoon: stardust dunes, lily drifts, reed and current lanes, and aurora
+nights. All 144 standard fish are now authored
 and catchable: 36 each on Briar and Cedar, and 34 on each new water. Briar's chart now includes the
 Reed Passage. [Lake framework](docs/issue-51/README.md) · [Fish data and captures](docs/issue-52/README.md) · [Flathead captures and load evidence](docs/issue-53/README.md) · [Crater captures and budgets](docs/issue-54/README.md).
 
@@ -136,6 +137,8 @@ SDL2 and SDL2_ttf have to be on the system. The launcher installs NumPy and Mode
 That makes a `.venv` if you don't have one, installs the dependencies, and starts the game. A save is written to your platform's user-data folder (autosave about every 45 seconds, and on quit). An older `saves/briar.json` is migrated there on first launch, with a backup.
 
 To set up a fresh clone and check it first, run `sh scripts/setup.sh` (on Windows, `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1`). For an offline package that runs without Python, see the [release checklist](docs/RELEASE-CHECKLIST.md): `python3 scripts/build_package.py` builds it.
+
+**Python versions.** Running from source needs Python 3.10 or newer. CI (`validation.yml`) and the release packages use Python 3.12, and that is the version whose green run gates a merge. Use 3.12 to match CI exactly. The local gate also passes on 3.14 (`uv venv .venv --python 3.14`). Lint with `ruff check .`; the rules are in `ruff.toml`.
 
 ```sh
 ./play.sh --selftest          # gameplay and graphics regressions. No window.
