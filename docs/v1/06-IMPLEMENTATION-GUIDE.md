@@ -1332,11 +1332,13 @@ water pixels.
 
 Off the eye (the third-person chase camera and staged views), `skipperview.SkipperFigure`
 stands the whole rig at the helm in place of the paws and the head silhouette:
-feet on the cockpit floor (`skipperview.FLOOR`, measured per hull), facing the bow,
-leaning with the steering, turning its head to the cats nearby and waving back when the
-boat idles within hailing range of one. The head's target is a softmin over the cats'
-directions (cats within about 3 m of the nearest share it), so it turns smoothly as
-two cats trade places. Every boat uses the helm pose; seated
+feet on the cockpit floor (the measured `skipperview.FLOOR` for the four hand-built
+hulls; generated hulls use their actual deck height from `boatfamilies`—`SPECS` for
+most, the top of the six logs for the raft), facing the bow,
+leaning with the steering, turning its head toward nearby cats and waving back when the
+boat idles within hailing range. It blends the cats' directions and fades head attention
+as opposing looks cancel, so neither head-turn nor wave snaps when two cats trade places.
+Every boat uses the helm pose; seated
 tiller and oar poses are not built. Both renderers draw it through the same
 `pose_state` and `cat.vert` path as the 52 cats, and it reflects in GL.
 
