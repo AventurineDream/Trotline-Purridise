@@ -102,6 +102,8 @@ Do these on each OS, on a machine without Python or developer tools:
    the numpy and moderngl `*.dist-info` folders are present. The Atkinson license
    is `_internal/fishing/assets/fonts/OFL.txt`.
 
+Record each pass in a copy of the [QA note template](QA-NOTE-TEMPLATE.md).
+
 ## Where saves live
 
 | OS | Save file | Backups |
