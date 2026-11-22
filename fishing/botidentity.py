@@ -137,8 +137,12 @@ def name(state):
 
 
 def format_text(text, state):
-    """Only known literal placeholders; braces in ordinary text stay literal."""
-    return str(text).replace('{BotName}', name(state)).replace('{Skipper}', 'Skipper')
+    """Only known literal placeholders; braces in ordinary text stay literal.
+
+    `{Skipper}` is the player's chosen name (skipperlook), "Skipper" until they pick one.
+    """
+    from .skipperlook import name as skipper_name
+    return str(text).replace('{BotName}', name(state)).replace('{Skipper}', skipper_name(state))
 
 
 def grant_shell(state, shell_id):

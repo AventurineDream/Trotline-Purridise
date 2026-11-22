@@ -69,14 +69,15 @@ class LakeRenderer(SoftwareRenderer):
         self._objects = []
         self._program_members = {}
         self._uniform_cache = {}
-        self._bot_pack_key = None
-        self._bot_pack = None
+        self._bot_rig = None  # bot.HomeRig, made on the first frame Bot is aboard
         self._boat_key = None
         self._boat_local = None
         self._fish_card_painter = None
         from .actors import ActorCache
         self.actor_cache = ActorCache(world)
         self._actor_draws = []
+        from .skipperview import SkipperFigure
+        self.skipper = SkipperFigure()
         self._impostors = 0
         self.fx = []
         self._fx_values = {}
@@ -264,7 +265,7 @@ class LakeRenderer(SoftwareRenderer):
         self.bloom[0][0].use(BLOOM_UNIT)
 
     def _build_actor_slots(self):
-        """Fixed GPU slots for resident cats: both LODs, the boat, and one impostor layer each."""
+        """Fixed GPU slots for resident cats (both LODs, the boat, one impostor layer each), plus the Skipper's."""
         from .actors import MAX_ACTORS
         ctx = self.ctx
         self.actor_slots = []
@@ -281,16 +282,22 @@ class LakeRenderer(SoftwareRenderer):
                                      "layer":self.actor_layer0+index})
         self.impostor_buf = self.own(ctx.buffer(reserve=7*4*MAX_ACTORS,dynamic=True))
         self.impostor_vao = self.tree_vao(self.impostor_buf)
+        # The Skipper rides in the player's boat (drawn with it) and is never far enough for an impostor.
+        vbo = self.own(ctx.buffer(reserve=CAT_VBO_BYTES,dynamic=True))
+        ibo = self.own(ctx.buffer(reserve=CAT_IBO_BYTES,dynamic=True))
+        vao = self.own(ctx.vertex_array(self.cat_p,[(vbo,fmt,*names)],ibo,index_element_size=4))
+        self.skipper_slot = {"vbo":vbo,"ibo":ibo,"vao":vao,"actor":None,"npc_id":None,"boat_vertices":0}
 
     def actor_memory(self) -> dict:
-        """The cat budget with this renderer's fixed slot reserves and impostor layers."""
+        """The cat budget with this renderer's fixed slot reserves, impostor layers and the Skipper's slot."""
         from .actors import MAX_ACTORS, memory_report
         gpu = (MAX_ACTORS*(CAT_VBO_BYTES+CAT_IBO_BYTES+CAT_BOAT_BYTES+self.flora_atlas.layer_bytes)
-               + self.impostor_buf.size)
-        return memory_report(self.actor_cache,gpu_bytes=gpu)
+               + self.impostor_buf.size + CAT_VBO_BYTES+CAT_IBO_BYTES)
+        skipper = self.skipper.actor.nbytes() if self.skipper.actor is not None else 0
+        return memory_report(self.actor_cache,gpu_bytes=gpu+skipper)
 
-    def _upload_actor(self, slot, actor):
-        """Both LODs of one cat, its boat, and its impostor into a slot (once per arrival)."""
+    def _upload_actor(self, slot, actor, *, extras=True):
+        """Both LODs of one cat into a slot (once per arrival); with `extras`, its boat and impostor too."""
         from .catmesh import LOD0, LOD1, vertex_block
         from .catart import impostor
         blocks, tris, ranges, offset, first = [], [], {}, 0, 0
@@ -311,19 +318,23 @@ class LakeRenderer(SoftwareRenderer):
             raise RuntimeError(f"cat {actor.npc_id} exceeds its GPU slot")
         slot["vbo"].write(vertices.tobytes())
         slot["ibo"].write(indices.tobytes())
+        slot.update(actor=actor, npc_id=actor.npc_id, ranges=ranges)
+        if not extras:
+            return
         boat = self._pack_faces(actor.boat_faces) if actor.boat_faces else np.zeros((0,10),np.float32)
         if boat.nbytes > CAT_BOAT_BYTES:
             raise RuntimeError(f"boat for {actor.npc_id} exceeds its GPU slot")
         if len(boat):
             slot["boat_vbo"].write(boat.tobytes())
-        slot.update(actor=actor, npc_id=actor.npc_id, ranges=ranges, boat_vertices=len(boat))
+        slot.update(boat_vertices=len(boat))
         # The impostor fills its atlas layer, feet on the bottom edge.
         sprite,width_m,height_m,base_m = impostor(actor.npc_id)
         self.flora_atlas.write_sprite(slot["layer"],sprite)
         slot["impostor"] = (width_m,height_m,base_m)
 
     def _prepare_actors(self, state, cam):
-        """Pick each present cat's slot, LOD and animation for this frame."""
+        """Pick each present cat's slot, LOD and animation for this frame, and the Skipper's off the eye."""
+        from .catmesh import LOD0
         from .actors import lod_for, pose_state, roster
         actors = self.actor_cache.sync(getattr(state,"npcs",()) or (), roster())
         reduced = bool(state.v2.get("settings",{}).get("reduced_motion",False)) if isinstance(state.v2,dict) else False
@@ -345,6 +356,11 @@ class LakeRenderer(SoftwareRenderer):
                 width_m,height_m,base_m = slot["impostor"]
                 impostors.append((actor.x,actor.y+base_m,actor.z,width_m,height_m,slot["layer"],1.0))
             draws.append((actor,slot,lod,pose_state(actor,state.x,state.z,state.anim,reduced)))
+        if cam.boat is not None:  # off the eye the Skipper stands at the helm (skipperview)
+            actor = self.skipper.place(state,cam.boat)
+            if self.skipper_slot["actor"] is not actor:
+                self._upload_actor(self.skipper_slot,actor,extras=False)
+            draws.append((actor,self.skipper_slot,LOD0,self.skipper.params(state,reduced)))
         self._actor_draws = draws
         if impostors:
             self.impostor_buf.write(np.asarray(impostors,np.float32).tobytes())
@@ -704,13 +720,14 @@ class LakeRenderer(SoftwareRenderer):
             layer.draw(state,cam=cam,light=light,mirror=mirror,stage="scene")
 
     def _paw_vertices(self, state, cam):
-        """The Skipper's paws in the eye frame, as cockpit triangles (V1-29)."""
+        """The Skipper's paws in the eye frame, as cockpit triangles (V1-29); none off the eye."""
         from .skipper import paw_mesh
+        if cam.boat is not None:  # the whole Skipper stands at the helm instead
+            return np.zeros((0,10),np.float32)
         reduced = bool(state.v2.get("settings",{}).get("reduced_motion",False))
         pos,nrm,rgb,tris = paw_mesh(state,reduced)
         flat = tris.reshape(-1)
         out = np.empty((len(flat),10),np.float32)
-        cam = cam.boat or cam
         basis = np.stack([cam.right,cam.up,cam.forward],axis=1)
         out[:,:3] = pos[flat]@basis.T+cam.eye
         out[:,3:6] = nrm[flat]@basis.T
@@ -719,9 +736,10 @@ class LakeRenderer(SoftwareRenderer):
         return out
 
     def _draw_skipper_reflection(self, state, cam, light, mirror, fb):
-        """The Skipper's head, drawn into the reflection pass only, on calm water at idle."""
+        """The Skipper's head, drawn into the reflection pass only, on calm water at idle, in first person."""
         from .skipper import head_silhouette, shows_reflection
-        if not shows_reflection(state,light):
+        # Off the eye the standing rig reflects as a cat (_draw_actors runs in the mirror pass too).
+        if cam.boat is not None or not shows_reflection(state,light):
             return
         pos,nrm,rgb,tris = head_silhouette(state)
         flat = tris.reshape(-1)
@@ -808,23 +826,13 @@ class LakeRenderer(SoftwareRenderer):
         self.water_p["ripple_count"] = ripple_n
         self.water_vao.render()
         boat = self._boat_vertices(state,cam)
-        from .bot import faces as bot_faces
-        profile = state.v2.get("profile", {}) if isinstance(state.v2, dict) else {}
-        settings = state.v2.get("settings", {}) if isinstance(state.v2, dict) else {}
-        collar = profile.get("collar", {}) if isinstance(profile, dict) else {}
+        from .bot import faces as bot_faces, HomeRig
         if state.bot_phase == "home":
-            bot_key = (
-                state.x, state.z, state.yaw, state.boat_id, state.boat.eye_height,
-                profile.get("shell", "tin"), collar.get("stage", "none"),
-                collar.get("knot"), collar.get("visible", True),
-                settings.get("collar_visible", True), settings.get("reduced_motion", False),
-            )
-            if bot_key != self._bot_pack_key:
-                self._bot_pack = self._pack_faces(bot_faces(state))
-                self._bot_pack_key = bot_key
-            extra = self._bot_pack
+            # The rest pose is cached per placement; the idle is applied to the packed rows in NumPy.
+            if self._bot_rig is None:
+                self._bot_rig = HomeRig()
+            extra = self._bot_rig.rows(state, self._pack_faces)
         else:
-            self._bot_pack_key = None
             extra = self._pack_faces(bot_faces(state))
         if len(extra):
             boat = np.concatenate([boat, extra])

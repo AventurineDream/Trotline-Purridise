@@ -14,7 +14,7 @@ from .lakes import LAKES
 from .pngsave import read_png, write_png
 from .render import Renderer
 from .sim import State
-from .skipper import COAT, SILHOUETTE
+from .skipper import silhouette_rgb
 from .weather import lighting_at
 from .world import World
 
@@ -57,8 +57,10 @@ class BeautyMatrix(unittest.TestCase):
 
 class SecondPassFixes(unittest.TestCase):
     def test_the_skippers_reflection_is_the_coat_in_shadow_not_black(self):
-        self.assertGreater(float(SILHOUETTE.mean()), 0.2)
-        ratios = SILHOUETTE / COAT
+        state = State.new(World("briar"), seed=3)
+        shade = silhouette_rgb(state)
+        self.assertGreater(float(shade.mean()), 0.2)
+        ratios = shade / np.asarray(state.v2["skipper"]["colors"]["base"], np.float32)
         self.assertTrue(np.allclose(ratios, ratios[0]))
 
     def test_the_night_horizon_is_lighter_than_the_night_zenith(self):

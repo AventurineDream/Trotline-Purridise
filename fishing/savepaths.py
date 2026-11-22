@@ -252,6 +252,7 @@ def default_v2(state=None) -> dict:
     """Build the guide's v2 defaults, seeded only from existing save data."""
     from .data import PANTRY
     from .botidentity import default_profile
+    from .skipperlook import DEFAULT as SKIPPER_DEFAULT
     schedule_seed = 0
     journal_species = {}
     scenes_seen = []
@@ -266,6 +267,8 @@ def default_v2(state=None) -> dict:
     return {
         "mode": "cozy",
         "profile": default_profile(schedule_seed),
+        # The player's cat (skipperlook); a save from before the creator gets this default look.
+        "skipper": deepcopy(SKIPPER_DEFAULT),
         "needs": deepcopy(DEFAULT_NEEDS),
         "buff": None,
         "pantry": {item_id: 0 for item_id in PANTRY},
@@ -344,6 +347,8 @@ def merge_v2_defaults(state, saved_v2: object) -> dict:
     normalized["profile"]["collar"]["visible"] = collar_visible
     from .botidentity import normalize_profile
     normalize_profile(normalized, state.narrative.schedule_seed if state is not None else 0)
+    from .skipperlook import normalize as normalize_skipper
+    normalize_skipper(normalized)
     if state is not None:
         seed_stage_claims(normalized, state.journal)
     return normalized

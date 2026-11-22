@@ -173,9 +173,10 @@ def name(u, frame, legendary_id: str, beats: dict):
     u._backed(frame, title, w / 2, int(h * 0.14), u._size(frame, "head"), (218, 187, 124), family="sans", center=True)
 
 
-def photo_frame(u, frame, legendary_id: str, x: int, y: int, width: int, caption: str = "") -> int:
+def photo_frame(u, frame, state, legendary_id: str, x: int, y: int, width: int, caption: str = "") -> int:
     """The book's photo in its print border, the caption on its broad lower edge. Returns the
-    frame's height."""
+    frame's height. `state` dresses the Skipper's paw on the gunwale in the saved look."""
+    from .skipper import mitt_rgb
     border = max(5, width // 28)
     small = u._size(frame, "small")
     foot = u.cell(small)[1] + border * 2 if caption else border
@@ -184,7 +185,7 @@ def photo_frame(u, frame, legendary_id: str, x: int, y: int, width: int, caption
     total = border + inner_h + foot
     u._fill(frame, x + 3, y + 4, width, total, (20, 24, 22), 0.25)
     u._fill(frame, x, y, width, total, PRINT_BORDER, 1.0)
-    u._blit_rgb(frame, encounter.photo(legendary_id, inner_w, inner_h), x + border, y + border)
+    u._blit_rgb(frame, encounter.photo(legendary_id, inner_w, inner_h, mitt_rgb(state)), x + border, y + border)
     if caption:
         while len(caption) > 1 and u._measure(caption, small) > inner_w:
             caption = caption[:-2].rstrip() + "…"
@@ -254,7 +255,8 @@ def card(u, frame, state, ui, catch):
     photo_w = pw - pad * 2 if compact else int(pw * 0.48)
     if compact:
         photo_w = min(photo_w, int((ph - (top - y) - u.cell(small)[1] * 6) / 0.8))
-    used = photo_frame(u, frame, legendary_id, x + pad, top, max(80, photo_w), photo_caption(legendary_id, record))
+    used = photo_frame(u, frame, state, legendary_id, x + pad, top, max(80, photo_w),
+                       photo_caption(legendary_id, record))
     if compact:
         tx, ty, tw = x + pad, top + used + pad // 2, pw - pad * 2
     else:

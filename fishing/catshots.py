@@ -2,8 +2,10 @@
 
 Writes the lineup and portrait sheets, a pose, pattern and LOD sheet, the lakes'
 resident cats from the player's boat in both renderers, the Skipper's paws and
-calm-water reflection, a dialogue portrait, chart pins, and `benchmark.json` with
-triangle counts, timings, the actor budget and the hailing checks.
+calm-water reflection, the Skipper's own rig at the helm (default and custom looks)
+from the chase camera, a dialogue portrait, chart pins, and `benchmark.json` with
+triangle counts, timings, the actor budget, the hailing checks and the Reduced
+Motion holds.
 """
 
 from __future__ import annotations
@@ -187,8 +189,31 @@ def _world(out, renderers, content):
     return report
 
 
-def _skipper(out, renderers):
-    """The paws for each grip, and the head reflection idle against moving."""
+def _chase(renderer, state, back, turn=0.0):
+    """game._camera's third-person view `back` metres behind (turned `turn` rad round) the boat."""
+    from .game import THIRD_PERSON_ELEVATION
+    yaw = state.yaw + turn
+    chase = renderer.camera_for(state, yaw=yaw, pitch=-math.atan2(THIRD_PERSON_ELEVATION, back),
+                                x=state.x - math.sin(yaw) * back, z=state.z - math.cos(yaw) * back)
+    chase.y += THIRD_PERSON_ELEVATION
+    chase.eye[1] += THIRD_PERSON_ELEVATION
+    chase.boat = renderer.camera_for(state)
+    return chase
+
+
+def skipper_looks():
+    """The default Skipper and a custom one (tuxedo in ink, cap, scarf and oilskin) for the figure shots."""
+    from . import skipperlook
+    custom = skipperlook.normalize({})
+    custom = skipperlook.cycle(custom, "pattern", catmesh.PATTERNS.index("tuxedo") - catmesh.PATTERNS.index("tabby"))
+    custom = skipperlook.cycle(custom, "base", [n for n, _c in skipperlook.COAT_SWATCHES].index("Ink"))
+    for key in ("head", "neck", "body"):
+        custom = skipperlook.cycle(custom, key, 1)
+    return {"default": None, "custom": dict(custom, name="Mochi", created=True)}
+
+
+def _skipper(out, renderers, content):
+    """The paws for each grip, the head reflection idle against moving, and the whole Skipper off the eye."""
     world = World("briar")
     cases = (("jon", {}), ("rowboat", {}), ("rowboat", {"rowboat_trolling_motor": True}), ("sail", {}),
              ("log_raft", {}), ("dory", {}), ("river_runner", {"steer": 0.5}), ("jon", {"hauling": True}))
@@ -213,6 +238,23 @@ def _skipper(out, renderers):
                 tiles.append(_labelled(resize_rgb(frame, 480, 270),
                                        f"{_tag(backend)} reflection {'idle' if speed == 0 else 'moving'}",
                                        (240, 236, 210)))
+            # Off the eye the Skipper's own rig stands at the helm, waving back to a cat in hailing range.
+            for name, look in skipper_looks().items():
+                for boat_id in ("jon", "pontoon"):
+                    state = State.new(world, seed=3)
+                    state.game_minutes = 10 * 60
+                    state.boat_id = boat_id
+                    state.npcs = active_npcs(state, world, content)
+                    if look is not None:
+                        state.v2["skipper"] = look
+                    _place_player(state, world, renderer.actor_cache.sync(state.npcs, actors.roster())[0], 12.0)
+                    state.anim = 3.0
+                    for view, cam in (("chase", _chase(renderer, state, 6.0)),
+                                      ("front", _chase(renderer, state, 4.0, 2.3))):
+                        frame = renderer.render(state, cam)
+                        write_png(out / f"skipper-{name}-{boat_id}-{view}-{backend}.png", frame)
+                        tiles.append(_labelled(resize_rgb(frame, 480, 270),
+                                               f"{_tag(backend)} skipper {name} {boat_id} {view}", (240, 236, 210)))
         finally:
             renderer.close()
     write_png(out / "skipper.png", _sheet(tiles, 5, (20, 24, 26)))
@@ -288,7 +330,8 @@ def _hailing(content):
 
 
 def _motion(roster):
-    """The approach wave and head turn by distance, and the Reduced Motion hold."""
+    """The approach wave and head turn by distance, and the Reduced Motion hold (cats and the Skipper)."""
+    from .skipperview import SkipperFigure
     world = World("briar")
     content = load_content()
     state = State.new(world, seed=3)
@@ -300,7 +343,15 @@ def _motion(roster):
         rows.append({"distance_m": distance, "wave_blend": round(p["blend"], 3), "head_yaw": round(p["head_yaw"], 3)})
     still = [actors.animate(actor.mesh(catmesh.LOD0), actors.pose_state(actor, actor.x + 50, actor.z, t, True))[0]
              for t in (0.0, 7.7)]
-    return {"npc": actor.npc_id, "by_distance": rows, "reduced_motion_still": bool(np.array_equal(*still))}
+    figure = SkipperFigure()
+    figure.place(state, Camera(state.x, state.boat.eye_height, state.z, state.yaw, 0.0, 0.0, 1.2, 64, 36,
+                               build_rays=False))
+    held = []
+    for t in (0.0, 7.7):
+        state.anim = t
+        held.append(actors.animate(figure.actor.mesh(catmesh.LOD0), figure.params(state, True))[0])
+    return {"npc": actor.npc_id, "by_distance": rows, "reduced_motion_still": bool(np.array_equal(*still)),
+            "skipper_reduced_motion_still": bool(np.array_equal(*held))}
 
 
 def shots(dest, *, software=False):
@@ -320,7 +371,7 @@ def shots(dest, *, software=False):
     build_ms, portrait_ms = _lineup(out, roster)
     _poses_patterns_lods(out, roster)
     world = _world(out, renderers, content)
-    _skipper(out, renderers)
+    _skipper(out, renderers, content)
     _dialogue_and_chart(out, content)
     lod0 = np.asarray([catmesh.cat_mesh(i, catmesh.LOD0).triangle_count for i in roster])
     lod1 = np.asarray([catmesh.cat_mesh(i, catmesh.LOD1).triangle_count for i in roster])
@@ -342,8 +393,8 @@ def shots(dest, *, software=False):
     }
     if cats != 52:
         raise AssertionError(f"The lineup holds {cats} cats, not 52")
-    if not result["motion"]["reduced_motion_still"]:
-        raise AssertionError("Reduced Motion must hold the cats still")
+    if not (result["motion"]["reduced_motion_still"] and result["motion"]["skipper_reduced_motion_still"]):
+        raise AssertionError("Reduced Motion must hold the cats and the Skipper still")
     if result["peak_rss_bytes"] >= MEMORY_LIMIT_BYTES:
         raise AssertionError("Cat captures exceeded 3 GB")
     (out / "benchmark.json").write_text(json.dumps(result, indent=2) + "\n")

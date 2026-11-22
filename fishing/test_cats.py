@@ -8,7 +8,7 @@ import unittest
 
 import numpy as np
 
-from . import actors, catart, catmesh, skipper
+from . import actors, catart, catmesh, catmotion, skipper
 from .botidentity import format_text
 from .catmesh import FUR_PARTS, LOD0, LOD1, PATTERNS, POSES
 from .content import _BOAT_PAINT_IDS, ContentError, load_content, load_content_v2, validate_content_v2
@@ -42,6 +42,39 @@ def _lake(lake_id, seed=3):
     state.game_minutes = 10 * 60
     state.npcs = active_npcs(state, world, NARRATIVE)
     return world, state
+
+
+def _skipper_actor():
+    """The Skipper's helm figure in a custom look (tuxedo, cap, scarf, oilskin), as skipperview builds it."""
+    from . import skipperlook, skipperview
+    look = skipperlook.cycle(skipperlook.normalize({}), "pattern",
+                             PATTERNS.index("tuxedo") - PATTERNS.index(skipperlook.DEFAULT["pattern"]))
+    for key in ("head", "neck", "body"):
+        look = skipperlook.cycle(look, key, 1)
+    appearance = skipperlook.appearance(look, "helm")
+    return actors.Actor("skipper", "Skipper", 3.0, 0.0, -2.0, 0.9, None, {}, [], skipperview.SEED, appearance=appearance)
+
+
+def _pose_cast():
+    """One actor per authored pose and craft prop, plus Pip & Pebble, at the origin."""
+    picks, seen = [], set()
+    for npc_id, row in ROSTER.items():
+        look = row["appearance"]
+        key = "twin" if "twin" in look else (look["pose"], look["prop"])
+        if key not in seen:
+            seen.add(key)
+            picks.append(actors.Actor(npc_id, npc_id, 0.0, 0.0, 0.0, 0.4, None, {}, [], actors._seed(npc_id)))
+    return picks
+
+
+def _busy_moments(actor):
+    """Clock times (s) when this cat is mid-blink and when its work loop swings hardest."""
+    seed, look = actors._int_seed(actor), actor.look
+    times = [t / 40.0 for t in range(1600)]
+    blink = next(t for t in times if catmotion.blink(t, seed) > 0.5)
+    work = max(times, key=lambda t: abs(catmotion.work(t, seed, look["pose"], look["prop"])[0])
+               + abs(catmotion.work(t, seed, look["pose"], look["prop"])[1]))
+    return blink, work
 
 
 class RosterData(unittest.TestCase):
@@ -142,10 +175,11 @@ class Rig(unittest.TestCase):
                     counts[lod] = mesh.triangle_count
                     base = row["appearance"]["pose"]
                     self.assertIn(base, mesh.positions)
-                    self.assertIn("wave", mesh.positions)
-                    for positions in mesh.positions.values():
+                    self.assertIn(catmesh.GESTURES[base] or base, mesh.positions)
+                    for pose, positions in mesh.positions.items():
                         self.assertTrue(np.isfinite(positions).all())
                         self.assertFalse(positions.flags.writeable)
+                        self.assertEqual(len(mesh.pivots[pose]), len(mesh.cats))
                     self.assertGreaterEqual(int(mesh.triangles.min()), 0)
                     self.assertLess(int(mesh.triangles.max()), len(mesh.part))
                     self.assertEqual(len(mesh.cats), 2 if twin else 1)
@@ -247,29 +281,42 @@ void main() {
         try:
             common = (SHADERS / "common.glsl").read_text(encoding="utf-8")
             program = ctx.program(vertex_shader="#version 330\n" + common + "\n" + (SHADERS / "cat.vert").read_text(encoding="utf-8"),
-                                  varyings=["pos"])
+                                  varyings=["pos", "normal"])
             # Headless EGL has no default framebuffer, and a draw needs one even with no fragments.
             fb = ctx.simple_framebuffer((1, 1))
             fb.use()
             world, state = _lake("briar")
-            for actor in actors.ActorCache(world).sync(state.npcs, actors.roster()):
-                for distance, t in ((6.0, 3.7), (35.0, 11.2), (60.0, 0.4)):
+            # The lake's own cats, and one of every pose (and Pip & Pebble) caught mid-blink and mid-work.
+            cast = [(a, ((6.0, 3.7, {}), (35.0, 11.2, {}), (60.0, 0.4, {})))
+                    for a in actors.ActorCache(world).sync(state.npcs, actors.roster())]
+            cast += [(a, ((60.0, _busy_moments(a)[0], {}), (60.0, _busy_moments(a)[1], {}), (34.0, 7.3, {})))
+                     for a in _pose_cast()]
+            # The Skipper's own look mesh at the helm: the gesture override (wave back) and steering lean.
+            cast += [(_skipper_actor(), ((60.0, 2.9, {"steer": 0.7}), (12.0, 5.1, {"gesture": 0.6, "steer": -0.4}),
+                                         (8.0, 0.0, {"gesture": 1.0})))]
+            for actor, frames in cast:
+                for distance, t, extra in frames:
                     mesh = actor.mesh(LOD0)
-                    params = actors.pose_state(actor, actor.x + distance, actor.z + 1.0, t, False)
+                    params = actors.pose_state(actor, actor.x + distance, actor.z + 1.0, t, False, **extra)
                     vertices = catmesh.vertex_block(mesh)
                     vbo = ctx.buffer(vertices.tobytes())
-                    out = ctx.buffer(reserve=len(vertices) * 12)
-                    # Only `pos` is captured, so the compiler drops the paint attributes.
+                    out = ctx.buffer(reserve=len(vertices) * 24)
+                    # Only `pos` and `normal` are captured, so the compiler drops the paint attributes.
                     vao = ctx.vertex_array(program, [(vbo, catmesh.VERTEX_FORMAT, *catmesh.VERTEX_ATTRIBUTES)],
                                            skip_errors=True)
                     for key, value in {**actors.shader_uniforms(actor, mesh, params), "mirror": 1.0}.items():
                         if key in program:
                             program[key].value = value
                     vao.transform(out, moderngl.POINTS, vertices=len(vertices))
-                    gl = np.frombuffer(out.read(), np.float32).reshape(-1, 3)
-                    cpu = actor.local_to_world(actors.animate(mesh, params)[0])
-                    with self.subTest(npc=actor.npc_id, distance=distance):
-                        np.testing.assert_allclose(gl, cpu, atol=2e-4)
+                    gl = np.frombuffer(out.read(), np.float32).reshape(-1, 6)
+                    posed, normals = actors.animate(mesh, params)
+                    cpu = actor.local_to_world(posed)
+                    # Normals carry no translation; both sides are compared as unit directions.
+                    cpu_n = actor.local_to_world(normals) - actor.local_to_world(np.zeros((1, 3), np.float32))
+                    unit = lambda v: v / np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-9)
+                    with self.subTest(npc=actor.npc_id, distance=distance, t=t, **extra):
+                        np.testing.assert_allclose(gl[:, :3], cpu, atol=2e-4)
+                        np.testing.assert_allclose(unit(gl[:, 3:]), unit(cpu_n), atol=2e-3)
                     for obj in (vao, out, vbo):
                         obj.release()
             fb.release()
@@ -325,17 +372,88 @@ class Actors(unittest.TestCase):
         far = actors.pose_state(actor, actor.x + 45.0, actor.z, 2.0, False)
         self.assertEqual(near["blend"], 1.0)
         self.assertEqual(far["blend"], 0.0)
-        self.assertEqual(far["head_yaw"], 0.0)
+        # Far off, the cat looks about on its own: where the player is makes no difference.
+        far_left = actors.pose_state(actor, actor.x - 45.0, actor.z, 2.0, False)
+        self.assertEqual(far["head_yaw"], far_left["head_yaw"])
         self.assertNotEqual(near["head_yaw"], 0.0)
         self.assertLessEqual(abs(near["head_yaw"]), 1.1)
-        behind = actors.pose_state(actor, actor.x - math.sin(actor.yaw) * 5, actor.z - math.cos(actor.yaw) * 5, 2.0,
+        beside = actors.pose_state(actor, actor.x + math.cos(actor.yaw) * 5, actor.z - math.sin(actor.yaw) * 5, 2.0,
                                    False)
-        self.assertAlmostEqual(abs(behind["head_yaw"]), 1.1)
+        self.assertAlmostEqual(abs(beside["head_yaw"]), 1.1)
+        # Circling the cat, its head follows without a snap where the player passes behind it.
+        circle = [actors.pose_state(actor, actor.x + math.sin(a / 90.0) * 5, actor.z + math.cos(a / 90.0) * 5, 2.0,
+                                    True)["head_yaw"] for a in range(round(math.tau * 90) + 1)]
+        self.assertLess(max(abs(b - a) for a, b in zip(circle, circle[1:])), 0.1)
         mesh = actor.mesh(LOD0)
         moving = [actors.animate(mesh, actors.pose_state(actor, actor.x + 5, actor.z, t, False))[0] for t in (0.3, 1.9)]
         self.assertFalse(np.array_equal(*moving))
         still = [actors.animate(mesh, actors.pose_state(actor, actor.x + 5, actor.z, t, True))[0] for t in (0.3, 1.9)]
         np.testing.assert_array_equal(*still)
+
+    def test_idle_life_is_a_pure_seeded_function_of_the_clock(self):
+        times = [t / 40.0 for t in range(2400)]
+        for actor in _pose_cast():
+            with self.subTest(npc=actor.npc_id):
+                self.assertEqual(actors.pose_state(actor, None, None, 47.3, False),
+                                 actors.pose_state(actor, None, None, 47.3, False))
+                frames = [actors.pose_state(actor, None, None, t, False) for t in times]
+                # Within a minute every cat blinks, twitches each ear and breathes.
+                for key in ("blink", "ear_l", "ear_r"):
+                    self.assertGreater(max(f[key] for f in frames), 0.5, key)
+                self.assertGreater(np.ptp([f["breath"] for f in frames]), 0.01)
+                self.assertGreater(np.ptp([f["tail"] for f in frames]), 0.0)
+                if actor.look["pose"] != "nap_curl":
+                    # Awake cats look about; sitters cast, crafters work and helmsmen steer.
+                    self.assertGreater(np.ptp([f["head_yaw"] for f in frames]), 0.2)
+                if actor.look["pose"] in ("sit_fish", "craft", "helm", "wave"):
+                    self.assertGreater(np.ptp([f["arm"] + f["forearm"] for f in frames]), 0.05)
+        # Two cats in the same pose are out of step.
+        sitters = [actors.Actor(n, n, 0.0, 0.0, 0.0, 0.0, None, {}, [], actors._seed(n)) for n, row in ROSTER.items()
+                   if row["appearance"]["pose"] == "sit_fish"][:2]
+        blinks = [[actors.pose_state(a, None, None, t, False)["blink"] > 0.5 for t in times] for a in sitters]
+        self.assertNotEqual(*blinks)
+
+    def test_reduced_motion_zeroes_every_clock_driven_term(self):
+        for actor in _pose_cast():
+            for t in (0.0, 13.1, 52.9):
+                with self.subTest(npc=actor.npc_id, t=t):
+                    p = actors.pose_state(actor, actor.x + 80.0, actor.z, t, True)
+                    for key in ("blink", "ear_l", "ear_r", "breath", "rise", "tail", "tail_curl", "forearm", "arm",
+                                "body_roll", "body_pitch", "head_yaw", "head_pitch", "head_roll"):
+                        self.assertEqual(p[key], 0.0, key)
+
+    def test_every_gesture_blend_keeps_the_body_whole_mid_way(self):
+        # A linear blend between a lying and a sitting torso squashes it into a blob mid-way:
+        # each pose blends to a gesture built on its own body instead.
+        for actor in _pose_cast():
+            mesh = actor.mesh(LOD1)
+            if catmesh.slots(mesh)[1] is None:
+                continue
+            torso = mesh.part == catmesh.TORSO
+
+            def spread(w):
+                pos = mesh.blend(catart._pose_weights(mesh, w))[0][torso]
+                return float(np.linalg.norm(pos - pos.mean(0), axis=1).mean())
+
+            with self.subTest(npc=actor.npc_id):
+                self.assertGreater(spread(0.5), 0.95 * min(spread(0.0), spread(1.0)))
+
+    def test_pebble_turns_her_head_about_her_own_neck(self):
+        actor = actors.Actor("pip_pebble", "Pip & Pebble", 0.0, 0.0, 0.0, 0.0, None, {}, [], 0.3)
+        mesh = actor.mesh(LOD1)
+        _look, lo, hi = mesh.cats[1]
+        head = np.zeros(len(mesh.part), bool)
+        head[lo:hi] = mesh.part[lo:hi] == catmesh.HEAD
+        body = np.zeros(len(mesh.part), bool)
+        body[lo:hi] = mesh.part[lo:hi] == catmesh.TORSO
+        for side in (1.0, -1.0):
+            # Held in the idle pose (gesture=0) with the player close beside: only the head turns.
+            turned = actors.animate(mesh, actors.pose_state(actor, side * 20.0, 20.0, 0.0, True, gesture=0.0))[0]
+            rest = actors.animate(mesh, actors.pose_state(actor, None, None, 0.0, True))[0]
+            self.assertGreater(np.abs(turned[head] - rest[head]).max(), 0.02)
+            offset = [np.linalg.norm((p[head].mean(0) - p[body].mean(0))[[0, 2]]) for p in (rest, turned)]
+            with self.subTest(side=side):
+                self.assertLess(abs(offset[1] - offset[0]), 0.03)
 
     def test_hailing_range_and_speed_are_unchanged(self):
         self.assertEqual(HAIL_RANGE_M, 20.0)
@@ -489,17 +607,36 @@ class Skipper(unittest.TestCase):
             state = self._state(boat_id, **{flag: True for flag in flags})
             with self.subTest(boat=boat_id, flags=flags):
                 self.assertEqual(skipper.grip_kind(state), kind)
-                pos, nrm, rgb, tris = skipper.paw_mesh(state)
+                pos, nrm, rgb, tris, part = skipper.paw_mesh(state, parts=True)
                 if kind is None:
                     self.assertEqual(len(tris), 0)
                     continue
                 self.assertTrue(np.isfinite(pos).all())
                 # Every mitt is in view at 16:9 and 74 degrees.
-                mitts = pos[np.all(np.isclose(rgb, skipper.MITT), axis=1)]
+                mitts = pos[part == skipper.PART_MITT]
                 self.assertGreater(len(mitts), 0)
                 visible = ((mitts[:, 2] > 0.3) & (np.abs(mitts[:, 0]) < mitts[:, 2] * tanx)
                            & (np.abs(mitts[:, 1]) < mitts[:, 2] * tany))
                 self.assertGreater(float(visible.mean()), 0.6)
+
+    def test_the_paws_and_reflection_wear_the_saved_coat(self):
+        from . import skipperlook
+        state = self._state("jon")
+        _p, _n, rgb, _t, part = skipper.paw_mesh(state, parts=True)
+        arm = rgb[part == skipper.PART_FOREARM]
+        # The default tabby's forearm is ringed: its base coat and its darker stripe both show.
+        self.assertGreater(float(np.ptp(arm.mean(axis=1))), 0.12)
+        look = skipperlook.cycle(skipperlook.saved(state), "pattern", PATTERNS.index("tuxedo")
+                                 - PATTERNS.index("tabby"))
+        look = skipperlook.cycle(look, "base", [n for n, _c in skipperlook.COAT_SWATCHES].index("Ink"))
+        state.v2["skipper"] = look
+        _p, _n, rgb, _t, part = skipper.paw_mesh(state, parts=True)
+        accent, base = (np.asarray(look["colors"][k], np.float32) for k in ("accent", "base"))
+        # A tuxedo wears white mitts at the end of a black arm, as the rig paints the same cat.
+        self.assertLess(float(np.abs(rgb[part == skipper.PART_MITT] - accent).max()), 0.05)
+        self.assertLess(float(np.abs(np.median(rgb[part == skipper.PART_FOREARM], axis=0) - base).max()), 0.05)
+        _p, _n, shade, _t = skipper.head_silhouette(state)
+        np.testing.assert_allclose(shade[0], base * skipper.SHADOW, rtol=1e-6)
 
     def test_the_head_reflection_shows_only_idle_on_calm_water_past_the_bow(self):
         state = self._state("jon")
@@ -517,6 +654,23 @@ class Skipper(unittest.TestCase):
         ahead = (pos[:, 2] - state.z) * math.cos(state.yaw) + (pos[:, 0] - state.x) * math.sin(state.yaw)
         landing = ahead * eye / (eye + pos[:, 1])
         self.assertGreater(float(landing.min()), state.boat.bow * 2.5)
+
+    def test_the_figure_turns_smoothly_as_two_cats_trade_places(self):
+        from . import skipperview
+        figure = skipperview.SkipperFigure()
+        figure.actor = _skipper_actor()
+        cats = [SimpleNamespace(anchor=SimpleNamespace(x=x, z=8.0, lake_id="briar")) for x in (-6.0, 6.0)]
+        state = SimpleNamespace(npcs=cats, lake_id="briar", speed=0.0, steer=0.0, anim=0.0)
+        figure.actor.yaw = 0.0
+        yaws = []
+        # Sail across the line between the two cats, 1 cm a step: the nearest cat switches midway.
+        for i in range(1601):
+            figure.actor.x, figure.actor.z = -8.0 + i * 0.01, 0.0
+            yaws.append(figure.params(state, True)["head_yaw"])
+        steps = np.abs(np.diff(yaws))
+        self.assertLess(float(steps.max()), 0.02)
+        # It still looks at the cats: left of centre at the start, right at the end.
+        self.assertLess(yaws[0] * yaws[-1], 0.0)
 
     def test_hauling_is_transient_and_never_saved(self):
         import tempfile
