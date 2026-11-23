@@ -2352,8 +2352,8 @@ def _enter_lake(platform, session, renderer, ui, text, loading, software_backend
     return renderer, ui
 
 
-# Progress at which the travel card's text joins the starfield: the tip has mostly
-# covered the old lake. It clears at starlight.RISE_START, as the new water surfaces.
+# Join the text with the starfield while the old lake remains visible beneath it.
+# Clear the card as the new water surfaces so its copy stays legible over the transition.
 _STARLIGHT_CARD_START = 0.2
 
 
