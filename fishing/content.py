@@ -23,6 +23,9 @@ CONTENT_V2_FILES = ("species.json", "baits.json", "boats.json", "lakes.json",
                     "npcs.json", "quests.json", "ripples.json", "keepsakes.json")
 BOOK_CONTENT_PATH = CONTENT_V2_PATH / "book.json"
 BAIT_BY_ID = LAKES = LINE_TIERS = SPECIES_BY_ID = ZONE_ORDER = None
+# Loading-card pools in lakes.json (Aven's QA 2026-11-22, items 1 and 13; issue #138).
+LOADING_QUIPS_SHARED_MIN = 24
+LOADING_QUIPS_PER_LAKE_MIN = 12
 _GAMEPLAY_REFS_LOADED = False
 
 
@@ -755,6 +758,40 @@ class _ContentV2Validator:
                 valid.append(item)
         return valid
 
+    def loading_quips(self, filename, where, value, minimum, owners):
+        """Check one loading-quip pool and claim its lines.
+
+        Args:
+            filename: Content file being validated, for error messages.
+            where: Path of this pool within the file; also recorded as each quip's owner.
+            value: The raw pool, expected to be a list of non-empty strings.
+            minimum: Fewest distinct quips the pool must provide.
+            owners: Quip text -> owning pool path for every pool checked so far.
+                Updated in place, so a lake's quips stay unique to that lake and
+                never repeat a shared one.
+
+        Side effects:
+            Appends errors; mutates `owners`.
+        """
+        if not isinstance(value, list):
+            self.error(filename, where, "expected a list of loading quips")
+            return
+        distinct = 0
+        for index, quip in enumerate(value):
+            item_where = f"{where}[{index}]"
+            if not isinstance(quip, str) or not quip.strip():
+                self.error(filename, item_where, "expected non-empty text")
+                continue
+            owner = owners.get(quip)
+            if owner is not None:
+                self.error(filename, item_where, f"duplicate loading quip {quip!r}, already in {owner}")
+                continue
+            owners[quip] = where
+            distinct += 1
+        if distinct < minimum:
+            self.error(filename, where,
+                       f"expected at least {minimum} distinct loading quips, got {distinct}")
+
     def multiplier_map(self, filename, where, value, allowed, *, maximum=None):
         if not isinstance(value, dict):
             self.error(filename, where, "expected an object of IDs to multipliers")
@@ -1029,7 +1066,8 @@ class _ContentV2Validator:
         baits_root = self.root(docs, baits_file, {"schema_version", "fallback_multiplier", "baits"})
         boats_root = self.root(docs, boats_file, {"schema_version", "boats"})
         lakes_root = self.root(docs, lakes_file, {
-            "schema_version", "zone_order", "zone_fallback_multiplier", "zones", "lakes"})
+            "schema_version", "zone_order", "zone_fallback_multiplier", "zones", "loading_quips",
+            "lakes"})
 
         tiers = self.table(docs, species_file, "tier_defaults", {"tier", "rate", "trophy"}, id_field="tier")
         if species_file not in self.unavailable_files and set(tiers) != {"C", "U", "R", "V"}:
@@ -1056,6 +1094,7 @@ class _ContentV2Validator:
         self.require_saved_ids(baits_file, "baits", baits)
         self.require_saved_ids(boats_file, "boats", boats)
 
+        quip_owners = {}  # loading quip -> its pool; shared first, then each lake
         if lakes_file in self.unavailable_files:
             zone_order = []
         else:
@@ -1073,12 +1112,14 @@ class _ContentV2Validator:
                 seen_zone_ids.add(zone_id)
             self.number(lakes_file, "zone_fallback_multiplier", lakes_root.get("zone_fallback_multiplier"),
                         minimum=0, maximum=1)
+            self.loading_quips(lakes_file, "loading_quips", lakes_root.get("loading_quips"),
+                               LOADING_QUIPS_SHARED_MIN, quip_owners)
         zones = self.table(docs, lakes_file, "zones", {"id", "name", "cedar_name", "fishing", "matches"})
         lakes = self.table(docs, lakes_file, "lakes", {
             "id", "name", "landing", "region", "blurb", "species_count", "species_ids",
             "zone_ids", "zone_labels", "palette", "placeholder", "unlock_chapter",
-            "travel_caption", "lake_days"}, {"rate_multipliers", "placeholder_depths", "environment",
-                                             "areas", "waypoints"})
+            "travel_caption", "loading_quips", "lake_days"}, {"rate_multipliers", "placeholder_depths",
+                                                              "environment", "areas", "waypoints"})
         self.require_saved_ids(lakes_file, "zones", zones)
         self.require_saved_ids(lakes_file, "lakes", lakes)
         if lakes_file not in self.unavailable_files and not {"briar", "cedar"}.issubset(lakes):
@@ -1298,6 +1339,8 @@ class _ContentV2Validator:
             self.number(lakes_file, where + ".unlock_chapter", row.get("unlock_chapter"),
                         integer=True, minimum=0, maximum=5)
             self.text(lakes_file, where + ".travel_caption", row.get("travel_caption"))
+            self.loading_quips(lakes_file, where + ".loading_quips", row.get("loading_quips"),
+                               LOADING_QUIPS_PER_LAKE_MIN, quip_owners)
             self.named_places(lakes_file, where, lid, row, places)
             palette = row.get("palette")
             if not isinstance(palette, dict) or set(palette) != {"water", "land"}:

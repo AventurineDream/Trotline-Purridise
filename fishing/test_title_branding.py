@@ -21,6 +21,9 @@ class TitleBrandingChecks(unittest.TestCase):
         self.assertIn("self._text(frame,GAME_TITLE", ui_source)
         self.assertIn("Platform(width, height, GAME_TITLE", game_source)
         self.assertIn("ui._center(loading,GAME_TITLE", game_source)
+        # Beneath the title, startup shows a varied quip for the opening lake (issue #138).
+        self.assertIn("_loading_quip(ui, loading, quips.pick(world.id)", game_source)
+        self.assertNotIn("Opening the lake...", game_source)
         self.assertTrue(all(GAME_TITLE in _help_title(topic) for topic, _ in _HELP))
 
     def test_ui_strings_only_use_little_briar_as_a_lake_name(self):

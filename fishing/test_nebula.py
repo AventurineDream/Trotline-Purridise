@@ -424,17 +424,29 @@ class StarlightTravel(unittest.TestCase):
             focused = True
 
         source = np.zeros((8, 8, 3), np.uint8)
-        for focused, minimum in ((True, 0.002), (False, 0.03)):
+        # Freeze the frame clock so every frame reports zero render time: the
+        # requested sleep is then exactly the policy period, independent of
+        # how fast or how loaded the host is.
+        for focused, period, minimum in ((True, 1 / 240, 0.002), (False, 1 / 30, 0.03)):
             platform = Platform(focused)
-            with patch("fishing.game.time.sleep") as sleep:
+            with patch("fishing.game.time.perf_counter", return_value=0.0), \
+                    patch("fishing.game.time.sleep") as sleep:
                 _play_starlight(platform, Session(), source, None, 0.0, 0.05, False)
-            self.assertTrue(any(call.args[0] >= minimum for call in sleep.call_args_list))
+            slept = [call.args[0] for call in sleep.call_args_list]
+            self.assertTrue(slept)
+            for seconds in slept:
+                self.assertAlmostEqual(seconds, period)
+            self.assertTrue(all(seconds >= minimum for seconds in slept))
 
     def test_lake_change_tips_into_starlight_only_on_lagoon_routes(self):
+        import random
         import tempfile
         from pathlib import Path
+        from unittest.mock import patch
+        from . import game
         from .game import Session, _enter_lake
         from .imageops import resize_rgb
+        from .lakes import LoadingQuips, loading_quips
         from .platform import Text
         from .render import Renderer
         from .ui import UI
@@ -462,8 +474,11 @@ class StarlightTravel(unittest.TestCase):
                 pass
 
         text = Text()
+        quips = LoadingQuips(random.Random(138))
         try:
-            for source, destination, starlit in (("crater", "nebula", True), ("flathead", "crater", False)):
+            # Both Lagoon directions and an ordinary trip: each names the destination and a quip.
+            for source, destination, starlit in (("crater", "nebula", True), ("nebula", "briar", True),
+                                                 ("flathead", "crater", False)):
                 with tempfile.TemporaryDirectory(prefix="starlight-") as temp:
                     world = World(source)
                     state = State.new(world, seed=4)
@@ -476,19 +491,50 @@ class StarlightTravel(unittest.TestCase):
                     self.assertIsNone(session.change_lake(destination))
                     platform = Platform()
                     loading = np.empty((180, 320, 3), np.uint8)
-                    renderer, ui = _enter_lake(
-                        platform, session, renderer, ui, text, loading, True, True, shown)
+                    # Record the progress of every starlight frame composed and, for each
+                    # card draw, the progress of the frame it was painted onto.
+                    progress, card_progress = [], []
+                    compose, paint = starlight.frame, game._travel_card_text
+
+                    def frame(source, destination, t, **kwargs):
+                        progress.append(t)
+                        return compose(source, destination, t, **kwargs)
+
+                    def draw_card(*args):
+                        card_progress.append(progress[-1] if progress else None)
+                        return paint(*args)
+
+                    with patch("fishing.starlight.frame", side_effect=frame), \
+                            patch("fishing.game._travel_card_text", side_effect=draw_card) as card:
+                        renderer, ui = _enter_lake(
+                            platform, session, renderer, ui, text, loading, True, True, shown,
+                            quips=quips)
                     try:
                         self.assertIs(renderer.world, session.world)
                         self.assertEqual(renderer.world.id, destination)
                         self.assertEqual(state.game_minutes, before)
+                        self.assertIn(quips.last, loading_quips(destination))
+                        self.assertTrue(card.call_args_list)
+                        for call in card.call_args_list:
+                            self.assertEqual(call.args[2:], (session.world.name, quips.last))
                         if starlit:
                             self.assertGreater(len(platform.frames), 10)
-                            # The tip starts from the last frame shown on the source water.
+                            # The tip starts from the last frame shown on the source water,
+                            # before the card joins the stars; the card clears as the lake rises.
                             first = platform.frames[0].astype(np.float32)
                             self.assertLess(float(np.abs(first-shown).mean()), 25)
+                            self.assertEqual(len(progress), len(platform.frames))
+                            self.assertLess(card.call_count, len(platform.frames) - 1)
+                            # Exactly the frames from the card start until the rise carry the
+                            # card, in order; none over the source tip, rising lake or arrival.
+                            expected = [t for t in progress
+                                        if game._STARLIGHT_CARD_START <= t < starlight.RISE_START]
+                            self.assertTrue(expected)
+                            self.assertEqual(card_progress, expected)
                         else:
                             self.assertEqual(len(platform.frames), 1)
+                            self.assertEqual(card.call_count, 1)
+                            self.assertTrue(np.any(platform.frames[0] != (17, 31, 32)))
                     finally:
                         renderer.close()
         finally:

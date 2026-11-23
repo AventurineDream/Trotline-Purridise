@@ -421,6 +421,34 @@
       "fishing": true
     }
   ],
+  "loading_quips": [
+    "Untangling the trotline...",
+    "Counting the hooks twice, just in case...",
+    "Coaxing the minnows into the bucket...",
+    "Sharpening hooks on a pocket stone...",
+    "Topping up the thermos...",
+    "Asking the catfish to wait a moment...",
+    "Folding the chart along the wrong crease...",
+    "Waking the lake gently...",
+    "Fluffing the life vest...",
+    "Rinsing out the livewell...",
+    "Making sure the buoys still float...",
+    "Tying a knot that will actually hold...",
+    "Brushing scales off the cooler lid...",
+    "Warming paws on a mug of cocoa...",
+    "Politely shooing a dragonfly...",
+    "Smoothing whiskers into the wind...",
+    "Pretending to understand the weather...",
+    "Teaching the bait to sit still...",
+    "Wiping fog off the sonar screen...",
+    "Stacking the nets in a tidy heap...",
+    "Shooing a heron off the dock...",
+    "Packing the tackle box with snacks...",
+    "Listening for the first ripple...",
+    "Stretching, the way cats do...",
+    "Checking which way the wind is purring...",
+    "Finding the comfy spot on the bench..."
+  ],
   "lakes": [
     {
       "id": "briar",
@@ -505,6 +533,20 @@
       "placeholder": false,
       "unlock_chapter": 0,
       "travel_caption": "The boat rides the trailer back to Briar Landing.",
+      "loading_quips": [
+        "Grandmother Whiskers is knitting on the porch...",
+        "Lighting the lamp at Briar Landing...",
+        "Easing through Reed Passage...",
+        "Breathing in the cypress shore...",
+        "Lily pads are opening in the cove...",
+        "The old fish book waits on the counter...",
+        "Listening to the creek inlet chatter...",
+        "Peering down into the Deep hole...",
+        "Frogs are tuning up on the North flats...",
+        "Dew is still beaded on the landing rail...",
+        "Something glows softly under the lilies...",
+        "Stepping carefully past the South rocks..."
+      ],
       "lake_days": [
         "mayfly_morning",
         "firefly_night"
@@ -771,6 +813,20 @@
       "placeholder": false,
       "unlock_chapter": 0,
       "travel_caption": "The jon boat rides the trailer down the county road.",
+      "loading_quips": [
+        "Doc Barnaby is backing the trailer down...",
+        "Rolling down the county road to Caney Creek...",
+        "Blue cats are stirring in the Southern basin...",
+        "Crappie are bedding in Clear Creek coves...",
+        "Hybrids are chasing shad along the riprap...",
+        "Checking that the lamp buoys still shine...",
+        "Somebody left the jug bobbing again...",
+        "A warm Texas breeze crosses the flats...",
+        "Weaving through the creek channels...",
+        "Watching the flooded shoreline for swirls...",
+        "Rounding the islands on the upper lake...",
+        "Something big grumbles near the spillway..."
+      ],
       "lake_days": [
         "shad_run",
         "breezy_bass"
@@ -937,6 +993,20 @@
       "placeholder": false,
       "unlock_chapter": 2,
       "travel_caption": "Doc's trailer rattles north toward the mountains.",
+      "loading_quips": [
+        "Captain Huckleberry is stoking the stove...",
+        "Shaking snow off the outpost porch...",
+        "Snowmelt is trickling down the inlet...",
+        "Sweeping larch needles off the dock...",
+        "Reading the ripples over the gravel reefs...",
+        "Peering into the cold glacial trench...",
+        "Spruce smoke curls over the ridge...",
+        "Pondweed sways in the quiet bay...",
+        "Bundling up against the mountain air...",
+        "The peaks are wearing fresh snow...",
+        "Something silver flashed below the snags...",
+        "Clear water, cold paws, big sky..."
+      ],
       "lake_days": [
         "clear_sky_trout",
         "larch_gold"
@@ -1270,6 +1340,20 @@
       "placeholder": false,
       "unlock_chapter": 3,
       "travel_caption": "Huckleberry knows a cat with a truck.",
+      "loading_quips": [
+        "Sora is sweeping cinders off the rim dock...",
+        "The thermal springs are breathing steam...",
+        "Drifting over the pumice shelf...",
+        "The moss gardens are soft and green today...",
+        "Gliding quietly past the drowned pines...",
+        "Peering into the cobalt deep...",
+        "The cinder isle glints like black glass...",
+        "Waiting for the caldera sky to clear...",
+        "Warm water, cool rim, sleepy cat...",
+        "Something warm is basking near the springs...",
+        "Counting stars along the caldera rim...",
+        "The obsidian cliffs remember every ripple..."
+      ],
       "lake_days": [
         "warm_springs",
         "fog_lift"
@@ -1626,6 +1710,20 @@
       "placeholder": false,
       "unlock_chapter": 4,
       "travel_caption": "The reflection deepens, and the boat tips gently into starlight.",
+      "loading_quips": [
+        "Professor Astra-9 is calibrating the stars...",
+        "Docking softly at Cosmic Drift Station...",
+        "The lily drifts float just above the water...",
+        "Combing stardust out of the whiskers...",
+        "The comet stream runs bright tonight...",
+        "Crystal kelp is chiming in the current...",
+        "Steering clear of the meteor reefs...",
+        "Peering politely into the void well...",
+        "The light-reeds are glowing softly...",
+        "Catching a ride on the astral current...",
+        "Gravity is optional here. Snacks are not...",
+        "The stars are humming a lullaby..."
+      ],
       "lake_days": [
         "meteor_shower",
         "aurora_tide"

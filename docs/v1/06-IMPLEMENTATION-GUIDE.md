@@ -639,6 +639,13 @@ casts remain empty until the character-content tickets land. They allocate only 
 world, and the native renderer supports an empty foliage buffer. The play loop
 also releases its startup reference when changing lakes.
 
+Loading cards (#138) carry a quip under the title at startup and under
+"Opening {lake}..." on every trip, the Lagoon's starlight route included, where
+the card rides the starfield while the new lake loads. `lakes.json` holds the
+shared `loading_quips` (at least 24) and each lake's own (at least 12, unique to
+that lake); the validator enforces both. `lakes.LoadingQuips` picks from the
+shared pool plus the destination's, never the same line twice in a row.
+
 Travel reads `v2.story.chapter` (earlier chapters completed) or explicit integer
 `completed_chapters`: completing 2/3/4 opens Flathead/Crater/Nebula. Briar and
 Cedar remain open for existing saves. Querying the menu never grants rewards or
