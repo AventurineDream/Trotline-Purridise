@@ -44,17 +44,33 @@ def lake_day(lake_id, minutes):
     return next((row for row in LAKE_DAYS if row.lake == lake_id and row.weekday == weekday(minutes)), None)
 
 
-def rate_multiplier(lake_id, minutes, species_id, zone):
+def active_lake_day(lake_id, minutes, zone):
+    """The Lake Day boosting bites in `zone` of `lake_id` at game minute `minutes`, or None.
+
+    A Lake Day boosts on its weekday, in its time band ('any' is all day) and, when it names
+    zones, only in those. `boosts` says which species it lifts. `species_rates` looks this up
+    once per hook rather than once per species, which keeps long offline catch-ups fast.
+    """
     special = lake_day(lake_id, minutes)
-    species = SPECIES_BY_ID.get(species_id)
     if special is None or (special.band != 'any' and special.band != band_of(hour_of_day(minutes))):
-        return 1.0
+        return None
     if special.zones and zone not in special.zones:
-        return 1.0
-    if special.species or special.foods:
-        if species_id not in special.species and (species is None or species.food not in special.foods):
-            return 1.0
-    return special.multiplier
+        return None
+    return special
+
+
+def boosts(special, species_id):
+    """Whether Lake Day `special` lifts `species_id`: any, unless it names species or foods."""
+    if not (special.species or special.foods):
+        return True
+    species = SPECIES_BY_ID.get(species_id)
+    return species_id in special.species or (species is not None and species.food in special.foods)
+
+
+def rate_multiplier(lake_id, minutes, species_id, zone):
+    """Bite-rate multiplier for one species in `zone`: the active Lake Day's, otherwise 1.0."""
+    special = active_lake_day(lake_id, minutes, zone)
+    return special.multiplier if special is not None and boosts(special, species_id) else 1.0
 
 
 def apply_rates(state, rates, zone):

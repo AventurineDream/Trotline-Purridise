@@ -1,4 +1,7 @@
-"""Optional routine, naps and positive comfort; no offline needs clock."""
+"""Optional routine, naps and positive comfort; no offline needs clock.
+
+Mode checks live here, including each mode's offline soak cap (`offline_soak_seconds`).
+"""
 
 from copy import deepcopy
 import math
@@ -12,6 +15,9 @@ NAP_MINUTES = 120
 RESTED_MINUTES = 360
 PROMPT_INTERVAL = 600.0
 SNOOZE_SECONDS = 1800.0
+# Real hours that set lines keep fishing while the game is closed (#140). Only the soak
+# is capped: hook spoilage keeps its own game-hour rule (data.SPOIL_HOURS).
+OFFLINE_SOAK_HOURS = {"cozy": 72, "old_salt": 36}
 MAX_MEAL_HOURS = max([24.0, *(dish.value for dish in DISHES.values()
                             if dish.effect == "glow_buoys")])
 DEFAULT_NEEDS = {
@@ -128,6 +134,20 @@ def tow_fee(v2, cash, boat_price):
         return 0.0
     available = math.floor(number(cash) * 100 + 1e-8) / 100
     return min(available, round(25 + .02 * number(boat_price), 2))
+
+
+def offline_soak_seconds(v2):
+    """Return the longest absence, in real seconds, that offline catch-up replays.
+
+    Args:
+        v2: The loaded save's v2 data. Its mode picks the cap; a missing or unknown mode
+            reads as Cozy, as `mode` does everywhere.
+
+    Returns:
+        72 real hours in Cozy or 36 in Old Salt, in seconds. At one game minute per real
+        second that replays 4,320 or 2,160 game hours. A shorter absence replays whole.
+    """
+    return OFFLINE_SOAK_HOURS[mode(v2)] * 3600
 
 
 def active_time(v2, seconds):
