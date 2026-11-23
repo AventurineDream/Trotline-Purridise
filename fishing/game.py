@@ -46,7 +46,7 @@ from .bot import summon as summon_bot
 from .bot import tick as tick_bot
 from .sim import Catch, State
 from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
-from .ui import (UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, CREDITS_HOLD_S, check_rows,
+from .ui import (UI, UIState, SHOP_TABS, HELP_SPREADS, GAME_TITLE, CREDITS_HOLD_S, check_rows,
                  comfort_controls, pause_options, shop_rows, title_options,
                  SETTINGS_ROW_COUNT, SETTINGS_KEYBOARD_CONTROLS_ROW)
 from .world import World
@@ -1024,7 +1024,8 @@ class Session:
 
     def _open_help(self, origin: str):
         self.ui.help_from = origin
-        self.ui.help_page = 0
+        self.ui.help_spread = 0
+        self.ui.help_spreads = 0  # counted again by the next draw, at this window's text size
         self.ui.mode = "help"
 
     def _open_set(self):
@@ -2073,15 +2074,20 @@ class Session:
         self.save()
 
     def _help_keys(self, keys, dt):
+        """Esc or H closes the Field Guide; left or up turns back a spread, right or down on.
+
+        Turns wrap around, by the spread count the guide last drew, which follows the window
+        and text size (HELP_SPREADS before the first draw)."""
         if "esc" in keys.pressed or "h" in keys.pressed:
             self.ui.mode = self.ui.help_from
             return
+        spreads = self.ui.help_spreads or HELP_SPREADS
         left, up = keys.tap("left", dt), keys.tap("up", dt)
         right, down = keys.tap("right", dt), keys.tap("down", dt)
         if left or up:
-            self.ui.help_page = (self.ui.help_page - 1) % HELP_N
+            self.ui.help_spread = (self.ui.help_spread - 1) % spreads
         if right or down:
-            self.ui.help_page = (self.ui.help_page + 1) % HELP_N
+            self.ui.help_spread = (self.ui.help_spread + 1) % spreads
 
 
 def _throttle(keys, mode: str) -> float:

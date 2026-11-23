@@ -6,12 +6,12 @@ from unittest.mock import patch
 
 import numpy as np
 
-from . import uiscreens
+from . import fieldguide, uiscreens
 from .platform import Text, find_font
 from .sim import State
 from .ui import (
-    DIM, GOLD, SPECIES, UI, UIState, _GAMEPAD_HELP_CONTROLS, _help_title,
-    _prompt_for_device, _toast_for_device, help_pages, shop_rows,
+    DIM, GOLD, SPECIES, UI, UIState, _prompt_for_device, _toast_for_device, help_topics,
+    shop_rows,
 )
 from .world import World
 
@@ -467,60 +467,56 @@ class GuideLayoutChecks(unittest.TestCase):
         self.assertTrue(all(record[1] >= found[1] for record in observations))
 
     def _check_pages(self):
-        # The guide needs no world or save. Keep the actual font rasterizer and
-        # panel/text draws, while recording their geometry before any clipping.
+        # The guide needs no world or save. Keep the actual font rasterizer and text draws,
+        # while recording their geometry before any clipping, and turn through every spread.
         ui = UI.__new__(UI)
         ui.text, ui._cw, ui._ch = self.text, {}, {}
-        text_draw, panel_draw = ui._text, ui._panel
-        records, panels = [], []
+        text_draw = ui._text
+        records = []
 
         def text(frame, label, x, y, size, color, shadow=True, family='mono'):
             image = self.text.render(label, size, color, family)
-            records.append((label, x, y, image.shape[1], image.shape[0], size))
+            records.append((label, x, y, image.shape[1], image.shape[0], size, color))
             return text_draw(frame, label, x, y, size, color, shadow, family)
 
-        def panel(frame, x, y, width, height, alpha):
-            panels.append((x, y, width, height))
-            panel_draw(frame, x, y, width, height, alpha)
-
-        ui._text, ui._panel = text, panel
+        ui._text = text
         for width, height in ((480, 270), (640, 360), (960, 540), (1280, 720), (1920, 1080)):
             for device in ("keyboard", "gamepad"):
-                for page, (title, original_lines) in enumerate(help_pages()):
-                    lines = original_lines
-                    if device == "gamepad":
-                        lines = tuple(_GAMEPAD_HELP_CONTROLS.get(line, line)
-                                      for line in original_lines)
-                    with self.subTest(width=width, height=height, page=page, device=device):
+                topics = help_topics(None, device)
+                panel = UIState(mode='help', input_device=device)
+                ink = []
+                while True:
+                    with self.subTest(width=width, height=height, device=device,
+                                      spread=panel.help_spread):
                         records.clear()
-                        panels.clear()
                         frame = np.zeros((height, width, 3), np.uint8)
-                        ui._help(frame, UIState(help_page=page, input_device=device))
-                        self.assertEqual(len(panels), 1)
-                        px, py, pw, ph = panels[0]
-                        self.assertGreaterEqual(px, 0)
-                        self.assertGreaterEqual(py, 0)
-                        self.assertLessEqual(px + pw, width)
-                        self.assertLessEqual(py + ph, height)
-                        # A table row is a tuple of cells; each cell is drawn as its own label.
-                        cells = [cell for line in lines
-                                 for cell in (line if isinstance(line, tuple) else (line,)) if cell]
-                        self.assertEqual([r[0] for r in records[2:-1]], cells)
-                        self.assertEqual(records[0][0], _help_title(title))
-                        self.assertIn('Esc closes' if device == 'keyboard' else 'B closes', records[-1][0])
-                        for label, x, y, tw, th, size in records:
+                        ui._help(frame, panel)
+                        ink += [label for label, *_rest, color in records
+                                if color == fieldguide.INK]
+                        closes = 'Esc closes' if device == 'keyboard' else 'B closes'
+                        self.assertTrue(any(closes in r[0] for r in records))
+                        for label, x, y, tw, th, size, _color in records:
                             self.assertGreaterEqual(size, 12, label)
-                            self.assertGreaterEqual(x, px, label)
-                            self.assertGreaterEqual(y, py, label)
-                            self.assertLessEqual(x + tw, px + pw, label)
-                            self.assertLessEqual(y + th, py + ph, label)
+                            self.assertGreaterEqual(x, 0, label)
+                            self.assertGreaterEqual(y, 0, label)
+                            self.assertLessEqual(x + tw, width, label)
+                            self.assertLessEqual(y + th, height, label)
                         for i, first in enumerate(records):
                             for second in records[i+1:]:
-                                _, x, y, tw, th, _ = first
-                                _, xx, yy, ww, hh, _ = second
+                                _, x, y, tw, th, *_ = first
+                                _, xx, yy, ww, hh, *_ = second
                                 overlap = x < xx + ww and xx < x + tw and y < yy + hh and yy < y + th
                                 self.assertFalse(overlap, f'{first[0]!r} overlaps {second[0]!r}')
                         self.assertGreater(np.count_nonzero(frame), 0)
+                    panel.help_spread += 1
+                    # help_spreads stays 0 if a draw raised inside subTest, so stop then too.
+                    if panel.help_spread >= max(1, panel.help_spreads):
+                        break
+                # Every authored word is drawn once, in order: table rows are tuples of cells.
+                words = [word for _title, lines in topics for line in lines
+                         for cell in (line if isinstance(line, tuple) else (line,)) if cell
+                         for word in cell.split()]
+                self.assertEqual([word for label in ink for word in label.split()], words)
 
 
 class PanelFitChecks(unittest.TestCase):

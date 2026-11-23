@@ -42,7 +42,8 @@ BACKDROP_MINUTE = 1440 + 4 * 60  # day one, 10:00
 SEED = 723
 # The screens whose six versions the PR review looks at side by side.
 KEY_SCREENS = ("play", "map", "dialogue", "shop Bait", "haul card", "check", "kitchen menu",
-               "journal Fish", "well with a fish", "pause", "settings", "your skipper", "help page 24")
+               "journal Fish", "well with a fish", "pause", "settings", "your skipper",
+               "help opening spread", "help final spread")
 
 
 def _backdrop(software: bool) -> np.ndarray:

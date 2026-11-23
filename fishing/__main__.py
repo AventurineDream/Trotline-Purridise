@@ -496,8 +496,8 @@ def _play(world: World):
         if session.ui.mode != "help":
             raise AssertionError("help")
         session.tick(Keys(pressed={"right"}), 0.05)
-        if session.ui.help_page != 1:
-            raise AssertionError("help page")
+        if session.ui.help_spread != 1:
+            raise AssertionError("help spread")
         session.tick(Keys(pressed={"esc"}), 0.05)
         if session.ui.mode != "play":
             raise AssertionError("help did not close")

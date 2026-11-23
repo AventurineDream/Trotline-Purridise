@@ -423,7 +423,6 @@ def coverage_checks(*, software=False) -> dict:
                 ui = UI(text, world)
                 panels = [UIState(mode="shop", has_save=True, shop_tab=tab, shop_i=0)
                           for tab in range(len(SHOP_TABS))]
-                panels += [UIState(mode="help", has_save=True, help_page=page) for page in range(HELP_N)]
                 panels += [UIState(mode="journal", has_save=True, journal_page=page, journal_i=0,
                                    book_entry_i=0, journal_quest_i=0) for page in range(len(BOOK_TABS))]
                 for panel in panels:
@@ -433,10 +432,21 @@ def coverage_checks(*, software=False) -> dict:
                         raise AssertionError(f"{panel.mode} frame has shape {frame.shape}")
                     if panel.mode == "shop":
                         counts["shop_tabs"] += 1
-                    elif panel.mode == "help":
-                        counts["help_pages"] += 1
                     else:
                         counts["book_tabs"] += 1
+                # The Field Guide, spread by spread until it wraps, so every help page is drawn.
+                guide = UIState(mode="help", has_save=True)
+                shown = set()
+                while True:
+                    frame = resize_rgb(low, 1440, 810)
+                    ui.draw(frame, state, guide)
+                    if frame.shape != (810, 1440, 3):
+                        raise AssertionError(f"help frame has shape {frame.shape}")
+                    shown.update(guide.help_shown)
+                    guide.help_spread += 1
+                    if guide.help_spread >= guide.help_spreads:
+                        break
+                counts["help_pages"] = len(shown)
                 # The legendary encounter's haul scene, in its encounter phase.
                 scene_state = _staged(world, LEGENDARY_SCENE)
                 scene_ui = UI(text, world)
@@ -645,7 +655,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             visit = mode_frames[panel.mode]
             mode_frames[panel.mode] += 1
             panel.shop_tab = visit%len(SHOP_TABS)
-            panel.help_page = visit%HELP_N
+            panel.help_spread = visit  # the guide wraps it into its spread count
             legacy_pages = len(SPECIES) + len(QUEST_IDS)
             journal_visit = visit % (legacy_pages + 4)
             panel.journal_page = ((1, 2, 4, 5)[journal_visit - legacy_pages]
@@ -681,7 +691,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
             if panel.mode=="shop":
                 coverage["shop_tabs"].add(panel.shop_tab)
             elif panel.mode=="help":
-                coverage["help_pages"].add(panel.help_page)
+                coverage["help_pages"].update(panel.help_shown)
             elif panel.mode=="journal":
                 coverage["book_tabs"].add(panel.journal_page)
                 if panel.journal_page in (0, 3):

@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 
 from .savepaths import SDL_APPLICATION, SDL_ORGANIZATION
-from .ui import GAME_TITLE, _HELP, _help_title
+from .ui import FIELD_GUIDE_TITLE, GAME_TITLE
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +24,8 @@ class TitleBrandingChecks(unittest.TestCase):
         # Beneath the title, startup shows a varied quip for the opening lake (issue #138).
         self.assertIn("_loading_quip(ui, loading, quips.pick(world.id)", game_source)
         self.assertNotIn("Opening the lake...", game_source)
-        self.assertTrue(all(GAME_TITLE in _help_title(topic) for topic, _ in _HELP))
+        # The Field Guide's cover carries the name above its pages (#139).
+        self.assertIn(GAME_TITLE, FIELD_GUIDE_TITLE)
 
     def test_ui_strings_only_use_little_briar_as_a_lake_name(self):
         ui_paths = (
