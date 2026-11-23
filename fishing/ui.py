@@ -57,7 +57,7 @@ from .boat import (
 from .lakes import LAKES, LAKE_ZONE_NAMES, travel_lock_reason
 from .data import weight_string
 from .weather import wind_at
-from . import comfort, detail, skipperlook
+from . import comfort, detail, fieldguide, skipperlook
 
 INK = (238, 233, 216)
 DIM = (169, 183, 175)
@@ -469,7 +469,11 @@ class UIState:
     capturing_key: bool = False
     caption: str = ""
     caption_timer: float = 0.0
-    help_page: int = 0
+    # The Field Guide (fieldguide, #139): the open spread. Each draw records the spread
+    # count (0 until the guide is first drawn) and the topics on the open pages.
+    help_spread: int = 0
+    help_spreads: int = 0
+    help_shown: tuple = ()
     help_from: str = "play"
     title_i: int = 0
     confirm_new: bool = False
@@ -752,6 +756,7 @@ class UI:
         self._title_alpha_cache_limit = layer_bytes - self._map_image_cache_limit
         self._text_scale = 1.0
         self._dyslexia_font = False
+        self._guide_layouts: OrderedDict = OrderedDict()  # the Field Guide's, newest last
         self.fish_card_renderer = None
 
     def close(self) -> None:
@@ -762,6 +767,7 @@ class UI:
         self._title_alpha_cache_bytes = 0
         self._cw.clear()
         self._ch.clear()
+        self._guide_layouts.clear()
 
     def cell(self, size: int) -> tuple[int, int]:
         actual = self._actual_size(size)
@@ -1324,7 +1330,12 @@ class UI:
         if x0 >= x1 or y0 >= y1:
             return
         if alpha >= 1.0:
-            dst[y0:y1,x0:x1] = rgb
+            # One row of the colour, copied down: numpy copies whole rows many times faster
+            # than it spreads a 3-tuple over every pixel, which matters for the page-sized
+            # fills of the Field Guide's paper.
+            region = dst[y0:y1, x0:x1]
+            region[0] = rgb
+            region[1:] = region[0]
             return
         # Weights out of 256 so the divide is a shift; rounding stays within one level.
         weight = min(256, max(0, int(alpha * 256 + 0.5)))
@@ -2812,10 +2823,19 @@ class UI:
             ui, f"W/S choose  ·  A/D change  ·  Enter picks  ·  Q/E turn  ·  Done saves  ·  {back[0]}",
             f"D-pad choose  ·  D-pad change  ·  A picks  ·  LB/RB turn  ·  Done saves  ·  {back[1]}")
 
-    def _caption(self, frame, state, ui: UIState):
+    @staticmethod
+    def _shown_caption(state, ui: UIState) -> str:
+        """The sound caption to show this frame: `ui.caption`, or "" while none is timed to
+        show or the player has turned captions off in `state`'s settings (state may be None)."""
         v2 = getattr(state, "v2", {})
         settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
-        if not settings.get("captions", True) or ui.caption_timer <= 0 or not ui.caption:
+        if not settings.get("captions", True) or ui.caption_timer <= 0:
+            return ""
+        return ui.caption
+
+    def _caption(self, frame, state, ui: UIState):
+        # The Field Guide covers the window, so `_help` draws the caption on its cover instead.
+        if ui.mode == "help" or not self._shown_caption(state, ui):
             return
         h, w = frame.shape[:2]
         if ui.mode in {"kitchen", "cook_confirm", "cooking"} or (ui.mode == "shop" and ui.shop_tab in (6, 7)):
@@ -2841,86 +2861,16 @@ class UI:
         self._center(frame, self._trim(ui.caption, size, pw - 24, "sans"), w / 2,
                      y + 8, size, INK, family="sans")
 
-    def _table_columns(self, lines, size):
-        """Measured column offsets for the table rows of a help page (V1-41).
-
-        A table row is a tuple of cell strings. Column c is as wide as its widest
-        cell on the page, measured at `size`, and columns sit `_TABLE_GAP_EMS` em
-        apart. Returns (offsets, width). A page without table rows gives ((), 0).
-        """
-        rows = [line for line in lines if isinstance(line, tuple)]
-        columns = max((len(row) for row in rows), default=0)
-        widths = [0] * columns
-        for row in rows:
-            for index, cell in enumerate(row):
-                if cell:
-                    widths[index] = max(widths[index], self._measure(cell, size, "mono"))
-        gap = _TABLE_GAP_EMS * self.cell(size)[0]
-        offsets, x = [], 0
-        for width in widths:
-            offsets.append(x)
-            x += width + gap
-        return tuple(offsets), max(0, x - gap)
-
     def _help(self, frame, ui: UIState, state=None):
-        pages = help_pages(_saved_bindings(state))
-        ui.help_page %= len(pages)
-        title, lines = pages[ui.help_page]
-        if ui.input_device == "gamepad":
-            lines = tuple(_GAMEPAD_HELP_CONTROLS.get(line, line) for line in lines)
-        title = _help_title(title)
-        h, w = frame.shape[:2]
-        head = self._size(frame, "head")
-        body = self._size(frame, "small")
-        if h < 300:
-            head = body
-        m = 12 if w < 800 else 18
-        page = f"{ui.help_page + 1} / {len(pages)}"
-        foot = self._controls(ui, "WASD or arrows turn pages    Esc closes",
+        """Draw the Field Guide, the help notebook, open at the reader's spread (#139).
+
+        `state` supplies the saved key bindings for the keyboard tables and the captions
+        setting. `fieldguide` lays out the pages and draws them, a sound's caption in the
+        controls hint's place below them, and records the spread count in `ui`."""
+        hint = self._controls(ui, "WASD or arrows turn pages    Esc closes",
                               "D-pad / stick turn pages    B closes")
-        page_w = self._measure(page, body, "mono")
-        # Table rows are sized column by column, exactly as they are drawn below.
-        offsets, table_w = self._table_columns(lines, body)
-        plain = [line for line in (*lines, foot) if isinstance(line, str) and line]
-        content_w = max([self._measure(line, body, "mono") for line in plain] + [table_w])
-        content_w = max(content_w, self._measure(title, head, "mono") + page_w + 16)
-        pw = min(w - 16, max(int(w * 0.70), content_w + m * 2))
-        # Fallback fonts may give descenders a taller surface than "M".
-        # Space rows using the actual authored strings on this machine.
-        ch = max(self._render(text, body, INK).shape[0]
-                 for line in (*lines, foot) for text in _row_cells(line) if text)
-        hh = self._render(title, head, INK).shape[0]
-        header = 2 if h < 300 else 4 if h < 400 else 14
-        top = header + hh + (2 if h < 300 else 4 if h < 400 else 10)
-        bottom = 2 if h < 300 else 6 if h < 400 else 12
-        foot_gap = 2 if h < 300 else 4 if h < 400 else 8
-        vertical_margin = 4 if h < 300 else 16
-        available = h - vertical_margin - top - foot_gap - ch - bottom
-        # Expand the sheet before reducing spacing. Even at 480x270 the
-        # authored text keeps its readable 12px font; only blank gaps collapse.
-        gap = max(0, min(3, (available - len(lines) * ch) // len(lines)))
-        blank_count = sum(_row_blank(line) for line in lines)
-        blank_h = ch + gap
-        if blank_count:
-            blank_h = max(0, min(blank_h,
-                (available - (len(lines) - blank_count) * (ch + gap)) // blank_count))
-        row_heights = [blank_h if _row_blank(line) else ch + gap for line in lines]
-        ph = min(h - vertical_margin, max(int(h * 0.74), top + sum(row_heights) + foot_gap + ch + bottom))
-        x, y = (w - pw) // 2, (h - ph) // 2
-        self._panel(frame, x, y, pw, ph, 0.92)
-        self._text(frame, title, x + m, y + header, head, INK)
-        self._text(frame, page, x + pw - m - page_w,
-                   y + header + (hh - ch) // 2, body, GOLD, shadow=False)
-        row_y = y + top
-        for line, row_h in zip(lines, row_heights):
-            if isinstance(line, tuple):
-                for offset, cell in zip(offsets, line):
-                    if cell:
-                        self._text(frame, cell, x + m + offset, row_y, body, INK, shadow=False)
-            elif line:
-                self._text(frame, line, x + m, row_y, body, INK, shadow=False)
-            row_y += row_h
-        self._text(frame, foot, x + m, y + ph - ch - bottom, body, DIM, shadow=False)
+        fieldguide.draw(self, frame, ui, help_topics(state, ui.input_device),
+                        FIELD_GUIDE_TITLE, hint, self._shown_caption(state, ui))
 
 
 _HELP = (
@@ -2935,7 +2885,7 @@ _HELP = (
         "Tab chart    J journal    I livewell",
         "C hails a paw-wave NPC: within 20 m, below 3 knots",
         "T changes time: 1x 3x 6x 12x, while you are still",
-        "B sends Bot ahead, or out to a line. B calls him back.",
+        "B sends Bot ahead, or out to a line.  B calls him back.",
         "H help    M mute    Esc pause",
         "",
         "One real second is one minute on the lake at 1x.",
@@ -3023,21 +2973,21 @@ _HELP = (
         "Pick up your lines first. Money, catches, gear,",
         "boats and the journal all come with you.",
         "",
-        "Flathead has snow mist, Crater caldera fog and",
-        "Nebula aurora. Reeds need the Reed Anchor.",
-        "Nebula currents drift lines unless you own the",
-        "Zero-G Winch.",
+        "Flathead has snow mist, Crater caldera fog",
+        "and Nebula aurora. Reeds need the Reed Anchor.",
+        "Nebula currents drift lines unless you own",
+        "the Zero-G Winch.",
     )),
     ("THE BOOK", (
         "J opens the book. A/D changes tabs, W/S chooses.",
         "Enter opens a fish or turns a page. J closes it.",
         "Tabs: Fish, Book, Ripples & Keepsakes, Story,",
         "Watch and Week.",
-        "Stages: Rumor, Identified (1 catch), Bait known",
-        "(3), Verified (5), Mastered (10). Each one toasts.",
+        "Stages: Rumor, Identified (1 catch), Bait known (3),",
+        "Verified (5), Mastered (10). Each one toasts.",
         "What we heard stays put. What we found grows.",
-        "The title changes: Fishypedia, The Book of Five",
-        "Waters, then Pescapedia when all 144 are verified.",
+        "The title changes: Fishypedia, The Book of Five Waters,",
+        "then Pescapedia when all 144 are verified.",
         "Mouse: click tabs, species, controls and week rows.",
         "The wheel scrolls the book. Kitchen lists take clicks.",
     )),
@@ -3067,8 +3017,8 @@ _HELP = (
         "In a chat, W/S or the arrows pick a reply.",
         "Numbers 1 to 5 pick one too. Enter or C goes on.",
         "Esc closes a chat, unless a story scene is playing.",
-        "Each cat starts as a Stranger, becomes an",
-        "Acquaintance after their first quest, and a Friend",
+        "Each cat starts as a Stranger, becomes",
+        "an Acquaintance after their first quest, and a Friend",
         "after the second. Greetings change at each step.",
         "Friends write once their quests are all done.",
         "Postmaster Pounce: one letter a day, 8 AM to 4 PM.",
@@ -3117,8 +3067,8 @@ _HELP = (
         "New Game asks for your pace. Settings change it.",
         "Cozy, the default, has no penalties at all.",
         "Old Salt has a light routine. Nothing is ever lost.",
-        "Energy: 16 awake hours is Drowsy, and hauls are",
-        "25% slower. After 20 hours a safe catnap runs.",
+        "Energy: 16 awake hours is Drowsy, and hauls",
+        "are 25% slower. After 20 hours a safe catnap runs.",
         "Hunger: 24 hours without a meal is Peckish.",
         "Boats run 20% slower until you eat.",
         "Any dish or Kibble Tin counts as a meal.",
@@ -3150,8 +3100,8 @@ _HELP = (
         "and Astral (5). Tools need their shell earned.",
         "Reed Anchor, $120: sets lines in reeds.",
         "Wave Chime, $180: G near a line, while slow.",
-        "Thermocline Scanner, $260: the cold layer on",
-        "Flathead and Crater, shown in the HUD.",
+        "Thermocline Scanner, $260: the cold layer",
+        "on Flathead and Crater, shown in the HUD.",
         "Zero-G Winch, $400: holds lines in Nebula currents.",
         "Sonar Grid, $150: chart overlay. Needs a depth finder.",
     )),
@@ -3214,14 +3164,14 @@ _GAMEPAD_HELP_CONTROLS = {
         "RB hails a paw-wave NPC: within 20 m, below 3 knots",
     "T changes time: 1x 3x 6x 12x, while you are still":
         "T changes time (keyboard): 1x 3x 6x 12x while still",
-    "B sends Bot ahead, or out to a line. B calls him back.":
-        "Tap Y sends Bot ahead or to a line; tap again to recall",
+    "B sends Bot ahead, or out to a line.  B calls him back.":
+        "Tap Y sends Bot ahead or to a line.  Tap Y again to recall.",
     "H help    M mute    Esc pause":
         "H help / M mute (keyboard)    Start pauses",
     "Nose into the slip and press E.":
         "Nose into the slip and press A.",
     "At the landing: A/D tabs, W/S rows, Enter selects.":
-        "At landing: D-pad tabs / rows, A selects, B returns",
+        "At landing: D-pad tabs / rows, A selects, B returns.",
     "Q raises or lowers the daysailer's sail.":
         "Q raises or lowers the daysailer's sail (keyboard).",
     "A/D steers. Sail across the wind; tack to go upwind.":
@@ -3297,7 +3247,7 @@ _GAMEPAD_HELP_CONTROLS = {
     "R tows, B sends Bot. Tab or Esc closes the chart.":
         "Back or B closes the chart. R tows (keyboard).",
     "Keyboard controls: Enter rebinds. Backspace or Esc":
-        "Keyboard controls: rebinding (keyboard).",
+        "Keyboard controls: Enter rebinds (keyboard). Backspace or Esc",
 }
 
 _GAMEPAD_TUTORIAL_PROMPTS = {
@@ -3326,18 +3276,6 @@ _GAMEPAD_TUTORIAL_TOASTS = {
 # The keyboard tables name each player action with the key bound to it, so a
 # rebound key shows here. Each row holds up to two actions. Every page's line
 # count is fixed, so HELP_N does not depend on the bindings.
-
-# Space between table columns, in em (the body font's "M" width).
-_TABLE_GAP_EMS = 2
-
-
-def _row_cells(line):
-    """A help line as its cells: a table row is a tuple, anything else one string."""
-    return line if isinstance(line, tuple) else (line,)
-
-
-def _row_blank(line):
-    return not any(_row_cells(line))
 
 _KEY_GLYPHS = {
     "shift": "Shift", "rshift": "R Shift", "return": "Enter", "esc": "Esc",
@@ -3441,6 +3379,23 @@ def _saved_bindings(state):
     return settings.get("key_bindings") if isinstance(settings, dict) else None
 
 
+def help_topics(state, input_device: str) -> tuple:
+    """The help pages as the Field Guide shows them to this player.
+
+    Args:
+        state: the game state whose saved key bindings fill the keyboard tables, or None.
+        input_device: "gamepad" puts each authored line in its gamepad wording.
+
+    Returns:
+        (title, lines) per help page, in `help_pages` order.
+    """
+    pages = help_pages(_saved_bindings(state))
+    if input_device != "gamepad":
+        return pages
+    return tuple((title, tuple(_GAMEPAD_HELP_CONTROLS.get(line, line) for line in lines))
+                 for title, lines in pages)
+
+
 def _prompt_for_device(prompt: str | None, input_device: str) -> str | None:
     if prompt and input_device == "gamepad":
         if prompt.startswith("E  "):
@@ -3455,11 +3410,11 @@ def _toast_for_device(text: str, input_device: str) -> str:
     return text
 
 
-def _help_title(topic: str) -> str:
-    return f"{topic}  ·  {GAME_TITLE}"
-
-
 HELP_N = len(help_pages())
+# Spreads in the Field Guide when every topic fits one page. The guide counts its real
+# spreads when it is drawn (UIState.help_spreads); page turns fall back on this before then.
+HELP_SPREADS = (HELP_N + 1) // 2
+FIELD_GUIDE_TITLE = f"{GAME_TITLE}  ·  Field Guide"
 
 
 def _clamp(index: int, count: int) -> int:

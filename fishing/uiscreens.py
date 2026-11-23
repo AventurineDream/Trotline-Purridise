@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from . import comfort, skipperlook
 from .data import BAIT_RECIPES, DISHES, PANTRY
 from .sim import Catch, Hook, SetLine, State
-from .ui import HELP_N, SHOP_TABS, SPECIES, UIState
+from .ui import HELP_SPREADS, SHOP_TABS, SPECIES, UIState
 from .world import World
 
 LARGEST_TEXT = 2
@@ -189,6 +189,9 @@ def screens(ui, world, dyslexia_font, text_size=LARGEST_TEXT):
                                              skipper_look=skipper_look("Mo"), skipper_i=0, skipper_typing=True))
     add("your skipper new morning", base, UIState(mode="skipper", skipper_origin="new",
                                                   skipper_look=skipper_look()))
-    for page in range(HELP_N):
-        add(f"help page {page + 1}", base, UIState(mode="help", help_page=page))
+    # The Field Guide notebook (#139): its opening spread, one from the middle, and the last,
+    # which help_spread -1 wraps to however many spreads the text size makes.
+    add("help opening spread", base, UIState(mode="help"))
+    add("help middle spread", base, UIState(mode="help", help_spread=HELP_SPREADS // 2))
+    add("help final spread", base, UIState(mode="help", help_spread=-1))
     return screens

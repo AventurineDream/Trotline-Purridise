@@ -2154,21 +2154,54 @@ V1-40 (#68) makes the offline release (02 §20). The package runs without Python
 
 V1-41 (#69) writes help for every system in 02 and adds glyph tables built from the player's own bindings (02 §16–§17).
 
-**Pages.** The help has 24 pages, and `HELP_N` is their count. The first five keep indices 0 to 4 (ON THE WATER, TROT LINES, THE LANDING, BOATS AND OTHER WATERS, BAIT SECTIONS), which the smoke test and the field-guide checks rely on. `FIRST HOUR` (5) follows, then fourteen system pages (6–19): lakes and travel, the book, the chart, shinies and trophies, cats and hailing, quests and story, the week and cookout, kitchen and galley, cozy and old salt, catnaps and rested, Bot and his tools, legendaries, settings and captions, and where saves live. The last four pages (20–23) are generated: two `KEYBOARD` pages and two `GAMEPAD` pages.
+**Pages.** The help has 24 pages, and `HELP_N` is their count. Since #139 each is a topic of the Field Guide notebook, which may run to more than one notebook page (below). The first five keep indices 0 to 4 (ON THE WATER, TROT LINES, THE LANDING, BOATS AND OTHER WATERS, BAIT SECTIONS). `FIRST HOUR` (5) follows, then fourteen system pages (6–19): lakes and travel, the book, the chart, shinies and trophies, cats and hailing, quests and story, the week and cookout, kitchen and galley, cozy and old salt, catnaps and rested, Bot and his tools, legendaries, settings and captions, and where saves live. The last four pages (20–23) are generated: two `KEYBOARD` pages and two `GAMEPAD` pages.
 
 **Glyph tables** (`ui.help_pages(saved_bindings)`). The keyboard pages read `normalize_key_bindings(settings["key_bindings"])` at draw time, so a rebound key appears on its row. Each row holds two actions. The gamepad pages are built from `BUTTON_ACTIONS` plus the Y tap and hold. The page count does not depend on the bindings, so `HELP_N` is fixed.
 
 **Gamepad wording.** Every authored help line that names a key has an entry in `_GAMEPAD_HELP_CONTROLS`. The entry names a pad control or says `(keyboard)`. Controls with no pad button say so on the gamepad pages: the book, livewell, time scale, sail, tow, mute, help and new morning. Anchoring with Space is keyboard only, as before.
 
 **Tests** (`test_help.py`, and `test_ui_layout.py` widened to match):
-- every page fits at all three `TEXT_SIZE_SCALES`, at the five layout resolutions, on both devices, with the default keys and with `catnap` rebound to X, measured with the game's own text rendering;
+- every page fits at all three `TEXT_SIZE_SCALES`, at the five layout resolutions, on both devices, with the default keys and with `catnap` rebound to X, measured with the game's own text rendering (since #139, every notebook spread);
 - every player action in `ACTION_SYMBOLS` (not menu navigation or the alias pairs) has a keyboard row showing its bound key;
 - rebinding `catnap` changes the keyboard page, including the page as drawn;
 - each system keyword appears on some help page;
 - each line that names a key has gamepad wording;
 - `HELP_N` is the same for every set of bindings.
 
-`test_ui_layout.py` now iterates `help_pages()` and `range(HELP_N)` where it used `_HELP` and a fixed count, so its layout checks cover the generated pages too.
+`test_ui_layout.py` iterates the help topics, where it used `_HELP` and a fixed count, so its layout checks cover the generated pages too. Since #139 it turns through every notebook spread.
+
+## Implemented Field Guide notebook (#139)
+
+#139 redraws the H help as a lined notebook open at two facing pages (`fieldguide.py`). `UI._help` takes the topics from `ui.help_topics(state, device)`: the 24 `help_pages`, in gamepad wording on a pad. `fieldguide.draw` lays them out and draws them.
+
+**Flow.** Each topic starts on a fresh page, with its title at the head.
+- Prose rewraps to the page. The help was written in lines for one fixed panel, so a line that ends in a comma or semicolon, or is followed by one starting in lower case, joins the next. A line that ends in neither a comma nor a semicolon and is followed by one that starts with a capital, a digit or a bracket stands alone, as each of the ON THE WATER commands does. Elsewhere the authored lines break a sentence only where that rule joins it again. A wrapped paragraph's later rows hang two em in, so only its first row starts at the margin.
+- A run of two or more spaces separates the commands on one line ("F sets a trotline     E checks a line or the landing"), so a line with two commands needs one ("B sends Bot ahead, or out to a line.  B calls him back."). Commands share a row, gap kept, only when the whole of each fits; otherwise a command starts a row of its own at the margin, so a key never ends a row while its action starts the next.
+- Tables keep measured columns. A keyboard table too wide for four columns stacks each row's two pairs. On a narrow page a gamepad description goes under its control, indented.
+- A topic too long for one page runs on to the next. Its rows are shared evenly between its pages, and each page after the first says "continued": at the end of the title's line when it has room, and otherwise on the page's first ruled row, which pagination keeps for it.
+- Nothing is clipped or drawn under the 12 px floor, so the page count follows the window, the text size and the face the fonts resolve to. Measured with Liberation Mono, at standard text from 960x540 up it is 24 pages (12 spreads), or 25 where a long topic runs over, as BOATS AND OTHER WATERS does on a pad at 1440x810; at 480x270 with the largest text it is about 80. With DejaVu Sans Mono, the face CI uses, 480x270 with the largest text gives about 105.
+- Layouts are measured with the game's own text rendering and cached on the UI (`_guide_layouts`, four kept).
+
+**Spreads.** Pages pair into spreads. An odd last page faces a blank ruled page that reads "End of the Field Guide". A page turn (WASD, arrows, D-pad or stick) moves a whole spread and wraps around. Each draw wraps `UIState.help_spread` into range and records two values. `help_spreads` is the spread count, which `Session._help_keys` wraps by; before the first draw it uses `HELP_SPREADS`, one page per topic. `help_shown` holds the topics on view. `HELP_N` stays the topic count.
+
+**Showing that more follow.**
+- The cover's top band names the guide (`FIELD_GUIDE_TITLE`) and the pages on view ("Pages 1–2 of 24").
+- Each page has its number at the inner foot, by the spine, and its cue at the outer foot, by the corner the page turns at, at least two em from the number. So each cue's chevron points at that corner, never at the number. "Turn the page ›" is on the right page while pages remain, "Back to page 1 ›" on the last spread, and "‹ Turn back" on the left page after the first spread.
+- The right page's corner is turned up while the guide goes on, and the left page's once there are pages behind.
+- The edges of the other pages show beside the spread, more on the side with more pages.
+- A progress track under the right page has a segment per spread, with the open one bright. It takes the room the controls hint, or a caption in its place, leaves, and is left out when too little remains.
+
+**Captions.** The notebook covers the window, so `UI._caption` draws no caption panel in help mode, where it would cover the pages' feet and the cover below them. While a sound's caption shows, `fieldguide.draw` writes it on the cover below the pages in the controls hint's place, in paper colour and cut with ".." to the spread's width. The hint returns when the caption ends.
+
+**Colours.** Paper, ink, ochre and faded ink come from the book (`bookview`). On the paper, ink has 9.2:1 contrast, ochre 5.2:1 and faded ink 4.7:1. The cues use only ‹ ›, which every bundled face has. The notebook fills many rectangles each frame, so `UI._fill`'s opaque path now fills one row and copies it down, with the same pixels.
+
+**Checks:**
+- `test_help.py` covers every spread at all three text sizes, five resolutions, both devices, and default and rebound keys. Text stays inside its page and right of the margin, cover text stays on the cover, nothing overlaps or drops under 12 px, and every authored word is drawn once, in order. Titles, page numbers, the page indicator and the cues are checked too, with where each number and cue sits, and the "continued" marker on every page that carries a topic over.
+- It also checks that the glyph tables keep one x per column at 480x270 and 960x540, what the opening, last and odd last spreads show, and that page turns in a running `Session` wrap by the spread count the guide drew at the largest text.
+- At 480x270 with the smallest and the largest text, and at 1920x1080 with the largest, it checks that every paragraph outside the command list ends a sentence and sits at the margin only on its first row, and that the commands of a line stay whole on their rows. The command check also runs at 1280x720 with the largest text, at 640x360 with the smallest and standard text, and at 480x270 with the smallest and standard text in the dyslexia-friendly face, where a single-spaced command line once split from its key.
+- At every layout resolution, at the smallest and the largest text, it checks that a caption, whole or cut, takes the hint's place below the pages without overlapping any string or the progress track, and that the hint stays when captions are off.
+- `test_ui_layout.py` turns through every spread at five resolutions, with the proportional fallback face too.
+- `uiscreens` replaces its 24 help page screens with the opening, a middle and the last spread, for the layout checks and the `--ui-matrix` shots. The opening and last spreads are key screens. The `--selftest` coverage and the benchmark count the topics drawn (`help_shown`).
 
 ## Implemented second-pass graphics (V1-42)
 

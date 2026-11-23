@@ -14,7 +14,7 @@ from .bookview import BOOK_TABS
 from .game import Keys, Session
 from .platform import Input
 from .sim import Catch, HeldLine, State
-from .ui import HELP_N, check_rows, pause_options, shop_rows
+from .ui import HELP_SPREADS, check_rows, pause_options, shop_rows
 from .weather import celestial, lighting_at, weather_visuals
 
 
@@ -93,10 +93,10 @@ def interface_checks(world):
 
         session.ui.mode = "help"
         for key in ("d", "s", "a", "w", "right", "down", "left", "up"):
-            session.ui.help_page = 0
+            session.ui.help_spread = 0
             session.tick(Keys(pressed={key}), 0.05)
-            expected = 1 if key in {"d", "s", "right", "down"} else HELP_N-1
-            if session.ui.help_page != expected:
+            expected = 1 if key in {"d", "s", "right", "down"} else HELP_SPREADS-1
+            if session.ui.help_spread != expected:
                 raise AssertionError(f"{key} did not turn the field guide page")
 
         # Exercise the actual keyboard repeat implementation, rather than the
