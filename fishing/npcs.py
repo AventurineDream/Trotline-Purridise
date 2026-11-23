@@ -29,7 +29,7 @@ DAY_HOURS = (6.0, 20.0)
 NIGHT_HOURS = (20.0, 4.0)
 POUNCE_HOURS = (8.0, 16.0)
 THISTLE_HOURS = (10.0, 18.0)
-SATURDAY = 5  # day 0 is Monday (02 §5)
+SATURDAY = 6  # Sunday-first week; the absolute saved day count is unchanged (02 §5).
 TRAVELER_MOORINGS = {"pounce": "mail_mooring", "thistle": "tinker_mooring"}
 
 

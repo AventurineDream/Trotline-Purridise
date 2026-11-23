@@ -225,15 +225,16 @@ class NebulaSky(unittest.TestCase):
         self.assertNotIn("starlight", lighting_at(360, briar))
 
     def test_aurora_nights_and_the_meteor_shower_are_scheduled_and_read_only(self):
+        """Night effects use actual Wednesday/Saturday events and never mutate the save or RNG."""
         state = State.new(self.world, seed=4)
         before, rng = deepcopy(state.to_json()), state.rng.s
         self.assertEqual(calendar.weather_at(state, 900), "aurora")
         self.assertEqual(lighting_at(900, state)["aurora"], 1)
         self.assertEqual(lighting_at(360, state)["aurora"], 0)
         self.assertTrue(0 < lighting_at(835, state)["aurora"] < 1)
-        self.assertEqual(lighting_at(2*1440+1170, state)["meteors"], 1)
+        self.assertEqual(lighting_at(3*1440+1170, state)["meteors"], 1)
         self.assertEqual(lighting_at(1170, state)["meteors"], 0)
-        self.assertEqual(lighting_at(2*1440+360, state)["meteors"], 0)
+        self.assertEqual(lighting_at(3*1440+360, state)["meteors"], 0)
         self.assertEqual(state.to_json(), before)
         self.assertEqual(state.rng.s, rng)
 
@@ -260,6 +261,7 @@ class NebulaSky(unittest.TestCase):
             text.close()
 
     def test_software_bands_render_distinctly_without_rng_or_save_changes(self):
+        """All bands and the actual Wednesday Meteor Shower render without changing save or RNG."""
         from .software import SoftwareRenderer
         state = State.new(self.world, seed=4)
         state.x, state.z, state.yaw = -300, -160, .9
@@ -279,7 +281,7 @@ class NebulaSky(unittest.TestCase):
             state.anim, state.look = 16.5, .12
             state.game_minutes = 1170
             quiet = renderer.render(state).astype(np.int32)
-            state.game_minutes = 2*1440+1170
+            state.game_minutes = 3*1440+1170
             shower = renderer.render(state).astype(np.int32)
             self.assertGreater(int((np.abs(shower-quiet).sum(axis=2) > 90).sum()), 3)
             state.anim, state.look = 0, 0

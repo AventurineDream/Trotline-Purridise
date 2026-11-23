@@ -83,6 +83,7 @@ class CalderaChecks(unittest.TestCase):
         self.assertTrue(all(np.isfinite(face.pts).all() for face in marker))
 
     def test_thermal_steam_and_bubbles_are_bounded_reduced_motion_and_read_only(self):
+        """Thermal decoration stays bounded and read-only, including Friday's Fog Lift dawn."""
         world=self.world
         state=State.new(world,seed=4)
         before,rng=deepcopy(state.to_json()),state.rng.s
@@ -103,7 +104,7 @@ class CalderaChecks(unittest.TestCase):
         for x,z in world.environment['thermal']:
             self.assertLess(float(world.shore_sd(x,z)),-2)
             self.assertEqual(world.zone_at(x,z),'springs')
-        for minute in (0,360,960,4*1440+20):
+        for minute in (0,360,960,5*1440+20):
             state.game_minutes=minute
             for x,z in world.environment['thermal']:
                 state.x,state.z=x,z
@@ -112,15 +113,18 @@ class CalderaChecks(unittest.TestCase):
                 self.assertTrue(all(np.isfinite(face.pts).all() for face in faces))
 
     def test_fog_lifts_with_forecast_and_clear_night_hook_never_advances_story(self):
+        """Friday dawn fog lifts independently of the seed's unchanged clear-night reflection."""
         state=State.new(self.world,seed=4)
         before,rng=deepcopy(state.to_json()),state.rng.s
-        fog=lighting_at(4*1440+20,state)
-        clearing=lighting_at(4*1440+60,state)
-        clear=lighting_at(4*1440+100,state)
+        # At 06:30 the crossfade from Thursday's clear sky is fully fogged.
+        fog=lighting_at(5*1440+30,state)
+        clearing=lighting_at(5*1440+60,state)
+        clear=lighting_at(5*1440+100,state)
         self.assertGreater(fog['mist'],clearing['mist'])
         self.assertGreater(clearing['mist'],clear['mist'])
         self.assertEqual(clear['mist'],0)
         state.game_minutes=4*1440+960
+        self.assertIsNone(calendar.lake_day(state.lake_id,state.game_minutes))
         self.assertEqual(calendar.weather_at(state,state.game_minutes),'clear')
         self.assertEqual(reflection_strength(state,lighting_at(state.game_minutes,state)),1)
         self.assertEqual(reflection_strength(state,lighting_at(4*1440+360,state)),0)
@@ -147,6 +151,7 @@ class CalderaChecks(unittest.TestCase):
                 validate_content_v2(bad)
 
     def test_software_caldera_plays_fog_clear_night_and_springs_without_rng_changes(self):
+        """Friday fog and the deterministic clear night render without altering the save or RNG."""
         from .software import SoftwareRenderer
         state=State.new(self.world,seed=4)
         state.x,state.z,state.yaw=-230,40,1.828
@@ -154,7 +159,7 @@ class CalderaChecks(unittest.TestCase):
         renderer=SoftwareRenderer(self.world,160,90)
         frames=[]
         try:
-            for minute in (4*1440+20,4*1440+100,4*1440+360,4*1440+960):
+            for minute in (5*1440+20,5*1440+100,4*1440+360,4*1440+960):
                 state.game_minutes=minute
                 frame=renderer.render(state)
                 self.assertEqual(frame.shape,(90,160,3))
@@ -183,6 +188,7 @@ class CalderaChecks(unittest.TestCase):
             text.close()
 
     def test_native_reflection_depth_and_thermal_draws_reuse_graphics_resources(self):
+        """Friday fog and clear-night native passes reuse graphics resources and finite depths."""
         try:
             import moderngl
             ctx=moderngl.create_standalone_context(require=330,backend='egl')
@@ -195,7 +201,7 @@ class CalderaChecks(unittest.TestCase):
             state=State.new(self.world,seed=4)
             count=len(renderer._objects)
             depths=[]
-            for minute in (4*1440+20,4*1440+100,4*1440+360,4*1440+960):
+            for minute in (5*1440+20,5*1440+100,4*1440+360,4*1440+960):
                 state.game_minutes=minute
                 frame=renderer.render(state)
                 self.assertGreater(float(frame.std()),5)

@@ -42,10 +42,11 @@ class NPCChecks(unittest.TestCase):
         return active_npcs(self.state, self.worlds[lake], self.content)
 
     def test_day_night_and_dawn_boundaries(self):
+        """Normal daytime coverage excludes Sunday's cookout window; dawn/night stay unchanged."""
         # The clock starts at 06:00: 840 = 20:00, 1320 = 04:00, 1440 = 06:00 next day.
         seed = self.state.narrative.schedule_seed
         day0 = list(day_encounters(seed, 'briar', 0))
-        for minute, expected in ((0, day0), (839, day0), (840, ['master_cinder']), (1319, ['master_cinder']),
+        for minute, expected in ((0, day0), (659, day0), (840, ['master_cinder']), (1319, ['master_cinder']),
                                  (1320, []), (1439, []), (1440, list(day_encounters(seed, 'briar', 1)))):
             with self.subTest(minute=minute):
                 ids = [a.id for a in self.cast_at(minute) if a.id != 'pounce']
@@ -76,6 +77,7 @@ class NPCChecks(unittest.TestCase):
                         self.assertGreater(math.dist(a.anchor.position, b.anchor.position), 40.0)
 
     def test_every_cookout_guest_can_be_hailed_from_a_docked_boat(self):
+        """Every lake's first Sunday cookout is reachable from the landing on either hull."""
         # Cookout chats and attend_event need a hail while docked (`at_landing`). Under V1-30's
         # layout the host and the first guest stood at the slip mouth, nearer no docked boat.
         from .boat import BOATS
@@ -84,7 +86,7 @@ class NPCChecks(unittest.TestCase):
         for lake in LAKES:
             world = self.worlds.get(lake) or World(lake)
             state = State.new(world, seed=32)
-            state.game_minutes = 6 * 1440 + 11 * 60 + 30  # Sunday 17:30
+            state.game_minutes = 11 * 60 + 30  # Sunday 17:30
             state.npcs = active_npcs(state, world, self.content)
             slip, host = world.slip, cast().hosts[lake]
             for boat_id in ('jon', longest):
@@ -131,6 +133,8 @@ class NPCChecks(unittest.TestCase):
         self.assertNotIn('willow', pinned(self.state, self.content))
 
     def test_travelers_keep_their_own_rules(self):
+        """Thistle visits only Saturday day six; Pounce keeps the unchanged absolute-day route."""
+        self.assertEqual(SATURDAY, 6)
         lakes = ('briar', 'cedar')
         for day in range(14):
             visits = [lake for lake in lakes
@@ -138,7 +142,7 @@ class NPCChecks(unittest.TestCase):
             self.assertEqual(visits, [pounce_lake(self.state, day)])
             for minute in (day * 1440 + 60, day * 1440 + 600):  # 07:00 and 16:00
                 self.assertNotIn('pounce', [a.id for a in self.cast_at(minute, visits[0])])
-            saturday = day % 7 == SATURDAY
+            saturday = day % 7 == 6
             for lake in lakes:
                 at_ten = [a.id for a in self.cast_at(day * 1440 + 240, lake)]
                 self.assertEqual('thistle' in at_ten, saturday)

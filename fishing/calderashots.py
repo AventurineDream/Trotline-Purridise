@@ -65,6 +65,7 @@ def finite_night_check(renderer, world):
 
 
 def shots(dest, *, software=False, frames=60):
+    """Write Friday fog and clear-night views to `dest`, plus `frames` warmed timings."""
     if frames<60:
         raise ValueError('Use at least 60 warmed full frames')
     out=Path(dest)
@@ -86,7 +87,7 @@ def shots(dest, *, software=False, frames=60):
     state.toasts.clear()
     thumbs=[]
     captures=[]
-    friday=4*1440
+    friday=5*1440
     overlook=(-230,40,1.828)
     try:
         def compose():
@@ -111,7 +112,8 @@ def shots(dest, *, software=False, frames=60):
                                  mist=light['mist'],still_reflection=reflection_strength(state,light)))
 
         for name,offset in (('dawn-fog',20),('lifting-fog',60),('noon',360),('dusk',780),('clear-night',960)):
-            capture(name,friday+offset,overlook)
+            # Fog Lift moved with Friday; keep the seed's unchanged clear-night/noon probes.
+            capture(name,(friday if offset < 120 else 4*1440)+offset,overlook)
         if captures[-1]['weather']!='clear' or captures[-1]['still_reflection']!=1:
             raise AssertionError('The sky reflection capture must use a real clear night')
         capture('thermal-springs',friday+360,(270,-270,math.pi/2))

@@ -4,7 +4,7 @@
     {
       "id": "mayfly_morning",
       "lake": "briar",
-      "weekday": 1,
+      "weekday": 2,
       "name": "Mayfly Morning",
       "band": "dawn",
       "multiplier": 1.3,
@@ -19,7 +19,7 @@
     {
       "id": "firefly_night",
       "lake": "briar",
-      "weekday": 4,
+      "weekday": 5,
       "name": "Firefly Night",
       "band": "night",
       "multiplier": 1.25,
@@ -34,7 +34,7 @@
     {
       "id": "shad_run",
       "lake": "cedar",
-      "weekday": 3,
+      "weekday": 4,
       "name": "Shad Run",
       "band": "night",
       "multiplier": 1.3,
@@ -50,7 +50,7 @@
     {
       "id": "breezy_bass",
       "lake": "cedar",
-      "weekday": 5,
+      "weekday": 6,
       "name": "Breezy Bass",
       "band": "day",
       "multiplier": 1.25,
@@ -68,7 +68,7 @@
     {
       "id": "clear_sky_trout",
       "lake": "flathead",
-      "weekday": 0,
+      "weekday": 1,
       "name": "Clear-Sky Trout",
       "band": "dawn",
       "multiplier": 1.3,
@@ -83,7 +83,7 @@
     {
       "id": "larch_gold",
       "lake": "flathead",
-      "weekday": 2,
+      "weekday": 3,
       "name": "Larch Gold",
       "band": "day",
       "multiplier": 1.25,
@@ -99,7 +99,7 @@
     {
       "id": "warm_springs",
       "lake": "crater",
-      "weekday": 1,
+      "weekday": 2,
       "name": "Warm Springs",
       "band": "any",
       "multiplier": 1.3,
@@ -124,7 +124,7 @@
     {
       "id": "fog_lift",
       "lake": "crater",
-      "weekday": 4,
+      "weekday": 5,
       "name": "Fog Lift",
       "band": "dawn",
       "multiplier": 1.4,
@@ -140,7 +140,7 @@
     {
       "id": "meteor_shower",
       "lake": "nebula",
-      "weekday": 2,
+      "weekday": 3,
       "name": "Meteor Shower",
       "band": "night",
       "multiplier": 1.15,
@@ -153,7 +153,7 @@
     {
       "id": "aurora_tide",
       "lake": "nebula",
-      "weekday": 5,
+      "weekday": 6,
       "name": "Aurora Tide",
       "band": "any",
       "multiplier": 1.3,
@@ -375,7 +375,7 @@
     }
   ],
   "cookout": {
-    "weekday": 6,
+    "weekday": 0,
     "start_hour": 17,
     "end_hour": 20,
     "gift_count": 1

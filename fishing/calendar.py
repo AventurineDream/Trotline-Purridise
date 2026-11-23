@@ -16,7 +16,7 @@ from .data import (CALENDAR_DATA, LAKE_DAYS, LEGENDARY_WINDOWS, PANTRY,
                    PANTRY_CAPACITY, SPECIES_BY_ID, WEATHER_RESERVATIONS,
                    band_of, clock_string, hour_of_day)
 
-WEEKDAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
+WEEKDAYS = ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
 LAKE_IDS = ('briar', 'cedar', 'flathead', 'crater', 'nebula')
 PLAN_VERSION = 1
 DAY_MINUTES = 1440
@@ -29,10 +29,12 @@ def day_number(minutes):
 
 
 def weekday(minutes):
+    """Return the Sunday-first weekday (0–6) at game `minutes`; days roll at 06:00."""
     return day_number(minutes) % 7
 
 
 def day_name(minutes):
+    """Return the weekday name at game `minutes`, without changing the saved clock."""
     return WEEKDAYS[weekday(minutes)]
 
 
@@ -41,6 +43,7 @@ def in_hours(hour, start, end):
 
 
 def lake_day(lake_id, minutes):
+    """Return `lake_id`'s special at game `minutes`, or None on a quiet weekday."""
     return next((row for row in LAKE_DAYS if row.lake == lake_id and row.weekday == weekday(minutes)), None)
 
 
@@ -86,7 +89,12 @@ def _fork(seed, purpose):
 
 @lru_cache(maxsize=32)
 def weekly_plan(seed, lake_id, week):
-    """168 immutable hourly conditions, including both dawn and midnight seams."""
+    """Return 168 deterministic hourly conditions for Sunday-first `week` and `lake_id`.
+
+    `seed` is the saved schedule seed; slot zero is Sunday 06:00. Unknown lakes raise
+    ValueError. Keep the seed fork/version stable: reordering weekdays must not reroll
+    the ordinary weather draws or consume fishing RNG.
+    """
     if lake_id not in LAKE_IDS:
         raise ValueError('Unknown forecast lake: ' + str(lake_id))
     rng = _fork(seed, f'{lake_id}:{week}')
@@ -209,6 +217,7 @@ def next_legendary_window(seed, legendary_id, eligible_minute):
 
 
 def cookout_active(minutes):
+    """Whether game `minutes` fall on Sunday, 17:00 inclusive to 20:00 exclusive."""
     event = CALENDAR_DATA['cookout']
     return weekday(minutes) == event['weekday'] and in_hours(hour_of_day(minutes), event['start_hour'], event['end_hour'])
 

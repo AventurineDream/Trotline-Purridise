@@ -50,27 +50,80 @@ class ForecastChecks(unittest.TestCase):
             calendar.weekly_plan(1, 'missing', 0)
 
     def test_day_origin_week_and_cookout_boundaries(self):
-        self.assertEqual(calendar.day_name(0), 'Monday')
-        self.assertEqual(calendar.day_name(1439), 'Monday')
-        self.assertEqual(calendar.day_name(1440), 'Tuesday')
-        self.assertEqual(calendar.day_name(10080), 'Monday')
-        for minute, active in ((9299, False), (9300, True), (9479.99, True), (9480, False), (10080, False)):
-            self.assertEqual(calendar.cookout_active(minute), active)
+        """Sunday begins day zero and every week; midnight never changes the game day."""
+        self.assertEqual(calendar.WEEKDAYS,
+                         ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'))
+        for week in (0, 1, 12):
+            start = week * calendar.WEEK_MINUTES
+            for day, name in enumerate(calendar.WEEKDAYS):
+                for offset in (0, 1079.99, 1080, 1439.99):
+                    minute = start + day * 1440 + offset
+                    self.assertEqual(calendar.weekday(minute), day)
+                    self.assertEqual(calendar.day_name(minute), name)
+            self.assertEqual(calendar.day_name(start + 10079.99), 'Saturday')
+            self.assertEqual(calendar.day_name(start + 10080), 'Sunday')
+            self.assertEqual(hour_of_day(start + 10080), 6)
+            for offset, active in ((659.99, False), (660, True), (839.99, True), (840, False)):
+                self.assertEqual(calendar.cookout_active(start + offset), active)
+                self.assertFalse(calendar.cookout_active(start + 6 * 1440 + offset))
+
+    def test_all_ten_authored_specials_keep_their_named_weekday_and_boost(self):
+        """Every authored Lake Day repeats on its named day, including Saturday day six."""
+        rows = (
+            ('mayfly_morning', 'briar', 2, 'Tuesday', 0, 'bluegill', 'flats', 1.3),
+            ('firefly_night', 'briar', 5, 'Friday', 840, 'channel', 'deep', 1.25),
+            ('shad_run', 'cedar', 4, 'Thursday', 840, 'blue', 'deep', 1.3),
+            ('breezy_bass', 'cedar', 6, 'Saturday', 360, 'largemouth', 'open', 1.25),
+            ('clear_sky_trout', 'flathead', 1, 'Monday', 0, 'lake_trout', 'deep', 1.3),
+            ('larch_gold', 'flathead', 3, 'Wednesday', 360, 'yellow_perch', 'flats', 1.25),
+            ('warm_springs', 'crater', 2, 'Tuesday', 360, 'ember_char', 'springs', 1.3),
+            ('fog_lift', 'crater', 5, 'Friday', 0, 'mistfin_dace', 'flats', 1.4),
+            ('meteor_shower', 'nebula', 3, 'Wednesday', 840, 'bluegill', 'open', 1.15),
+            ('aurora_tide', 'nebula', 6, 'Saturday', 360, 'galaxy_gar', 'current', 1.3),
+        )
+        self.assertEqual({row[0] for row in rows}, {row.id for row in calendar.LAKE_DAYS})
+        for week in (0, 1, 8):
+            for event_id, lake, day, name, offset, species, zone, multiplier in rows:
+                with self.subTest(week=week, event=event_id):
+                    minute = week * calendar.WEEK_MINUTES + day * 1440 + offset
+                    self.assertEqual(calendar.day_name(minute), name)
+                    self.assertEqual(calendar.active_lake_day(lake, minute, zone).id, event_id)
+                    self.assertEqual(calendar.rate_multiplier(lake, minute, species, zone), multiplier)
+                    for other in range(7):
+                        special = calendar.lake_day(lake, week * calendar.WEEK_MINUTES + other * 1440)
+                        self.assertEqual(special is not None and special.id == event_id, other == day)
+
+    def test_weekly_weather_slots_start_sunday_and_apply_named_weather_biases(self):
+        """Hourly lookups keep all 168 dawn-based slots, including the Sunday week seam."""
+        for seed in (4, 16, 44016):
+            for week in (0, 1, 12):
+                start = week * calendar.WEEK_MINUTES
+                for lake in calendar.LAKE_IDS:
+                    plan = calendar.weekly_plan(seed, lake, week)
+                    self.assertEqual(len(plan), 168)
+                    for slot, weather in enumerate(plan):
+                        self.assertEqual(calendar.planned_weather(seed, lake, start + slot * 60), weather)
+                        self.assertEqual(calendar.planned_weather(seed, lake, start + slot * 60 + 59.99), weather)
+                self.assertEqual(calendar.planned_weather(seed, 'flathead', start + 1440 + 60), 'clear')
+                self.assertEqual(calendar.planned_weather(seed, 'crater', start + 5 * 1440), 'fog')
+                self.assertEqual(calendar.planned_weather(seed, 'crater', start + 5 * 1440 + 60), 'clear')
+                self.assertEqual(calendar.planned_weather(seed, 'nebula', start + 6 * 1440 + 360), 'aurora')
 
     def test_briar_and_cedar_modifiers_only_on_their_day_band_species_and_zone(self):
+        """Weekday reindexing leaves the existing band/species/zone multipliers intact."""
         rows = [
-            ('briar', 1440, 'bluegill', 'flats', 1.3),
-            ('briar', 1440 + 120, 'bluegill', 'flats', 1),
-            ('briar', 0, 'bluegill', 'flats', 1),
-            ('briar', 1440, 'channel', 'flats', 1),
-            ('briar', 4*1440+840, 'channel', 'deep', 1.25),
-            ('briar', 4*1440+660, 'channel', 'deep', 1),
-            ('cedar', 3*1440+840, 'blue', 'deep', 1.3),
-            ('cedar', 3*1440+840, 'flathead', 'deep', 1),
-            ('cedar', 5*1440+360, 'largemouth', 'open', 1.25),
-            ('cedar', 5*1440+360, 'largemouth', 'rocks', 1.25),
-            ('cedar', 5*1440+360, 'largemouth', 'lilies', 1),
-            ('cedar', 4*1440+360, 'largemouth', 'open', 1)]
+            ('briar', 2*1440, 'bluegill', 'flats', 1.3),
+            ('briar', 2*1440 + 120, 'bluegill', 'flats', 1),
+            ('briar', 1440, 'bluegill', 'flats', 1),
+            ('briar', 2*1440, 'channel', 'flats', 1),
+            ('briar', 5*1440+840, 'channel', 'deep', 1.25),
+            ('briar', 5*1440+660, 'channel', 'deep', 1),
+            ('cedar', 4*1440+840, 'blue', 'deep', 1.3),
+            ('cedar', 4*1440+840, 'flathead', 'deep', 1),
+            ('cedar', 6*1440+360, 'largemouth', 'open', 1.25),
+            ('cedar', 6*1440+360, 'largemouth', 'rocks', 1.25),
+            ('cedar', 6*1440+360, 'largemouth', 'lilies', 1),
+            ('cedar', 5*1440+360, 'largemouth', 'open', 1)]
         for lake, minute, sid, zone, expected in rows:
             self.assertEqual(calendar.rate_multiplier(lake, minute, sid, zone), expected)
             base = species_rates(zone, 'worm', hour_of_day(minute), 'clear', 3, lake)
@@ -104,7 +157,8 @@ class CalendarPlayChecks(unittest.TestCase):
         self.session.ui.mode = 'play'
 
     def sunday(self):
-        self.state.game_minutes = 9300
+        """Place the player at the first Sunday's 17:00 cookout with an ordinary fish."""
+        self.state.game_minutes = 660
         self.state.well = [Catch('bluegill', .5, 1., 0, 'flats', 'worm', 17)]
         self.session._refresh_npcs()
 
@@ -133,6 +187,44 @@ class CalendarPlayChecks(unittest.TestCase):
         other = State.new(self.world, seed=44017)
         self.assertNotEqual(state.v2['calendar']['weather_windows'], other.v2['calendar']['weather_windows'])
 
+    def test_save_reload_at_sunday_rollover_preserves_clock_rng_forecast_and_social_ledgers(self):
+        """Old-style saves retain absolute days; rebuilding week caches cannot replay social events."""
+        state = self.state
+        state.game_minutes = calendar.WEEK_MINUTES - 1
+        ledger = {
+            'cookout_gifts': {'briar': 6},
+            'cookout_chats': {'grandmother_whiskers': 6},
+            'invitation_day': 6, 'invitations_used': 1,
+            'lake_day_notes': {'briar': 5},
+        }
+        state.v2['calendar'].update(deepcopy(ledger))
+        # Calendar saves have no weekday epoch marker. Keep that shape rather than
+        # shifting game minutes, NPC selection days, or last-day social ledgers.
+        calendar.ensure_plans(state)
+        expected = {lake: [calendar.planned_weather(44016, lake, t)
+                           for t in range(10020, 30240, 60)] for lake in calendar.LAKE_IDS}
+        rng, narrative = state.rng.s, deepcopy(state.narrative.to_json())
+        state.save(self.path, update_stamp=False)
+        loaded = State.load(self.path, self.world)
+        self.assertEqual(loaded.game_minutes, state.game_minutes)
+        self.assertEqual(calendar.day_name(loaded.game_minutes), 'Saturday')
+        self.assertEqual(loaded.rng.s, rng)
+        self.assertEqual(loaded.narrative.to_json(), narrative)
+        for key, value in ledger.items():
+            self.assertEqual(loaded.v2['calendar'][key], value)
+        loaded.advance_bulk(1)
+        self.assertEqual(loaded.game_minutes, calendar.WEEK_MINUTES)
+        self.assertEqual(calendar.day_name(loaded.game_minutes), 'Sunday')
+        self.assertEqual({row['week'] for row in loaded.v2['calendar']['weather_windows'].values()}, {1, 2})
+        loaded.save(self.path, update_stamp=False)
+        reloaded = State.load(self.path, self.world)
+        for lake in calendar.LAKE_IDS:
+            reloaded.bind(SimpleNamespace(id=lake))
+            self.assertEqual([calendar.weather_at(reloaded, t) for t in range(10020, 30240, 60)], expected[lake])
+        for key, value in ledger.items():
+            self.assertEqual(reloaded.v2['calendar'][key], value)
+        self.assertEqual(reloaded.rng.s, rng)
+
     def test_saved_plans_roll_forward_offline_with_bounded_storage_and_no_social_replay(self):
         state = self.state
         state.stamp = 1000
@@ -158,14 +250,15 @@ class CalendarPlayChecks(unittest.TestCase):
         self.assertEqual(state.rng.s, rng)
 
     def test_simulation_uses_planned_weather_and_lake_day_rates(self):
+        """The simulation receives the Tuesday Lake Day minute and its deterministic forecast."""
         from .sim import Hook, SetLine
         state = self.state
-        state.game_minutes = 1440
+        state.game_minutes = 2 * 1440
         state.lines = [SetLine('std', 'worm', 10, 205, 22, 205, 'flats', [Hook(True)])]
         with patch('fishing.sim.species_rates', wraps=species_rates) as rates:
             state._one_span(1/60)
         self.assertEqual(rates.call_args.args[3], calendar.weather_at(state))
-        self.assertEqual(rates.call_args.kwargs['game_minutes'], 1440)
+        self.assertEqual(rates.call_args.kwargs['game_minutes'], 2 * 1440)
 
     def test_bot_fireflies_follow_forecast_when_legacy_weather_disagrees(self):
         from .data import weather_at as legacy_weather
@@ -184,10 +277,9 @@ class CalendarPlayChecks(unittest.TestCase):
                 self.assertEqual(state.to_json(), before)
 
     def test_all_current_lake_friends_gather_and_restore_normal_schedule(self):
-        # Sunday 16:59: the host and three day cats. 17:00–20:00: Briar's whole cast on
-        # the landing piers. 20:00: the host and Master Cinder.
+        """The first Sunday's gathering starts at 17:00 and restores the night cast at 20:00."""
         keys = set()
-        for minute, count in ((9299, 4), (9300, 9), (9479, 9), (9480, 2)):
+        for minute, count in ((659, 4), (660, 9), (839, 9), (840, 2)):
             self.state.game_minutes = minute
             actors = active_npcs(self.state, self.world, self.content)
             self.assertEqual(len(actors), count)
@@ -244,15 +336,22 @@ class CalendarPlayChecks(unittest.TestCase):
         self.assertEqual(len(state.well), 3)
 
     def test_cookout_requires_landing_and_event_and_each_friend_has_one_chat(self):
+        """Cookout interactions require the landing/window and chats cannot repeat after reload."""
         self.sunday()
         state = self.state
         for friend in calendar.cookout_friends(self.content, 'briar'):
             self.assertTrue(calendar.chat(state, self.world, friend['id'], self.content))
             self.assertIn(calendar.CALENDAR_DATA['cookout_lines'][friend['id']], state.toasts[-1][0])
             self.assertFalse(calendar.chat(state, self.world, friend['id'], self.content))
+        state.save(self.path, update_stamp=False)
+        state = State.load(self.path, self.world)
+        before = state.to_json()
+        for friend in calendar.cookout_friends(self.content, 'briar'):
+            self.assertFalse(calendar.chat(state, self.world, friend['id'], self.content))
+        self.assertEqual(state.to_json(), before)
         with patch.object(state, 'slip_status', return_value='away'):
             self.assertIsNotNone(calendar.share_fish(state, self.world))
-        state.game_minutes = 9480
+        state.game_minutes = 840
         self.assertIsNotNone(calendar.share_fish(state, self.world))
         self.assertFalse(calendar.chat(state, self.world, 'grandmother_whiskers', self.content))
 
@@ -294,6 +393,28 @@ class CalendarPlayChecks(unittest.TestCase):
             session.tick(Keys(), 1)
             self.assertEqual(state.v2['calendar']['invitations_used'], 1)
         self.assertEqual(state.v2['calendar']['invitation_mark'], spot)
+
+    def test_week_tab_lists_sunday_cookout_first_and_saturday_last_across_rollover(self):
+        """Week rows, selected titles and cookout details share the Sunday-first epoch."""
+        text = Text()
+        self.addCleanup(text.close)
+        painter = UI(text, self.world)
+        frame = np.zeros((720, 1280, 3), np.uint8)
+        for minute, selected, week, name, day in ((0, 0, 1, 'Sunday', 1),
+                                                 (10079, 6, 1, 'Saturday', 7),
+                                                 (10080, 0, 2, 'Sunday', 8)):
+            self.state.game_minutes = minute
+            panel = UIState(mode='journal', journal_page=5, book_week_i=selected)
+            with patch.object(painter, '_text', wraps=painter._text) as drawn:
+                painter.draw(frame, self.state, panel)
+            labels = [call.args[1] for call in drawn.call_args_list]
+            rows = [label for label in labels if label.startswith(tuple(day[:3] + ' · ' for day in calendar.WEEKDAYS))]
+            self.assertEqual([label[:3] for label in rows], ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
+            self.assertIn('Cookout', rows[0])
+            self.assertNotIn('Cookout', rows[-1])
+            self.assertIn(f'{name} · Day {day}', labels)
+            self.assertTrue(any(label.startswith(f'Week {week} · ') for label in labels))
+            self.assertEqual(any('Landing Cookout' in label for label in labels), selected == 0)
 
     def test_week_tab_keyboard_pointer_and_every_forecast_page_are_read_only(self):
         state, session = self.state, self.session

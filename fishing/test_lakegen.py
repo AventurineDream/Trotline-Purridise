@@ -89,6 +89,7 @@ class AlpineChecks(unittest.TestCase):
                 self.assertGreaterEqual(float(world.shore_sd(*world.slip.world(a,s))),1)
 
     def test_smoke_and_larch_gold_are_bounded_visuals_without_save_or_rng_changes(self):
+        """Wednesday's Larch Gold changes visuals only, without altering saved state or RNG."""
         state = State.new(self.world,seed=723)
         before, rng = deepcopy(state.to_json()), state.rng.s
         first = smoke_faces(state,self.world)
@@ -105,7 +106,7 @@ class AlpineChecks(unittest.TestCase):
         state.anim = 0
         self.assertEqual(state.to_json(),before)
         self.assertEqual(state.rng.s,rng)
-        for minute in (0,360,900,2*1440+360):
+        for minute in (0,360,900,3*1440+360):
             state.game_minutes = minute
             faces = ambient.faces(state,self.world)
             self.assertLessEqual(len(faces),ambient.MAX_FACES)
@@ -166,13 +167,14 @@ class AlpineChecks(unittest.TestCase):
                 validate_content_v2(bad)
 
     def test_software_alpine_snow_and_gold_render_without_retained_state(self):
+        """Scheduled snow and Wednesday Larch Gold render without retaining save or RNG changes."""
         from .software import SoftwareRenderer
         state=State.new(self.world,seed=723)
         before,rng=deepcopy(state.to_json()),state.rng.s
         renderer=SoftwareRenderer(self.world,160,90)
         try:
             frames=[]
-            for minute in (5,360,780,960,2*1440+360):
+            for minute in (5,360,780,960,3*1440+360):
                 state.game_minutes=minute
                 frame=renderer.render(state)
                 self.assertEqual(frame.shape,(90,160,3))
@@ -201,6 +203,7 @@ class AlpineChecks(unittest.TestCase):
             text.close()
 
     def test_native_snow_and_gold_reuse_buffers_and_preserve_depth(self):
+        """Wednesday's gold tree layers reuse native buffers without changing scene depth."""
         try:
             import moderngl
             ctx=moderngl.create_standalone_context(require=330,backend='egl')
@@ -216,7 +219,7 @@ class AlpineChecks(unittest.TestCase):
             renderer.render(state)
             original=renderer.prop_data.copy()
             depth=np.frombuffer(renderer.read_depth(),np.float32).copy()
-            state.game_minutes=2*1440+360
+            state.game_minutes=3*1440+360
             renderer.render(state)
             np.testing.assert_array_equal(depth,np.frombuffer(renderer.read_depth(),np.float32))
             np.testing.assert_array_equal(original[:,:5],renderer.prop_data[:,:5])

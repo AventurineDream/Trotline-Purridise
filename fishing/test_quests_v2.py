@@ -903,6 +903,7 @@ class EventSources(Worlds):
         self.assertTrue(entries[0]["player_controlled"])
 
     def test_session_samples_weather_and_hails_with_host_landing_and_cookout(self):
+        """Live Sunday hails include host, landing and event provenance, once per absolute day."""
         world = self.worlds["briar"]
         with tempfile.TemporaryDirectory() as tmp:
             state = State.new(world, seed=5)
@@ -914,13 +915,13 @@ class EventSources(Worlds):
             self.assertIn(sample["weather"], WEATHER_STATES)
             self.assertEqual((sample["x"], sample["z"]), (state.x, state.z))
             host = next(n for n in state.npcs if n.id == "grandmother_whiskers")
-            state.game_minutes = 6 * 1440 + 11 * 60 + 30  # Sunday 17:30, during the cookout
+            state.game_minutes = 11 * 60 + 30  # Sunday 17:30, during the cookout
             state._park(world)
             self.assertTrue(record_hail(state, world, host))
             self.assertFalse(record_hail(state, world, host))
             hail = [e for e in events if e["type"] == "npc.hail"][-1]
             self.assertEqual((hail["host_of"], hail["event"], hail["at_landing"]), ("briar", "cookout", True))
-            self.assertEqual(state.v2["npcs"]["talk_days"]["grandmother_whiskers"], [6])
+            self.assertEqual(state.v2["npcs"]["talk_days"]["grandmother_whiskers"], [0])
 
 
 class QuestFlow(Worlds):
@@ -995,6 +996,7 @@ class QuestFlow(Worlds):
         self.assertNotIn("friendship", h.state.v2["npcs"])
 
     def test_greetings_pick_the_most_specific_true_state(self):
+        """Greetings prefer first meetings, weather, story and then the actual Sunday cookout."""
         rows = [quest("wc_marigold_a", "a", "marigold", "briar", {"type": "catnap"})]
         cats = [{"id": "marigold", "greetings": {
             "stranger": "Hello, stranger!", "acquaintance": "Hello again!", "first": "Oh! A new face!",
@@ -1012,7 +1014,7 @@ class QuestFlow(Worlds):
             self.assertEqual(greeting(h.state, h.content, "marigold"), "Hello again!")
             h.state.v2["story"]["chapter"] = 2
             self.assertEqual(greeting(h.state, h.content, "marigold"), "The book has a new page!")
-            h.state.game_minutes = 6 * 1440 + 11 * 60 + 30
+            h.state.game_minutes = 11 * 60 + 30
             self.assertEqual(greeting(h.state, h.content, "marigold"), "Pie!")
         self.assertIsNone(greeting(h.state, h.content, "old_gus"))
 
@@ -1102,7 +1104,7 @@ class QuestFlow(Worlds):
         self.assertEqual(quest_journal_details(h.state, h.content, "wc_marigold_a")["progress"],
                          f"Under way. Postmaster Pounce visits Little Briar {when}, 08:00–16:00.")
         self.assertEqual(quest_journal_details(h.state, h.content, "wc_old_gus_a")["progress"],
-                         "Under way. Tinker Thistle moors at your lake in 5 days, 10:00–18:00.")
+                         "Under way. Tinker Thistle moors at your lake in 6 days, 10:00–18:00.")
 
     def test_ledger_keeps_v1_0_progress_claims_and_older_shapes(self):
         legacy = NarrativeState().to_json()

@@ -2279,6 +2279,7 @@ class _ContentV2Validator:
         return shells, tools
 
     def calendar(self, docs, species):
+        """Validate `docs`' Sunday-first calendar against `species`; collect errors and return windows."""
         filename = "calendar.json"
         raw = self.root(docs, filename, {"schema_version", "lake_days", "legendary_windows",
                                        "reservations", "cookout", "cookout_lines"})
@@ -2297,7 +2298,7 @@ class _ContentV2Validator:
         seen = set()
         for _id, row, where in self.rows(filename, "lake_days"):
             self.enum(filename, where + ".lake", row.get("lake"), lakes)
-            self.number(filename, where + ".weekday", row.get("weekday"), integer=True, minimum=0, maximum=5)
+            self.number(filename, where + ".weekday", row.get("weekday"), integer=True, minimum=1, maximum=6)
             self.text(filename, where + ".name", row.get("name"))
             self.enum(filename, where + ".band", row.get("band"), {"dawn", "day", "dusk", "night", "any"})
             self.number(filename, where + ".multiplier", row.get("multiplier"), minimum=1, maximum=2)
@@ -2350,7 +2351,7 @@ class _ContentV2Validator:
             if row.get("start_hour") == row.get("end_hour"):
                 self.error(filename, where, "weather window must have positive duration")
         cookout = raw.get("cookout")
-        if cookout != {"weekday": 6, "start_hour": 17, "end_hour": 20, "gift_count": 1}:
+        if cookout != {"weekday": 0, "start_hour": 17, "end_hour": 20, "gift_count": 1}:
             self.error(filename, "cookout", "expected Sunday 17–20 and one pantry gift")
         lines = raw.get("cookout_lines")
         if not isinstance(lines, dict) or set(lines) != NPC_IDS:
