@@ -412,7 +412,7 @@ supplies display labels (existing pattern: `CEDAR_ZONES`). `shore` (labelled Ban
 | springs | — | — | — | Thermal springs | — |
 | current | — | — | — | — | Astral current |
 
-**Lake Days** (day 0 = Monday):
+**Lake Days** (Sunday-first: day 0 = Sunday, day 6 = Saturday; days begin at 06:00):
 
 | Lake | Day | Name | Effect |
 | --- | --- | --- | --- |

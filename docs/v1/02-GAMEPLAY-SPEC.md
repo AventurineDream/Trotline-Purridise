@@ -263,9 +263,9 @@ non-Treasured fish and says so. It never discards silently.
 
 - Existing weather blending stays. New lakes add **snow mist** (Flathead),
   **caldera fog** (Crater) and **aurora** (Nebula) as weather states.
-- The game uses a 7-day week (day 0 = Monday), rolling over at 06:00 with
-  the existing NPC game-day schedule. The journal’s Week tab shows all seven
-  days, Lake Days and a paginated hourly forecast. Watch cards show the next
+- The game uses a Sunday–Saturday 7-day week (day 0 = Sunday, day 6 = Saturday),
+  rolling over at 06:00 with the existing NPC game-day schedule. The journal’s Week
+  tab shows all seven days in that order, Lake Days and a paginated hourly forecast. Watch cards show the next
   weather opportunity without claiming that story/equipment gates are met.
 - **Lake Days:** each lake has two weekday specials in `03 §8` (e.g. Cedar's
   Thursday *Shad Run*: blue and channel catfish ×1.3 at night).

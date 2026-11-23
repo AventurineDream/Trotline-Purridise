@@ -603,6 +603,15 @@ same seed during reads, so drawing and menus cannot mutate saved state.
 Clock changes refresh saved plans only when crossing a week; lake binding repairs
 or initializes them. Lake travel therefore cannot reroll weather.
 
+Weeks and the Week tab run Sunday–Saturday: absolute game day modulo seven is
+Sunday = 0 through Saturday = 6, and slot zero of each 168-hour plan is Sunday
+06:00. All authored Lake Day indices retain their named weekdays; the cookout is
+Sunday and Thistle visits Saturday. The Sunday-first cutover (#142) deliberately
+does not shift saved `game_minutes`, NPC selection days, forecast seeds/fork
+version, or social last-day ledgers. Existing plans are reconstructed on bind
+with the updated weekday weather biases; the ordinary weather draws and fishing
+RNG are unchanged. Save/reload and lake travel continue to use the same plan.
+
 Daily hard reservations guarantee every legendary at least 120 continuous game
 minutes of matching weather and clock, within three days of any eligibility
 instant. Flathead's conflicting clear/snow windows and Nebula's clear/aurora
@@ -623,9 +632,10 @@ share the kitchen quota but never consume the tacos' optional extra request.
 
 `test_calendar.py` exercises 1,000 seeded weeks × twelve legendaries × two
 fractional eligibility instants, checking complete two-hour windows and the
-three-day bound. It also covers reload, lake binding, week rollover, Lake Day
-rate isolation, event boundaries, atomic gifts, protected choices, pause/focus,
-read-only drawing and keyboard/pointer forecast pagination. `--shots` adds the
+three-day bound. It also covers Sunday day zero, Saturday day six, Sunday week
+rollover, all ten named Lake Days, weekly weather indexing, reload/lake binding
+and unchanged social ledgers, rate isolation, event boundaries, atomic gifts,
+protected choices, pause/focus, read-only drawing and keyboard/pointer forecast pagination. `--shots` adds the
 calendar gallery and a warmed UI benchmark (week, Sunday, cookout and fish
 confirmation), including large text, accessibility font and 480×270 layouts.
 

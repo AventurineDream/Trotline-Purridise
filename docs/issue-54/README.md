@@ -88,11 +88,12 @@ python -m fishing --shots docs/issue-54/software --caldera --software
 python -m unittest fishing.test_caldera fishing.test_lakegen -v
 ```
 
-Seed 4 provides a real clear Friday night and noon. Friday's Fog Lift supplies
-06:20 fog, the 07:00 clearing crossfade, then a clear lake. The remaining views
-show noon, sunset, the clear-night mirror, thermal springs, the cinder isle,
-dock/survey marker and a labelled habitat chart. Every capture pose passes the
-actual boat's hull-clear check. Images include the UI at 1280×720.
+Seed 4 provides a real clear Thursday night and noon under the Sunday-first
+calendar. Friday's Fog Lift supplies 06:20 fog and the 07:00 clearing crossfade.
+The remaining views show noon, sunset, the clear-night mirror, thermal springs,
+the cinder isle, dock/survey marker and a labelled habitat chart. Every capture
+pose passes the actual boat's hull-clear check. Images include the UI at 1280×720;
+the checked-in captures below predate #142's Sunday-first weekday labels.
 
 ![Native OpenGL caldera captures](native/contact-sheet.png)
 

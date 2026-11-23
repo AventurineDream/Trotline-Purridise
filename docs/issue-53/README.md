@@ -63,10 +63,11 @@ python -m fishing --shots docs/issue-53/software --alpine --software
 python -m unittest fishing.test_lakegen -v
 ```
 
-Seed 16 supplies actual scheduled weather: Monday dawn and noon, sunset, a
-night, the reserved snow-mist dawn, and Wednesday's clear Larch Gold noon. The
-same view and clock are used for both backends; separate views show the Outpost
-and habitat chart. Captures are composed at 1280×720 with the game's UI.
+The current Seed 16 fixture uses Sunday dawn and noon, sunset, a night, the
+reserved snow-mist dawn, and Wednesday's Larch Gold noon. The same view and
+clock are used for both backends; separate views show the Outpost and habitat
+chart. Captures are composed at 1280×720 with the game's UI. The checked-in images
+below predate #142's Sunday-first weekday labels.
 
 ![Native OpenGL time/weather, Outpost and chart](native/contact-sheet.png)
 
