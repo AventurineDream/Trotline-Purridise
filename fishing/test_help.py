@@ -311,11 +311,29 @@ def _page_lines(title):
 
 
 class HelpContentChecks(unittest.TestCase):
-    """The corrected claims (V1-41 audit, #122, #140) and the topics the help now covers."""
+    """The corrected claims (V1-41 audit, #122, #140, #141) and the topics the help covers."""
 
     def test_the_original_pages_keep_their_places(self):
         self.assertEqual([title for title, _ in help_pages()[:4]],
                          ["ON THE WATER", "TROT LINES", "THE LANDING", "BOATS AND OTHER WATERS"])
+
+    def test_boats_describe_the_full_shop_unlocks_and_landing_restrictions(self):
+        """Both device variants explain all boat tiers without gating the original four."""
+        for device in ("keyboard", "gamepad"):
+            with self.subTest(device=device):
+                page = " ".join(dict(help_topics(None, device))["BOATS AND OTHER WATERS"])
+                for claim in (
+                    "Boats tab: 24 boats in 8 tiers.",
+                    "Jon, rowboat, daysailer and pontoon start unlocked.",
+                    "New boats: tiers 1–2 at start, tiers 3–4 after chapter 2, "
+                    "tiers 5–6 after chapter 3, tier 7 after chapter 4, "
+                    "and tier 8 after chapter 5.",
+                    "Tier 8 boats sell only at Cosmic Drift Station in the Nebula.",
+                    "Buy and switch only at a landing.",
+                    "Owned boats switch freely at any landing.",
+                ):
+                    self.assertIn(claim, page)
+                self.assertNotIn("buy a daysailer or a pontoon", page)
 
     def test_no_claim_of_foraging_or_a_pressed_h_anywhere(self):
         text = "\n".join(_all_lines(help_pages()))
@@ -686,12 +704,12 @@ class HelpSpreadChecks(unittest.TestCase):
 
     def test_the_opening_spread_shows_two_pages_and_that_more_follow(self):
         guide, frame, panel, texts = _draw_spread(_painter(self.text), 1280, 720)
-        self.assertEqual(panel.help_spreads, HELP_SPREADS)
+        self.assertEqual(panel.help_spreads, len(guide.spreads))
         self.assertEqual(panel.help_shown, (0, 1))
         labels = [label for label, *_rest in texts]
         self.assertEqual(labels[0], FIELD_GUIDE_TITLE)
         self.assertIn(GAME_TITLE, labels[0])
-        self.assertIn(f"Pages 1–2 of {HELP_N}", labels)
+        self.assertIn(f"Pages 1–2 of {guide.page_count}", labels)
         (left_x, _y, page_w, _h), (right_x, *_rest) = guide.pages
         drawn_at = {label: x for label, x, *_rest in texts}
         # The first topic opens the left page and the second faces it.
@@ -707,10 +725,18 @@ class HelpSpreadChecks(unittest.TestCase):
 
     def test_the_last_spread_turns_back_to_page_one(self):
         guide, frame, panel, texts = _draw_spread(_painter(self.text), 1280, 720, -1)
-        self.assertEqual(panel.help_spread, HELP_SPREADS - 1)
-        self.assertEqual(panel.help_shown, (HELP_N - 2, HELP_N - 1))
+        self.assertEqual(panel.help_spreads, len(guide.spreads))
+        self.assertEqual(panel.help_spread, len(guide.spreads) - 1)
+        last_spread = guide.spreads[-1]
+        self.assertEqual(panel.help_shown,
+                         tuple(page.topic for page in last_spread if page is not None))
         labels = [label for label, *_rest in texts]
-        self.assertIn(f"Pages {HELP_N - 1}–{HELP_N} of {HELP_N}", labels)
+        first_page = 2 * (len(guide.spreads) - 1) + 1
+        if last_spread[1] is None:
+            expected_label = f"Page {first_page} of {guide.page_count}"
+        else:
+            expected_label = f"Pages {first_page}–{first_page + 1} of {guide.page_count}"
+        self.assertIn(expected_label, labels)
         self.assertIn(fieldguide.BACK_CUES[0], labels)
         self.assertIn(fieldguide.FIRST_CUES[0], labels)
         self.assertNotIn(fieldguide.TURN_CUES[0], labels)
