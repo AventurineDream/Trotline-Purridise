@@ -424,11 +424,19 @@ class StarlightTravel(unittest.TestCase):
             focused = True
 
         source = np.zeros((8, 8, 3), np.uint8)
-        for focused, minimum in ((True, 0.002), (False, 0.03)):
+        # Freeze the frame clock so every frame reports zero render time: the
+        # requested sleep is then exactly the policy period, independent of
+        # how fast or how loaded the host is.
+        for focused, period, minimum in ((True, 1 / 240, 0.002), (False, 1 / 30, 0.03)):
             platform = Platform(focused)
-            with patch("fishing.game.time.sleep") as sleep:
+            with patch("fishing.game.time.perf_counter", return_value=0.0), \
+                    patch("fishing.game.time.sleep") as sleep:
                 _play_starlight(platform, Session(), source, None, 0.0, 0.05, False)
-            self.assertTrue(any(call.args[0] >= minimum for call in sleep.call_args_list))
+            slept = [call.args[0] for call in sleep.call_args_list]
+            self.assertTrue(slept)
+            for seconds in slept:
+                self.assertAlmostEqual(seconds, period)
+            self.assertTrue(all(seconds >= minimum for seconds in slept))
 
     def test_lake_change_tips_into_starlight_only_on_lagoon_routes(self):
         import random
