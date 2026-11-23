@@ -431,10 +431,14 @@ class StarlightTravel(unittest.TestCase):
             self.assertTrue(any(call.args[0] >= minimum for call in sleep.call_args_list))
 
     def test_lake_change_tips_into_starlight_only_on_lagoon_routes(self):
+        import random
         import tempfile
         from pathlib import Path
+        from unittest.mock import patch
+        from . import game
         from .game import Session, _enter_lake
         from .imageops import resize_rgb
+        from .lakes import LoadingQuips, loading_quips
         from .platform import Text
         from .render import Renderer
         from .ui import UI
@@ -462,8 +466,11 @@ class StarlightTravel(unittest.TestCase):
                 pass
 
         text = Text()
+        quips = LoadingQuips(random.Random(138))
         try:
-            for source, destination, starlit in (("crater", "nebula", True), ("flathead", "crater", False)):
+            # Both Lagoon directions and an ordinary trip: each names the destination and a quip.
+            for source, destination, starlit in (("crater", "nebula", True), ("nebula", "briar", True),
+                                                 ("flathead", "crater", False)):
                 with tempfile.TemporaryDirectory(prefix="starlight-") as temp:
                     world = World(source)
                     state = State.new(world, seed=4)
@@ -476,19 +483,29 @@ class StarlightTravel(unittest.TestCase):
                     self.assertIsNone(session.change_lake(destination))
                     platform = Platform()
                     loading = np.empty((180, 320, 3), np.uint8)
-                    renderer, ui = _enter_lake(
-                        platform, session, renderer, ui, text, loading, True, True, shown)
+                    with patch("fishing.game._travel_card_text", wraps=game._travel_card_text) as card:
+                        renderer, ui = _enter_lake(
+                            platform, session, renderer, ui, text, loading, True, True, shown,
+                            quips=quips)
                     try:
                         self.assertIs(renderer.world, session.world)
                         self.assertEqual(renderer.world.id, destination)
                         self.assertEqual(state.game_minutes, before)
+                        self.assertIn(quips.last, loading_quips(destination))
+                        self.assertTrue(card.call_args_list)
+                        for call in card.call_args_list:
+                            self.assertEqual(call.args[2:], (session.world.name, quips.last))
                         if starlit:
                             self.assertGreater(len(platform.frames), 10)
-                            # The tip starts from the last frame shown on the source water.
+                            # The tip starts from the last frame shown on the source water,
+                            # before the card joins the stars; the card clears as the lake rises.
                             first = platform.frames[0].astype(np.float32)
                             self.assertLess(float(np.abs(first-shown).mean()), 25)
+                            self.assertLess(card.call_count, len(platform.frames) - 1)
                         else:
                             self.assertEqual(len(platform.frames), 1)
+                            self.assertEqual(card.call_count, 1)
+                            self.assertTrue(np.any(platform.frames[0] != (17, 31, 32)))
                     finally:
                         renderer.close()
         finally:

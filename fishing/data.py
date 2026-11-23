@@ -247,9 +247,13 @@ ZONE_MATCH: dict[str, dict[str, float]] = {
 ZONE_FALLBACK_MULTIPLIER = _LAKE_CONTENT["zone_fallback_multiplier"]
 ZONE_NAME = {row["id"]: row["name"] for row in _LAKE_CONTENT["zones"]}
 LAKES = {row["id"]: {key: value for key, value in row.items()
-                      if key not in ("id", "species_count", "species_ids", "rate_multipliers", "zone_labels")}
+                      if key not in ("id", "species_count", "species_ids", "rate_multipliers", "zone_labels",
+                                     "loading_quips")}
          for row in _LAKE_CONTENT["lakes"]}
 LAKE_SPECIES_IDS = {row["id"]: tuple(row["species_ids"]) for row in _LAKE_CONTENT["lakes"]}
+# Loading-card lines: shared ones suit any water, each lake's own are unique to it.
+LOADING_QUIPS = tuple(_LAKE_CONTENT["loading_quips"])
+LAKE_LOADING_QUIPS = {row["id"]: tuple(row["loading_quips"]) for row in _LAKE_CONTENT["lakes"]}
 LAKE_RATE_MULTIPLIERS = {}
 for _lake in _LAKE_CONTENT["lakes"]:
     _rates = {species_id: 0.0 for species_id in SPECIES_BY_ID}

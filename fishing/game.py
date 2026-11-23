@@ -50,7 +50,7 @@ from .ui import (UI, UIState, SHOP_TABS, HELP_N, GAME_TITLE, CREDITS_HOLD_S, che
                  comfort_controls, pause_options, shop_rows, title_options,
                  SETTINGS_ROW_COUNT, SETTINGS_KEYBOARD_CONTROLS_ROW)
 from .world import World
-from .lakes import travel_caption, travel_lock_reason
+from .lakes import LoadingQuips, travel_caption, travel_lock_reason
 
 DRIVING = {"play"}
 MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
@@ -2181,13 +2181,14 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
     detail_tiers.configure(software=software_tier, override=detail)
     text = Text()
     ui = UI(text, world)
+    # One picker for the run, so startup and every trip after it vary without repeats.
+    quips = LoadingQuips()
     # Show a real first frame while the forest and shaders initialize.
     loading = np.empty((height,width,3),np.uint8)
     loading[:] = (17,31,32)
     ui._center(loading,GAME_TITLE,width/2,int(height*0.40),
                max(36,height//12),(238,233,216),"serif")
-    ui._center(loading,"Opening the lake...",width/2,int(height*0.58),
-               max(14,height//40),(218,187,124))
+    _loading_quip(ui, loading, quips.pick(world.id), int(height*0.58))
     platform.present(loading)
     audio = Audio(tier=detail_tiers.current().name)
     render_width, render_height = detail_tiers.render_dimensions(
@@ -2228,7 +2229,7 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                 if scene is not None and scene.shape[:2] != (height, width):
                     scene = resize_rgb(scene, width, height)
                 renderer, ui = _enter_lake(platform, session, renderer, ui, text, loading,
-                                           software_backend, software_tier, scene)
+                                           software_backend, software_tier, scene, quips=quips)
                 # The startup variable must not retain the first lake's grids.
                 world = session.world
                 last = platform.ticks()
@@ -2306,28 +2307,34 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
 
 
 def _enter_lake(platform, session, renderer, ui, text, loading, software_backend,
-                software_tier, last_frame):
+                software_tier, last_frame, *, quips: LoadingQuips | None = None):
     """Swap to the session's new lake and return its renderer and UI.
 
     Travel to or from the Lagoon tips into starlight from the last lake image
     (`last_frame`, without the HUD); the new lake loads under the full
-    starfield. Other routes show the plain loading card, as before.
+    starfield, which carries the travel card's text. Other routes show the
+    plain loading card. Both name the destination and add a quip from
+    `quips` (a fresh picker when None) for the destination lake.
     """
     from . import starlight
     height, width = loading.shape[:2]
     starlit = (last_frame is not None
                and starlight.touches_starlight(renderer.world.id, session.world.id))
     reduced = bool(session.state.v2.get("settings", {}).get("reduced_motion", False))
+    quip = (quips if quips is not None else LoadingQuips()).pick(session.world.id)
     if starlit:
-        _play_starlight(platform, session, last_frame, None, 0.0, starlight.TIP_END, reduced)
+        _play_starlight(platform, session, last_frame, None, 0.0, starlight.TIP_END, reduced,
+                        card=(ui, session.world.name, quip))
     else:
         loading[:] = (17,31,32)
-        ui._center(loading,f"Opening {session.world.name}...",width/2,height/2,
-                   max(18,height//30),(238,233,216),"serif")
+        _travel_card_text(ui, loading, session.world.name, quip)
         platform.present(loading)
+    # The starlight card spans the UI swap; keep the player's text size and font on it.
+    text_style = (ui._text_scale, ui._dyslexia_font)
     ui.close()
     renderer.close()
     ui = UI(text,session.world)
+    ui._text_scale, ui._dyslexia_font = text_style
     render_width, render_height = detail_tiers.render_dimensions(
         width, height, software=software_tier)
     renderer = Renderer(session.world,render_width,render_height,
@@ -2340,15 +2347,44 @@ def _enter_lake(platform, session, renderer, ui, text, loading, software_backend
         arrival = renderer.render(session.state, _camera(renderer, session))
         if arrival.shape[:2] != (height, width):
             arrival = resize_rgb(arrival, width, height)
-        _play_starlight(platform, session, last_frame, arrival, starlight.TIP_END, 1.0, reduced)
+        _play_starlight(platform, session, last_frame, arrival, starlight.TIP_END, 1.0, reduced,
+                        card=(ui, session.world.name, quip))
     return renderer, ui
 
 
-def _play_starlight(platform, session, source, destination, start, end, reduced):
+# Progress at which the travel card's text joins the starfield: the tip has mostly
+# covered the old lake. It clears at starlight.RISE_START, as the new water surfaces.
+_STARLIGHT_CARD_START = 0.2
+
+
+def _loading_quip(ui, frame, quip, y):
+    """Center a loading quip on `frame` with its top at row `y`.
+
+    The size follows the window height, like the rest of the card; the line is
+    trimmed only if a larger text setting would push it past the frame's edges.
+    """
+    height, width = frame.shape[:2]
+    size = max(14, height//40)
+    ui._center(frame, ui._trim(quip, size, int(width*0.92), "sans"), width/2, y, size,
+               (218,187,124))
+
+
+def _travel_card_text(ui, frame, lake_name, quip):
+    """Paint the travel card's destination heading and quip onto `frame` in place."""
+    height, width = frame.shape[:2]
+    ui._center(frame, f"Opening {lake_name}...", width/2, int(height*0.46),
+               max(18,height//30), (238,233,216), "serif")
+    _loading_quip(ui, frame, quip, int(height*0.56))
+
+
+def _play_starlight(platform, session, source, destination, start, end, reduced, *, card=None):
     """Present the starlight transition from progress `start` to `end`.
 
-    The session does not tick, so the world and the clock stay paused. Closing
-    the window still quits immediately.
+    `card` is the travel card as (ui, lake name, quip), drawn over the stars
+    from `_STARLIGHT_CARD_START` until the destination begins to surface, so
+    the Lagoon route says where it goes like every other trip. The session
+    does not tick, so the world and the clock stay paused. Closing the window
+    still quits immediately.
     """
     from . import starlight
     begin = platform.ticks()
@@ -2360,7 +2396,11 @@ def _play_starlight(platform, session, source, destination, start, end, reduced)
         if keys.quit:
             session.quit = True
             return
-        platform.present(starlight.frame(source, destination, t, reduced_motion=reduced))
+        shown = starlight.frame(source, destination, t, reduced_motion=reduced)
+        if card is not None and _STARLIGHT_CARD_START <= t < starlight.RISE_START:
+            card_ui, lake_name, quip = card
+            _travel_card_text(card_ui, shown, lake_name, quip)
+        platform.present(shown)
         if t >= end:
             return
         focused = bool(getattr(keys, "focused", getattr(session, "focused", True)))
