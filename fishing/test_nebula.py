@@ -491,7 +491,21 @@ class StarlightTravel(unittest.TestCase):
                     self.assertIsNone(session.change_lake(destination))
                     platform = Platform()
                     loading = np.empty((180, 320, 3), np.uint8)
-                    with patch("fishing.game._travel_card_text", wraps=game._travel_card_text) as card:
+                    # Record the progress of every starlight frame composed and, for each
+                    # card draw, the progress of the frame it was painted onto.
+                    progress, card_progress = [], []
+                    compose, paint = starlight.frame, game._travel_card_text
+
+                    def frame(source, destination, t, **kwargs):
+                        progress.append(t)
+                        return compose(source, destination, t, **kwargs)
+
+                    def draw_card(*args):
+                        card_progress.append(progress[-1] if progress else None)
+                        return paint(*args)
+
+                    with patch("fishing.starlight.frame", side_effect=frame), \
+                            patch("fishing.game._travel_card_text", side_effect=draw_card) as card:
                         renderer, ui = _enter_lake(
                             platform, session, renderer, ui, text, loading, True, True, shown,
                             quips=quips)
@@ -509,7 +523,14 @@ class StarlightTravel(unittest.TestCase):
                             # before the card joins the stars; the card clears as the lake rises.
                             first = platform.frames[0].astype(np.float32)
                             self.assertLess(float(np.abs(first-shown).mean()), 25)
+                            self.assertEqual(len(progress), len(platform.frames))
                             self.assertLess(card.call_count, len(platform.frames) - 1)
+                            # Exactly the frames from the card start until the rise carry the
+                            # card, in order; none over the source tip, rising lake or arrival.
+                            expected = [t for t in progress
+                                        if game._STARLIGHT_CARD_START <= t < starlight.RISE_START]
+                            self.assertTrue(expected)
+                            self.assertEqual(card_progress, expected)
                         else:
                             self.assertEqual(len(platform.frames), 1)
                             self.assertEqual(card.call_count, 1)
