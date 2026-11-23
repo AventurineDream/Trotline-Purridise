@@ -1,8 +1,11 @@
 """Boat, trotlines, bites, and the bait-shop ledger.
 
 Time: one real second is one game minute at 1x, and a new game starts at dawn.
-Lines keep fishing while the game is closed, capped at six hours, and a hook
-only holds one fish, so a long absence is one soak rather than a jackpot.
+Lines keep fishing while the game is closed, for up to 72 real hours in Cozy and 36
+in Old Salt (the loaded save's mode; `comfort.offline_soak_seconds`). That cap only
+ends the replay. Spoilage is its own rule: a hooked fish gets away after
+`SPOIL_HOURS` game hours, and a hook only holds one fish, so a long absence is one
+soak rather than a jackpot.
 """
 
 from __future__ import annotations
@@ -436,23 +439,114 @@ FIRST_BITE_BOOST = 8.0  # bite pace in a new game's prologue, until its first fi
 
 
 def species_rates(zone: str, bait: str, hour: float, weather: str, depth: float, lake_id="briar", *, game_minutes=None, tool: bottools.ToolState | None = None) -> dict[str, float]:
+    """Each species' bite rate at one hook, in bites per game hour, keyed in SPECIES order.
+
+    A rate multiplies the species' base rate by its bait, zone, time-band, weather, depth,
+    lake and Bot-tool factors, in that order; given `game_minutes`, an active Lake Day's boost
+    follows (`calendar.rate_multiplier`). A species the lake does not hold has lake factor 0,
+    so its rate is 0.0 whatever the other factors, and only the lake's own species are
+    multiplied out. #140 kept the factor order, so every rate stays bit-identical.
+
+    Pure in its arguments and the content tables. `game_minutes` reaches the rates only
+    through the Lake Day row `calendar.active_lake_day` picks for it, which is why
+    `_BulkMemo` can key a total by that row instead of the minute.
+
+    Hot path: `State._one_span` asks `State._hook_rates` once per baited hook per span. A
+    span without a memo (each live game minute, and the minutes left over after a bulk
+    advance's whole hours) calls this every time. The whole-hour spans of one
+    `State._advance_hours` (offline catch-up, tows, catnaps, a frame owing over 180 game
+    minutes) share a `_BulkMemo` that keeps only each key's total: this runs when a key is
+    first asked or asked again after its map started over, and again, unmemoized, when a hook
+    bites on a remembered total, to pick the species.
+
+    Args:
+        zone: Zone id at the hook.
+        bait: Bait id on the hook.
+        hour: Hour of day, 0-24.
+        weather: Weather id.
+        depth: Water depth at the hook, metres.
+        lake_id: Lake id.
+        game_minutes: Game clock in minutes, for Lake Days; None leaves them out.
+        tool: Bot tools in effect (cold layer, chime, winch, silent hull), or None.
+
+    Returns:
+        Every species id mapped to its rate (>= 0); the keys' order drives `RNG.pick`.
+    """
     out = {}
     lake_rates = LAKE_RATE_MULTIPLIERS.get(lake_id, {})
+    special = (None if game_minutes is None
+               else calendar.active_lake_day(lake_id, game_minutes, zone))
     for sp in SPECIES:
-        out[sp.id] = (
+        lake_rate = lake_rates.get(sp.id, 0.0)
+        if not lake_rate:
+            out[sp.id] = 0.0
+            continue
+        rate = (
             sp.rate
             * bait_mult(bait, sp.id)
             * zone_mult(zone, sp.id)
             * time_mult(sp.pref_time, hour)
             * weather_mult(sp.id, weather)
             * depth_mult(sp, depth)
-            * lake_rates.get(sp.id, 0.0)
+            * lake_rate
             * bottools.species_factor(sp.tags, depth, tool)
         )
-    if game_minutes is not None:
-        out = {sid: rate * calendar.rate_multiplier(lake_id, game_minutes, sid, zone)
-               for sid, rate in out.items()}
+        if special is not None and calendar.boosts(special, sp.id):
+            rate *= special.multiplier
+        out[sp.id] = rate
     return out
+
+
+@dataclass
+class _BulkMemo:
+    """Answers one bulk advance asks again and again, each pure in its key (#140).
+
+    One lives for one `State._advance_hours` call and is dropped when it returns, so the
+    world, lake, owned tools and hull it was filled under cannot change beneath it.
+
+    `ground` maps a hook point (x, z), the exact floats `SetLine.point_at` returns, to the
+    world's (zone, depth in metres) there. It is keyed by position, never by line or hook,
+    so a line a Nebula current carries asks again at each new point.
+
+    `totals` maps a baited hook's bite inputs to `sum(species_rates(...).values())`, its
+    total bites per game hour before FIRST_BITE_BOOST, which `_one_span` applies after the
+    lookup. The key (`State._hook_rates`) holds every input `species_rates` reads: zone,
+    bait, hour, weather, depth, lake, the Lake Day row in effect (the only way the game
+    minute reaches the rates) and all four `bottools.ToolState` fields. Within one advance
+    the zone, bait, hour, weather, depth, Lake Day and chime change; the lake, winch and hull
+    do not, and the cold layer follows from lake, hour and weather. Those are keyed anyway,
+    so no key relies on them holding still. Only the total is kept: a hook that bites asks
+    again without the memo for its species rates.
+
+    Keys and values are immutable and neither map draws from the RNG, so a hit, a miss or a
+    map starting over leaves every draw, bite and catch as it would be without a memo.
+
+    MAX_ENTRIES bounds what one call holds: `remember` empties a full map before storing.
+    tracemalloc on CPython 3.12, with maps shaped like these and every float its own object
+    (so an upper estimate), puts an entry near 224 bytes in `ground` and 264 in `totals`:
+    about 15 and 17 MB at the cap, some 32 MB together, freed when the advance returns. The
+    heaviest soak measured for #140, a full boat's 192 hooks on grub through the 72-hour
+    Cozy cap as eight drifting Nebula current lines, peaked at 25,771 `totals` entries
+    (`ground` 14,471) with no map started over: about 40% of the cap. Drifting hook points
+    are what add keys there; the earlier full-boat soaks on low-rate bait stayed under
+    22,000. Those are measured soaks, not a bound, so the cap stays the guarantee.
+    Starting over costs only re-reading answers; it never changes an outcome.
+    """
+
+    MAX_ENTRIES: ClassVar[int] = 65_536
+    ground: dict = field(default_factory=dict)
+    totals: dict = field(default_factory=dict)
+
+    @classmethod
+    def remember(cls, table: dict, key, value):
+        """Store `value` under `key` in `table`, one of a memo's maps, and return `value`.
+
+        A map already holding MAX_ENTRIES is emptied first, so it never holds more.
+        """
+        if len(table) >= cls.MAX_ENTRIES:
+            table.clear()
+        table[key] = value
+        return value
 
 
 def fishing_hint(state, world) -> str | None:
@@ -876,9 +970,40 @@ class State:
         return f"{count} fish waited a long while and wriggled free. Good for them."
 
     def catch_up(self, now: float | None = None) -> None:
+        """Replay the real time since `stamp` as offline soak, then restamp at `now`.
+
+        One real second replays as one game minute, up to this save's mode cap
+        (`comfort.offline_soak_seconds`: 72 real hours in Cozy, 36 in Old Salt). A
+        shorter gap replays exactly; a longer one stops at the cap. The lines soak as in
+        play: a current carries lines set in it, fish bite, and hooked fish age and get away
+        by the usual `SPOIL_HOURS` rule. Each bite is recorded as in play, so the journal and
+        book update, a stage-up queues its `book_events` entry and toast, and a protected
+        species is released on the spot. No legendary is ever hooked here: offline bites
+        pick only from `SPECIES`, which holds no legendary, and their `Catch` keeps
+        `legendary=False`. Week seams refresh the saved forecast plans.
+
+        Event-driven quest progress can move: those stage-ups send `book.stage_up`, and
+        those protected releases `catch.resolved` (never `legendary`), to the attached quest
+        handler (`emit_quest_event`; in play the session's quest manager), whose steps
+        listening for them may advance. What runs on active play stays frozen: needs,
+        `narrative.active_play_game_minutes` and the quest timers measured from it do not
+        move. Nothing is sold and nothing enters the livewell.
+
+        Args:
+            now: Real time to catch up to, in epoch seconds; the system clock when None.
+
+        Side effects:
+            Advances the game clock, lines, fishing RNG, journal, book, `book_events` and
+            the saved forecast plans; increments the in-memory saved `hooked_total` for
+            each offline bite (the caller's later `State.save` writes it), which can end a
+            new game's first-bite boost, let the tutorial advance on the next drive tick,
+            and, if Bot was saved out monitoring a line, cause his bite toast/sound on his
+            next tick; may send quest events as above; sets `stamp` to
+            `now`; toasts each stage-up, and a summary when anything was hooked or got away.
+        """
         now = time.time() if now is None else now
         elapsed = max(0.0, now - self.stamp)
-        elapsed = min(elapsed, 6 * 3600)
+        elapsed = min(elapsed, comfort.offline_soak_seconds(self.v2))
         minutes = int(elapsed)
         self.stamp = now
         if minutes <= 0:
@@ -903,8 +1028,9 @@ class State:
 
     def _advance_hours(self, hours: int, toast: bool) -> tuple[int, int]:
         hooked = spoiled = 0
+        memo = _BulkMemo()  # what these hours ask of every baited hook again and again
         for _ in range(hours):
-            h, s = self._one_span(1.0, announce=toast)
+            h, s = self._one_span(1.0, announce=toast, memo=memo)
             hooked += h
             spoiled += s
             self.game_minutes += 60.0
@@ -920,8 +1046,13 @@ class State:
             calendar.ensure_plans(self)
         return events, s
 
-    def _one_span(self, hours: float, collect: bool = False, announce: bool = False):
-        """Age and bite across `hours` of game time. Clock is advanced by the caller."""
+    def _one_span(self, hours: float, collect: bool = False, announce: bool = False,
+                  memo: _BulkMemo | None = None):
+        """Age and bite across `hours` of game time. Clock is advanced by the caller.
+
+        `memo`, from a bulk advance, spares re-reading what its earlier spans read
+        (`_BulkMemo`); the outcome is the same with or without it.
+        """
         hooked = 0
         spoiled = 0
         events: list[tuple[int, str, float]] = []
@@ -955,20 +1086,19 @@ class State:
                 if not hook.baited:
                     continue
                 x, z = line.point_at(i)
-                zone = world.zone_at(x, z)
-                depth = float(world.depth(x, z))
+                zone, depth = self._ground(world, x, z, memo)
                 bait = line.bait_for_hook(i)
                 bot_tool = bottools.ToolState(cold_layer, self.game_minutes < line.chime_until, winched,
                                               silent_hull)
-                rates = species_rates(zone, bait, hour, weather, depth,self.lake_id,
-                                      game_minutes=self.game_minutes, tool=bot_tool)
-                total = sum(rates.values())
+                rates, total = self._hook_rates(zone, bait, hour, weather, depth, bot_tool, memo)
                 if total <= 0:
                     continue
                 if nudge:
                     total *= FIRST_BITE_BOOST
                 if not self.rng.chance(1.0 - math.exp(-total * hours)):
                     continue
+                if rates is None:  # a remembered total; the bite needs the species
+                    rates, _total = self._hook_rates(zone, bait, hour, weather, depth, bot_tool, None)
                 sp = self.rng.pick(rates)
                 weight = self._roll_weight(sp)
                 caught_hour = hour
@@ -993,6 +1123,42 @@ class State:
         if collect:
             return hooked, spoiled, events
         return hooked, spoiled
+
+    @staticmethod
+    def _ground(world: World, x: float, z: float, memo: _BulkMemo | None) -> tuple[str, float]:
+        """Zone id and depth in metres at hook point (x, z), from `memo` once it has them."""
+        if memo is None:
+            return world.zone_at(x, z), float(world.depth(x, z))
+        ground = memo.ground.get((x, z))
+        if ground is None:
+            ground = memo.remember(memo.ground, (x, z),
+                                   (world.zone_at(x, z), float(world.depth(x, z))))
+        return ground
+
+    def _hook_rates(self, zone: str, bait: str, hour: float, weather: str, depth: float,
+                    tool: bottools.ToolState,
+                    memo: _BulkMemo | None) -> tuple[dict[str, float] | None, float]:
+        """A baited hook's species rates now and their total, both per game hour.
+
+        `species_rates` depends only on these inputs, the lake and the Lake Day in effect, so
+        with `memo` a total asked before in this advance comes back alone, rates None, as the
+        very float it was. A bite then asks again without `memo` for the species. The full
+        key, and why it is enough, is in `_BulkMemo`.
+        """
+        key = None
+        if memo is not None:
+            special = calendar.active_lake_day(self.lake_id, self.game_minutes, zone)
+            key = (zone, bait, hour, weather, depth, self.lake_id, special,
+                   tool.cold_layer_m, tool.chime, tool.winch, tool.silent)
+            total = memo.totals.get(key)
+            if total is not None:
+                return None, total
+        rates = species_rates(zone, bait, hour, weather, depth, self.lake_id,
+                              game_minutes=self.game_minutes, tool=tool)
+        total = sum(rates.values())
+        if key is not None:
+            memo.remember(memo.totals, key, total)
+        return rates, total
 
     def _roll_weight(self, species_id: str) -> float:
         sp = SPECIES_BY_ID[species_id]
@@ -1519,6 +1685,12 @@ class State:
 
         A line moves as a whole, its midpoint at most DRIFT_CAP_M from where it was
         set. A step that would leave the water or crowd another line is skipped.
+
+        A line pinned at the cap where the current pushes straight outward steps onto the
+        very endpoints it already has, span after span (a long Nebula catch-up spends most
+        of its spans so). Such a step skips the wet and spacing checks (#140): they are
+        pure, and pass or fail the line stays where it is. Any zero endpoint takes the
+        checks anyway, because -0.0 == 0.0 and only a passed check would write the sign.
         """
         if minutes <= 0 or self.owns_tool("zero_g_winch"):
             return
@@ -1536,7 +1708,10 @@ class State:
             if reach > bottools.DRIFT_CAP_M:
                 off_x *= bottools.DRIFT_CAP_M / reach
                 off_z *= bottools.DRIFT_CAP_M / reach
-            moved = replace(line, x0=ox0 + off_x, z0=oz0 + off_z, x1=ox1 + off_x, z1=oz1 + off_z)
+            stepped = (ox0 + off_x, oz0 + off_z, ox1 + off_x, oz1 + off_z)
+            if stepped == (line.x0, line.z0, line.x1, line.z1) and 0.0 not in stepped:
+                continue
+            moved = replace(line, x0=stepped[0], z0=stepped[1], x1=stepped[2], z1=stepped[3])
             ends_wet = all(world.navigable(px, pz) for px, pz in
                            ((moved.x0, moved.z0), (moved.x1, moved.z1)))
             if ends_wet and not any(other is not line and _seg_gap(moved, other) < bottools.DRIFT_MIN_GAP_M

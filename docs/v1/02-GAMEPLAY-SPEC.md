@@ -86,9 +86,13 @@ time offline do not count toward these real-play timers.
    hours. The existing bulk simulation advances the full 120 minutes once and
    saves the result before a dusk-to-dawn style fade. Any key or click finishes
    the fade. Naps count as active game time for needs and quest timers.
-4. **Offline soak (existing)** stays: lines keep fishing for up to 6 real hours
-   while the game is closed. Needs, NPC timers and quest durations do **not**
-   advance offline.
+4. **Offline soak (existing)** stays, with a cap per mode (#140): lines keep
+   fishing while the game is closed for up to **72 real hours in Cozy** or **36
+   real hours in Old Salt**, by the loaded save's mode. A shorter absence replays
+   exactly; a longer one stops at the cap. The cap only ends the replay: hooked
+   fish still get away under the 13-game-hour rule (§5.3), and a hook holds one
+   fish, so a long absence is one soak. Needs, NPC timers and quest durations do
+   **not** advance offline, and nothing is sold.
 5. **Windows are generous.** No objective, legendary window or event lasts less
    than **120 game minutes**. Every recurring window shows its next occurrence in
    the journal.

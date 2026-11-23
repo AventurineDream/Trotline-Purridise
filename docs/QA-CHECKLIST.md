@@ -17,7 +17,7 @@ Use a **disposable save** for every pass: launch with `--save <scratch>` (for ex
 - [ ] At a landing, sell ordinary fish and inspect the result. **Expect:** money updates clearly; no unexpected loss of protected/Treasured fish.
 - [ ] **Boundary:** fill the livewell, then haul another eligible catch. **Expect:** any required release is explicitly indicated; nothing is silently discarded.
 - [ ] **Boundary:** leave a fish hooked beyond the 13-game-hour spoilage window. **Expect:** it is described as having gotten away; no other possession is lost.
-- [ ] **Boundary:** leave lines soaking while the game is closed for a short interval; on return, confirm offline soak is bounded (up to six real hours) and fish do not exceed the normal spoilage rule.
+- [ ] **Boundary:** leave lines soaking while the game is closed for a short interval, well under the offline cap (72 real hours in Cozy, 36 in Old Salt, by the save's mode). **Expect:** on return the lines fished for the whole interval; a fish hooked more than 13 game hours before your return has gotten away under the normal hook rule, not because of the cap.
 
 ### Menus, book, quests, NPCs
 - [ ] Open chart (**Tab**), journal (**J**), livewell (**I**), help (**H**) and pause (**Esc**); navigate with **W/S**, tabs/pages with **A/D**, Enter/Space to select, Escape to close. **Expect:** world time pauses in menus and controls are explained.

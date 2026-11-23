@@ -2905,7 +2905,8 @@ _HELP = (
         "Run a line over and you may knock one off.",
         "",
         "While the game is closed the lines keep soaking,",
-        "for up to six real hours, then the fish get away.",
+        "for up to 72 real hours in Cozy or 36 in Old Salt.",
+        "Hooked fish still get away after 13 game hours.",
     )),
     ("THE LANDING", (
         "Nose into the slip and press E.",

@@ -257,7 +257,13 @@ build and remains serialized until a recognized boat is selected.
   The haul view runs its own presentation clock; the world is paused during it.
 - Catnap calls the existing bulk-advance path (as the tow does) for 120 game
   minutes, with interpolated visuals. It counts as active play for quest timers.
-- Offline catch-up stays as implemented (lines only).
+- Offline catch-up simulates the lines. Its bites update the journal and book,
+  queue stage-up events and toasts, and release protected species on the spot;
+  stage-ups and those releases emit book and quest-router events, so it may
+  advance event-driven book/quest steps. Offline bites come only from `SPECIES`,
+  so no legendary is hooked offline. Needs, active-play timers, money/sales and
+  the livewell stay unchanged. Since #140 its cap follows the loaded save's mode:
+  72 real hours in Cozy, 36 in Old Salt (`comfort.offline_soak_seconds`).
 - `comfort.py` owns mode checks, need thresholds, prompt throttling, meals,
   nap rewards and the tow quote. Effects read the current mode at use time;
   switching clears Energy/Hunger while retaining Rested, dream notes and the

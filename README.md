@@ -284,7 +284,7 @@ $0. Deployed lines keep soaking in place.
 
 ## On the water
 
-One real second is one minute on the lake. A day is 24 minutes. `T` cycles 1×, 3×, 6×, and 12× while the boat is idling or anchored. At 12× a whole day takes two real minutes. Lines keep fishing for up to six real hours while the game is closed. A hook holds one fish, and a fish spoils after 13 game hours, so a long absence is one soak.
+One real second is one minute on the lake. A day is 24 minutes. `T` cycles 1×, 3×, 6×, and 12× while the boat is idling or anchored. At 12× a whole day takes two real minutes. While the game is closed, lines keep fishing for up to **72 real hours in Cozy** or **36 in Old Salt**, by the save's mode; a longer absence stops at that cap. The cap is not the spoil rule: a hook holds one fish, and a fish left on it gets away after 13 game hours, so a long absence is one soak.
 
 **Bot** is the tin deckhand on the bow. `B` sends him to the nearest trotline, or a short way ahead if nothing is set. He calls back the depth (a range, unless you own the finder), the ground, and what he would bait. `B` again brings him home. He does not change what bites or what fish are worth. A tow or a change of lake puts him back on deck.
 

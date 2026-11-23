@@ -13,7 +13,8 @@ from unittest.mock import patch
 
 import numpy as np
 
-from . import fieldguide
+from . import comfort, fieldguide
+from .data import SPOIL_HOURS
 from .game import Keys, Session
 from .gamepad import (
     ACTION_ALIASES, ACTION_SYMBOLS, BUTTON_ACTIONS, BUTTON_Y, normalize_key_bindings,
@@ -310,7 +311,7 @@ def _page_lines(title):
 
 
 class HelpContentChecks(unittest.TestCase):
-    """The corrected claims (V1-41 audit, #122) and the topics the help now covers."""
+    """The corrected claims (V1-41 audit, #122, #140) and the topics the help now covers."""
 
     def test_the_original_pages_keep_their_places(self):
         self.assertEqual([title for title, _ in help_pages()[:4]],
@@ -376,6 +377,17 @@ class HelpContentChecks(unittest.TestCase):
     def test_the_first_hour_describes_h_truthfully(self):
         page = " ".join(_page_lines("FIRST HOUR"))
         self.assertIn("H opens these pages on the water. Pause has Help too.", page)
+
+    def test_the_offline_soak_names_each_mode_cap_apart_from_the_hook_rule(self):
+        # #140: closed-game soaking stops at a cap per mode, in real hours. A hooked fish
+        # gets away by the game-hour hook rule, never because the cap ran out.
+        page = " ".join(_page_lines("TROT LINES"))
+        cozy, old_salt = comfort.OFFLINE_SOAK_HOURS["cozy"], comfort.OFFLINE_SOAK_HOURS["old_salt"]
+        self.assertIn("While the game is closed the lines keep soaking, for up to "
+                      f"{cozy} real hours in Cozy or {old_salt} in Old Salt.", page)
+        self.assertIn(f"Hooked fish still get away after {SPOIL_HOURS:g} game hours.", page)
+        self.assertNotIn("six real hours", page)
+        self.assertNotIn("then the fish get away", page)
 
 
 class HelpLayoutChecks(unittest.TestCase):
