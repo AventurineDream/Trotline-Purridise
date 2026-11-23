@@ -34,9 +34,9 @@ NEBULA_AWAY = 4 * 24 * 60 + 23
 SETTLE_HOURS = 120  # hourly drift spans the direct check steps; both lines settle near 82
 SMALL = 16  # MAX_ENTRIES small enough that both soaks empty both maps over and over
 # 23:00 on a plain Nebula weekday, noon that day, and 23:00 on Meteor Shower night.
-PLAIN_NIGHT = 3 * 1440 + 17 * 60
-PLAIN_NOON = 3 * 1440 + 6 * 60
-METEOR_NIGHT = 2 * 1440 + 17 * 60
+PLAIN_NIGHT = 4 * 1440 + 17 * 60
+PLAIN_NOON = 4 * 1440 + 6 * 60
+METEOR_NIGHT = 3 * 1440 + 17 * 60
 
 
 def memo_free():

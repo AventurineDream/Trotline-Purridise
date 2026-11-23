@@ -1,5 +1,6 @@
 """Calendar --shots fixtures and a bounded, warmed UI benchmark."""
 def calendar_gallery(destination, *, text=None, world=None, background=None):
+    """Write calendar panels and UI timings to `destination`; reuse supplied render resources."""
     import json
     from pathlib import Path
     import resource
@@ -19,15 +20,15 @@ def calendar_gallery(destination, *, text=None, world=None, background=None):
     out = Path(destination)
     out.mkdir(parents=True, exist_ok=True)
     state = State.new(world, seed=44016)
-    state.game_minutes = 9300
+    state.game_minutes = 660
     state.well = [Catch('bluegill', .9, 1, 0, 'flats', 'worm', 17),
                   Catch('gar', 3., 1, 0, 'open', 'minnow', 17)]
     state.toasts.clear()
     state.tutorial = 4
     painter = UI(text, world)
     panels = (
-        ('week', UIState(mode='journal', journal_page=5, book_week_i=1)),
-        ('sunday', UIState(mode='journal', journal_page=5, book_week_i=6)),
+        ('week', UIState(mode='journal', journal_page=5, book_week_i=2)),
+        ('sunday', UIState(mode='journal', journal_page=5, book_week_i=0)),
         ('cookout', UIState(mode='kitchen')),
         ('share', UIState(mode='cook_confirm', cook_kind='cookout', cook_label='Sunday landing cookout')),
     )

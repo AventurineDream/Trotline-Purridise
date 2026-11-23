@@ -3043,7 +3043,7 @@ _HELP = (
         "Finish a chapter to open the next lake's route.",
     )),
     ("THE WEEK AND COOKOUT", (
-        "The week starts on Monday and rolls over at 6 AM.",
+        "Weeks run Sun–Sat. Each day begins at 6 AM.",
         "The book's Week tab lists all seven days.",
         "Each lake has two Lake Days, with a bonus for",
         "certain fish, hours or weather.",

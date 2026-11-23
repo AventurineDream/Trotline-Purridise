@@ -248,19 +248,20 @@ class LakeFrameworkChecks(unittest.TestCase):
             ctx.release()
 
     def test_all_ten_lake_days_and_future_weather_biases(self):
+        """All five lakes retain two specials, with weather biases on their Sunday-first days."""
         self.assertEqual(len(LAKE_DAYS), 10)
         for lake, definition in LAKES.items():
             days = {row.id for row in LAKE_DAYS if row.lake == lake}
             self.assertEqual(days, set(definition["lake_days"]))
             self.assertEqual(len(days), 2)
         for seed in range(10):
-            self.assertEqual(calendar.planned_weather(seed, "flathead", 60), "clear")
-            self.assertEqual(calendar.planned_weather(seed, "crater", 4*1440), "fog")
-            self.assertEqual(calendar.planned_weather(seed, "crater", 4*1440+60), "clear")
-        self.assertEqual(calendar.rate_multiplier("nebula", 2*1440+840, "bluegill", "open"), 1.15)
-        self.assertEqual(calendar.rate_multiplier("nebula", 2*1440+360, "bluegill", "open"), 1)
-        self.assertEqual(calendar.rate_multiplier("flathead", 2*1440+360, "yellow_perch", "flats"), 1.25)
-        self.assertEqual(calendar.rate_multiplier("crater", 1440, "ember_char", "deep"), 1.3)
+            self.assertEqual(calendar.planned_weather(seed, "flathead", 1440+60), "clear")
+            self.assertEqual(calendar.planned_weather(seed, "crater", 5*1440), "fog")
+            self.assertEqual(calendar.planned_weather(seed, "crater", 5*1440+60), "clear")
+        self.assertEqual(calendar.rate_multiplier("nebula", 3*1440+840, "bluegill", "open"), 1.15)
+        self.assertEqual(calendar.rate_multiplier("nebula", 3*1440+360, "bluegill", "open"), 1)
+        self.assertEqual(calendar.rate_multiplier("flathead", 3*1440+360, "yellow_perch", "flats"), 1.25)
+        self.assertEqual(calendar.rate_multiplier("crater", 2*1440, "ember_char", "deep"), 1.3)
 
 
 class FiveWaterTravelChecks(unittest.TestCase):

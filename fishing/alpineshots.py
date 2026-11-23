@@ -32,6 +32,7 @@ def resident_bytes():
 
 
 def shots(dest, *, software=False, frames=60):
+    """Write alpine views to `dest`, including Wednesday's Larch Gold and `frames` warmed timings."""
     if frames < 60:
         raise ValueError('Use at least 60 warmed full frames')
     out=Path(dest)
@@ -72,7 +73,7 @@ def shots(dest, *, software=False, frames=60):
 
         overlook=(-260,10,math.pi/2)
         for name,minute in (('dawn',60),('noon',360),('dusk',780),('night',960),
-                            ('snow-mist',5),('larch-gold',2*1440+360)):
+                            ('snow-mist',5),('larch-gold',3*1440+360)):
             capture(name,minute,overlook)
         # A real navigable approach shows the inhabited launch, cabin and chimney.
         px,pz=world.slip.world(-55,0)
@@ -99,7 +100,7 @@ def shots(dest, *, software=False, frames=60):
         times=[]
         for index in range(frames):
             panel.mode=modes[index%3]
-            state.game_minutes=(5,360,960,2*1440+360)[index%4]
+            state.game_minutes=(5,360,960,3*1440+360)[index%4]
             state.anim=index/30
             begin=time.perf_counter()
             compose()

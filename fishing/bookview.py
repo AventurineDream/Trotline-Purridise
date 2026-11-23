@@ -649,6 +649,7 @@ class BookView:
         self.footer(f"Watch {self.ui.book_watch_i + 1}/{len(LEGENDARY_IDS)} · Page {index}/{count}")
 
     def week(self):
+        """Draw the Sunday–Saturday week and read-only forecast for the selected day."""
         from . import calendar
         state, ui = self.state, self.ui
         today = calendar.day_number(state.game_minutes)
@@ -656,7 +657,7 @@ class BookView:
         selected = first + ui.book_week_i % 7
         special = calendar.lake_day(state.lake_id, selected * 1440)
         values = [special.name + f" · {special.band} catches ×{special.multiplier:g}" if special else "A quiet lake day."]
-        if selected % 7 == 6:
+        if selected % 7 == calendar.CALENDAR_DATA['cookout']['weekday']:
             values += ["Landing Cookout · 5–8 PM", "All lake friends gather. Bring one ordinary fish for a pantry gift; no cost for missing it."]
         values += ["Forecast · dawn to dawn", *calendar.forecast_text(state, selected),
                    "Days begin at 6 AM. Rain is shown as drizzle. Rare-weather opportunities repeat daily; story and equipment gates still apply."]
@@ -670,7 +671,7 @@ class BookView:
                 day = first + i
                 event = calendar.lake_day(state.lake_id, day * 1440)
                 label = calendar.WEEKDAYS[i][:3] + (" · Today" if day == today else "")
-                label += " · " + ("Cookout" if i == 6 else event.name if event else "Quiet day")
+                label += " · " + ("Cookout" if i == calendar.CALENDAR_DATA['cookout']['weekday'] else event.name if event else "Quiet day")
                 self.fill(rect, LEATHER if i == ui.book_week_i % 7 else (218, 210, 185))
                 size = self.small
                 while size > 1 and self.u.cell(size)[1] > rect[3] - 8:

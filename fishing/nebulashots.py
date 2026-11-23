@@ -42,10 +42,10 @@ def resident_bytes():
 
 
 def calm_minute(state, offset, days=range(7)):
-    """The first day whose forecast at this clock offset is clear or fair."""
+    """Return the first clear/fair game minute at `offset`, excluding Saturday's Aurora Tide."""
     for day in days:
         minute = day*1440+offset
-        if day % 7 != 5 and weather_at(state, minute) in ('clear', 'fair'):
+        if day % 7 != 6 and weather_at(state, minute) in ('clear', 'fair'):
             return minute
     return offset
 
@@ -182,6 +182,7 @@ def transition_strips(source, arrival):
 
 
 def shots(dest, *, software=False, frames=60):
+    """Write Nebula evidence to `dest`, using `frames` warmed frames; fail on invalid captures."""
     if frames < 60:
         raise ValueError('Use at least 60 warmed full frames')
     out = Path(dest)
@@ -240,10 +241,10 @@ def shots(dest, *, software=False, frames=60):
 
         for name, offset in BANDS:
             capture(name, calm_minute(state, offset), OVERLOOK, title=name.title()+' band')
-        capture('aurora', 900, OVERLOOK)
+        capture('aurora', 6*1440+900, OVERLOOK)
         if captures[-1]['weather'] != 'aurora' or captures[-1]['aurora'] < 1:
             raise AssertionError('The aurora capture must use a real aurora night')
-        capture('meteor-shower', 2*1440+1170, OVERLOOK, look=.12, anim=16.5)
+        capture('meteor-shower', 3*1440+1170, OVERLOOK, look=.12, anim=16.5)
         if captures[-1]['meteors'] < 1:
             raise AssertionError('The meteor capture must fall on a Meteor Shower night')
         lx, lz = _lane_point(world, 7)

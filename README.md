@@ -358,11 +358,13 @@ The collection includes bluegill; yellow, black, and brown bullhead; black and w
 
 
 The **Week** tab shows the active lake's seven-day weather plan, Lake Days and
-Sunday cookout. Days begin at 6 AM, with Monday as day zero. Tuesday dawn
+Sunday cookout. Weeks run Sunday–Saturday (Sunday is day zero), and days still begin at 6 AM. Tuesday dawn
 panfish and Friday night catfish have Briar bonuses; Cedar has Thursday night
 blue/channel catfish and Saturday daytime bass in open water or rocks. Forecasts
 survive reloading and lake travel, and Watch cards show the next rare-weather
 opportunity (story and gear requirements still apply).
+Existing saves keep their elapsed game minutes, forecast seed and daily social-event
+ledgers; changing the weekday convention does not reset time or replay claimed gifts/chats.
 
 On Sunday from 5–8 PM, meet the lake friends at the landing: six on Briar and Cedar, none yet on the other lakes. Open
 **Kitchen**, choose **Share a fish at the Sunday cookout**, then confirm a fish
