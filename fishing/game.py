@@ -719,7 +719,9 @@ class Session:
             return click is not None or bool(wheel)
         if wheel:
             if ui.skipper_typing or ui.capturing_key:
-                return True
+                # Swallow the wheel but still run native handlers: they read
+                # physical_keyboard_pressed for typed letters and Backspace.
+                return False
             registry.owner = "scroll"
             registry.hovered = None
             self._pointer_scroll(registry.scroll, -int(wheel))

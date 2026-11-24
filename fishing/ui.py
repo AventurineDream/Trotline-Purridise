@@ -1800,6 +1800,8 @@ class UI:
         if mh > max_map_h:
             mh = max_map_h
             mw = int(mh * chart.shape[1] / chart.shape[0])
+        # A shallow window can drive max_map_h negative; _fit needs positive samples.
+        mh, mw = max(1, mh), max(1, mw)
         # Reserve the chart's lower edge for the same actions its native keys expose.
         key_x = x + mw + gap
         key_w = w - margin - key_x
