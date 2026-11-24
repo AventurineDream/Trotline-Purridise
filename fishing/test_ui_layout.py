@@ -255,6 +255,40 @@ class GuideLayoutChecks(unittest.TestCase):
         self.assertTrue(quest_step_text.endswith("to scout."), quest_step_text)
         self.assertGreater(quest_title, clock_y)
         self.assertGreater(quest_step, quest_title)
+    def test_weather_sits_on_the_right_hud_and_quest_is_its_own_pill(self):
+        """Issue #158: weather moves right; the quest tracker is a separate pill."""
+        from . import calendar
+
+        world = World()
+        state = State.new(world, seed=53)
+        state.narrative.quests["q01_tea_leaves_deep_holes"].status = "active"
+        ui = UI(self.text, world)
+        panels, texts = [], []
+        original_panel, original_text = ui._panel, ui._text
+
+        def panel(frame, x, y, width, height, *args, **kwargs):
+            panels.append((int(x), int(y), int(width), int(height)))
+            return original_panel(frame, x, y, width, height, *args, **kwargs)
+
+        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
+            texts.append((label, int(x), int(y)))
+            return original_text(frame, label, x, y, size, color, shadow, family)
+
+        ui._panel, ui._text = panel, text
+        ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play"))
+        weather = calendar.weather_at(state).replace("_", " ").upper()
+        weather_label = next((x for label, x, _y in texts if label.startswith("WEATHER")), None)
+        quest_title = next((x for label, x, _y in texts if label.startswith("QUEST ·")), None)
+        self.assertIsNotNone(weather_label, "no WEATHER line on the HUD")
+        self.assertIn("WEATHER  " + weather, next(label for label, _x, _y in texts if label.startswith("WEATHER")))
+        self.assertIsNotNone(quest_title)
+        # The quest pill is a panel below the left clock panel, not inside it.
+        left_panel = panels[0]
+        quest_panel = next((p for p in panels if p[1] > left_panel[1] + left_panel[3]), None)
+        self.assertIsNotNone(quest_panel, "quest tracker has no separate pill")
+        self.assertEqual(quest_panel[0], left_panel[0])
+        self.assertGreater(quest_panel[1], left_panel[1] + left_panel[3] - 4)
+
 
     def test_comfort_status_sits_below_the_quest_tracker(self):
         """A picnic buff or Old Salt needs label never covers the quest's next step."""

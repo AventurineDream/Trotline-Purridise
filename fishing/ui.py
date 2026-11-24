@@ -1576,49 +1576,54 @@ class UI:
         weather = calendar.weather_at(state).replace("_", " ").upper()
         clock = calendar.day_name(state.game_minutes)[:3] + " " + clock_string(state.game_minutes)
         clock_size = max(22,int(30*unit))
-        meta = weather
-        if self.world.id == "nebula":
-            # The Lagoon names its bands Rising, Bright, Fading and Deep (03 §1.6).
-            from .data import hour_of_day
-            from .nebula import band_label
-            meta = band_label(hour_of_day(state.game_minutes)).upper() + "  /  " + weather
+        # Issue #158: the left panel keeps the clock and time scale; weather
+        # moves to the right HUD and the quest tracker becomes its own pill.
+        meta = ""
         if state.time_scale!=1:
-            meta += f"  /  {state.time_scale}x" + ("" if state.fast_ok() else " held")
-        # As wide as its clock at the largest text (V1-43).
+            meta = f"{state.time_scale}x" + ("" if state.fast_ok() else " held")
         lw = max(int(205*unit)+34, self._measure(clock,clock_size,"serif")+34,
-                 self._measure(self.world.name.upper(),small,"sans")+34, self._measure(meta,small,"sans")+34)
+                 self._measure(self.world.name.upper(),small,"sans")+34)
+        if meta:
+            lw = max(lw, self._measure(meta,small,"sans")+34)
         lh = int(92*unit)+10
         meta_y = m+int(71*unit)
         hud_quest = _active_hud_quest(state, self.narrative_content)
+        qw = lw
         if hud_quest is not None:
-            # The tracker may widen the panel, but never past 42% of the screen.
             quest_title = "QUEST · " + hud_quest[0]
             quest_progress = hud_quest[1]
             content_width = max(self._measure(quest_title, small, "sans"),
                                 self._measure(quest_progress, small, "sans"))
-            lw = max(lw, min(int(w*.42), content_width+32))
-            quest_title = self._trim(quest_title, small, lw-32, "sans")
-            quest_progress = self._trim(quest_progress, small, lw-32, "sans")
-            quest_y = meta_y+self.cell(small)[1]+max(2,int(3*unit))
-            progress_y = quest_y+self.cell(small)[1]+max(1,int(2*unit))
-            lh = max(lh, progress_y+self.cell(small)[1]+10-m)
+            qw = max(lw, min(int(w*.42), content_width+32))
+            quest_title = self._trim(quest_title, small, qw-32, "sans")
+            quest_progress = self._trim(quest_progress, small, qw-32, "sans")
         lw = min(w-2*m, lw)
+        qw = min(w-2*m, qw)
         self._panel(frame,m,m,lw,lh,HUD_PANEL_ALPHA)
         if getattr(self, "_hud_rects", None) is None:
             self._hud_rects = []
         self._hud_rects.append((m, m, lw, lh))
         self._text(frame,self.world.name.upper(),m+16,m+int(11*unit),small,GOLD,False,"sans")
         self._text(frame,clock,m+16,m+int(31*unit),clock_size,INK,False,"serif")
-        self._text(frame,meta,m+16,meta_y,small,DIM,False,"sans")
+        if meta:
+            self._text(frame,meta,m+16,meta_y,small,DIM,False,"sans")
         if hud_quest is not None:
-            self._text(frame,quest_title,m+16,quest_y,small,GOLD,False,"sans")
-            self._text(frame,quest_progress,m+16,progress_y,small,INK,False,"sans")
+            # The quest tracker is its own pill just below the clock panel.
+            qy = m+lh+4
+            qh = int(48*unit)
+            self._panel(frame,m,qy,qw,qh,HUD_PANEL_ALPHA)
+            self._hud_rects.append((m, qy, qw, qh))
+            q_title_y = qy+int(8*unit)
+            q_progress_y = q_title_y+self.cell(small)[1]+max(1,int(2*unit))
+            self._text(frame,quest_title,m+16,q_title_y,small,GOLD,False,"sans")
+            self._text(frame,quest_progress,m+16,q_progress_y,small,INK,False,"sans")
         zone = self.world.zone_name(self.world.zone_at(state.x, state.z))
         zone_width = self._measure(zone,size+4,"serif")
         rx = w-m-max(int(194*unit),zone_width+32)
         rw = w-m-rx
-        self._panel(frame,rx,m,rw,int(140*unit)+10,HUD_PANEL_ALPHA)
-        self._hud_rects.append((rx, m, rw, int(140*unit)+10))
+        rh = int(160*unit)+10
+        self._panel(frame,rx,m,rw,rh,HUD_PANEL_ALPHA)
+        self._hud_rects.append((rx, m, rw, rh))
         self._text(frame,"ON THE WATER",rx+16,m+int(11*unit),small,GOLD,False,"sans")
         self._text(frame,zone,rx+16,m+int(31*unit),size+4,INK,False,"serif")
         bearing = ("N","NE","E","SE","S","SW","W","NW")[int((state.yaw%(2*np.pi))/(np.pi/4)+0.5)%8]
@@ -1627,6 +1632,14 @@ class UI:
         if state.finder:
             navigation += f"  /  {float(self.world.depth(state.x,state.z))*3.28084:.0f} FT"
         self._text(frame,navigation,rx+16,m+int(71*unit),small,DIM,False,"sans")
+        # Issue #158: weather lives on the right HUD, clearly labeled.
+        if self.world.id == "nebula":
+            from .data import hour_of_day
+            from .nebula import band_label
+            weather_line = band_label(hour_of_day(state.game_minutes)).upper() + "  /  " + weather
+        else:
+            weather_line = weather
+        self._text(frame,"WEATHER  "+weather_line,rx+16,m+int(91*unit),small,DIM,False,"sans")
         lever = state.throttle_setting
         gear = "IDLE" if abs(lever)<0.005 else ("FWD" if lever>0 else "REV")
         percent = round(abs(lever)/(1.0 if lever>=0 else 0.45)*100)
@@ -1640,31 +1653,31 @@ class UI:
         else:
             power = "ENGINE OFF" if not state.engine_on else "THROTTLE"
         throttle = f"{power}  IDLE" if gear=="IDLE" else f"{power}  {gear} {percent}%"
-        self._text(frame,throttle,rx+16,m+int(91*unit),small,
+        self._text(frame,throttle,rx+16,m+int(111*unit),small,
                    DIM if gear=="IDLE" else GOLD,False,"sans")
         if state.boat_id=="rowboat":
             power = (f"BATTERY  {state.rowboat_battery_kwh:.1f} / {ROWBOAT_BATTERY_KWH:.0f} kWh"
                      if state.rowboat_trolling_motor else "ROW POWER  OARS READY")
             low_power = (state.rowboat_trolling_motor
                          and state.rowboat_battery_kwh<ROWBOAT_BATTERY_KWH*0.15)
-            self._text(frame,power,rx+16,m+int(111*unit),small,WARN if low_power else DIM,False,"sans")
+            self._text(frame,power,rx+16,m+int(131*unit),small,WARN if low_power else DIM,False,"sans")
         elif not state.boat.fuelled:
-            self._text(frame,"NO FUEL NEEDED",rx+16,m+int(111*unit),small,DIM,False,"sans")
+            self._text(frame,"NO FUEL NEEDED",rx+16,m+int(131*unit),small,DIM,False,"sans")
         else:
             fuel = f"FUEL  {state.fuel:.1f} / {state.boat.tank:.0f} L"
-            self._text(frame,fuel,rx+16,m+int(111*unit),small,
+            self._text(frame,fuel,rx+16,m+int(131*unit),small,
                        WARN if state.fuel<state.boat.tank*0.15 else DIM,False,"sans")
         if state.boat.fuelled and state.boat.tank > 0 and state.fuel < state.boat.tank * 0.15:
             level = "EMPTY" if state.fuel <= 0.001 else "LOW FUEL"
             recovery = self._controls(ui, "R tow · Boats", "Call tow · Boats")
             label = self._trim(f"{level} · {recovery}", small, rw - 32)
-            self._text(frame, label, rx + 16, m + int(131 * unit), small, WARN, False, "sans")
+            self._text(frame, label, rx + 16, m + int(151 * unit), small, WARN, False, "sans")
         elif state.boat.power == "sail":
             wind,wind_speed = wind_at(state.game_minutes+state.minute_acc, state)
             coming_from = (wind+np.pi)%(2*np.pi)
             direction = ("N","NE","E","SE","S","SW","W","NW")[int(coming_from/(np.pi/4)+0.5)%8]
             sail = "SAIL UP" if state.sail_raised else "SAIL DOWN"
-            self._text(frame,f"{sail} / {direction} {wind_speed*1.94384:.0f} KT",rx+16,m+int(131*unit),small,GOLD,False,"sans")
+            self._text(frame,f"{sail} / {direction} {wind_speed*1.94384:.0f} KT",rx+16,m+int(151*unit),small,GOLD,False,"sans")
         elif state.bot_phase != "home":
             from .bot import status as bot_status
             from .sim import hour_of_day
@@ -1672,7 +1685,7 @@ class UI:
             cold = bottools.scanner_text(state.owns_tool("thermo_scanner"), self.world.id,
                                          hour_of_day(state.game_minutes), weather_at(state))
             report = " · ".join(part for part in (bot_status(state), cold) if part)
-            self._text(frame, self._trim(report, small, rw - 32), rx+16, m+int(131*unit), small, GOLD, False, "sans")
+            self._text(frame, self._trim(report, small, rw - 32), rx+16, m+int(151*unit), small, GOLD, False, "sans")
         else:
             from .sim import fishing_hint, hour_of_day
             from .calendar import weather_at
@@ -1680,7 +1693,7 @@ class UI:
                                          hour_of_day(state.game_minutes), weather_at(state))
             parts = [part for part in (cold, fishing_hint(state, self.world)) if part]
             label = self._trim(" · ".join(parts), small, rw - 32) if parts else state.boat.name
-            self._text(frame, label, rx+16, m+int(131*unit), small, GOLD if parts else DIM, False, "sans")
+            self._text(frame, label, rx+16, m+int(151*unit), small, GOLD if parts else DIM, False, "sans")
         sw,stat_h = int(208*unit)+32,int(106*unit)+12
         sx,sy = w-m-sw,h-m-stat_h
         self._panel(frame,sx,sy,sw,stat_h,0.80)
