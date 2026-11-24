@@ -384,19 +384,19 @@ def _scaled(p, size):
 
 
 def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
-    """Build one cat's posed geometry in metres without changing its appearance.
+    """Build one posed cat with its tail root buried inside the torso.
 
     Args:
-        look: A validated npcs.json-style appearance, including size and ear kind.
-        pose: An authored POSE_JOINTS key.
-        lod: LOD0 or LOD1; poses of the same look and LOD share topology.
+        look: Validated appearance; size scales the rig's metre-based dimensions.
+        pose: A POSE_JOINTS key, including the greeting poses.
+        lod: LOD0 or LOD1; poses and tail kinds retain the same tail topology.
 
     Returns:
-        Positions, normals, part ids, along-part coordinates, triangle indices,
-        attire tags and motion Pivots, all in the cat's local frame.
+        Positions (metres), normals, part ids, along-part fractions, triangles,
+        attire tags and motion pivots. Arrays belong to the caller.
 
     Raises:
-        KeyError: If an appearance kind or pose is unknown.
+        KeyError: An appearance or pose key is missing or unsupported.
     """
     j = POSE_JOINTS[pose]
     size = float(look["size"])
@@ -542,19 +542,29 @@ def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
         p, n, f, a = _ellipsoid(foot_c, (0.03 * s, 0.022 * s, 0.05 * s), _rot(yaw=side * 0.1), *c["paw"])
         out.add(p, n, f, FOOT, a)
 
-    # Tail: a swept tube along the pose's cage; bob and none are short.
+    # Keep the authored tip and tail kinds, but bury the root in the posed rump.
     tail_kind = look["tail"]
     length = {"long": 1.0, "plume": 1.0, "bob": 0.28, "none": 0.08}[tail_kind]
-    cage = [_scaled(p, s) + np.array([0, lift * s if pose not in LYING else 0, 0]) for p in j["tail"]]
-    pts = _bezier(cage, c["tail"])
-    if length < 1.0:
-        # Keep the sample count (so poses share topology) on a shorter curve.
-        t = np.linspace(0, length, c["tail"])[:, None]
-        pts = (1 - t) ** 3 * cage[0] + 3 * (1 - t) ** 2 * t * cage[1] + 3 * (1 - t) * t * t * cage[2] + t ** 3 * cage[3]
+    cage = _scaled(j["tail"], s)
+    cage[:, 1] += lift * s if pose not in LYING else 0.0
+    u = np.linspace(0, 1, c["tail"])
+    t = (u * length)[:, None]
+    pts = (1 - t) ** 3 * cage[0] + 3 * (1 - t) ** 2 * t * cage[1] + 3 * (1 - t) * t * t * cage[2] + t ** 3 * cage[3]
+    root = pts[0] - centre
+    root_distance = np.linalg.norm((root @ torso_rot) / torso_r)
+    # The inner 30% leaves room for the whole ring and cap even on thin, low-LOD
+    # torsos. Fade over the shortened curve so a Manx tuft is not buried.
+    inset = centre + root * (0.30 / root_distance) - pts[0]
+    # A cubic fade bunches a stub's outer rings where greeting lift bends it up.
+    # Shorter tails need a more even inset gradient to keep those ring planes apart;
+    # full-length tails retain their authored cubic transition and tip tangent.
+    remaining = 1 - u
+    fade = (1 - length) * remaining + length * remaining ** 3
+    pts += inset * fade[:, None]
     thick = (0.034 if tail_kind == "plume" else 0.022) * s * fluff
-    radii = thick * (1.0 - 0.55 * np.linspace(0, 1, c["tail"]) ** 1.5)
+    radii = thick * (1.0 - 0.55 * u ** 1.5)
     if tail_kind == "plume":
-        radii = radii * (1.0 + 0.35 * np.sin(np.linspace(0, math.pi, c["tail"])))
+        radii = radii * (1.0 + 0.35 * np.sin(u * math.pi))
     p, n, f, a = _tube(pts, radii, c["tail_sides"])
     out.add(p, n, f, TAIL, a)
 
