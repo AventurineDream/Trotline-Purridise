@@ -2,7 +2,7 @@
 
 The layout and contrast tests draw each of these at the largest text size, and
 `python -m fishing --shots <dir> --ui-matrix` draws each at every text size, for keyboard
-and for gamepad (uishots.py).
+and gamepad and pointer (uishots.py), including shared row focus and action-button outlines.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from . import comfort, skipperlook
 from .data import BAIT_RECIPES, DISHES, PANTRY
 from .sim import Catch, Hook, SetLine, State
-from .ui import HELP_SPREADS, SHOP_TABS, SPECIES, UIState
+from .ui import HELP_SPREADS, SHOP_TABS, SPECIES, UIState, pause_options
 from .world import World
 
 LARGEST_TEXT = 2
@@ -71,7 +71,11 @@ def skipper_look(name: str = "Mochi") -> dict:
 
 
 def screens(ui, world, dyslexia_font, text_size=LARGEST_TEXT):
-    """(name, state, UIState) for every screen UI.draw can show, each with real content."""
+    """Return real-content (name, state, UIState) fixtures for every rendered screen.
+
+    ``ui`` supplies authored content and ``world`` the lake; font and text-size
+    settings select the same layout inputs as play. No input is routed or saved.
+    """
     from . import legendshots
     from .bookview import BOOK_TABS, ENTRY_IDS
     from .kitchen import rows as kitchen_rows
@@ -83,6 +87,7 @@ def screens(ui, world, dyslexia_font, text_size=LARGEST_TEXT):
     base = settled_state(world, 51, dyslexia_font, text_size)
     add("title", base, UIState(mode="title", has_save=True))
     add("title new game", base, UIState(mode="title", has_save=False))
+    add("title confirmation", base, UIState(mode="title", has_save=True, confirm_new=True))
     add("play", base, UIState(mode="play"))
     add("map", base, UIState(mode="map"))
     add("dialogue", base, UIState(
@@ -97,6 +102,8 @@ def screens(ui, world, dyslexia_font, text_size=LARGEST_TEXT):
     for tab in range(len(SHOP_TABS)):
         add(f"shop {SHOP_TABS[tab]}", base, UIState(mode="shop", shop_tab=tab, shop_i=0))
     add("setbait", base, UIState(mode="setbait"))
+    add("setbait sections", base, UIState(mode="setbait", set_sections=3, set_section=1,
+                                          set_section_baits=(0, 1, 2)))
 
     haul = haul_state(world, dyslexia_font, fish=True, shiny=True, text_size=text_size)
     add("haul rise", haul_state(world, dyslexia_font, fish=True, text_size=text_size), UIState(
@@ -177,10 +184,13 @@ def screens(ui, world, dyslexia_font, text_size=LARGEST_TEXT):
     well.well = [Catch("bluegill", 0.75, 1.0, 0.0, "flats", "worm", 8.0)]
     add("well with a fish", well, UIState(mode="well", well_i=0))
     add("pause", base, UIState(mode="pause"))
+    add("pause scrolled", base, UIState(mode="pause", pause_i=len(pause_options(base)) - 1))
     add("settings", base, UIState(mode="settings"))
+    add("settings volume", base, UIState(mode="settings", settings_i=7))
     add("keyboard controls", base, UIState(mode="settings", settings_page="keys", key_binding_i=0))
     add("keyboard controls scrolled", base, UIState(
         mode="settings", settings_page="keys", key_binding_i=29))
+    add("keyboard capture", base, UIState(mode="settings", settings_page="keys", capturing_key=True))
     # The Skipper creator: from the pause menu, a look with most rows in use; typing its name; and
     # the same creator as a new morning's (Done there starts the game).
     add("your skipper", base, UIState(mode="skipper", skipper_origin="pause", skipper_look=skipper_look(),

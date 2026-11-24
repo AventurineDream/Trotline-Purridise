@@ -4,6 +4,11 @@ from .data import BOT_COLLAR_STAGES, BOT_KNOTS
 
 
 def draw(renderer, frame, state, ui):
+    """Paint Bot stock into the RGB pixel frame through Kitchen's shared renderer.
+
+    ``state`` supplies the profile and ``ui`` receives native row focus and
+    measured tab/row pointer targets. Returns None; never purchases an item.
+    """
     saved = botidentity.profile(state)
     collar = saved['collar']
     stage = BOT_COLLAR_STAGES.get(collar.get('stage'), 'Collar memory')

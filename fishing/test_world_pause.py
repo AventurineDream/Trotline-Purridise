@@ -105,11 +105,13 @@ class WorldPauseChecks(unittest.TestCase):
         self.assertEqual(self.session.advance_bulk(120), (0, 0))
         self.assertEqual(self.snapshot(), before)
 
-    def test_chart_menu_cannot_trigger_the_tow_time_jump(self):
+    def test_chart_r_tows_like_the_chart_button(self):
+        # The chart documents "R tows" and publishes a Call tow target; the key
+        # takes the same _map_tow path, which advances the world from play.
         self.session.ui.mode = "map"
-        before = self.snapshot()
         self.session.tick(Keys(pressed=("r",)), 0.25)
-        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.session.ui.mode, "play")
+        self.assertGreater(self.state.game_minutes, 800)
 
     def test_chart_closing_frame_does_not_apply_held_driving_keys(self):
         self.session.ui.mode = "map"

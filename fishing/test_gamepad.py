@@ -1,4 +1,4 @@
-"""SDL GameController translation and controller-only play loop checks."""
+"""SDL controller actions and unchanged pointer/viewport metadata through remapping."""
 
 from __future__ import annotations
 
@@ -26,6 +26,8 @@ from .world import World
 
 
 class GamepadChecks(unittest.TestCase):
+    """Cover native controller input and its shared session-input adapter."""
+
     def setUp(self):
         self.environment = patch.dict(os.environ, {
             "SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
@@ -290,6 +292,78 @@ class GamepadChecks(unittest.TestCase):
         )
         session_input(keys, default_key_bindings(), repeat)
         self.assertEqual(repeat, {"w": 0.2})
+
+    def test_session_input_preserves_pointer_and_resize_metadata_when_remapping(self):
+        """Key bindings cannot remap coordinates, consume clicks, or lose resize edges."""
+        saved = default_key_bindings()
+        saved["throttle_up"] = "p"
+        keys = Input()
+        keys.keyboard_pressed = {"p"}
+        keys.keyboard_held = {"p"}
+        keys.keyboard_press_order = ["p"]
+        keys.gamepad_pressed = {"e"}
+        keys.gamepad_held = {"e"}
+        keys.mouse_pos = (1234, 567)
+        keys.mouse_moved = True
+        keys.mouse_click = (1200, 560)
+        keys.mouse_wheel = -2
+        keys.viewport = (2560, 1440)
+        keys.resized = True
+        keys.device = "mouse"
+        mapped = session_input(keys, saved, {})
+        self.assertEqual(mapped.mouse_pos, keys.mouse_pos)
+        self.assertTrue(mapped.mouse_moved)
+        self.assertEqual(mapped.mouse_click, keys.mouse_click)
+        self.assertEqual(mapped.mouse_wheel, -2)
+        self.assertEqual(mapped.viewport, (2560, 1440))
+        self.assertTrue(mapped.resized)
+        self.assertTrue(mapped.focused)
+        self.assertEqual(mapped.device, "mouse")
+        self.assertIn("w", mapped.pressed)
+        self.assertIn("w", mapped.held)
+        self.assertIn("e", mapped.gamepad_pressed)
+        self.assertEqual(mapped.physical_keyboard_pressed, {"p"})
+        self.assertEqual(mapped.physical_keyboard_press_order, ["p"])
+        mapped.mouse_click = None
+        self.assertEqual(keys.mouse_click, (1200, 560))
+
+        keys.mouse_pos = keys.mouse_click = None
+        keys.mouse_moved = keys.resized = False
+        keys.mouse_wheel = 0
+        keys.viewport = (0, 0)
+        keys.focused = False
+        mapped = session_input(keys, saved, {})
+        self.assertIsNone(mapped.mouse_pos)
+        self.assertIsNone(mapped.mouse_click)
+        self.assertFalse(mapped.mouse_moved)
+        self.assertFalse(mapped.resized)
+        self.assertEqual(mapped.mouse_wheel, 0)
+        self.assertEqual(mapped.viewport, (0, 0))
+        self.assertFalse(mapped.focused)
+
+    def test_session_input_defaults_new_metadata_for_older_physical_inputs(self):
+        """Existing headless callers retain their old default viewport and no pointer."""
+        keys = SimpleNamespace(
+            keyboard_pressed=set(), keyboard_held=set(),
+            gamepad_pressed=set(), gamepad_held=set(),
+            pressed=set(), held=set(), quit=False, focused=True, device="keyboard",
+        )
+        mapped = session_input(keys, default_key_bindings(), {})
+        self.assertIsNone(mapped.mouse_pos)
+        self.assertFalse(mapped.mouse_moved)
+        self.assertIsNone(mapped.mouse_click)
+        self.assertEqual(mapped.mouse_wheel, 0)
+        self.assertEqual(mapped.viewport, (1280, 720))
+        self.assertFalse(mapped.resized)
+
+    def test_session_input_passes_legacy_pointer_metadata_through(self):
+        """Already-translated headless inputs are returned without metadata loss."""
+        keys = SimpleNamespace(
+            pressed=set(), held=set(), quit=False, focused=True, device="mouse",
+            mouse_pos=(90, 40), mouse_moved=True, mouse_click=(90, 40),
+            mouse_wheel=1, viewport=(1920, 1080), resized=True,
+        )
+        self.assertIs(session_input(keys, default_key_bindings(), {}), keys)
 
     def test_virtual_controller_hotplug_opens_and_closes(self):
         joystick, set_button, update, detach_device = self.attach_virtual_controller()

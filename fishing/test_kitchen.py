@@ -496,6 +496,7 @@ class KitchenChecks(unittest.TestCase):
                                                      f'{label!r} overlaps {other!r}')
 
     def test_mouse_purchase_controller_access_and_hunger_snack(self):
+        """Buy via the displayed registry and preserve controller/needs access."""
         state = self.state
         state.money = 100
         self.session.tick(Keys(pressed={'e'}), 0)
@@ -506,7 +507,8 @@ class KitchenChecks(unittest.TestCase):
         renderer.draw(np.zeros((720, 1280, 3), np.uint8), state, self.session.ui)
         rows = kitchen.rows(state, self.world)
         target = next(i for i, row in enumerate(rows) if row.kind == 'ingredient' and row.arg == 'kibble')
-        box = next(rect for index, rect in self.session.ui.kitchen_hitboxes if index == target)
+        box = next(hit.rect for hit in self.session.ui.pointer.targets
+                   if hit.field == 'shop_i' and hit.value == target)
         self.session.tick(Keys(mouse_click=(box[0] + 3, box[1] + 3)), 0)
         self.assertEqual(state.v2['pantry']['kibble'], 1)
         self.assertEqual(state.money, 97)

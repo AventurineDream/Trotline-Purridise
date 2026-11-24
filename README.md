@@ -290,13 +290,19 @@ One real second is one minute on the lake. A day is 24 minutes. `T` cycles 1×, 
 
 Every key and button is on the help screen (**H**), in its own pages for the keyboard and the gamepad. The keys shown there are your current bindings.
 
-Menus accept **W/S** to move through items and **A/D** to change tabs, lines, or
-pages. Arrow keys also work, including held-key repeat. Enter or Space selects;
-Esc closes. On a controller, the D-pad or left stick moves through menus, the
-D-pad changes tabs or pages, A selects, and B returns. The on-screen hints switch
-to controller glyphs after the last controller input, and back to keyboard hints
-after the last keyboard input. Release a direction used in a menu before using it
-to drive the boat again.
+Every menu also accepts the **pointer**: hover shares the keyboard/controller
+focus, click a visible row or button to select, and use the wheel to browse
+long lists or turn Field Guide spreads. Settings and Skipper rows have **−/+**
+controls; bait rows choose the section's bait, and **Set** deploys the line.
+Visible **Back/Close** buttons follow Escape's exits; story dialogue must still
+be read through. Clicking a menu never also acts on the water.
+
+**W/S** moves through items and **A/D** changes tabs, lines, or pages. Arrow keys
+also work, including held-key repeat. Enter or Space selects; Esc closes. On a
+controller, the D-pad or left stick moves through menus, the D-pad changes tabs
+or pages, A selects, and B returns. Hints switch to controller glyphs after the
+last controller input, and back to keyboard hints after keyboard/pointer input.
+Release a direction used in a menu before using it to drive the boat again.
 
 **Pause → Settings → Camera view** switches between **First person** (the
 default) and **Third person**. The preference is saved. Third person keeps a

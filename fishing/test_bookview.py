@@ -58,8 +58,15 @@ class BookNavigationChecks(unittest.TestCase):
         self.assertEqual(visited, set(ENTRY_IDS))
 
     def test_mouse_survives_action_remapping_and_opens_cards_and_tabs(self):
+        """Route remapped pointer clicks only through freshly displayed Book geometry."""
         layout = book_layout(1280, 720)
+        text = Text()
+        self.addCleanup(text.close)
+        renderer = UI(text, self.world)
+        self.addCleanup(renderer.close)
         def click(rect):
+            renderer.draw(np.zeros((720, 1280, 3), np.uint8),
+                          self.state, self.session.ui)
             keys = Input()
             keys.device = "mouse"
             keys.mouse_click = (rect[0] + 4, rect[1] + 4)

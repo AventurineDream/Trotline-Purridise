@@ -417,6 +417,7 @@ class CalendarPlayChecks(unittest.TestCase):
             self.assertEqual(any('Landing Cookout' in label for label in labels), selected == 0)
 
     def test_week_tab_keyboard_pointer_and_every_forecast_page_are_read_only(self):
+        """Route Week selection only after its geometry is displayed; forecasts stay read-only."""
         state, session = self.state, self.session
         session.ui.mode, session.ui.journal_page = 'journal', len(BOOK_TABS)-1
         before, rng = deepcopy(state.v2), state.rng.s
@@ -439,6 +440,7 @@ class CalendarPlayChecks(unittest.TestCase):
         self.assertEqual(state.v2, before)
         self.assertEqual(state.rng.s, rng)
         rect = week_rects(book_layout(1280, 720))[6]
+        ui.draw(np.zeros((720, 1280, 3), np.uint8), state, session.ui)
         session.tick(Keys(mouse_click=(rect[0]+3, rect[1]+3)), .1)
         self.assertEqual(session.ui.book_week_i, 6)
         session.tick(Keys(pressed={'down'}), .1)

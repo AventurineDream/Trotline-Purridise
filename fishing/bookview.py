@@ -86,6 +86,12 @@ def tracker_species(state, ui):
 
 
 def book_controls(layout, state=None, ui=None):
+    """Return visible named control rectangles in UI pixels for ``layout``.
+
+    Optional ``state`` and ``ui`` expose only the selected entry's available
+    tracker or trophy-rail action. Geometry is shared by rendering and input;
+    this function neither changes selection nor activates a control.
+    """
     controls = {
         "previous": (layout.x + layout.w - 185, layout.y + layout.h - 70, 36, 34),
         "turn": (layout.x + layout.w - 143, layout.y + layout.h - 70, 88, 34),
@@ -95,6 +101,14 @@ def book_controls(layout, state=None, ui=None):
     if state is not None and ui is not None and tracker_species(state, ui):
         x, y, w, _h = layout.content
         controls["tracker"] = (x + w - 152, y, 152, 34)
+    if (state is not None and ui is not None and not ui.book_ceremony
+            and ui.journal_page == 2 and ui.book_shelf == 2):
+        from .boat import BOATS
+        model = BOATS.get(state.boat_id)
+        items = trophy_items(state)
+        if (items and items[ui.book_collection_i % len(items)][0] != "witnessed"
+                and model is not None and "trophy_rail" in model.traits):
+            controls["rail"] = (layout.x + layout.w - 352, layout.y + layout.h - 70, 152, 34)
     return controls
 
 
@@ -231,9 +245,13 @@ def silhouette(width, height):
 
 
 class BookView:
+    """Paint Book pages and publish only their displayed pixel-space controls."""
+
     def __init__(self, owner, frame, state, ui):
+        """Bind the UI painter, RGB pixel frame, game state and native menu focus."""
         self.u, self.frame, self.state, self.ui = owner, frame, state, ui
         self.layout = book_layout(frame.shape[1], frame.shape[0])
+        self.controls = book_controls(self.layout, state, ui)
         self.small = owner._size(frame, "small")
         self.body = owner._size(frame, "body")
         self.head = owner._size(frame, "head")
@@ -308,7 +326,9 @@ class BookView:
         return y
 
     def footer(self, value, color=FADED):
-        self.text(value, self.x, self.bottom + 4, self.w - 190, color=color)
+        """Paint ``value`` in ``color`` clear of the displayed action buttons; return None."""
+        width = self.controls["rail"][0] - self.x - 10 if "rail" in self.controls else self.w - 190
+        self.text(value, self.x, self.bottom + 4, width, color=color)
 
     def text_pages(self, values, width, top):
         """Wrap the full text first, then divide it into visible lines."""
@@ -347,6 +367,7 @@ class BookView:
 
 
     def draw(self):
+        """Paint the owned pixel frame, publish targets and normalize page fields; return None."""
         l = self.layout
         self.ui.book_detail_pages = 1
         self.fill((l.x - 5, l.y - 5, l.w + 10, l.h + 10), LEATHER)
@@ -381,11 +402,21 @@ class BookView:
             # Short stitches keep the tabs distinct without an animated texture.
             for stitch in range(rect[0] + 8, rect[0] + rect[2] - 5, 15):
                 self.fill((stitch, rect[1] + rect[3] - 3, 5, 1), RULE)
+            if not self.ui.book_ceremony:
+                self.ui.pointer.add(rect, "tab", value=index)
         if self.ui.book_ceremony:
             self.ceremony()
+            self.ui.pointer.add(l.content, "activate")
         else:
             (self.grid, self.entry, self.shelf, self.story, self.watch, self.week)[self.ui.journal_page]()
-        for name, rect in book_controls(l, self.state, self.ui).items():
+        for name, rect in self.controls.items():
+            if self.ui.book_ceremony and name not in {"close", "turn"}:
+                continue
+            action = {"previous": "book_previous", "next": "book_next", "turn": "book_turn",
+                      "tracker": "book_tracker", "rail": "book_tracker", "close": "back"}[name]
+            if self.ui.book_ceremony and name == "turn":
+                action = "activate"
+            self.ui.pointer.add(rect, action)
             if name != "close":
                 self.fill(rect, (218, 210, 185))
                 if name == "tracker":
@@ -394,8 +425,11 @@ class BookView:
                     bindings = self.state.v2["settings"]["key_bindings"]
                     key = "X" if self.ui.input_device == "gamepad" else bindings["set_line"].upper()
                     label = key + (" · Stop tracking" if active else " · Track shiny")
+                elif name == "rail":
+                    item = trophy_items(self.state)[self.ui.book_collection_i][:2]
+                    label = "Take down" if item in self.state.rail_trophies() else "Hang on rail"
                 else:
-                    label = {"previous": "‹", "turn": "Turn", "next": "›"}[name]
+                    label = "Continue" if self.ui.book_ceremony else {"previous": "‹", "turn": "Turn", "next": "›"}[name]
                 size = self.small
                 while size > 1 and (self.u.cell(size)[1] > rect[3] - 8
                         or self.u._render(label, size, INK).shape[1] > rect[2] - 8):
@@ -405,7 +439,7 @@ class BookView:
                           rect[1] + (rect[3] - glyphs.shape[0]) // 2, rect[2] - 8, size)
         foot = ("D-pad choose · Left/right tabs · A opens / turns · B closes"
                 if self.ui.input_device == "gamepad" else
-                "W/S choose · A/D tabs · Enter opens / turns · J closes · Click to choose")
+                "Hover / click to choose · Wheel browses · Enter opens / turns · J closes")
         # Shortcut hints have a fixed footer row. Keep tall accessibility glyphs
         # inside that row instead of treating the hint as overflowing content.
         hint_size = self.small
@@ -414,6 +448,7 @@ class BookView:
         self.text(foot, self.x, l.y + l.h - 32, self.w, hint_size)
 
     def grid(self):
+        """Draw the grid and publish native species focus plus entry activation; return None."""
         self.ui.journal_i %= len(BOOK_SPECIES_IDS)
         start = self.ui.journal_i // self.layout.capacity * self.layout.capacity
         for index, rect in enumerate(self.layout.cells(), start):
@@ -433,6 +468,7 @@ class BookView:
             self.text(label, x + 8, y + ah + 8, w - 16)
             self.text(f"{count} caught" if count else "What we heard", x + 8,
                       y + ah + 8 + self.line, w - 16, color=FADED)
+            self.ui.pointer.add(rect, "book_turn", "journal_i", index)
         seen = sum(1 for sid in BOOK_SPECIES_IDS if self.state.journal.get(sid, {}).get("count", 0))
         count = len(BOOK_SPECIES_IDS)
         self.footer(f"{seen}/{count} identified · Fish {self.ui.journal_i + 1}/{count} · Enter reads this page", OCHRE)
@@ -649,7 +685,7 @@ class BookView:
         self.footer(f"Watch {self.ui.book_watch_i + 1}/{len(LEGENDARY_IDS)} · Page {index}/{count}")
 
     def week(self):
-        """Draw the Sunday–Saturday week and read-only forecast for the selected day."""
+        """Draw the selected day's forecast and publish native day-row focus; return None."""
         from . import calendar
         state, ui = self.state, self.ui
         today = calendar.day_number(state.game_minutes)
@@ -678,6 +714,7 @@ class BookView:
                     size -= 1
                 self.text(label, rect[0] + 8, rect[1] + 4, rect[2] - 16, size,
                           PAPER if i == ui.book_week_i % 7 else INK)
+                ui.pointer.add(rect, "focus", "book_week_i", i)
             x = self.x + rects[0][2] + 24
             width = self.w - rects[0][2] - 24
             top = self.text(title, x, self.y + 48, width, self.body) + 8

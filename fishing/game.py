@@ -35,19 +35,19 @@ from .haul import haul_cadence
 from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_rumor
 from .book import take_dream_clue
 from . import comfort, skipperlook
+from . import pointer
 from . import encounter
 from . import soundscape
 from . import detail as detail_tiers
 from . import kitchen
-from .bookview import (BOOK_TABS, ENTRY_IDS, book_controls, book_layout, contains,
-                       move_selection, tracker_species, turn_page)
+from .bookview import (BOOK_TABS, ENTRY_IDS, move_selection, tracker_species, turn_page)
 from .bot import reset as reset_bot
 from .bot import summon as summon_bot
 from .bot import tick as tick_bot
 from .sim import Catch, State
 from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
 from .ui import (UI, UIState, SHOP_TABS, HELP_SPREADS, GAME_TITLE, CREDITS_HOLD_S, check_rows,
-                 comfort_controls, pause_options, shop_rows, title_options,
+                 pause_options, shop_rows, title_options,
                  SETTINGS_ROW_COUNT, SETTINGS_KEYBOARD_CONTROLS_ROW)
 from .world import World
 from .lakes import LoadingQuips, travel_caption, travel_lock_reason
@@ -79,17 +79,21 @@ def _save_target(root: Path, override: str | Path | None) -> tuple[Path, bool]:
 
 
 class Keys:
-    """Enough of Input for a headless tick. `pressed` is the edge set."""
+    """Headless input in UI pixels; pointer edges last for exactly one tick."""
 
     def __init__(self, pressed=(), held=(), quit=False, focused=True, *,
-                 mouse_click=None, mouse_wheel=0, viewport=(1280, 720)):
+                 mouse_click=None, mouse_wheel=0, viewport=(1280, 720),
+                 mouse_pos=None, mouse_moved=False, resized=False):
+        """Create frame input; positions/viewport are UI pixels, wheel is whole steps."""
         self.pressed = set(pressed)
         self.held = set(held) | set(pressed)
         self.quit = quit
         self.focused = bool(focused)
         self.mouse_click, self.mouse_wheel, self.viewport = mouse_click, mouse_wheel, viewport
+        self.mouse_pos, self.mouse_moved, self.resized = mouse_pos, mouse_moved, resized
 
     def tap(self, name: str, dt: float) -> bool:
+        """Return whether the named key has a press edge; headless input never repeats."""
         return name in self.pressed
 
 
@@ -98,6 +102,7 @@ class MenuKeys:
 
     def __init__(self, keys):
         self.keys = keys
+        self.pointer_only = False
         self.pressed = keys.pressed
         self.held = keys.held
         self.physical_keyboard_pressed = getattr(
@@ -109,8 +114,11 @@ class MenuKeys:
             getattr(keys, "keyboard_press_order", ()))
 
     def tap(self, name: str, dt: float) -> bool:
+        """Repeat a menu key after ``dt`` seconds unless pointer intent owns navigation."""
         if name not in MENU_DIRECTIONS:
             return self.keys.tap(name, dt)
+        if self.pointer_only:
+            return False
         arrow = self.keys.tap(name, dt)
         alias = self.keys.tap(MENU_DIRECTIONS[name], dt)
         return arrow or alias
@@ -148,6 +156,7 @@ class Session:
         self.ui = UIState(has_save=has_save)
         self.quit = False
         self._menu_held: set[str] = set()
+        self._pointer_activate = False
         self._input_repeat: dict[str, float] = {}
         self._npc_content = load_content()
         self.quest_manager = QuestManager(self._npc_content)
@@ -188,7 +197,8 @@ class Session:
             None.
 
         Side effects:
-            Updates UI/simulation; an enabled Devmode consumes its input before gameplay.
+            Updates UI/simulation and displayed pointer focus. Menu pointer edges
+            are consumed before native activation; Devmode may consume all input.
         """
         self.sound = None
         self.cues = []
@@ -217,6 +227,7 @@ class Session:
                         physical.clear()
                 keys.mouse_click = None
                 keys.mouse_wheel = 0
+                keys.mouse_moved = False
                 # The fractional wheel remainder belongs to SDL's input, not its action wrapper.
                 wheel_remainder = getattr(input_source, "mouse_wheel_remainder", None)
                 if wheel_remainder is not None:
@@ -232,12 +243,13 @@ class Session:
             self._menu_held.update(keys.held & NAVIGATION_KEYS)
         self._refresh_npcs()
         previous_page = (self.ui.mode, self.ui.journal_page, self.ui.book_entry_i)
+        pointer_used = (getattr(keys, "mouse_click", None) is not None
+                        or bool(getattr(keys, "mouse_wheel", 0)))
         self._keys(keys, dt)
         self.state.hauling = self.ui.mode == "haul"
         current_page = (self.ui.mode, self.ui.journal_page, self.ui.book_entry_i)
         if (current_page != previous_page or keys.pressed
-                or getattr(keys, "mouse_click", None) is not None
-                or getattr(keys, "mouse_wheel", 0)):
+                or pointer_used):
             self._remember_book_page()
         self._simulate(keys, dt, driving_presses)
         self._tick_settle(dt)
@@ -645,10 +657,242 @@ class Session:
         if self.state.narrative.record_bot_reaction(f"npc:{npc.id}", note):
             self.state.toast(note)
 
+    def _menu_selected(self, keys):
+        """Unify native confirm and one semantic activation, never gameplay keys."""
+        return self._pointer_activate or bool(keys.pressed & {"return", "space"})
+
+    def _pointer_focus(self, target):
+        ui = self.ui
+        if target.field == "dialogue_selected":
+            if self.conversation is not None:
+                self.conversation.selected = target.value
+        elif target.field:
+            if getattr(ui, target.field) != target.value:
+                ui.note = ""
+            setattr(ui, target.field, target.value)
+            if target.field == "book_week_i":
+                ui.book_detail_page = 0
+            if target.field == "set_bait":
+                baits = list(ui.set_section_baits)
+                baits[ui.set_section] = ui.set_bait
+                ui.set_section_baits = tuple(baits)
+
+    def _route_pointer(self, keys):
+        """Consume input against displayed geometry, then dispatch at most once.
+
+        Native menu handlers own activation and selection. Stale/blank clicks
+        are consumed rather than interpreted as fallback confirmation.
+        """
+        ui, registry = self.ui, self.ui.pointer
+        if not self.focused:
+            registry.hovered = None
+            return ui.mode not in DRIVING
+        if ui.mode in DRIVING and not ui.whale_return:
+            registry.hovered = None
+            return False
+        click = getattr(keys, "mouse_click", None)
+        wheel = getattr(keys, "mouse_wheel", 0)
+        moved = getattr(keys, "mouse_moved", False)
+        position = click if click is not None else getattr(keys, "mouse_pos", None)
+        source = keys.keys if isinstance(keys, MenuKeys) else keys
+        valid = (registry.identity == pointer.context(self.state, ui)
+                 and registry.viewport == getattr(keys, "viewport", (1280, 720))
+                 and not getattr(keys, "resized", False))
+        if ui.mode in {"catnap", "cooking", "haul", "credits"} or ui.book_ceremony:
+            if not valid:
+                source.mouse_click, source.mouse_wheel = None, 0
+            return False
+        source.mouse_click, source.mouse_wheel = None, 0
+        # Auxiliary controls have no list index. Confirm honors their visible
+        # semantic focus; navigation returns ownership to the screen's row index.
+        hovered = registry.hovered
+        if (valid and registry.owner == "pointer" and hovered is not None
+                and not hovered.field and keys.pressed & {"return", "space"}
+                and not ui.skipper_typing and not ui.capturing_key):
+            return self._pointer_action(hovered.action, hovered.value)
+        if keys.pressed or (keys.held & NAVIGATION_KEYS and not moved and click is None):
+            registry.owner = "keyboard"
+            registry.hovered = None
+            return False
+        if not valid:
+            registry.hovered = None
+            return click is not None or bool(wheel)
+        if wheel:
+            if ui.skipper_typing or ui.capturing_key:
+                return True
+            registry.owner = "scroll"
+            registry.hovered = None
+            self._pointer_scroll(registry.scroll, -int(wheel))
+            return True
+        if not moved and click is None:
+            return False
+        registry.owner = "pointer"
+        keys.pointer_only = True
+        registry.hovered = registry.hit(position) if position is not None else None
+        target = registry.hovered
+        if target is None:
+            return click is not None
+        if not ui.skipper_typing or click is not None:
+            self._pointer_focus(target)
+        if click is None:
+            return False
+        if ui.mode == "skipper" and ui.skipper_typing:
+            ui.skipper_look["name"] = skipperlook.clean_name(ui.skipper_look["name"])
+            ui.skipper_typing = ui.skipper_fresh = False
+        return self._pointer_action(target.action, target.value)
+
+    def _pointer_scroll(self, kind, amount):
+        ui = self.ui
+        if kind == "help":
+            ui.help_spread = (ui.help_spread + amount) % (ui.help_spreads or HELP_SPREADS)
+            return
+        if kind == "book":
+            move_selection(self.state, ui, self._npc_content, amount)
+            return
+        counts = {
+            "title": ("title_i", len(title_options(ui.has_save))),
+            "pause": ("pause_i", len(pause_options(self.state))),
+            "settings": ("settings_i", SETTINGS_ROW_COUNT),
+            "keys": ("key_binding_i", len(ACTION_SYMBOLS)
+                     - sum(len(group) - 1 for group in ACTION_ALIASES) + 1),
+            "skipper": ("skipper_i", len(skipperlook.ROWS)),
+            "bait": ("set_bait", len(BAITS)),
+            "well": ("well_i", len(self.state.well)),
+            "check": ("check_i", len(check_rows(self.state, ui.check_line))),
+        }
+        if kind in {"shop", "kitchen"}:
+            rows = (shop_rows(self.state, ui.shop_tab) if ui.mode == "shop"
+                    else kitchen.rows(self.state, self.world))
+            counts[kind] = ("shop_i", len(rows))
+        if kind == "dialogue" and self.conversation is not None:
+            count = len(self.conversation.node(self._npc_content).get("choices", []))
+            if count:
+                self.conversation.selected = (self.conversation.selected + amount) % count
+            return
+        if kind == "cook_fish":
+            ui.cook_fish += amount
+            return
+        if kind in counts:
+            field, count = counts[kind]
+            if count:
+                value = (getattr(ui, field) + amount) % count
+                self._pointer_focus(pointer.Target((0, 0, 0, 0), field=field, value=value))
+                ui.note = ""
+
+    def _pointer_action(self, action, value):
+        ui, mode = self.ui, self.ui.mode
+        if action in {"activate", "set"}:
+            self._pointer_activate = True
+            return False
+        if action == "focus":
+            return True
+        if action == "skip_scene":
+            if self.stage_skippable():
+                self.stage.t = self.stage.stage.duration
+        elif action == "skip_whale":
+            if mode == "play" and ui.whale_return and self.whale_clock is not None:
+                self._skip_whale()
+        elif action in {"back", "creator_cancel"}:
+            self._pointer_back()
+        elif action == "help":
+            self._open_help(mode)
+        elif action == "creator_done":
+            self._close_skipper(confirm=True)
+        elif action in {"previous", "next"}:
+            self._pointer_scroll(ui.pointer.scroll, -1 if action == "previous" else 1)
+        elif action in {"adjust_minus", "adjust_plus"}:
+            direction = -1 if action == "adjust_minus" else 1
+            if mode == "skipper":
+                key = skipperlook.ROWS[ui.skipper_i][0]
+                if key != "done":
+                    self._skipper_change(key, direction)
+            elif mode == "settings" and ui.settings_page == "main":
+                self._adjust_setting(ui.settings_i, direction)
+        elif action == "tab":
+            if mode == "shop":
+                ui.shop_tab, ui.shop_i, ui.note = value, 0, ""
+            elif mode == "journal":
+                ui.journal_page = value
+                ui.book_detail_page, ui.book_detail_pages = 0, 1
+                if value == 1:
+                    ui.book_entry_i = ui.journal_i
+        elif action == "set_line":
+            if self.state.held:
+                ui.set_line, ui.note = value % len(self.state.held), ""
+        elif action == "set_sections":
+            old, ui.set_sections = ui.set_sections, value
+            baits = list(ui.set_section_baits)
+            for index in range(old, value):
+                baits[index] = ui.set_bait
+            ui.set_section %= value
+            ui.set_bait = baits[ui.set_section]
+            ui.set_section_baits, ui.note = tuple(baits), ""
+        elif action == "set_section":
+            ui.set_section = value % ui.set_sections
+            ui.set_bait, ui.note = ui.set_section_baits[ui.set_section], ""
+        elif action == "book_turn":
+            turn_page(self.state, ui, ui.pointer.viewport)
+        elif action == "book_tracker":
+            self._toggle_book_tracker()
+        elif action in {"book_previous", "book_next"}:
+            move_selection(self.state, ui, self._npc_content,
+                           -1 if action == "book_previous" else 1)
+        elif action == "kitchen":
+            self._open_kitchen()
+        elif action == "catnap":
+            ui.mode = "play"
+            if not self._start_catnap():
+                ui.mode, ui.note = "pause", "Anchor or dock for a catnap."
+        elif action == "treasure":
+            if self.state.toggle_treasured(ui.well_i) is None:
+                self.save()
+        elif mode == "map":
+            actions = {"map_hail": self._hail, "map_anchor": self._anchor,
+                       "map_sail": self._sail, "map_tow": self._map_tow, "map_bot": self._bot}
+            if action in actions:
+                actions[action]()
+        return True
+
+    def _pointer_back(self):
+        ui, mode = self.ui, self.ui.mode
+        if mode == "title":
+            ui.confirm_new = False
+        elif mode == "help":
+            ui.mode = ui.help_from
+        elif mode == "skipper":
+            self._close_skipper(confirm=False)
+        elif mode == "settings":
+            if ui.capturing_key:
+                ui.capturing_key = False
+            elif ui.settings_page == "keys":
+                ui.settings_page = "main"
+            else:
+                ui.mode = "pause"
+        elif mode == "dialogue":
+            if self.conversation is None or not self.conversation.in_scene(self._npc_content):
+                self._close_dialogue()
+        elif mode == "new_mode":
+            ui.mode = "title"
+        elif mode == "needs":
+            comfort.snooze(self.state.v2, ui.needs_kind)
+            ui.mode = "play"
+            self.save()
+        elif mode in {"kitchen", "cook_confirm"}:
+            ui.mode = ui.kitchen_from if mode == "kitchen" else ui.cook_from
+            ui.note = ""
+            self.save()
+        elif mode in {"pause", "shop", "setbait", "check", "journal", "well", "map"}:
+            ui.mode = "play"
+            if mode in {"shop", "journal"}:
+                self.save()
+
     def _keys(self, keys, dt: float):
         mode = self.ui.mode
         if mode not in DRIVING:
             keys = MenuKeys(keys)
+        self._pointer_activate = False
+        if self._route_pointer(keys):
+            return
         # Typing a Skipper name uses Shift for capitals and M as a letter, so neither idles
         # the throttle nor mutes until the name is set.
         typing = mode == "skipper" and self.ui.skipper_typing
@@ -683,7 +927,7 @@ class Session:
         elif mode == "journal":
             self._journal_keys(keys, dt)
         elif mode == "well":
-            if "t" in keys.pressed or "return" in keys.pressed or "space" in keys.pressed:
+            if self._menu_selected(keys) or "t" in keys.pressed:
                 if self.state.toggle_treasured(self.ui.well_i) is None:
                     self.save()
             else:
@@ -699,7 +943,7 @@ class Session:
             elif "q" in keys.pressed:
                 self._sail()
             elif "r" in keys.pressed:
-                self._tow()
+                self._map_tow()
             elif "b" in keys.pressed:
                 self._bot()
         elif mode == "pause":
@@ -718,7 +962,7 @@ class Session:
         if self.ui.confirm_new:
             if "esc" in keys.pressed:
                 self.ui.confirm_new = False
-            elif "return" in keys.pressed or "space" in keys.pressed:
+            elif self._menu_selected(keys):
                 self.ui.confirm_new = False
                 self.ui.new_mode_i = 0
                 self.ui.mode = "new_mode"
@@ -731,7 +975,7 @@ class Session:
             self._open_help("title")
         if "n" in keys.pressed and self.ui.has_save:
             self.ui.confirm_new = True
-        if "return" in keys.pressed or "space" in keys.pressed:
+        if self._menu_selected(keys):
             choice = options[self.ui.title_i % len(options)]
             if choice == "Continue":
                 if self.dev_mode is None:
@@ -771,13 +1015,7 @@ class Session:
         field = "new_mode_i" if choosing_mode else "comfort_i"
         if any(keys.tap(key, dt) for key in ("left", "right", "up", "down")):
             setattr(self.ui, field, 1 - getattr(self.ui, field))
-        select = bool(keys.pressed & {"return", "space"})
-        click = getattr(keys, "mouse_click", None)
-        if click is not None:
-            for index, rect in enumerate(comfort_controls(getattr(keys, "viewport", (1280, 720)))):
-                if contains(rect, click):
-                    setattr(self.ui, field, index)
-                    select = True
+        select = self._menu_selected(keys)
         if not select:
             return
         if choosing_mode:
@@ -927,7 +1165,7 @@ class Session:
                 chat.selected = (chat.selected - 1) % len(choices)
             if keys.tap("down", dt):
                 chat.selected = (chat.selected + 1) % len(choices)
-        select = bool(keys.pressed & {"return", "space", "c"})
+        select = self._menu_selected(keys) or "c" in keys.pressed
         for i in range(len(choices)):
             if str(i + 1) in keys.pressed:
                 chat.selected = i
@@ -982,6 +1220,14 @@ class Session:
         reset_bot(self.state)
         self._record_world_advance(before)
         return None
+
+    def _map_tow(self):
+        """Call a tow from the chart: it advances the world, so run it from play."""
+        self.ui.mode = "play"
+        error = self._tow(toast=False)
+        if error:
+            self.ui.mode = "map"
+            self.state.toast(error)
 
     def change_lake(self,lake_id):
         if self.state.lines:
@@ -1177,7 +1423,8 @@ class Session:
             self.ui.mode = "check"
             self.ui.check_i = 0
             return
-        if self.ui.haul_phase == "card" and keys.pressed - {"e"}:
+        if self.ui.haul_phase == "card" and (
+                keys.pressed - {"e"} or getattr(keys, "mouse_click", None) is not None):
             # A legendary's framed book page must remain readable before it advances.
             if not (encounter.is_legendary(line.hooks[self.ui.haul_index].catch)
                     and self.ui.haul_phase_timer < encounter.PAGE_SETTLE_S):
@@ -1243,14 +1490,13 @@ class Session:
         self.ui.haul_legendary = hook.catch.species
 
     def _encounter_keys(self, keys, dt: float, hook) -> None:
-        """The scene runs on its own clock. Seen once, it can be skipped (Esc / B, or any key
-        but E) or hurried (hold E); the first time nothing does either."""
+        """Run the encounter clock; only a repeat allows key/click skipping or E hurrying."""
         if not encounter.is_legendary(hook.catch):
             self._next_haul_hook()
             return
         legendary_id = hook.catch.species
         repeat = encounter.presented(self.state.v2, legendary_id)
-        if repeat and keys.pressed - {"e"}:
+        if repeat and (keys.pressed - {"e"} or getattr(keys, "mouse_click", None) is not None):
             self._finish_encounter(hook)
             return
         t0 = self.ui.haul_phase_timer
@@ -1302,13 +1548,7 @@ class Session:
         if keys.tap("down", dt):
             self.ui.shop_i = (self.ui.shop_i + 1) % len(rows)
             self.ui.note = ""
-        select = bool(keys.pressed & {"return", "space"})
-        click = getattr(keys, "mouse_click", None)
-        if click is not None:
-            for index, rect in self.ui.kitchen_hitboxes:
-                if contains(rect, click) and index < len(rows):
-                    self.ui.shop_i, select = index, True
-        if select:
+        if rows and self._menu_selected(keys):
             row = rows[self.ui.shop_i % len(rows)]
             self.sound = self._buy(row) if row.kind.startswith("bot_") else self._kitchen_action(row)
 
@@ -1366,12 +1606,7 @@ class Session:
             self.ui.cook_fish += 1
         if keys.tap("left", dt) or keys.tap("right", dt):
             self.ui.comfort_i = 1 - self.ui.comfort_i
-        select = bool(keys.pressed & {"return", "space"})
-        click = getattr(keys, "mouse_click", None)
-        if click is not None:
-            for index, rect in enumerate(comfort_controls(getattr(keys, "viewport", (1280, 720)))):
-                if contains(rect, click):
-                    self.ui.comfort_i, select = index, True
+        select = self._menu_selected(keys)
         if not select:
             return
         if self.ui.comfort_i:
@@ -1423,7 +1658,7 @@ class Session:
         if rows and keys.tap("down", dt):
             self.ui.shop_i = (self.ui.shop_i + 1) % len(rows)
             self.ui.note = ""
-        if rows and ("return" in keys.pressed or "space" in keys.pressed):
+        if rows and self._menu_selected(keys):
             self.sound = self._buy(rows[self.ui.shop_i % len(rows)])
 
     def _buy(self, row):
@@ -1539,7 +1774,7 @@ class Session:
                 section_baits[self.ui.set_section] = self.ui.set_bait
                 self.ui.set_section_baits = tuple(section_baits)
                 self.ui.note = ""
-        if "return" in keys.pressed or "space" in keys.pressed:
+        if self._menu_selected(keys):
             baits = [BAITS[index % len(BAITS)].id
                      for index in self.ui.set_section_baits[:self.ui.set_sections]]
             err = self.state.try_set(self.world, self.ui.set_line, baits)
@@ -1568,7 +1803,7 @@ class Session:
         selected = rows[self.ui.check_i % len(rows)]
         if selected.kind == "hook" and keys.pressed & {"left", "right"}:
             self._check_act(selected)
-        elif "return" in keys.pressed or "space" in keys.pressed:
+        elif self._menu_selected(keys):
             self._check_act(selected)
 
     def _check_act(self, row):
@@ -1638,43 +1873,6 @@ class Session:
         if "f" in keys.pressed:
             self._toggle_book_tracker()
             return
-        layout = book_layout(*viewport)
-        if click is not None:
-            for name, rect in book_controls(layout, self.state, self.ui).items():
-                if contains(rect, click):
-                    if name == "close":
-                        self.ui.mode = "play"
-                        self.save()
-                    elif name == "turn":
-                        turn_page(self.state, self.ui, viewport)
-                    elif name == "tracker":
-                        self._toggle_book_tracker()
-                    else:
-                        move_selection(self.state, self.ui, self._npc_content,
-                                       -1 if name == "previous" else 1)
-                    return
-            for index, rect in enumerate(layout.tabs):
-                if contains(rect, click):
-                    self.ui.journal_page = index
-                    self.ui.book_detail_page = 0
-                    self.ui.book_detail_pages = 1
-                    if index == 1:
-                        self.ui.book_entry_i = self.ui.journal_i
-                    return
-            if self.ui.journal_page == 0:
-                start = self.ui.journal_i // layout.capacity * layout.capacity
-                for offset, rect in enumerate(layout.cells()):
-                    if contains(rect, click) and start + offset < len(BOOK_SPECIES_IDS):
-                        self.ui.journal_i = start + offset
-                        turn_page(self.state, self.ui, viewport)
-                        return
-            if self.ui.journal_page == 5:
-                from .bookview import week_rects
-                for index, rect in enumerate(week_rects(layout)):
-                    if contains(rect, click):
-                        self.ui.book_week_i = index
-                        self.ui.book_detail_page = 0
-                        return
         left = keys.tap("left", dt)
         right = keys.tap("right", dt)
         if left or right:
@@ -1688,10 +1886,7 @@ class Session:
             move_selection(self.state, self.ui, self._npc_content, -1)
         if keys.tap("down", dt):
             move_selection(self.state, self.ui, self._npc_content, 1)
-        wheel = getattr(keys, "mouse_wheel", 0)
-        if wheel:
-            move_selection(self.state, self.ui, self._npc_content, -wheel)
-        if keys.pressed & {"return", "space"}:
+        if self._menu_selected(keys):
             turn_page(self.state, self.ui, viewport)
 
     def _toggle_book_tracker(self):
@@ -1743,7 +1938,7 @@ class Session:
             self.ui.pause_i = (self.ui.pause_i - 1) % len(options)
         if keys.tap("down", dt):
             self.ui.pause_i = (self.ui.pause_i + 1) % len(options)
-        if "return" in keys.pressed or "space" in keys.pressed:
+        if self._menu_selected(keys):
             choice = options[self.ui.pause_i % len(options)]
             self.ui.note = ""
             if choice == "Resume":
@@ -1802,7 +1997,7 @@ class Session:
             self._adjust_setting(rows, -1)
         elif keys.tap("right", dt):
             self._adjust_setting(rows, 1)
-        elif "return" in keys.pressed or "space" in keys.pressed:
+        elif self._menu_selected(keys):
             if rows == SETTINGS_KEYBOARD_CONTROLS_ROW:
                 self.ui.settings_page = "keys"
                 self.ui.key_binding_i = 0
@@ -1890,7 +2085,7 @@ class Session:
             self.ui.key_binding_i = (self.ui.key_binding_i - 1) % rows
         elif keys.tap("down", dt):
             self.ui.key_binding_i = (self.ui.key_binding_i + 1) % rows
-        elif "return" in keys.pressed or "space" in keys.pressed:
+        elif self._menu_selected(keys):
             if self.ui.key_binding_i == len(actions):
                 settings["key_bindings"] = default_key_bindings()
                 self.save()
@@ -1948,7 +2143,7 @@ class Session:
         step = int(keys.tap("right", dt)) - int(keys.tap("left", dt))
         if step and key != "done":
             self._skipper_change(key, step)
-        if keys.pressed & {"return", "space"}:
+        if self._menu_selected(keys):
             if key == "done":
                 self._close_skipper(confirm=True)
                 return
@@ -2166,7 +2361,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
         detail: Detail tier name, or None/``auto`` to fit available memory.
 
     Side effects:
-        Opens the game window; ordinary play saves, while Devmode remains in memory.
+        Opens a resizable game window and shows its pointer outside gameplay.
+        Ordinary play saves, while Devmode remains in memory.
     """
     opened = open_save(save_path, persist_changes=not dev)
     world, state, has_save = opened.world, opened.state, opened.has_save
@@ -2177,6 +2373,13 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
     dw, dh = Platform.display_size()
     width, height = _window_size(dw, dh)
     platform = Platform(width, height, GAME_TITLE,graphics=not software)
+    # Do not create render targets until an initially minimized drawable exists.
+    while min(platform.viewport) <= 0:
+        if platform.poll(0).quit:
+            platform.close()
+            return
+        time.sleep(1 / 30)
+    width, height = platform.viewport
     software_backend = software or platform.context is None
     renderer_name = (str(platform.context.info.get("GL_RENDERER", "")).lower()
                      if platform.context is not None else "")
@@ -2229,6 +2432,26 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                 audio.blip(kind)
             if session.quit:
                 break
+            platform.set_pointer_visible(session.ui.mode != "play" or session.ui.whale_return)
+            viewport = keys.viewport
+            if viewport[0] <= 0 or viewport[1] <= 0:
+                # Keep consuming window/input events without allocating empty render targets.
+                time.sleep(1 / 30)
+                continue
+            if viewport != (width, height):
+                width, height = viewport
+                session.ui.pointer.begin(None, viewport)
+                platform.make_current()
+                render_world = renderer.world
+                renderer.close()
+                render_width, render_height = detail_tiers.render_dimensions(
+                    width, height, software=software_tier)
+                renderer = Renderer(render_world, render_width, render_height,
+                                    software=software_backend, context=platform.context,
+                                    output_size=viewport)
+                ui.fish_card_renderer = getattr(renderer, "fish_card", None)
+                loading = np.empty((height, width, 3), np.uint8)
+                low = None
             if renderer.world is not session.world:
                 # The transition runs on the last lake image without its HUD.
                 scene = low
