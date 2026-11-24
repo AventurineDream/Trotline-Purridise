@@ -119,10 +119,10 @@ target: **10–12 hours** for a player who follows it, while fishing normally.
 
 **Prologue — The inherited book.** At Briar Landing, Grandmother Whiskers gives the
 Skipper the landing's old fish book, the **Fishypedia**. It is a scrapbook of cat
-stories about fish, started by her own grandmother and added to by "anyone who ever
-tied up here". The last pages are blank. Her request: *"Bring back one useful new
-note from each water. Not the biggest fish. A useful note."* Bot finds a pencil stub
-in the spine and keeps it.
+stories about fish, started by her own grandmother and added to by anyone who tied
+up here, and not every story happened quite the way it is told. The last pages are
+blank. Her request: *"Bring back one useful new note from each water. Not the biggest
+fish. A useful note."* Bot finds a pencil stub in the spine and keeps it.
 
 Each lake chapter is three small steps: **meet → notice → share**. Each one ends
 with a visible change in the world and a page in the book.

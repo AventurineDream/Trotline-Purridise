@@ -3617,6 +3617,8 @@ _GAMEPAD_TUTORIAL_TOASTS = {
         "Dress your Skipper: Start, then Your Skipper.",
     "Anchor and press T to let time run. E checks a line.":
         "After setting a line, wait for a bite; A checks it.",
+    "Bot: Anchor, then press T to let time run faster.":
+        "Bot: Anchor, then choose Time in the pause menu to let it run faster.",
     "Nose into the landing and press E to sell.":
         "Nose into the landing and press A to sell.",
 }

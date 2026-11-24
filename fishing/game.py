@@ -1308,9 +1308,26 @@ class Session:
         self._show_conversation(conversation)
 
     def _close_dialogue(self):
+        npc = getattr(self.conversation, "npc_id", None)
         self.conversation = None
         self.ui.conversation = None
         self.ui.mode = self.ui.dialogue_from
+        # Issue #156: Bot explains time scaling once Grandmother's first
+        # conversation has actually closed, never over it.
+        if npc == "grandmother_whiskers":
+            self._explain_time_scale()
+
+    def _explain_time_scale(self):
+        """Bot's one-time explanation of the time-scale key, in his own voice."""
+        if self.state.time_tip_given():
+            return
+        self.state.mark_time_tip()
+        from .gamepad import normalize_key_bindings
+        saved = self.state.v2.get("settings", {})
+        bindings = normalize_key_bindings(saved.get("key_bindings") if isinstance(saved, dict) else None)
+        key = bindings.get("time_scale", "t").upper()
+        self.state.toast(f"Bot: Anchor, then press {key} to let time run faster.")
+        self.save()
 
     def _dialogue_keys(self, keys, dt):
         chat = self.conversation
