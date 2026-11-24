@@ -1442,6 +1442,17 @@ class Session:
         if not self.state.held:
             self.state.toast("Every line you own is already in the water.")
             return
+        # Issue #152: restricted water warns here, before the bait menu opens.
+        # Any held line that fits opens the menu; the chosen line is re-checked
+        # on confirm inside try_set.
+        zone_error = None
+        for held in self.state.held:
+            zone_error = self.state.line_zone_error(self.world, held.hooks)
+            if zone_error is None:
+                break
+        if zone_error is not None:
+            self.state.toast(zone_error, 5.0)
+            return
         self.ui.mode = "setbait"
         self.ui.set_line = 0
         prefer = self.state.preferred_bait

@@ -1633,10 +1633,14 @@ class State:
         elif self.tutorial == 3 and self.earned > 0:
             self.tutorial = 4
 
-    def hint(self) -> str | None:
+    def hint(self, world: World | None = None) -> str | None:
         if self.tutorial == 0:
             return "W/S row or power    Shift idle    A/D steer"
         if self.tutorial == 1:
+            # Issue #152: no set-line invite where the water refuses a line.
+            if (world is not None and self.held and all(
+                    self.line_zone_error(world, h.hooks) is not None for h in self.held)):
+                return None
             return "Stop, then F to set a trotline"
         if self.tutorial == 2:
             return "T changes time while anchored    E checks a line"
@@ -1670,7 +1674,7 @@ class State:
             return "Nose up to the dock"
         if self.nearest_line() is not None and abs(self.speed) < 1.4:
             return "E  Check the line"
-        return self.hint()
+        return self.hint(world)
 
     # --- lines ----------------------------------------------------------
 
@@ -1742,6 +1746,50 @@ class State:
         self.emit_tool_use(world, "wave_chime", line.zone)
         return None
 
+    def _line_span(self, hooks: int):
+        """Where a line of `hooks` hooks would lie, from the bow forward."""
+        fx, fz = math.sin(self.yaw), math.cos(self.yaw)
+        length = line_length(hooks)
+        x0 = self.x + fx * 5.0
+        z0 = self.z + fz * 5.0
+        return x0, z0, x0 + fx * length, z0 + fz * length
+
+    def line_zone_error(self, world: World, hooks: int) -> str | None:
+        """Why a line of `hooks` hooks cannot be set from here, or None.
+
+        Shared by ``try_set`` and the pre-menu check (issue #152): the water
+        rules are the same whether or not the bait menu is open. Bait, spare
+        line counts and spacing are checked separately in ``try_set``.
+        """
+        x0, z0, x1, z1 = self._line_span(hooks)
+        samples = []
+        shallow = False
+        for i in range(8):
+            t = i / 7
+            px = x0 + (x1 - x0) * t
+            pz = z0 + (z1 - z0) * t
+            samples.append((px, pz))
+            if not world.navigable(px, pz) and float(shore_sd_safe(world, px, pz)) >= -0.5:
+                return "Point at open water; that line climbs the bank."
+            if float(world.depth(px, pz)) < 0.9 and not bool(world.slip.contains(px, pz)):
+                shallow = True
+        if shallow:
+            return "Too skinny for the hooks. Ease out a little."
+        for px, pz in samples:
+            if bool(world.slip.contains(px, pz)):
+                return "The landing is a no-line zone."
+            if math.hypot(px - world.slip.ox, pz - world.slip.oz) < 46:
+                return "The landing is a no-line zone."
+            if not world.navigable(px, pz):
+                return "That water won't hold a line."
+        mx, mz = (x0 + x1) * 0.5, (z0 + z1) * 0.5
+        zone = world.zone_at(mx, mz)
+        if zone in ("landing", "shore"):
+            return "The landing is a no-line zone."
+        if zone == "reeds" and not (self.owns_tool("reed_anchor") or self.boat_id in REED_LINE_BOATS):
+            return "Reeds take a line only with Frog Bot's Reed Anchor."
+        return None
+
     def try_set(self, world: World, held_index: int,
                 bait_sections: str | list[str] | tuple[str, ...]) -> str | None:
         if abs(self.speed) > 0.5:
@@ -1768,42 +1816,16 @@ class State:
             have = self.bait.get(bait, 0)
             if have < amount:
                 return f"Need {amount} {BAIT_BY_ID[bait].name.lower()}. You have {have}."
-        fx, fz = math.sin(self.yaw), math.cos(self.yaw)
-        length = line_length(hooks)
-        x0 = self.x + fx * 5.0
-        z0 = self.z + fz * 5.0
-        x1 = x0 + fx * length
-        z1 = z0 + fz * length
-        samples = []
-        shallow = False
-        for i in range(8):
-            t = i / 7
-            px = x0 + (x1 - x0) * t
-            pz = z0 + (z1 - z0) * t
-            samples.append((px, pz))
-            if not world.navigable(px, pz) and float(shore_sd_safe(world, px, pz)) >= -0.5:
-                return "That line would climb the bank. Point toward open water."
-            if float(world.depth(px, pz)) < 0.9 and not bool(world.slip.contains(px, pz)):
-                shallow = True
-        if shallow:
-            return "Too skinny for the hooks. Ease out a little."
-        for px, pz in samples:
-            if bool(world.slip.contains(px, pz)):
-                return "The landing is a no-line zone."
-            if math.hypot(px - world.slip.ox, pz - world.slip.oz) < 46:
-                return "The landing is a no-line zone."
-            if not world.navigable(px, pz):
-                return "That water won't hold a line."
+        zone_error = self.line_zone_error(world, hooks)
+        if zone_error:
+            return zone_error
+        x0, z0, x1, z1 = self._line_span(hooks)
         draft = SetLine(held.tier, sections, x0, z0, x1, z1, "open", [])
         for other in self.lines:
             if _seg_gap(draft, other) < 16.0:
                 return "Too close to a line you already set."
         mx, mz = (x0 + x1) * 0.5, (z0 + z1) * 0.5
         zone = world.zone_at(mx, mz)
-        if zone in ("landing", "shore"):
-            return "The landing is a no-line zone."
-        if zone == "reeds" and not (self.owns_tool("reed_anchor") or self.boat_id in REED_LINE_BOATS):
-            return "Reeds hold a line only with the Reed Anchor from Frog Bot."
         for bait, amount in needed.items():
             self.bait[bait] -= amount
         self.held.pop(held_index)
