@@ -47,13 +47,13 @@ def boat_checks(world):
         if state.throttle_setting!=-0.45:
             raise AssertionError("reverse throttle sprang back")
         session.tick(Keys(pressed={"space"}),0.05)
-        if not state.anchored or state.throttle_setting!=0 or state.throttle!=0:
-            raise AssertionError("dropping the anchor did not idle")
-        state.throttle_setting=0.4
-        session.save()
-        loaded=State.load(session.save_path,world)
-        if loaded.throttle_setting!=0 or loaded.throttle!=0:
-            raise AssertionError("a saved game resumed under power")
+        if not state.anchored:
+            raise AssertionError("dropping the anchor failed")
+        session.tick(Keys(),0.05)
+        if state.throttle!=0:
+            raise AssertionError("an anchored boat kept thrust")
+        if state.throttle_setting!=-0.45:
+            raise AssertionError("dropping the anchor idled the engine lever")
 
     # Run the biggest motor into the narrow crossbeam with long normal ticks.
     state=State.new(world,seed=41)

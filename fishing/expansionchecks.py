@@ -197,6 +197,7 @@ def expansion_checks(briar,software=False):
     wind,speed=wind_at(state.game_minutes)
     state.yaw=wind+math.pi/2
     state.toggle_sail()
+    state.anchored=False  # #151: raising sail no longer lifts the anchor by default
     for _ in range(120):
         state.drive(0.05,0,0,briar)
     if state.speed<=1 or state.fuel or state.traveled<10:

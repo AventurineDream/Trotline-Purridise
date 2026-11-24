@@ -412,6 +412,7 @@ def _play(world: World):
         state = State.new(world, seed=3)
         session = Session(world, path, state, has_save=False)
         session.ui.mode = "play"
+        session.tick(Keys(pressed={"space"}), 0.05)  # weigh anchor: W no longer lifts it
         for _ in range(40):
             session.tick(Keys(held={"w"}), 0.05)
         if session.state.traveled < 1.0 and abs(session.state.speed) < 0.4:

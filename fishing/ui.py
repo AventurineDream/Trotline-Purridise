@@ -81,7 +81,7 @@ SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes", "Kitchen", "Bot"
 _TABS = SHOP_TABS
 TEXT_SIZE_SCALES = (0.9, 1.0, 1.15)
 MODES = comfort.MODES
-SETTINGS_ROW_COUNT = 13
+SETTINGS_ROW_COUNT = 14
 SETTINGS_KEYBOARD_CONTROLS_ROW = SETTINGS_ROW_COUNT - 1
 VOLUME_NAMES = ("master", "music", "ambience", "sfx")
 VOLUME_LABELS = {
@@ -2925,6 +2925,7 @@ class UI:
             rows.append((VOLUME_LABELS[name], f"{round(max(0.0, min(1.0, value)) * 100):.0f}%"))
         rows.extend([
             ("Collar visibility", "Visible" if collar_visible else "Hidden"),
+            ("Auto anchor", "On" if settings.get("auto_anchor") else "Off"),
             ("Keyboard controls", "Open  >"),
         ])
         return rows
@@ -3208,7 +3209,7 @@ _HELP = (
         "Power stays set       Shift returns it to idle",
         "A D or arrows steer   arrows look up and down",
         "Space drops or raises the anchor",
-        "W / S also pull the anchor when you mean to go",
+        "Settings: Auto anchor lets W/S pull it up too",
         "",
         "F sets a trotline     E checks a line or the landing",
         "Tab chart    J journal    I livewell",
@@ -3269,7 +3270,7 @@ _HELP = (
         "A/D steers. Sail across the wind; tack to go upwind.",
         "W/S controls its small auxiliary. Shift idles it.",
         "Wind power burns no fuel. Lower the sail to stop.",
-        "Space anchors and lowers the sail.",
+        "Space anchors; Q raises or lowers the sail.",
         "",
         "Buy fuel in the Boats tab. Each boat keeps its tank.",
         "Idle, then R calls a tow if you get stranded.",
@@ -3497,8 +3498,8 @@ _GAMEPAD_HELP_CONTROLS = {
         "Left stick steers. The pad has no look control.",
     "Space drops or raises the anchor":
         "Space anchors (keyboard)",
-    "W / S also pull the anchor when you mean to go":
-        "Use the left stick or triggers to set the throttle",
+    "Settings: Auto anchor lets W/S pull it up too":
+        "Auto anchor in Settings lets the stick lift it too",
     "F sets a trotline     E checks a line or the landing":
         "X sets a trotline     A checks a line or the landing",
     "Tab chart    J journal    I livewell":
@@ -3521,8 +3522,8 @@ _GAMEPAD_HELP_CONTROLS = {
         "Left stick steers. Sail across the wind; tack upwind.",
     "W/S controls its small auxiliary. Shift idles it.":
         "Stick or triggers run it; Shift idles (keyboard).",
-    "Space anchors and lowers the sail.":
-        "Space anchors and lowers the sail (keyboard).",
+    "Space anchors; Q raises or lowers the sail.":
+        "Space anchors; Q raises or lowers the sail (keyboard).",
     "Idle, then R calls a tow if you get stranded.":
         "Press R (keyboard) to call a tow if you get stranded.",
     "W and S throttle up and down. A and D steer.":

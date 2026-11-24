@@ -181,6 +181,7 @@ class SaveV2Checks(unittest.TestCase):
                         "ambience": 1.0, "sfx": 1.0},
             "collar_visible": True,
             "third_person": False,
+            "auto_anchor": False,
             "key_bindings": default_key_bindings(),
         })
         self.assertEqual(defaults["reward_claims"], {
