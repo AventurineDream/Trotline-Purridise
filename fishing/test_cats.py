@@ -361,6 +361,22 @@ class Rig(unittest.TestCase):
         np.testing.assert_allclose(rgb[prop][0], catmesh.PROP_COLOURS[look["prop"]], atol=1e-6)
         self.assertEqual(float(glow.max()), 0.0)
 
+    def test_goggle_frames_take_their_finish_while_lenses_stay_cyan(self):
+        """A non-brass frame colour reaches ATTIRE verts; the GLOW lens tint ignores it."""
+        look = deepcopy(next(iter(ROSTER.values()))["appearance"])
+        look.pop("twin", None)
+        look.update(attire=[{"kind": "goggles", "color": [0.78, 0.80, 0.83]}], prop="none")
+        mesh = catmesh.look_mesh(look, LOD0)
+        rgb, _glow = catmesh.paint(mesh)
+        frame = (mesh.tags == 0) & (mesh.part == catmesh.ATTIRE)
+        self.assertTrue(frame.any())
+        np.testing.assert_allclose(rgb[frame], np.broadcast_to([0.78, 0.80, 0.83], rgb[frame].shape),
+                                   atol=1e-6)
+        lens = (mesh.tags == 0) & (mesh.part == catmesh.GLOW)
+        self.assertTrue(lens.any())
+        np.testing.assert_allclose(rgb[lens], np.broadcast_to((0.55, 0.85, 0.95), rgb[lens].shape),
+                                   atol=1e-6)
+
 
 class ShaderAgreement(unittest.TestCase):
     def test_cat_frag_coat_patterns_match_the_numpy_reference(self):

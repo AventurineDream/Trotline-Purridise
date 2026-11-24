@@ -61,6 +61,17 @@ CLOTH_SWATCHES = (
 )
 BRASS = (0.76, 0.72, 0.60)  # spectacle and goggle frames, as the roster's
 
+# Spectacle and goggle frame finishes: preset RGB triples cycled on the head
+# colour row while a specs/goggles item is worn. Distinct from each other and
+# from the cyan goggle lens tint baked in catmesh.paint; any saved RGB still
+# round-trips, these are only the selectable presets.
+FRAME_FINISHES = (
+    ("Brass", BRASS),
+    ("Silver", (0.78, 0.80, 0.83)),
+    ("Gold", (0.95, 0.70, 0.20)),
+    ("Rose gold", (0.85, 0.55, 0.48)),
+)
+
 PATTERN_LABELS = {"solid": "Solid", "tabby": "Tabby", "mackerel": "Mackerel", "calico": "Calico",
                   "tortoiseshell": "Tortoiseshell", "tuxedo": "Tuxedo", "point": "Colourpoint",
                   "spotted": "Spotted", "bicolor": "Bicolour"}
@@ -245,7 +256,7 @@ def value_label(look: dict, key: str) -> str:
         if item is None:
             return "—"
         if item["kind"] in ("spectacles", "goggles"):
-            return "Brass"
+            return FRAME_FINISHES[_nearest(FRAME_FINISHES, item["color"])][0]
         return CLOTH_SWATCHES[_nearest(CLOTH_SWATCHES, item["color"])][0]
     return ""
 
@@ -256,7 +267,7 @@ def row_enabled(look: dict, key: str) -> bool:
         return key in PATTERN_COLORS[look["pattern"]]
     if key in COLOR_ROWS:
         item = _item(look, key[:4])
-        return item is not None and item["kind"] not in ("spectacles", "goggles")
+        return item is not None
     return True
 
 
@@ -298,9 +309,10 @@ def cycle(look: dict, key: str, step: int) -> dict:
             out["attire"].sort(key=lambda i: tuple(SLOTS).index(_slot_of(i["kind"])))
     elif key in COLOR_ROWS:
         item = _item(out, key[:4])
-        if item is not None and item["kind"] not in ("spectacles", "goggles"):
-            index = (_nearest(CLOTH_SWATCHES, item["color"]) + step) % len(CLOTH_SWATCHES)
-            item["color"] = list(CLOTH_SWATCHES[index][1])
+        if item is not None:
+            swatches = FRAME_FINISHES if item["kind"] in ("spectacles", "goggles") else CLOTH_SWATCHES
+            index = (_nearest(swatches, item["color"]) + step) % len(swatches)
+            item["color"] = list(swatches[index][1])
     return out
 
 
