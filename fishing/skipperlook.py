@@ -40,6 +40,10 @@ COAT_SWATCHES = (
     ("Blue grey", (0.52, 0.56, 0.60)),
     ("Charcoal", (0.20, 0.20, 0.22)),
     ("Ink", (0.10, 0.09, 0.09)),
+    ("Red", (0.72, 0.18, 0.14)),
+    ("Seal brown", (0.45, 0.30, 0.20)),
+    ("Dusty blue", (0.55, 0.62, 0.70)),
+    ("Mink", (0.55, 0.45, 0.35)),
 )
 EYE_SWATCHES = (
     ("Gold", (0.86, 0.70, 0.22)),
@@ -48,6 +52,11 @@ EYE_SWATCHES = (
     ("Blue", (0.38, 0.62, 0.90)),
     ("Hazel", (0.64, 0.62, 0.30)),
     ("Amber", (0.92, 0.58, 0.12)),
+    ("Lemon", (0.95, 0.85, 0.35)),
+    ("Olive", (0.55, 0.58, 0.25)),
+    ("Turquoise", (0.35, 0.80, 0.75)),
+    ("Violet", (0.65, 0.45, 0.80)),
+    ("Grey", (0.55, 0.55, 0.58)),
 )
 CLOTH_SWATCHES = (
     ("Oilskin yellow", (0.93, 0.74, 0.16)),
@@ -58,6 +67,11 @@ CLOTH_SWATCHES = (
     ("Teal", (0.18, 0.52, 0.52)),
     ("Oatmeal", (0.84, 0.78, 0.64)),
     ("Rust", (0.70, 0.36, 0.18)),
+    ("Sky blue", (0.35, 0.60, 0.85)),
+    ("Forest green", (0.15, 0.38, 0.22)),
+    ("Plum", (0.45, 0.25, 0.50)),
+    ("Mustard", (0.80, 0.60, 0.15)),
+    ("Charcoal", (0.18, 0.18, 0.20)),
 )
 BRASS = (0.76, 0.72, 0.60)  # spectacle and goggle frames, as the roster's
 
@@ -187,11 +201,17 @@ def _slot_of(kind):
     return next((slot for slot, kinds in SLOTS.items() if kind in kinds and kind != "none"), None)
 
 
+# New attire items start on these cloth swatches by name, so appending swatches
+# never silently moves a slot's default colour (positional indices would).
+_DEFAULT_CLOTH = {"head": "Navy", "neck": "Harbour red"}
+
+
 def _default_color(kind):
     """A new item's colour: brass frames, a navy cap, a red neckerchief, an oilskin-yellow jacket."""
     if kind in ("spectacles", "goggles"):
         return list(BRASS)
-    return list(CLOTH_SWATCHES[{"head": 2, "neck": 1}.get(_slot_of(kind), 0)][1])
+    name = _DEFAULT_CLOTH.get(_slot_of(kind), "Oilskin yellow")
+    return list(next(rgb for swatch_name, rgb in CLOTH_SWATCHES if swatch_name == name))
 
 
 def saved(state) -> dict:
