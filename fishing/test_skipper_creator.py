@@ -139,6 +139,45 @@ class SkipperCreatorTests(unittest.TestCase):
             for other in cards[i + 1:]:
                 self.assertFalse(np.array_equal(card, other))
 
+    def test_frame_finishes_cycle_for_specs_and_goggles_and_survive_saving(self):
+        """Brass, silver, gold and rose gold label, preview and reload on both frames."""
+        head_kinds = list(skipperlook.SLOTS["head"])
+
+        def worn_head(look):
+            item = next((i for i in look["attire"] if i["kind"] in head_kinds[1:]), None)
+            return item["kind"] if item else "none"
+
+        cards = []
+        for kind in ("spectacles", "goggles"):
+            for finish, colour in skipperlook.FRAME_FINISHES:
+                with self.subTest(kind=kind, finish=finish):
+                    self.open_from_pause()
+                    for _ in range(ROW["head"]):
+                        tap(self.session, "down")
+                    steps = (head_kinds.index(kind) - head_kinds.index(worn_head(self.look()))) % len(head_kinds)
+                    for _ in range(steps):
+                        tap(self.session, "right")
+                    self.assertEqual(worn_head(self.look()), kind)
+                    for _ in range(ROW["head_color"] - ROW["head"]):
+                        tap(self.session, "down")
+                    self.assertTrue(skipperlook.row_enabled(self.look(), "head_color"))
+                    # The frame starts at brass; step to the wanted finish and check its label.
+                    for _ in range(4):
+                        if skipperlook.value_label(self.look(), "head_color") == finish:
+                            break
+                        tap(self.session, "right")
+                    self.assertEqual(skipperlook.value_label(self.look(), "head_color"), finish)
+                    cards.append(skipperview.preview(self.look(), 0.0, 0.0, 240, True, 99.0))
+                    finish_creator(self.session)
+                    saved = self.state.v2["skipper"]["attire"]
+                    frame = next(i for i in saved if i["kind"] == kind)
+                    self.assertEqual(frame["color"], list(colour))
+                    reloaded = State.load(self.path, self.world).v2["skipper"]["attire"]
+                    self.assertEqual(next(i for i in reloaded if i["kind"] == kind)["color"], list(colour))
+        for i, card in enumerate(cards):
+            for other in cards[i + 1:]:
+                self.assertFalse(np.array_equal(card, other))
+
     def test_a_row_that_changes_nothing_does_not_wave(self):
         self.open_from_pause()
         ui = self.session.ui
