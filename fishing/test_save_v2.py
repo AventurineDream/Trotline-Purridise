@@ -240,6 +240,21 @@ class SaveV2Checks(unittest.TestCase):
         self.assertEqual(loaded.v2["skipper"], state.v2["skipper"])
         self.assertEqual(format_text("Morning, {Skipper}.", loaded), "Morning, Mochi.")
 
+    def test_backward_fold_values_survive_normalization_and_save_roundtrips(self):
+        """Legacy symmetric folds and new windswept folds persist without a schema migration."""
+        from .skipperlook import normalize
+        self.migrate_fixture("mid_game.json")
+        _world, state, _has = load_game_save(self.save_path, State, World)
+        for ears in ("folded", "folded_left", "folded_right"):
+            with self.subTest(ears=ears):
+                look = normalize({"skipper": dict(state.v2["skipper"], ears=ears)})
+                self.assertEqual(look["ears"], ears)
+                state.v2["skipper"] = look
+                state.save(self.save_path)
+                _world, loaded, has_save = load_game_save(self.save_path, State, World)
+                self.assertTrue(has_save)
+                self.assertEqual(loaded.v2["skipper"], look)
+
     def test_malformed_skipper_fields_fall_back_one_by_one_and_unknown_fields_survive(self):
         from .skipperlook import DEFAULT
         saved = {"skipper": {

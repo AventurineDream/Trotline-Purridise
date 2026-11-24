@@ -69,7 +69,8 @@ PATTERN_COLORS = {"solid": ("base",), "tabby": ("base", "secondary"), "mackerel"
                   "spotted": ("base", "secondary"), "point": ("base", "secondary"),
                   "calico": ("base", "secondary", "accent"), "tortoiseshell": ("base", "secondary", "accent"),
                   "tuxedo": ("base", "accent"), "bicolor": ("base", "accent")}
-EARS = {"pointed": "Pointed", "rounded": "Rounded", "tufted": "Tufted", "folded": "Folded"}
+EARS = {"pointed": "Pointed", "rounded": "Rounded", "tufted": "Tufted", "folded": "Folded back",
+        "folded_left": "Folded left", "folded_right": "Folded right"}
 TAILS = {"long": "Long", "plume": "Plume", "bob": "Bobbed", "none": "None (Manx)"}
 COATS = {"short": "Short", "long": "Long", "rex": "Curly (rex)", "hairless": "Hairless"}
 # Attire slots: one item each from the shared kit (the lantern is a deck prop, not worn).
