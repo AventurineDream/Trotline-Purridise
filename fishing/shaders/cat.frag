@@ -6,6 +6,7 @@ flat in float part;
 uniform int pattern;
 uniform vec3 coat_base, coat_secondary, coat_accent;
 uniform float coat_scale, coat_glow;
+uniform int coat_kind;   // catmesh.COAT_KINDS index; hairless (3) shows no fur pattern
 out vec4 frag;
 
 const float TORSO=0., HEAD=1., MUZZLE=2., EAR=5., ARM_UPPER=8., FOREARM=9., PAW=10., LEG=11., FOOT=12.,
@@ -99,7 +100,8 @@ void main() {
     vec3 c = color;
     float emit = glow;
     if (fur(part)) {
-        vec2 w = coat_weights(coat/coat_scale, normalize(coat_n), part, along);
+        // Hairless cats wear no fur pattern: the base colour covers them whole.
+        vec2 w = coat_kind == 3 ? vec2(0.0) : coat_weights(coat/coat_scale, normalize(coat_n), part, along);
         c = coat_base*(1.0-w.x-w.y) + coat_secondary*w.x + coat_accent*w.y;
         emit = max(emit, w.x*coat_glow);
     }

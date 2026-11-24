@@ -370,7 +370,7 @@ class LakeRenderer(SoftwareRenderer):
         if not self._actor_draws:
             return
         from .actors import shader_uniforms
-        from .catmesh import PATTERNS
+        from .catmesh import COAT_KINDS, PATTERNS
         self._uniforms(self.mesh_p,state,cam,light,mirror,fb.size)
         for _actor,slot,_lod,_p in self._actor_draws:
             if slot["boat_vertices"]:
@@ -387,7 +387,8 @@ class LakeRenderer(SoftwareRenderer):
                 colors = cat_look["colors"]
                 coat = dict(pattern=PATTERNS.index(cat_look["pattern"]),coat_base=tuple(colors["base"]),
                             coat_secondary=tuple(colors["secondary"]),coat_accent=tuple(colors["accent"]),
-                            coat_scale=float(cat_look["size"]),coat_glow=float(cat_look.get("glow",0.0)))
+                            coat_scale=float(cat_look["size"]),coat_glow=float(cat_look.get("glow",0.0)),
+                            coat_kind=COAT_KINDS.index(cat_look["coat"]))
                 for key,value in coat.items():
                     if key in self._program_members[program]:
                         program[key].value = value
