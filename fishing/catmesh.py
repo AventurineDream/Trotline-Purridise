@@ -44,6 +44,7 @@ GESTURES = {"sit_fish": "wave", "craft": "wave", "helm": "helm_wave", "nap_curl"
 LYING = ("nap_curl", "nap_rouse")
 STANDING = ("helm", "helm_wave")
 PATTERNS = ("solid", "tabby", "mackerel", "calico", "tortoiseshell", "tuxedo", "point", "spotted", "bicolor")
+_FOLDED_EARS = ("folded", "folded_left", "folded_right")
 
 
 @dataclass(frozen=True)
@@ -309,7 +310,7 @@ def _limb(a, b, c, r0, r1, sides, samples):
 
 
 def _ear(base, tip, width, depth, kind, lod, rot):
-    """An ear as a curved triangular cone: (outer, inner) meshes."""
+    """Outer and inner ear meshes in metres; folds follow the head's back and left/right axes."""
     rows = 4 if lod == LOD0 else 2
     cols = 6 if lod == LOD0 else 4
     base, tip = np.asarray(base, np.float64), np.asarray(tip, np.float64)
@@ -318,18 +319,23 @@ def _ear(base, tip, width, depth, kind, lod, rot):
     up /= height
     side = rot @ np.array([1.0, 0, 0])
     front = np.cross(side, up)
+    folded = kind in _FOLDED_EARS
+    if folded:
+        # Both ears sweep together in head space, not outward from each ear.
+        lateral = 0.85 if kind == "folded_left" else -0.85 if kind == "folded_right" else 0.0
+        fold = (side * lateral - front) * height
     pos, nrm = [], []
     for i in range(rows + 1):
         s = i / rows
         if kind == "rounded":
             half = width * math.sqrt(max(0.0, 1 - s ** 2.2))
-        elif kind == "folded":
+        elif folded:
             half = width * (1 - 0.6 * s)
         else:
             half = width * (1 - s) ** 0.9
         centre = base + up * height * s
-        if kind == "folded":
-            centre = centre + front * height * 0.9 * s * s
+        if folded:
+            centre = centre + fold * 0.9 * s * s
         for j in range(cols):
             a = math.pi * j / (cols - 1)
             offset = side * math.cos(a) * half - front * math.sin(a) * depth * (1 - s)
@@ -343,8 +349,8 @@ def _ear(base, tip, width, depth, kind, lod, rot):
     for i in range(rows + 1):
         s = i / rows
         centre = base + up * height * s * 0.85 + front * depth * 0.25
-        if kind == "folded":
-            centre = centre + front * height * 0.85 * s * s
+        if folded:
+            centre = centre + fold * 0.85 * s * s
         half = width * 0.62 * (1 - s) if kind != "rounded" else width * 0.62 * math.sqrt(max(0.0, 1 - s ** 2.2))
         for j in range(3):
             inner_pos.append(centre + side * (j - 1) * half)
@@ -378,7 +384,20 @@ def _scaled(p, size):
 
 
 def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
-    """One cat in one pose: (positions, normals, part, along, triangles, tags, Pivots)."""
+    """Build one cat's posed geometry in metres without changing its appearance.
+
+    Args:
+        look: A validated npcs.json-style appearance, including size and ear kind.
+        pose: An authored POSE_JOINTS key.
+        lod: LOD0 or LOD1; poses of the same look and LOD share topology.
+
+    Returns:
+        Positions, normals, part ids, along-part coordinates, triangle indices,
+        attire tags and motion Pivots, all in the cat's local frame.
+
+    Raises:
+        KeyError: If an appearance kind or pose is unknown.
+    """
     j = POSE_JOINTS[pose]
     size = float(look["size"])
     build_ = float(look["build"])
@@ -445,14 +464,14 @@ def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
                                 (0.0065 * hs, 0.016 * hs * max(eyes, 0.05), 0.004 * hs), eye_rot, *c["nose"])
         out.add(p, n, f, PUPIL, a)
 
-    # Ears: pointed, rounded, tufted or folded; Patch has one.
+    # Folded ears lie backward; the directional variants also sweep together sideways.
     kind = look["ears"]
-    height = {"pointed": 0.082, "rounded": 0.062, "tufted": 0.092, "folded": 0.042}[kind]
+    height = 0.042 if kind in _FOLDED_EARS else {"pointed": 0.082, "rounded": 0.062, "tufted": 0.092}[kind]
     for side in (1, -1):
         if look.get("one_ear") and side < 0:
             continue
         base = on_head((side * 0.058, 0.062, -0.005))
-        tip = on_head((side * 0.078, 0.062 + height, -0.01 + (0.02 if kind == "folded" else 0.0)))
+        tip = on_head((side * 0.078, 0.062 + height, -0.01))
         (op, on_, of, oa), (ip, in_, inf, ia) = _ear(base, tip, 0.036 * hs, 0.018 * hs, kind, lod, head_rot)
         out.add(op, on_, of, EAR, oa)
         out.add(ip, in_, inf, INNER_EAR, ia)

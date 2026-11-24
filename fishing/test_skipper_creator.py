@@ -116,6 +116,29 @@ class SkipperCreatorTests(unittest.TestCase):
         after_card = skipperview.preview(self.look(), ui.skipper_clock, ui.skipper_turn, 200, False, 0.0)
         self.assertFalse(np.array_equal(before_card, after_card))
 
+    def test_backward_and_directional_folds_preview_and_save_from_the_ears_row(self):
+        """Players can choose each backward fold, see distinct previews and reload the saved value."""
+        cards = []
+        options = list(skipperlook.EARS)
+        for ears, label in (("folded", "Folded back"), ("folded_left", "Folded left"),
+                            ("folded_right", "Folded right")):
+            with self.subTest(ears=ears):
+                self.open_from_pause()
+                for _ in range(ROW["ears"]):
+                    tap(self.session, "down")
+                steps = (options.index(ears) - options.index(self.look()["ears"])) % len(options)
+                for _ in range(steps):
+                    tap(self.session, "right")
+                self.assertEqual(self.look()["ears"], ears)
+                self.assertEqual(skipperlook.value_label(self.look(), "ears"), label)
+                cards.append(skipperview.preview(self.look(), 0.0, 0.0, 240, True, 99.0))
+                finish_creator(self.session)
+                self.assertEqual(self.state.v2["skipper"]["ears"], ears)
+                self.assertEqual(State.load(self.path, self.world).v2["skipper"]["ears"], ears)
+        for i, card in enumerate(cards):
+            for other in cards[i + 1:]:
+                self.assertFalse(np.array_equal(card, other))
+
     def test_a_row_that_changes_nothing_does_not_wave(self):
         self.open_from_pause()
         ui = self.session.ui

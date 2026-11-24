@@ -8,7 +8,7 @@ import unittest
 
 import numpy as np
 
-from . import actors, catart, catmesh, catmotion, skipper
+from . import actors, catart, catmesh, catmotion, skipper, skipperlook
 from .botidentity import format_text
 from .catmesh import FUR_PARTS, LOD0, LOD1, PATTERNS, POSES
 from .content import _BOAT_PAINT_IDS, ContentError, load_content, load_content_v2, validate_content_v2
@@ -44,13 +44,14 @@ def _lake(lake_id, seed=3):
     return world, state
 
 
-def _skipper_actor():
-    """The Skipper's helm figure in a custom look (tuxedo, cap, scarf, oilskin), as skipperview builds it."""
-    from . import skipperlook, skipperview
+def _skipper_actor(ears: str = "pointed"):
+    """Return a custom helm Actor with validated `ears`, using the creator's appearance builder."""
+    from . import skipperview
     look = skipperlook.cycle(skipperlook.normalize({}), "pattern",
                              PATTERNS.index("tuxedo") - PATTERNS.index(skipperlook.DEFAULT["pattern"]))
     for key in ("head", "neck", "body"):
         look = skipperlook.cycle(look, key, 1)
+    look["ears"] = ears
     appearance = skipperlook.appearance(look, "helm")
     return actors.Actor("skipper", "Skipper", 3.0, 0.0, -2.0, 0.9, None, {}, [], skipperview.SEED, appearance=appearance)
 
@@ -98,12 +99,23 @@ class RosterData(unittest.TestCase):
         looks = [row["appearance"] for row in ROSTER.values()]
         self.assertEqual({look["pose"] for look in looks}, set(POSES))
         self.assertEqual({look["pattern"] for look in looks}, set(PATTERNS))
-        self.assertEqual({look["ears"] for look in looks}, {"pointed", "folded", "tufted", "rounded"})
+        # The windswept folds are creator options; the authored roster keeps its four shapes.
+        self.assertEqual({look["ears"] for look in looks} | {"folded_left", "folded_right"},
+                         set(skipperlook.EARS))
         self.assertEqual({look["tail"] for look in looks}, {"long", "bob", "none", "plume"})
 
     def test_boat_paint_ids_mirror_the_shop_paints(self):
         for slot, ids in _BOAT_PAINT_IDS.items():
             self.assertEqual(ids, {row[0] for row in PAINT[slot]}, slot)
+
+    def test_validator_accepts_every_creator_ear_shape(self):
+        """Every saved creator ear value is also valid in an NPC appearance."""
+        for ears in skipperlook.EARS:
+            with self.subTest(ears=ears):
+                raw = deepcopy(CONTENT_V2_RAW)
+                raw["npcs.json"]["npcs"][0]["appearance"]["ears"] = ears
+                content = validate_content_v2(raw)
+                self.assertEqual(content.roster["grandmother_whiskers"]["appearance"]["ears"], ears)
 
     def test_validator_rejects_bad_cats_without_crashing(self):
         cases = []
@@ -186,6 +198,40 @@ class Rig(unittest.TestCase):
             self.assertLessEqual(counts[LOD0], 5000 if twin else 2800, npc_id)
             self.assertLessEqual(counts[LOD1], 1600 if twin else 1000, npc_id)
             self.assertLess(counts[LOD1] * 2.5, counts[LOD0], npc_id)
+
+    def test_folded_ears_sweep_backward_and_to_the_cats_left_or_right_in_every_pose(self):
+        """Both ear surfaces fold behind their roots in head space, at unchanged LOD budgets."""
+        look = skipperlook.appearance(skipperlook.normalize({}))
+        scale = catmesh.HEAD_SCALE * look["size"]
+        for lod in (LOD0, LOD1):
+            for pose, joints in catmesh.POSE_JOINTS.items():
+                _head, pitch, yaw = joints["head"]
+                head_rot = catmesh._rot(pitch=pitch, yaw=yaw)
+                reference = catmesh.build(look, pose, lod)
+                deltas = {}
+                for ears in ("folded", "folded_left", "folded_right"):
+                    with self.subTest(ears=ears, pose=pose, lod=lod):
+                        pos, nrm, part, along, tris, _tags, _pivots = catmesh.build(dict(look, ears=ears), pose, lod)
+                        self.assertTrue(np.isfinite(pos).all())
+                        self.assertTrue(np.isfinite(nrm).all())
+                        self.assertEqual(pos.shape, reference[0].shape)
+                        np.testing.assert_array_equal(tris, reference[4])
+                        self.assertLessEqual(len(tris), 2800 if lod == LOD0 else 1000)
+                        for surface in (catmesh.EAR, catmesh.INNER_EAR):
+                            roots = pos[(part == surface) & (along == 0)].reshape(2, -1, 3).mean(axis=1)
+                            tips = pos[(part == surface) & (along == 1)].reshape(2, -1, 3)
+                            delta = (tips - roots[:, None, :]) @ head_rot / scale
+                            # +z faces the muzzle; every tip vertex must be behind its own root.
+                            self.assertTrue(np.all(delta[:, :, 2] < -0.02))
+                            deltas[ears, surface] = delta.mean(axis=1)
+                for surface in (catmesh.EAR, catmesh.INNER_EAR):
+                    neutral = deltas["folded", surface]
+                    left, right = deltas["folded_left", surface], deltas["folded_right", surface]
+                    # Positive head-local x is the cat's left, for BOTH ears.
+                    self.assertTrue(np.all(left[:, 0] - neutral[:, 0] > 0.02))
+                    self.assertTrue(np.all(right[:, 0] - neutral[:, 0] < -0.02))
+                    np.testing.assert_allclose(left[:, 1:], neutral[:, 1:], atol=1e-6)
+                    np.testing.assert_allclose(right[:, 1:], neutral[:, 1:], atol=1e-6)
 
     def test_the_lod0_mesh_cache_stays_bounded(self):
         catmesh.clear_caches()
@@ -292,8 +338,10 @@ void main() {
             cast += [(a, ((60.0, _busy_moments(a)[0], {}), (60.0, _busy_moments(a)[1], {}), (34.0, 7.3, {})))
                      for a in _pose_cast()]
             # The Skipper's own look mesh at the helm: the gesture override (wave back) and steering lean.
-            cast += [(_skipper_actor(), ((60.0, 2.9, {"steer": 0.7}), (12.0, 5.1, {"gesture": 0.6, "steer": -0.4}),
-                                         (8.0, 0.0, {"gesture": 1.0})))]
+            cast += [(_skipper_actor(ears), ((60.0, 2.9, {"steer": 0.7}),
+                                            (12.0, 5.1, {"gesture": 0.6, "steer": -0.4}),
+                                            (8.0, 0.0, {"gesture": 1.0})))
+                     for ears in ("pointed", "folded", "folded_left", "folded_right")]
             for actor, frames in cast:
                 for distance, t, extra in frames:
                     mesh = actor.mesh(LOD0)
@@ -654,6 +702,23 @@ class Skipper(unittest.TestCase):
         ahead = (pos[:, 2] - state.z) * math.cos(state.yaw) + (pos[:, 0] - state.x) * math.sin(state.yaw)
         landing = ahead * eye / (eye + pos[:, 1])
         self.assertGreater(float(landing.min()), state.boat.bow * 2.5)
+
+    def test_folded_ear_reflections_keep_the_cat_relative_sweep(self):
+        """Reflections support all fold values and shift both tips toward the chosen head side."""
+        state = self._state("jon", yaw=0.7)
+        state.v2["skipper"]["ears"] = "folded"
+        neutral, _n, _rgb, triangles = skipper.head_silhouette(state)
+        rot = skipper._rot(0.0, state.yaw + math.pi)
+        for ears, sign in (("folded_left", 1), ("folded_right", -1)):
+            with self.subTest(ears=ears):
+                state.v2["skipper"]["ears"] = ears
+                pos, _n, _rgb, tris = skipper.head_silhouette(state)
+                np.testing.assert_array_equal(tris, triangles)
+                delta = (pos[-12:] - neutral[-12:]) @ rot
+                tips = delta[[2, 5, 8, 11]]
+                self.assertTrue(np.all(tips[:, 0] * sign > 0))
+                np.testing.assert_allclose(delta[:, 1:], 0, atol=1e-5)
+                np.testing.assert_array_equal(pos[:-12], neutral[:-12])
 
     def test_the_figure_turns_smoothly_as_two_cats_trade_places(self):
         from . import skipperview

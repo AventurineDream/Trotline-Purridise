@@ -420,7 +420,9 @@ current lake needs.
   built from deformed ellipsoids and swept tubes in NumPy, about 2.5k triangles at
   LOD0, 600 at LOD1, and an impostor sprite beyond 120 m.
 - **Parameters per cat in `npcs.json`:** size, build, ear shape (pointed, folded,
-  tufted, rounded), tail (long, bob, none: Manx, plume), coat pattern (solid,
+  folded_left, folded_right, tufted, rounded; all folds sweep backward, with the
+  directional variants also swept toward the cat's own left/right), tail (long,
+  bob, none: Manx, plume), coat pattern (solid,
   tabby, mackerel, calico, tortoiseshell, tuxedo, point, spotted, bicolor),
   colors, eye color, whisker length, and attire props from a shared kit (shawl,
   spectacles, oilskin, cap, parka, vest, goggles, life jacket, bandana, sweaters

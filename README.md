@@ -77,6 +77,11 @@ Money, catches, gear, boats and the journal come with you.
 
 **New morning** asks for a pace, then opens the Skipper creator. Choose a row with **W/S** and change it with **A/D**. The rows are name, pattern, coat, markings, bib and mitts, eyes, ears, tail, fur, hat and specs, hat colour, neckwear, neckwear colour, jacket and jacket colour. On the name row, typing edits the name. **Q** and **E** turn the Skipper (gamepad **LB** and **RB**). **Done** starts the morning, and **Esc** goes back to the pace choice.
 
+Ears can be pointed, rounded, tufted or folded backward along the head. **Folded left**
+and **Folded right** fold both ears backward and sweep them toward the cat's own left
+or right. Your choice is saved and appears in the preview, in play and in reflections;
+existing folded-ear Skippers and Bramble now use the backward fold too.
+
 In play, **Pause → Your Skipper** reopens the creator. Done saves and returns to the game; Esc cancels without saving.
 
 ### Where your save lives

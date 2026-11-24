@@ -483,7 +483,7 @@ _FISH_FEATURES = {"kype", "hump", "scutes", "gills", "legs", "rings", "lure", "h
                   "comet", "ribbon", "whiskers", "long_ear", "ocellus", "shoulder_spot"}
 # The cat roster's appearance (V1-29): catmesh.py builds and paints these.
 _CAT_COATS = {"short", "long", "rex", "hairless"}
-_CAT_EARS = {"pointed", "folded", "tufted", "rounded"}
+_CAT_EARS = {"pointed", "folded", "folded_left", "folded_right", "tufted", "rounded"}
 _CAT_TAILS = {"long", "bob", "none", "plume"}
 _CAT_PATTERNS = {"solid", "tabby", "mackerel", "calico", "tortoiseshell", "tuxedo", "point", "spotted", "bicolor"}
 _CAT_ATTIRE = {"shawl", "spectacles", "oilskin", "cap", "parka", "vest", "goggles", "life_jacket",

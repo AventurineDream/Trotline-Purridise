@@ -247,6 +247,13 @@ def head_silhouette(state):
     water halfway out: far enough past the bow that the hull never hides it, ears
     included (they point down in the mirror). Its size reads at that range, about
     0.05 rad across.
+
+    Args:
+        state: Live game state, including the saved Skipper look and boat eye height.
+
+    Returns:
+        Positions in world metres, unit normals, RGB colours and triangle indices
+        for the reflection's simplified head and ear outline.
     """
     m = _Mesh()
     look = skipperlook.saved(state)
@@ -264,11 +271,14 @@ def head_silhouette(state):
     m.add(pos, nrm, faces, shade)
     # The ear tips follow the Skipper's ears: the outline is all the mirror shows of them.
     tip_x, tip_y = {"pointed": (0.13, 0.26), "rounded": (0.14, 0.22), "tufted": (0.12, 0.30),
-                    "folded": (0.17, 0.16)}[look["ears"]]
+                    "folded": (0.17, 0.16), "folded_left": (0.17, 0.16),
+                    "folded_right": (0.17, 0.16)}[look["ears"]]
+    # Mirror the same cat-relative sweep as the shared rig, rather than splaying both tips.
+    sweep = 0.05 if look["ears"] == "folded_left" else -0.05 if look["ears"] == "folded_right" else 0.0
     for side in (-1, 1):
         inner = centre + rot @ (np.array((side * 0.03, 0.12, 0.0), np.float32) * s)
         outer = centre + rot @ (np.array((side * 0.14, 0.08, 0.0), np.float32) * s)
-        tip = centre + rot @ (np.array((side * tip_x, tip_y, 0.0), np.float32) * s)
+        tip = centre + rot @ (np.array((side * tip_x + sweep, tip_y, 0.0), np.float32) * s)
         ear = np.stack([inner, outer, tip, inner, outer, tip])
         m.add(ear, np.broadcast_to(-forward, ear.shape), [(0, 1, 2), (3, 5, 4)], shade)
     return m.arrays()
