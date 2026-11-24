@@ -471,6 +471,7 @@ def draw(owner, frame, ui, topics, title, hint, caption=""):
     Side effects:
         Wraps `ui.help_spread` into range and sets `ui.help_spreads` to the spread count and
         `ui.help_shown` to the topics on the open pages (left, then right unless it is blank).
+        Publishes pixel-space page-foot turns and the cover's Close control in `ui.pointer`.
     """
     guide = layout(owner, frame, topics, title, hint)
     count = len(guide.spreads)
@@ -491,7 +492,12 @@ def draw(owner, frame, ui, topics, title, hint, caption=""):
     _page(owner, frame, guide, 0, left, first, BACK_CUES if spread else (), spread > 0)
     _page(owner, frame, guide, 1, right, first + 1,
           TURN_CUES if more else FIRST_CUES if count > 1 else (), more)
-    _foot_band(owner, frame, guide, hint, caption, spread, count)
+    if count > 1:
+        for side, action in ((0, "previous"), (1, "next")):
+            px, py, pw, ph = guide.pages[side]
+            ui.pointer.add((px, py + guide.foot_y - guide.pad, pw,
+                            ph - guide.foot_y + guide.pad), action)
+    _foot_band(owner, frame, ui, guide, hint, caption, spread, count)
 
 
 def _edges(owner, frame, guide, spread, count):
@@ -527,26 +533,32 @@ def _top_band(owner, frame, guide, title, labels):
                 guide.body, PAPER, False, BODY_FAMILY)
 
 
-def _foot_band(owner, frame, guide, hint, caption, spread, count):
-    """The controls hint below the left page, or in its place a sound's caption cut to the
-    spread's width, and a progress track under the right page in the room left: a segment
-    per spread, the open one bright and raised."""
+def _foot_band(owner, frame, ui, guide, hint, caption, spread, count):
+    """Keep captions/hints and the progress track clear of the cover's Close button."""
     (left_x, _y, _w, _h), (right_x, _ry, page_w, _rh) = guide.pages
     inner = guide.band - 2 * guide.pad
     top = guide.cover[1] + guide.cover[3] - guide.band + guide.pad
-    right = right_x + page_w
-    label, color = hint, EDGE
-    if caption:
-        def measure(text):
-            return _extent(owner, text, guide.body, BODY_FAMILY, PAPER)[0]
-        label, color = caption, PAPER
-        if measure(caption) > right - left_x:
-            room = right - left_x - measure("..")
-            label = caption[:_fit(caption, room, measure)].rstrip() + ".."
+    em = owner.cell(guide.body)[0]
+    close_w = _extent(owner, "Close", guide.body, BODY_FAMILY, PAPER)[0] + 14
+    close_x = right_x + page_w - close_w
+    right = close_x - em
+    label, color = (caption, PAPER) if caption else (hint, EDGE)
+    def measure(text):
+        return _extent(owner, text, guide.body, BODY_FAMILY, color)[0]
+    if measure(label) > right - left_x:
+        room = right - left_x - measure("..")
+        label = label[:_fit(label, room, measure)].rstrip() + ".."
     label_w, label_h = _extent(owner, label, guide.body, BODY_FAMILY, color)
     owner._text(frame, label, left_x, top + (inner - label_h) // 2, guide.body, color, False,
                 BODY_FAMILY)
-    em = owner.cell(guide.body)[0]
+    # The foot band is cover, not page: draw like the other band labels (PAPER on the
+    # leather) and publish the hit rect by hand so the button chrome never shrinks the
+    # label under the 12px floor the layout tests enforce.
+    owner._round_fill(frame, close_x, top, close_w, inner, (46, 66, 62), 1)
+    label_w_close, label_h_close = _extent(owner, "Close", guide.body, BODY_FAMILY, PAPER)
+    owner._text(frame, "Close", close_x + (close_w - label_w_close) // 2,
+                top + (inner - label_h_close) // 2, guide.body, PAPER, False, BODY_FAMILY)
+    ui.pointer.add((close_x, top, close_w, inner), "back")
     track = min(right - (left_x + label_w + 2 * em), count * 3 * em)
     if count < 2 or track < 2 * count:
         return

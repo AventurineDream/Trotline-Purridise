@@ -145,7 +145,7 @@ class HaulChecks(unittest.TestCase):
                            haul_phase="card", haul_counts_before={"bluegill": 0})
         ui.draw(frame.copy(), session.state, ui_state)
         self.assertIn("NEW!", text.calls)
-        self.assertIn("Any key except E continues   Hold E speeds the haul", text.calls)
+        self.assertIn("Click / any key except E continues · Hold E hurries", text.calls)
 
         text.calls.clear()
         stage_session = self.make_session(12, catch=normal)

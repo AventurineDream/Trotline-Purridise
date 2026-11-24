@@ -276,6 +276,7 @@ class BotIdentityChecks(unittest.TestCase):
         self.assertEqual(identity.book_credit(state), 'the Skipper & Cobalt-774')
 
     def test_keyboard_and_pointer_landing_actions_save_once_and_pause_time(self):
+        """Share native actions with pointer targets published by the displayed Bot tab."""
         state, session = self.state, self.session
         identity.grant_shell(state, 'frog')
         session.ui.mode, session.ui.shop_tab = 'shop', SHOP_TABS.index('Bot')
@@ -288,8 +289,15 @@ class BotIdentityChecks(unittest.TestCase):
         state.finder, state.money = True, 200
         rows = shop_rows(state, 7)
         index = next(i for i, row in enumerate(rows) if row.arg == 'sonar_grid')
-        session.ui.kitchen_hitboxes = [(index, (20, 20, 150, 30))]
-        session.tick(Keys(mouse_click=(30, 30)), 1)
+        text = Text()
+        self.addCleanup(text.close)
+        painter = UI(text, self.world)
+        self.addCleanup(painter.close)
+        session.ui.shop_i = index
+        painter.draw(np.zeros((720, 1280, 3), np.uint8), state, session.ui)
+        rect = next(hit.rect for hit in session.ui.pointer.targets
+                    if hit.field == 'shop_i' and hit.value == index)
+        session.tick(Keys(mouse_click=(rect[0] + 3, rect[1] + 3)), 1)
         self.assertEqual(state.money, 50)
         self.assertIn('sonar_grid', identity.profile(state)['tools'])
         self.assertEqual(state.game_minutes, before)

@@ -270,7 +270,13 @@ class ComfortChecks(unittest.TestCase):
                 self.assertTrue(frame.any())
 
     def test_mouse_mode_choice_and_controller_pause_catnap(self):
+        """Choose the displayed pace by pointer, then retain controller catnap access."""
         self.session.ui.mode = "new_mode"
+        text = Text()
+        self.addCleanup(text.close)
+        renderer = UI(text, self.world)
+        self.addCleanup(renderer.close)
+        renderer.draw(np.zeros((270, 480, 3), np.uint8), self.state, self.session.ui)
         x, y, _w, _h = comfort_controls((480, 270))[1]
         keys = Input()
         keys.viewport, keys.mouse_click = (480, 270), (x + 4, y + 4)

@@ -19,7 +19,7 @@ from .game import Keys, Session
 from .gamepad import BUTTON_ACTIONS, BUTTON_X
 from .platform import Input, Text
 from .sim import Catch, Hook, RNG, SetLine, State
-from .ui import shop_rows
+from .ui import UI, shop_rows
 from .world import World
 
 
@@ -350,6 +350,11 @@ class ShinyIntegrationChecks(unittest.TestCase):
         session.tick(Keys(pressed={"f"}), .01)
         self.assertEqual(State.load(self.path, self.world).v2["book"]["tracked"], "bluegill")
         x, y, _w, _h = book_controls(layout, state, ui)["tracker"]
+        # Pointer input resolves against the last rendered frame; draw once so the
+        # tracker control is published at this viewport before the click.
+        renderer = UI(Text(), self.world)
+        self.addCleanup(renderer.close)
+        renderer.draw(np.zeros((270, 480, 3), np.uint8), state, ui)
         keys = Input()
         keys.viewport, keys.mouse_click = (480, 270), (x + 5, y + 5)
         session.tick(keys, .01)

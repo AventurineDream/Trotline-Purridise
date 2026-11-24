@@ -1,4 +1,4 @@
-"""SDL GameController input and the saved keyboard-to-action table."""
+"""SDL controllers and keyboard actions; pointer/viewport metadata stays in UI pixels."""
 
 from __future__ import annotations
 
@@ -207,7 +207,19 @@ def remap_keyboard(pressed, held, saved=None) -> tuple[set[str], set[str]]:
 
 
 def session_input(keys, saved_bindings, repeat_state: dict[str, float]):
-    """Build one action input from a Platform Input without losing its source."""
+    """Translate keyboard actions while preserving physical and pointer metadata.
+
+    Args:
+        keys: Physical input; pointer coordinates and viewport are UI pixels.
+        saved_bindings: Saved physical-key bindings keyed by canonical action.
+        repeat_state: Mutable action-repeat timers in seconds, shared across ticks.
+    Returns:
+        Action input retaining the source's pointer position/motion, click/wheel,
+        focus, resize edge, and viewport. Inputs without physical key sets pass
+        through unchanged.
+    Side effects:
+        Expires repeat timers for released actions; does not consume input edges.
+    """
     keyboard_pressed_source = getattr(keys, "keyboard_pressed", None)
     keyboard_held_source = getattr(keys, "keyboard_held", None)
     if keyboard_pressed_source is None or keyboard_held_source is None:
@@ -236,15 +248,21 @@ def session_input(keys, saved_bindings, repeat_state: dict[str, float]):
         repeat_state.pop(name, None)
 
     class ActionInput:
+        """One translated frame with unchanged pointer, focus, and geometry units."""
+
         def __init__(self):
+            """Capture this frame's translated keys and physical input metadata."""
             self.pressed = pressed
             self.held = held
             self.quit = keys.quit
             self.focused = keys.focused
             self.device = keys.device
+            self.mouse_pos = getattr(keys, "mouse_pos", None)
+            self.mouse_moved = getattr(keys, "mouse_moved", False)
             self.mouse_click = getattr(keys, "mouse_click", None)
             self.mouse_wheel = getattr(keys, "mouse_wheel", 0)
             self.viewport = getattr(keys, "viewport", (1280, 720))
+            self.resized = getattr(keys, "resized", False)
             self.keyboard_pressed = keyboard_pressed
             self.keyboard_held = keyboard_held
             self.physical_keyboard_pressed = physical_keyboard_pressed

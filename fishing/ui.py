@@ -57,7 +57,7 @@ from .boat import (
 from .lakes import LAKES, LAKE_ZONE_NAMES, travel_lock_reason
 from .data import weight_string
 from .weather import wind_at
-from . import comfort, detail, fieldguide, skipperlook
+from . import comfort, detail, fieldguide, pointer, skipperlook
 
 INK = (238, 233, 216)
 DIM = (169, 183, 175)
@@ -426,8 +426,15 @@ CREDITS_LINES = ("Grandmother Whiskers · Pip & Pebble · Doc Barnaby",
 
 @dataclass
 class UIState:
+    """Native menu focus and the last draw's semantic pointer geometry.
+
+    ``pointer`` rectangles use frame pixels and are valid only for its published
+    context/viewport. Selection fields remain shared by keyboard, pad and hover.
+    """
+
     mode: str = "title"
     input_device: str = "keyboard"
+    pointer: pointer.Registry = field(default_factory=pointer.Registry)
     shop_tab: int = 0
     shop_i: int = 0
     set_line: int = 0
@@ -483,7 +490,6 @@ class UIState:
     nap_timer: float = 0.0
     nap_forced: bool = False
     kitchen_from: str = "play"
-    kitchen_hitboxes: list = field(default_factory=list)
     cook_kind: str = ""
     cook_arg: str = ""
     cook_fish: int = 0
@@ -522,6 +528,7 @@ class UIState:
 
 
 def comfort_controls(viewport):
+    """Return the two comfort-choice rectangles for a (width, height) pixel viewport."""
     width, height = viewport
     margin = max(12, min(28, width // 35))
     button_h = max(34, min(52, height // 7))
@@ -780,6 +787,13 @@ class UI:
         return self._cw[key], self._ch[key]
 
     def draw(self, frame: np.ndarray, state, ui: UIState, camera=None) -> None:
+        """Paint an RGB frame and replace its context-bound menu hit targets.
+
+        ``frame`` dimensions and published rectangles are UI pixels; ``state``
+        supplies content/settings, ``ui`` receives visible geometry and native
+        selection normalization, and optional ``camera`` positions lake sightings.
+        Returns None; drawing never activates a menu or changes gameplay.
+        """
         v2 = getattr(state, "v2", {})
         settings = v2.get("settings", {}) if isinstance(v2, dict) else {}
         text_size = settings.get("text_size", 1)
@@ -789,6 +803,16 @@ class UI:
         self._dyslexia_font = bool(settings.get("dyslexia_font", False))
         self._hud_rects = []  # the HUD's top panels this frame; toasts keep clear of them
         mode = ui.mode
+        h, w = frame.shape[:2]
+        scroll = {"title": "title", "pause": "pause", "settings": "settings",
+                  "skipper": "skipper", "dialogue": "dialogue", "shop": "shop",
+                  "kitchen": "kitchen", "setbait": "bait", "check": "check",
+                  "well": "well", "help": "help", "journal": "book"}.get(mode, "")
+        if mode == "settings" and ui.settings_page == "keys":
+            scroll = "keys"
+        elif mode == "cook_confirm" and ui.cook_kind in {"dish", "cookout"}:
+            scroll = "cook_fish"
+        ui.pointer.begin(pointer.context(state, ui), (w, h), scroll)
         self._caption_floor = None
         if mode == "play":
             draw_sighting(frame, state, camera)
@@ -796,16 +820,22 @@ class UI:
             self._title(frame, state, ui)
             self._caption(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
+            self._pointer_outline(frame, state, ui)
             return
         if mode == "play" and ui.whale_return:
             # The Star-Whale comes back (V1-37): the HUD steps aside under a letterbox.
             from .staging import overlay
             overlay(frame, ui.stage_fx)
             h, w = frame.shape[:2]
-            self._center(frame, self._controls(ui, "Esc skip", "B skip"), w / 2, int(h * 0.95),
-                         self._size(frame, "small"), DIM)
+            size = self._size(frame, "small")
+            label = self._controls(ui, "Esc · Skip", "B · Skip")
+            button_w = self._measure(label, size, "sans") + 24
+            button_h = self.cell(size)[1] + 8
+            self._pointer_button(frame, ui, label,
+                                 ((w - button_w) // 2, h - button_h - 10, button_w, button_h), "skip_whale")
             self._caption(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
+            self._pointer_outline(frame, state, ui)
             return
         if mode == "play":
             if comfort.drowsy(state.v2):
@@ -823,6 +853,7 @@ class UI:
         if mode in {"new_mode", "needs", "catnap"}:
             self._comfort(frame, state, ui)
             self._caption(frame, state, ui)
+            self._pointer_outline(frame, state, ui)
             return
         if mode == "map":
             # The chart is a full-screen information surface; drawing the play HUD
@@ -830,6 +861,7 @@ class UI:
             self._map(frame, state, ui, big=True)
             # Toasts float across the lake view, but collide with the chart title
             # and footer on compact screens; the chart is a deliberate focus mode.
+            self._pointer_outline(frame, state, ui)
 
             return
         if mode == "dialogue":
@@ -873,6 +905,35 @@ class UI:
         elif mode == "credits":
             self._credits(frame, state, ui)
         self._caption(frame, state, ui)
+        self._pointer_outline(frame, state, ui)
+
+    def _pointer_button(self, frame, ui, label, rect, action="back", field="", value=None,
+                        *, selected=False, size=None):
+        """Draw and publish one measured button; later controls win overlapping hits."""
+        x, y, width, height = (int(part) for part in rect)
+        self._round_fill(frame, x, y, width, height, GOLD if selected else (46, 66, 62), 1)
+        size = self._size(frame, "small") if size is None else size
+        color = (22, 39, 39) if selected else INK
+        while size > 1 and (self._measure(label, size, "sans") > width - 10
+                           or self._render(label, size, color, "sans").shape[0] > height - 4):
+            size -= 1
+        glyph_h = self._render(label, size, color, "sans").shape[0]
+        self._center(frame, label, x + width / 2, y + (height - glyph_h) // 2,
+                     size, color, "sans")
+        ui.pointer.add((x, y, width, height), action, field, value)
+
+    def _pointer_outline(self, frame, state, ui):
+        """Publish normalized display identity and outline pointer-owned semantic focus."""
+        ui.pointer.identity = pointer.context(state, ui)
+        target = ui.pointer.hovered
+        if ui.pointer.owner != "pointer" or target is None or target not in ui.pointer.targets:
+            return
+        x, y, width, height = (int(part) for part in target.rect)
+        for inset, color in ((0, (22, 39, 39)), (1, GOLD)):
+            self._fill(frame, x + inset, y + inset, width - inset * 2, 1, color, 1)
+            self._fill(frame, x + inset, y + height - 1 - inset, width - inset * 2, 1, color, 1)
+            self._fill(frame, x + inset, y + inset, 1, height - inset * 2, color, 1)
+            self._fill(frame, x + width - 1 - inset, y + inset, 1, height - inset * 2, color, 1)
 
     def _credits(self, frame, state, ui):
         """The story's end (05 §3): the credits rise over the boat at dawn (V1-35), then rest."""
@@ -897,6 +958,7 @@ class UI:
         if ui.credits_s >= CREDITS_HOLD_S:  # keys do nothing while the credits hold
             hint = self._controls(ui, "Press any key to keep fishing.", "Press A to keep fishing.")
             self._backed(frame, hint, w / 2, int(h * 0.82), small, DIM, "sans", center=True)
+            ui.pointer.add((0, 0, w, h), "activate")
 
     def _vignette(self, frame, state, vignette: dict, panel_top: int):
         """A story moment's card beside the dialogue: the book, or Bot's collar (V1-35). It fits
@@ -976,39 +1038,72 @@ class UI:
         cols = max(8, (width - margin*2 - inset) // cw)
         lines = textwrap.wrap(text, cols)
         choices = node.get('choices', [])
-        rows = lines + ['']
-        colors = [INK] * len(lines) + [DIM]
-        for i, choice in enumerate(choices):
-            label = f"{'>' if i == chat.selected else ' '} {i+1}. {format_text(choice['text'], state)}"
-            wrapped = textwrap.wrap(label, cols)
-            rows.extend(wrapped)
-            colors.extend([GOLD if i == chat.selected else DIM] * len(wrapped))
         foot = self._controls(
-            ui,
-            "W/S or arrows choose / Enter Space C select / Esc leave / H Help",
-            "D-pad choose / A select / B leave / RB continue",
+            ui, "W/S or arrows choose · Enter selects · Esc leave · H Help",
+            "D-pad choose · A select · B leave · RB continue",
         )
         if not choices:
-            foot = self._controls(ui, "C / Enter / Space continue    Esc leave    H Help",
-                                  "A continue    B leave    RB continue")
-        if node.get('scene'):  # a story scene is read through; Esc does not leave it (V1-34)
-            foot = (self._controls(ui, "W/S or arrows choose / Enter Space C select / H Help",
-                                   "D-pad choose / A select / RB continue") if choices
-                    else self._controls(ui, "C / Enter / Space continue    H Help", "A continue    RB continue"))
-            if ui.stage_skip:  # a replay's staging can be skipped (V1-35)
-                foot += self._controls(ui, "    Esc skip", "    B skip")
+            foot = self._controls(ui, "C / Enter / Space continue · Esc leave · H Help",
+                                  "A continue · B leave · RB continue")
+        scene = bool(node.get('scene'))
+        if scene:
+            foot = (self._controls(ui, "W/S or arrows choose · Enter selects · H Help",
+                                  "D-pad choose · A select · RB continue") if choices else
+                    self._controls(ui, "C / Enter / Space continue · H Help", "A continue · RB continue"))
+            if ui.stage_skip:
+                foot += self._controls(ui, " · Esc skips staging", " · B skips staging")
+        wrapped_choices = []
+        for index, choice in enumerate(choices):
+            prefix = f"{index + 1}. "
+            content = textwrap.wrap(format_text(choice['text'], state), max(1, cols - len(prefix) - 2)) or [""]
+            marker = ">" if index == chat.selected else " "
+            wrapped_choices.append([f"{marker} {prefix}{content[0]}",
+                                    *[" " * (len(prefix) + 2) + line for line in content[1:]]])
         footer = textwrap.wrap(foot, cols)
-        height = (len(rows) + len(footer) + 2) * (ch + 3) + margin*2
+        button_h = max(24, ch + 8)
+        capacity = len(choices)
+        if choices:
+            available = ((h - 24 - margin * 2 - button_h - 10) // (ch + 3)
+                         - len(lines) - len(footer) - 4)
+            capacity = max(1, available // max(len(choice) for choice in wrapped_choices))
+        start, end = ui.pointer.window("dialogue", chat.selected, len(choices), max(1, capacity))
+        rows = lines + ['']
+        colors = [INK] * len(lines) + [DIM]
+        choice_rows = []
+        for index in range(start, end):
+            wrapped = wrapped_choices[index]
+            choice_rows.append((index, len(rows), len(wrapped)))
+            rows.extend(wrapped)
+            colors.extend([GOLD if index == chat.selected else DIM] * len(wrapped))
+        if end - start < len(choices):
+            footer = [f"Choices {start + 1}–{end} of {len(choices)} · Scroll to browse", *footer]
+        height = (len(rows) + len(footer) + 2) * (ch + 3) + margin * 2 + button_h + 10
         if portrait is not None:
-            height = max(height, side + margin*2)
-        x, y = (w-width)//2, h-height-12
+            height = max(height, side + margin * 2)
+        x, y = (w - width) // 2, h - height - 12
         self._panel(frame, x, y, width, height, 0.96)
         if portrait is not None:
-            self._blit_rgb(frame, portrait, x+margin, y+margin)
-        self._text(frame, name, x+margin+inset, y+margin, size, GOLD, False)
-        top = y+margin+(ch+3)*2
-        for i, (line, color) in enumerate(zip(rows+footer, colors+[DIM]*len(footer))):
-            self._text(frame, line, x+margin+inset, top+i*(ch+3), size, color, False)
+            self._blit_rgb(frame, portrait, x + margin, y + margin)
+        text_x = x + margin + inset
+        text_w = width - margin * 2 - inset
+        self._text(frame, name, text_x, y + margin, size, GOLD, False)
+        top = y + margin + (ch + 3) * 2
+        for index, (line, color) in enumerate(zip(rows + footer, colors + [DIM] * len(footer))):
+            self._text(frame, line, text_x, top + index * (ch + 3), size, color, False)
+        for index, first_row, row_count in choice_rows:
+            ui.pointer.add((text_x - 4, top + first_row * (ch + 3) - 1,
+                            text_w + 8, row_count * (ch + 3)),
+                           "activate", "dialogue_selected", index)
+        buttons = ([] if choices else [("Continue", "activate")]) + [("Help", "help")]
+        if not scene:
+            buttons.append(("Leave", "back"))
+        elif ui.stage_skip:
+            buttons.append(("Skip staging", "skip_scene"))
+        button_w = (text_w - (len(buttons) - 1) * 8) // len(buttons)
+        button_y = y + height - margin - button_h
+        for index, (label, action) in enumerate(buttons):
+            self._pointer_button(frame, ui, label,
+                                 (text_x + index * (button_w + 8), button_y, button_w, button_h), action)
         return y
 
     @staticmethod
@@ -1187,8 +1282,11 @@ class UI:
             overlay(frame, {"bars": beats["bars"]})
             encounterview.name(self, frame, hook.catch.species, beats)
             if encounter.presented(state.v2, hook.catch.species):
-                skip = self._controls(ui, "Esc skip   Hold E hurries", "B skip   Hold A hurries")
-                self._backed(frame, skip, w / 2, int(h * 0.95), small, DIM, "sans", center=True)
+                skip = self._controls(ui, "Click / Esc skip · Hold E hurries", "B skip · Hold A hurries")
+                sy = int(h * 0.95)
+                self._backed(frame, skip, w / 2, sy, small, DIM, "sans", center=True)
+                sw = min(w, self._measure(skip, small, "sans"))
+                ui.pointer.add(((w - sw) // 2, sy, sw, min(h - sy, self.cell(small)[1])), "activate")
             return
         title = f"HAULING  {index + 1:02d} / {len(line.hooks):02d}"
         self._backed(frame, title, int(w * 0.055), int(h * 0.06), head, INK)
@@ -1206,9 +1304,12 @@ class UI:
         self._backed(frame, result, w / 2, int(h * 0.73), body, result_color, "sans", center=True)
         speed_label = {"normal": "Normal", "quick": "Quick", "instant": "Instant"}.get(speed, "Normal")
         self._backed(frame, f"{speed_label} speed", int(w * 0.055), int(h * 0.13), small, GOLD)
-        foot = self._controls(ui, "Hold E 3×   Any key except E skips a card   Esc summary",
-                              "Hold A 3×   A skips a card   B summary")
-        self._backed(frame, foot, w / 2, int(h * 0.95), small, INK, "sans", center=True)
+        foot = self._controls(ui, "Click continues · Hold E 3× · Esc summary",
+                              "Hold A 3× · A skips a card · B summary")
+        fy = int(h * 0.95)
+        self._backed(frame, foot, w / 2, fy, small, INK, "sans", center=True)
+        fw = min(w, self._measure(foot, small, "sans"))
+        ui.pointer.add(((w - fw) // 2, fy, fw, min(h - fy, self.cell(small)[1])), "activate")
         if ui.haul_phase == "card" and hook.catch is not None:
             if legend:
                 encounterview.card(self, frame, state, ui, hook.catch)
@@ -1270,9 +1371,12 @@ class UI:
         if catch.shiny:
             self._center(frame, "SHINY CATCH", w / 2, image_y + image_h + 12 + self.cell(body)[1],
                          small, GOLD)
-        foot = self._controls(ui, "Any key except E continues   Hold E speeds the haul",
-                              "A continues   Hold A speeds the haul")
-        self._center(frame, foot, w / 2, y + ph - self.cell(small)[1] - 10, small, DIM)
+        foot = self._controls(ui, "Click / any key except E continues · Hold E hurries",
+                              "A continues · Hold A speeds the haul")
+        fy = y + ph - self.cell(small)[1] - 10
+        self._center(frame, foot, w / 2, fy, small, DIM)
+        fw = min(w, self._measure(foot, small, "sans"))
+        ui.pointer.add(((w - fw) // 2, fy, fw, self.cell(small)[1]), "activate")
 
     # --- primitives -----------------------------------------------------
 
@@ -1678,14 +1782,27 @@ class UI:
         chart = self.world.map_rgb
         margin = max(12, min(28, w // 40))
         gap = max(10, w // 80)
+        size = self._size(frame, "small")
+        button_h = max(24, self.cell(size)[1] + 8)
+        actions = [("Hail", "map_hail"),
+                   ("Weigh anchor" if state.anchored else "Anchor", "map_anchor")]
+        if getattr(state.boat, "sail_speed", 0):
+            actions.append(("Lower sail" if state.sail_raised else "Raise sail", "map_sail"))
+        actions += [("Call tow", "map_tow"),
+                    ("Send Bot" if state.bot_phase == "home" else "Recall Bot", "map_bot")]
+        columns = 3 if len(actions) > 4 else 2
+        rows = (len(actions) + columns - 1) // columns
+        x, y = margin, int(h * 0.10)
         available_width = w - 2 * margin - gap
         mw = int(available_width * 0.62)
         mh = int(mw * chart.shape[0] / chart.shape[1])
-        if mh > int(h * 0.70):
-            mh = int(h * 0.70)
+        max_map_h = h - y - margin - rows * (button_h + 6) - 12
+        if mh > max_map_h:
+            mh = max_map_h
             mw = int(mh * chart.shape[1] / chart.shape[0])
-        # The chart sits left so place names and symbols live in a side key, not over water.
-        x, y = margin, int(h * 0.10)
+        # A shallow window can drive max_map_h negative; _fit needs positive samples.
+        mh, mw = max(1, mh), max(1, mw)
+        # Reserve the chart's lower edge for the same actions its native keys expose.
         key_x = x + mw + gap
         key_w = w - margin - key_x
         key_h = h - y - margin
@@ -1753,13 +1870,20 @@ class UI:
                                     protected=protected_markers)
         self._plot_boat(frame, state, x, y, mw, mh, radius=4)
         self._plot_bot(frame, state, x, y, mw, mh)
-        size = self._size(frame, "small")
-        top = y - self.cell(size)[1] - 14
-        self._backed(frame, self.world.name, x, top, size, INK)
-        close_hint = self._controls(ui, "Tab closes the chart", "B closes the chart")
-        self._backed(frame, close_hint, x + mw - self._measure(close_hint, size, "mono"), top, size, DIM)
+        top = max(4, y - self.cell(size)[1] - 10)
+        close_w = min(mw // 2, self._measure("Tab · Close", size, "sans") + 16)
+        close_hint = self._controls(ui, "Tab · Close", "B · Close")
+        self._backed(frame, self._trim(self.world.name, size, mw - close_w - 8),
+                     x, top, size, INK)
+        self._pointer_button(frame, ui, close_hint,
+                             (x + mw - close_w, top - 2, close_w, self.cell(size)[1] + 6))
         self._map_key(frame, state, key_x, y, key_w, key_h, places, residents,
                       bool(sonar_cells))
+        action_w = (mw - (columns - 1) * 8) // columns
+        for index, (label, action) in enumerate(actions):
+            bx = x + index % columns * (action_w + 8)
+            by = y + mh + 12 + index // columns * (button_h + 6)
+            self._pointer_button(frame, ui, label, (bx, by, action_w, button_h), action)
 
     def legend_items(self, state, sonar_bands=False) -> list[tuple[str, str]]:
         """(marker kind, words) for the chart key. Every kind differs in shape, not only
@@ -2107,19 +2231,23 @@ class UI:
         title_h, body_h, small_h = (self._actual_size(value)
                                     for value in (title, body, small))
         gap_scale = getattr(self, "_text_scale", 1.0)
-        x,y = int(w*0.075),int(h*(0.20 if h<480 else 0.43))
+        x,y = int(w*0.075),int(h*(0.12 if h<480 else 0.43))
         self._text(frame,"A   T R O T L I N E   L A K E",x,y,small,GOLD,False,"sans")
         self._text(frame,GAME_TITLE,x,y+small_h+10*gap_scale,title,INK,True,"serif")
         self._text(frame,"Set your lines. Stay a while.",x,y+title_h+small_h+20*gap_scale,body,DIM,False,"sans")
         options = title_options(ui.has_save)
         ui.title_i %= len(options)
-        y2 = y+title_h+small_h+body_h+(30 if h<480 else 48)*gap_scale
+        y2 = y+title_h+small_h+body_h+(20 if h<480 else 48)*gap_scale
         if ui.confirm_new:
             msg = "New morning? The save on disk stays until you overwrite it."
-            self._text(frame,self._trim(msg,small,w-x*2),x,y2,small,WARN,False)
-            hint = self._controls(ui, "Enter chooses a mode     Esc cancels",
-                                  "A chooses a mode     B cancels")
-            self._text(frame,hint,x,y2+small_h+12*gap_scale,small,DIM,False,"sans")
+            self._backed(frame, self._trim(msg, small, w - x * 2), x, y2, small, WARN)
+            button_y = y2 + small_h + 12 * gap_scale
+            button_h = body_h + 18 * gap_scale
+            button_w = min(240, (w - x * 2 - 12) // 2)
+            self._pointer_button(frame, ui, "Yes · Choose a mode", (x, button_y, button_w, button_h),
+                                 "activate", selected=True, size=body)
+            self._pointer_button(frame, ui, "Cancel", (x + button_w + 12, button_y, button_w, button_h),
+                                 "back", size=body)
             return
         for i, label in enumerate(options):
             oy = y2+i*(body_h+27*gap_scale)
@@ -2136,11 +2264,18 @@ class UI:
                 self._text(frame,select,x+button_w-55*gap_scale,oy+9*gap_scale,small,(42,56,50),False,"sans")
             else:
                 self._text(frame,display,x+15,oy+4,option_size,INK,False,"sans")
-        controls = self._controls(ui, "H  Field guide     W / S  Choose",
-                                  "D-pad / stick choose     A select")
-        self._text(frame,controls,x,h-small_h-24*gap_scale,small,DIM,False,"sans")
-        mark = "ONE LAKE. NO HURRY."
-        self._backed(frame,mark,w-x-self._measure(mark,small,"sans"),h-small_h-24*gap_scale,small,DIM,"sans")
+            ui.pointer.add((int(x), int(oy - 4 * gap_scale), int(button_w),
+                            int(body_h + 24 * gap_scale)), "activate", "title_i", i)
+        guide_w = self._measure("Field guide", small, "sans") + 24
+        guide_y = h - small_h - 28 * gap_scale
+        self._pointer_button(frame, ui, "Field guide", (x, guide_y, guide_w, small_h + 12), "help")
+        controls = self._controls(ui, "H Help · W / S Choose · Enter selects",
+                                  "D-pad / stick choose · A select")
+        self._text(frame, self._trim(controls, small, w - 2 * x - guide_w - 16, "sans"),
+                   x + guide_w + 16, guide_y + 4, small, DIM, False, "sans")
+        if w >= 960:
+            mark = "ONE LAKE. NO HURRY."
+            self._backed(frame,mark,w-x-self._measure(mark,small,"sans"),guide_y-20,small,DIM,"sans")
 
     def _comfort_lines(self, value, size, width):
         cache = getattr(self, "_comfort_line_cache", None)
@@ -2247,6 +2382,21 @@ class UI:
                 glyph_height = self._render(label, font, INK, "sans").shape[0]
                 self._center(frame, label, bx + bw / 2, by + (bh - glyph_height) / 2,
                              font, (22, 39, 39) if chosen else INK)
+                field = "new_mode_i" if ui.mode == "new_mode" else "comfort_i"
+                ui.pointer.add(rect, "activate", field, index)
+            if ui.mode == "new_mode":
+                # Pace select is the only comfort sheet with no way back but Esc; give the
+                # pointer the same exit the keys have.
+                font = self._size(frame, "small")
+                bw = self._measure("Back", font) + 16
+                bh = min(30, max(22, font + 8))
+                bx, by = x + width - bw - 12, y + 10
+                self._round_fill(frame, bx, by, bw, bh, (46, 66, 62), 1)
+                glyph = self._render("Back", font, INK, "sans").shape[0]
+                self._center(frame, "Back", bx + bw / 2, by + (bh - glyph) / 2, font, INK)
+                ui.pointer.add((bx, by, bw, bh), "back")
+        else:
+            ui.pointer.add((0, 0, w, h), "activate")
 
     def _drowsy_edges(self, frame):
         h, w = frame.shape[:2]
@@ -2291,6 +2441,25 @@ class UI:
         self._panel(frame, margin, y, width, self._render(label, size, GOLD, "sans").shape[0] + 16, .8)
         self._text(frame, label, margin + 12, y + 6, size, GOLD, False, "sans")
 
+    def _shop_tabs(self, frame, ui, x, y, width, size):
+        """Draw the same measured tab strip for stock, Kitchen and Bot shops."""
+        font = size
+        indexes = list(range(len(_TABS)))
+        while font > 10 and sum(self._measure(f"[{name}]", font, "mono") + 8
+                                for name in _TABS) > width:
+            font -= 1
+        if sum(self._measure(f"[{name}]", font, "mono") + 8 for name in _TABS) > width:
+            indexes = [(ui.shop_tab + delta) % len(_TABS) for delta in (-1, 0, 1)]
+        tx = x
+        for index in indexes:
+            name = _TABS[index]
+            label = f"[{name}]" if index == ui.shop_tab else f" {name} "
+            color = GOLD if index == ui.shop_tab else DIM
+            tw = self._text(frame, label, tx, y, font, color, False)
+            ui.pointer.add((tx - 2, y - 2, tw + 4, self.cell(font)[1] + 4), "tab", value=index)
+            tx += tw + 8
+        return y + self.cell(font)[1] + 10
+
     def _shop(self, frame, state, ui: UIState):
         if ui.shop_tab == 7:
             from .botview import draw
@@ -2316,27 +2485,12 @@ class UI:
         meta = f"{host}    {dollars(state.money)}    well {state.well_load():.0f}/{state.well_cap():.0f} lb    bait {state.bait_count()}/{state.box_cap()}"
         self._text(frame, meta, x + m, y + 12 + self.cell(head)[1], small, GOLD, shadow=False)
         tab_y = y + 18 + self.cell(head)[1] + self.cell(small)[1]
-        tx = x + m
-        tab_font = body
-        while tab_font > 10 and sum(self._measure(name, tab_font, "mono") + 24 for name in _TABS) > pw - m * 2:
-            tab_font -= 1
-        indexes = list(range(len(_TABS)))
-        if sum(self._measure(name, tab_font, "mono") + 24 for name in _TABS) > pw - m * 2:
-            indexes = [(ui.shop_tab + delta) % len(_TABS) for delta in (-1, 0, 1)]
-        for i in indexes:
-            name = _TABS[i]
-            color = GOLD if i == ui.shop_tab else DIM
-            label = f"[{name}]" if i == ui.shop_tab else f" {name} "
-            tw = self._text(frame, label, tx, tab_y, tab_font, color)
-            tx += tw + 8
-        list_top = tab_y + ch + 10
+        list_top = self._shop_tabs(frame, ui, x + m, tab_y, pw - m * 2, body)
         list_h = ph - (list_top - y) - ch * 3
-        visible = max(4, list_h // (ch + 2))
-        start = _window(ui.shop_i, len(rows), visible)
-        for n in range(visible):
-            i = start + n
-            if i >= len(rows):
-                break
+        visible = max(1, list_h // (ch + 2))
+        start, end = ui.pointer.window("shop", ui.shop_i, len(rows), visible)
+        for i in range(start, end):
+            n = i - start
             row = rows[i]
             ry = list_top + n * (ch + 2)
             if i == ui.shop_i:
@@ -2349,6 +2503,7 @@ class UI:
             label = self._trim(row.label, body, pw - m * 2 - rw - self.cell(body)[0])
             self._text(frame, label, x + m, ry, body, color, shadow=False)
             self._text(frame, row.right, x + pw - m - rw, ry, body, color, shadow=False)
+            ui.pointer.add((x + 8, ry - 1, pw - 16, ch + 2), "activate", "shop_i", i)
         blurb = rows[ui.shop_i].blurb if rows else ""
         if ui.note:
             blurb = ui.note
@@ -2357,25 +2512,29 @@ class UI:
                    small, WARN if ui.note else DIM, False, "sans")
         foot = self._controls(ui, "W/S choose  A/D tabs  Arrows too  Enter buys  Esc",
                               "D-pad / stick choose  D-pad tabs  A buys  B back")
-        self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 8, small, DIM, shadow=False)
+        foot_y = y + ph - self.cell(small)[1] - 12
+        self._text(frame, self._trim(foot, small, pw - m * 2 - 90, "sans"), x + m,
+                   foot_y, small, DIM, False, "sans")
+        self._pointer_button(frame, ui, "Back", (x + pw - m - 76, foot_y - 3, 76,
+                                                self.cell(small)[1] + 8))
 
     def _setbait(self, frame, state, ui: UIState):
         h, w = frame.shape[:2]
-        head = self._size(frame, "head")
-        body = self._size(frame, "body")
-        small = self._size(frame, "small")
-        ch = self.cell(body)[1]
+        head, body, small = (self._size(frame, key) for key in ("head", "body", "small"))
+        head_h, ch, small_h = self.cell(head)[1], self.cell(body)[1], self.cell(small)[1]
         m = 16
-        foot = self._controls(ui, "W/S bait  A/D line  Q sections  Tab section  1-5 bait  Enter sets",
-                              "D-pad / stick choose  LB sections  Back section  A sets  B back")
-        # Wide enough for its controls line at every text size (V1-43).
-        pw = min(w - 24, max(int(w * 0.56), self._measure(foot, small, "mono") + m * 2))
-        ph = int(h * 0.62)
+        pw = min(w - 24, max(int(w * 0.64), 560))
+        control_h = max(22, small_h + 8)
+        foot_h = max(26, control_h)
+        minimum = 32 + head_h + control_h * 2 + ch + 4 + small_h + 10 + foot_h
+        ph = min(h - 24, max(int(h * 0.72), minimum))
         x, y = (w - pw) // 2, (h - ph) // 2
         self._panel(frame, x, y, pw, ph, 0.96)
         self._text(frame, "SET A LINE", x + m, y + 12, head, INK)
+        footer_y = y + ph - foot_h - 10
         if not state.held:
-            self._text(frame, "No line aboard.", x + m, y + 60, body, WARN)
+            self._text(frame, "No line aboard.", x + m, y + 20 + head_h, body, WARN)
+            self._pointer_button(frame, ui, "Back", (x + pw - m - 76, footer_y, 76, foot_h))
             return
         ui.set_line %= len(state.held)
         ui.set_bait %= len(BAITS)
@@ -2385,47 +2544,62 @@ class UI:
         if ui.set_section_baits == (0, 0, 0) and ui.set_bait:
             section_baits = [ui.set_bait] * 3
         ui.set_bait = section_baits[ui.set_section]
-        held = state.held[ui.set_line]
-        spec = LINE_TIERS[held.tier]
-        which = (f"Line {ui.set_line + 1} of {len(state.held)}    {spec['hooks']} hooks"
-                 f"    {len(state.lines)}/{state.boat.lines} deployed")
-        self._text(frame, which, x + m, y + 16 + self.cell(head)[1], small, GOLD, shadow=False)
-        section_summary = " / ".join(
-            f"S{i + 1} {BAITS[section_baits[i]].name}"
-            for i in range(ui.set_sections)
-        )
-        self._text(frame, self._trim(section_summary, small, pw - m * 2),
-                   x + m, y + 17 + self.cell(head)[1] + self.cell(small)[1],
-                   small, DIM, shadow=False)
-        top = y + 30 + self.cell(head)[1] + self.cell(small)[1] * 2
-        visible = max(1, (y + ph - ch * 2 - 42 - top) // (ch + 4))
-        start = _window(ui.set_bait, len(BAITS), visible)
+        spec = LINE_TIERS[state.held[ui.set_line].tier]
+        control_y = y + 20 + head_h
+        line_w = (pw - m * 2) // 2
+        self._pointer_button(frame, ui, "‹", (x + m, control_y, control_h, control_h),
+                             "set_line", value=(ui.set_line - 1) % len(state.held))
+        self._pointer_button(frame, ui, "›", (x + m + line_w - control_h, control_y, control_h, control_h),
+                             "set_line", value=(ui.set_line + 1) % len(state.held))
+        which = f"Line {ui.set_line + 1}/{len(state.held)} · {spec['hooks']} hooks"
+        self._text(frame, self._trim(which, small, line_w - 2 * control_h - 12, "sans"),
+                   x + m + control_h + 6, control_y + 3, small, GOLD, False, "sans")
+        count_x = x + m + line_w + 10
+        count_right = x + pw - m
+        label_w = max(0, count_right - count_x - control_h * 3 - 8)
+        self._text(frame, self._trim("Sections", small, label_w, "sans"),
+                   count_x, control_y + 3, small, DIM, False, "sans")
+        for count in range(1, 4):
+            bx = count_right - (4 - count) * control_h
+            self._pointer_button(frame, ui, str(count), (bx, control_y, control_h - 2, control_h),
+                                 "set_sections", value=count, selected=count == ui.set_sections)
+        section_y = control_y + control_h + 6
+        section_w = (pw - m * 2 - (ui.set_sections - 1) * 6) // ui.set_sections
+        for index in range(ui.set_sections):
+            label = f"S{index + 1} · {BAITS[section_baits[index]].name}"
+            self._pointer_button(frame, ui, label,
+                                 (x + m + index * (section_w + 6), section_y, section_w, control_h),
+                                 "set_section", value=index, selected=index == ui.set_section)
+        top = section_y + control_h + 8
+        note_y = footer_y - small_h - 6
+        visible = max(1, (note_y - top - 4) // (ch + 4))
+        start, end = ui.pointer.window("bait", ui.set_bait, len(BAITS), visible)
         need = sum(1 for hook_index in range(spec["hooks"])
                    if hook_index * ui.set_sections // spec["hooks"] == ui.set_section)
-        for offset, bait in enumerate(BAITS[start:start + visible]):
-            i = start + offset
+        for index in range(start, end):
+            bait = BAITS[index]
             have = state.bait.get(bait.id, 0)
-            label = f"{i + 1}  {bait.name}"
-            right = f"{have} aboard"
-            selected = i == section_baits[ui.set_section]
-            color = GOLD if selected else INK
-            if have < need and selected:
-                color = WARN
-            ry = top + offset * (ch + 4)
+            label, right = f"{index + 1}  {bait.name}", f"{have} aboard"
+            selected = index == section_baits[ui.set_section]
+            color = WARN if selected and have < need else GOLD if selected else INK
+            ry = top + (index - start) * (ch + 4)
             if selected:
                 self._fill(frame, x + 8, ry - 1, pw - 16, ch + 2, (46, 42, 28), 0.85)
-            rw = len(right) * self.cell(body)[0]
-            self._text(frame, self._trim(label, body, pw - m * 2 - rw - 16), x + m, ry, body, color, shadow=False)
+            rw = self._measure(right, body, "mono")
+            self._text(frame, self._trim(label, body, pw - m * 2 - rw - 16),
+                       x + m, ry, body, color, shadow=False)
             self._text(frame, right, x + pw - m - rw, ry, body, color, shadow=False)
+            ui.pointer.add((x + 8, ry - 1, pw - 16, ch + 3), "focus", "set_bait", index)
         bait = BAITS[section_baits[ui.set_section]]
-        note = ui.note or f"Editing section {ui.set_section + 1}: needs {need}. {bait.blurb}"
-        self._text(frame, self._trim(note, small, pw - m * 2, "sans"), x + m, y + ph - ch - 28,
+        note = ui.note or f"Section {ui.set_section + 1} needs {need}. {bait.blurb}"
+        self._text(frame, self._trim(note, small, pw - m * 2, "sans"), x + m, note_y,
                    small, WARN if ui.note else DIM, False, "sans")
-        # Proportional text collapses double spaces, so the groups need a visible divider.
-        foot = self._controls(ui, f"W/S bait · A/D line · Q sections · Tab section · 1-{min(9, len(BAITS))} bait · Enter sets",
-                              "D-pad / stick choose · LB sections · Back section · A sets · B back")
-        self._text(frame, self._trim(foot, small, pw - m * 2, "sans"), x + m,
-                   y + ph - self.cell(small)[1] - 8, small, DIM, False, "sans")
+        foot = self._controls(ui, "W/S bait · A/D line · Q sections · Tab section · Enter sets",
+                              "D-pad bait · LB sections · Back section · A sets · B back")
+        self._text(frame, self._trim(foot, small, pw - m * 2 - 164, "sans"),
+                   x + m, footer_y + 4, small, DIM, False, "sans")
+        self._pointer_button(frame, ui, "Set", (x + pw - m - 156, footer_y, 74, foot_h), "set")
+        self._pointer_button(frame, ui, "Back", (x + pw - m - 74, footer_y, 74, foot_h))
 
     def _check(self, frame, state, ui: UIState):
         rows = check_rows(state, ui.check_line)
@@ -2440,6 +2614,7 @@ class UI:
         m = 16
         if not rows:
             self._text(frame, "The line is gone.", x + m, y + 20, body, WARN)
+            self._pointer_button(frame, ui, "Back", (x + pw - m - 76, y + ph - 38, 76, 28))
             return
         line = state.lines[ui.check_line]
         title = state.line_label(ui.check_line).upper()
@@ -2451,12 +2626,10 @@ class UI:
         self._text(frame, sub, x + m, y + 14 + self.cell(head)[1], small, GOLD, shadow=False)
         ui.check_i = _clamp(ui.check_i, len(rows))
         list_top = y + 24 + self.cell(head)[1] + self.cell(small)[1]
-        visible = max(5, (ph - (list_top - y) - 36) // (ch + 1))
-        start = _window(ui.check_i, len(rows), visible)
-        for n in range(visible):
-            i = start + n
-            if i >= len(rows):
-                break
+        visible = max(1, (ph - (list_top - y) - 44) // (ch + 1))
+        start, end = ui.pointer.window("check", ui.check_i, len(rows), visible)
+        for i in range(start, end):
+            n = i - start
             row = rows[i]
             ry = list_top + n * (ch + 1)
             if i == ui.check_i:
@@ -2469,12 +2642,16 @@ class UI:
             self._text(frame, label, x + m, ry, body, color, shadow=False)
             if row.right:
                 self._text(frame, row.right, x + pw - m - rw, ry, body, color, shadow=False)
+            ui.pointer.add((x + 8, ry - 1, pw - 16, ch + 1), "activate", "check_i", i)
         foot = ui.note or self._controls(
             ui, "W/S choose  Enter toggles  Resolve applies  Esc back",
             "D-pad choose  A toggles / applies  B back",
         )
-        self._text(frame, self._trim(foot, small, pw - m * 2, "sans"), x + m,
-                   y + ph - self.cell(small)[1] - 10, small, WARN if ui.note else DIM, False, "sans")
+        foot_y = y + ph - self.cell(small)[1] - 12
+        self._text(frame, self._trim(foot, small, pw - m * 2 - 90, "sans"), x + m,
+                   foot_y, small, WARN if ui.note else DIM, False, "sans")
+        self._pointer_button(frame, ui, "Back", (x + pw - m - 76, foot_y - 3, 76,
+                                                self.cell(small)[1] + 8))
 
     def _journal(self, frame, state, ui: UIState):
         from .bookview import BOOK_TABS
@@ -2535,15 +2712,13 @@ class UI:
         ui.well_i = _clamp(ui.well_i, max(1, len(rows)))
         ch = self.cell(body)[1]
         top = y + 24 + self.cell(head)[1]
-        visible = max(4, (ph - (top - y) - 36) // (ch + 2))
+        visible = max(1, (ph - (top - y) - 44) // (ch + 2))
         if not rows:
             self._text(frame, "Empty. The lines keep what they catch.", x + m, top, body, DIM)
         else:
-            start = _window(ui.well_i, len(rows), visible)
-            for n in range(visible):
-                i = start + n
-                if i >= len(rows):
-                    break
+            start, end = ui.pointer.window("well", ui.well_i, len(rows), visible)
+            for i in range(start, end):
+                n = i - start
                 catch = rows[i]
                 sp = SPECIES_BY_ID.get(catch.species)
                 name = sp.name if sp is not None else catch.species.replace("_", " ").title()
@@ -2560,34 +2735,53 @@ class UI:
                 self._text(frame, self._trim(label, body, int(pw * 0.68)), x + m, ry, body, color, shadow=False)
                 right = dollars(catch.value())
                 self._text(frame, right, x + pw - m - len(right) * self.cell(body)[0], ry, body, color, shadow=False)
+                ui.pointer.add((x + 8, ry - 1, pw - 16, ch + 2), "treasure", "well_i", i)
         foot = self._controls(ui, "W/S choose    T / Enter marks Treasured    I closes",
                               "D-pad choose    A marks Treasured    B closes")
-        self._text(frame, foot, x + m, y + ph - self.cell(small)[1] - 10, small, DIM, shadow=False)
+        foot_y = y + ph - self.cell(small)[1] - 12
+        controls_w = 194 if rows else 76
+        self._text(frame, self._trim(foot, small, pw - m * 2 - controls_w - 12, "sans"),
+                   x + m, foot_y, small, DIM, False, "sans")
+        if rows:
+            label = "Unmark" if rows[ui.well_i].treasured else "Treasure"
+            self._pointer_button(frame, ui, label,
+                                 (x + pw - m - 194, foot_y - 3, 110, self.cell(small)[1] + 8), "treasure")
+        self._pointer_button(frame, ui, "Close", (x + pw - m - 76, foot_y - 3, 76,
+                                                 self.cell(small)[1] + 8))
 
     def _pause(self, frame, state, ui: UIState):
         h, w = frame.shape[:2]
         self._fill(frame, 0, 0, w, h, (6, 8, 8), 0.35)
         labels = pause_options(state)
-        body = self._size(frame, "body")
-        head = self._size(frame, "head")
-        small = self._size(frame, "small")
+        body, head, small = (self._size(frame, key) for key in ("body", "head", "small"))
+        head_h, body_h, small_h = self.cell(head)[1], self.cell(body)[1], self.cell(small)[1]
         foot = ui.note or self._controls(ui, "Arrows · Enter · Z nap · K pantry",
                                          "D-pad · A · X nap · Y pantry")
-        # Wide enough for the longest entry and the controls line at every text size (V1-43).
         widest = max([self._measure("> " + label, body, "mono") for label in labels]
                      + [self._measure(foot, small, "mono")])
         pw = min(w - 24, max(420, int(w * 0.34), widest + 36))
-        ph = 40 + self.cell(head)[1] + len(labels) * (self.cell(body)[1] + 8) + 30
+        row_h, button_h = body_h + 8, max(26, small_h + 10)
+        fixed = 36 + head_h + button_h + small_h + 24
+        visible = max(1, min(len(labels), (h - 24 - fixed) // row_h))
+        ph = fixed + visible * row_h
         x, y = (w - pw) // 2, (h - ph) // 2
         self._panel(frame, x, y, pw, ph, 0.92)
         self._text(frame, "PAUSED", x + 18, y + 14, head, INK)
         ui.pause_i %= len(labels)
-        for i, label in enumerate(labels):
-            color = GOLD if i == ui.pause_i else INK
-            prefix = "> " if i == ui.pause_i else "  "
-            self._text(frame, prefix + label, x + 18, y + 24 + self.cell(head)[1] + i * (self.cell(body)[1] + 8), body, color)
-        self._text(frame, foot, x + 18, y + ph - self.cell(small)[1] - 12, small,
-                   WARN if ui.note else DIM, shadow=False)
+        start, end = ui.pointer.window("pause", ui.pause_i, len(labels), visible)
+        list_top = y + 24 + head_h
+        for index in range(start, end):
+            ry = list_top + (index - start) * row_h
+            color = GOLD if index == ui.pause_i else INK
+            prefix = "> " if index == ui.pause_i else "  "
+            self._text(frame, prefix + labels[index], x + 18, ry, body, color)
+            ui.pointer.add((x + 10, ry - 2, pw - 20, row_h), "activate", "pause_i", index)
+        shortcut_y = list_top + visible * row_h + 4
+        button_w = (pw - 44) // 2
+        self._pointer_button(frame, ui, "Kitchen", (x + 18, shortcut_y, button_w, button_h), "kitchen")
+        self._pointer_button(frame, ui, "Catnap", (x + 26 + button_w, shortcut_y, button_w, button_h), "catnap")
+        self._text(frame, self._trim(foot, small, pw - 36, "sans"), x + 18,
+                   y + ph - small_h - 12, small, WARN if ui.note else DIM, False, "sans")
 
     def _settings_rows(self, state):
         v2 = getattr(state, "v2", {})
@@ -2645,20 +2839,22 @@ class UI:
             "D-pad choose  ·  D-pad change  ·  A changes  ·  B returns",
         )
         foot_lines = textwrap.wrap(foot, max(12, (pw - 2 * m) // self.cell(small)[0]))
-        foot_h = len(foot_lines) * (small_h + 2)
+        button_h = max(24, small_h + 8)
+        foot_h = len(foot_lines) * (small_h + 2) + button_h + 8
         row_h = body_h + max(4, int(h * 0.008))
         rows_top_offset = m + head_h + 14
         available = h - 24 - (2 * m + rows_top_offset + foot_h + 12)
         visible = max(1, min(len(rows), available // max(1, row_h)))
-        start = _window(ui.settings_i, len(rows), visible)
+        start, end = ui.pointer.window("settings", ui.settings_i, len(rows), visible)
         ph = 2 * m + head_h + 14 + visible * row_h + foot_h + 12
         x, y = (w - pw) // 2, (h - ph) // 2
         self._panel(frame, x, y, pw, ph, 0.96)
         self._text(frame, "SETTINGS & ACCESSIBILITY", x + m, y + m, head, INK)
         list_top = y + rows_top_offset
-        left_width = int((pw - 2 * m) * 0.63)
-        value_width = pw - 2 * m - left_width
-        for offset, (label, value) in enumerate(rows[start:start + visible]):
+        control_w = max(18, row_h - 2)
+        controls_x = x + pw - m - control_w * 2 - 6
+        left_width = int((pw - 2 * m - control_w * 2 - 18) * 0.60)
+        for offset, (label, value) in enumerate(rows[start:end]):
             index = start + offset
             ry = list_top + offset * row_h
             if index == ui.settings_i:
@@ -2666,12 +2862,20 @@ class UI:
             color = GOLD if index == ui.settings_i else INK
             prefix = "> " if index == ui.settings_i else "  "
             self._text(frame, prefix + self._trim(label, body, left_width - 10), x + m, ry, body, color, shadow=False)
-            value = self._trim(value, body, value_width - 4)
-            self._text(frame, value, x + pw - m - self._measure(value, body, "mono"), ry, body, color, shadow=False)
+            value_right = x + pw - m if index == SETTINGS_KEYBOARD_CONTROLS_ROW else controls_x - 8
+            value = self._trim(value, body, value_right - (x + m + left_width) - 4)
+            self._text(frame, value, value_right - self._measure(value, body, "mono"), ry, body, color, shadow=False)
+            ui.pointer.add((x + m - 4, ry - 1, pw - 2 * m + 8, row_h), "activate", "settings_i", index)
+            if index != SETTINGS_KEYBOARD_CONTROLS_ROW:
+                self._pointer_button(frame, ui, "-", (controls_x, ry, control_w, row_h - 2),
+                                     "adjust_minus", "settings_i", index)
+                self._pointer_button(frame, ui, "+", (controls_x + control_w + 6, ry, control_w, row_h - 2),
+                                     "adjust_plus", "settings_i", index)
         foot_y = y + ph - m - foot_h
         for line in foot_lines:
             self._text(frame, line, x + m, foot_y, small, DIM, shadow=False)
             foot_y += small_h + 2
+        self._pointer_button(frame, ui, "Back", (x + pw - m - 86, y + ph - m - button_h, 86, button_h))
 
     @staticmethod
     def _key_name(key: str) -> str:
@@ -2708,19 +2912,20 @@ class UI:
         if ui.input_device == "gamepad" and not ui.capturing_key:
             foot = "D-pad choose  ·  A rebinds a keyboard key  ·  B returns"
         foot_lines = textwrap.wrap(foot, max(12, (pw - 2 * m) // self.cell(small)[0]))
-        foot_h = len(foot_lines) * (small_h + 2)
+        button_h = max(24, small_h + 8)
+        foot_h = len(foot_lines) * (small_h + 2) + button_h + 8
         row_h = body_h + max(4, int(h * 0.008))
         rows_top_offset = m + head_h + 14
         available = h - 24 - (2 * m + rows_top_offset + foot_h + 12)
         visible = max(1, min(len(rows), available // max(1, row_h)))
-        start = _window(ui.key_binding_i, len(rows), visible)
+        start, end = ui.pointer.window("keys", ui.key_binding_i, len(rows), visible)
         ph = 2 * m + head_h + 14 + visible * row_h + foot_h + 12
         x, y = (w - pw) // 2, (h - ph) // 2
         self._panel(frame, x, y, pw, ph, 0.96)
         self._text(frame, "KEYBOARD CONTROLS", x + m, y + m, head, INK)
         list_top = y + rows_top_offset
         value_width = int((pw - 2 * m) * 0.24)
-        for offset, (action, label) in enumerate(rows[start:start + visible]):
+        for offset, (action, label) in enumerate(rows[start:end]):
             index = start + offset
             ry = list_top + offset * row_h
             if index == ui.key_binding_i:
@@ -2736,17 +2941,22 @@ class UI:
                 value = self._key_name(bindings.get(action, default_key_bindings()[action]))
             value = self._trim(value, body, value_width)
             self._text(frame, value, x + pw - m - self._measure(value, body, "mono"), ry, body, color, shadow=False)
+            if not ui.capturing_key:
+                ui.pointer.add((x + m - 4, ry - 1, pw - 2 * m + 8, row_h),
+                               "activate", "key_binding_i", index)
         foot_y = y + ph - m - foot_h
         for line in foot_lines:
             self._text(frame, line, x + m, foot_y, small, DIM, shadow=False)
             foot_y += small_h + 2
+        self._pointer_button(frame, ui, "Cancel key" if ui.capturing_key else "Back",
+                             (x + pw - m - 96, y + ph - m - button_h, 96, button_h))
 
     def _skipper(self, frame, state, ui: UIState):
         """The Skipper creator (skipperlook): settings-style rows on the left, the card on the right.
 
         A full-screen mode, so the play HUD stays off and the world is frozen behind it. The card is
         skipperview.preview, a pure function of the UI clock, the turn and reduced motion, so the same
-        state always draws the same frame. Reads `ui` only; the key handling lives in game.Session.
+        state always draws the same frame. Publishes native row focus and draft controls; activation lives in Session.
         """
         from . import skipperview
         h, w = frame.shape[:2]
@@ -2759,12 +2969,13 @@ class UI:
         m = max(14, min(24, int(w * 0.025)))
         pw = min(w - 20, max(int(w * 0.74), 760))
         foot_lines = _phrase_lines(self._skipper_foot(ui), max(12, (pw - 2 * m) // self.cell(small)[0]))
-        foot_h = len(foot_lines) * (small_h + 2)
+        button_h = max(24, small_h + 8)
+        foot_h = len(foot_lines) * (small_h + 2) + button_h + 8
         row_h = body_h + max(4, int(h * 0.008))
         rows_top_offset = m + head_h + 14
         available = h - 24 - (2 * m + rows_top_offset + foot_h + 12)
         visible = max(1, min(len(rows), available // max(1, row_h)))
-        start = _window(ui.skipper_i, len(rows), visible)
+        start, end = ui.pointer.window("skipper", ui.skipper_i, len(rows), visible)
         ph = 2 * m + head_h + 14 + visible * row_h + foot_h + 12
         x, y = (w - pw) // 2, (h - ph) // 2
         self._panel(frame, x, y, pw, ph, 0.96)
@@ -2772,8 +2983,10 @@ class UI:
         list_top = y + rows_top_offset
         # The rows keep the left 60% of the panel; the card takes the rest, beside them.
         left = int((pw - 2 * m) * 0.6)
-        value_w = int(left * 0.45)
-        for offset, (key, label) in enumerate(rows[start:start + visible]):
+        control_w = max(18, row_h - 2)
+        content_w = max(40, left - control_w * 2 - 14)
+        value_w = int(content_w * 0.45)
+        for offset, (key, label) in enumerate(rows[start:end]):
             index = start + offset
             ry = list_top + offset * row_h
             selected = index == ui.skipper_i
@@ -2785,12 +2998,12 @@ class UI:
             if key == "name" and ui.skipper_typing:
                 value, color = look["name"] + "_", GOLD
             prefix = "> " if selected else "  "
-            self._text(frame, prefix + self._trim(label, body, left - value_w - 12), x + m, ry, body, color,
+            self._text(frame, prefix + self._trim(label, body, content_w - value_w - 12), x + m, ry, body, color,
                        shadow=False)
             if value:
                 value = self._trim(value, body, value_w)
                 width = self._measure(value, body, "mono")
-                value_x = x + m + left - width
+                value_x = x + m + content_w - width
                 if key == "name" and ui.skipper_typing and ui.skipper_fresh:
                     # Selected on entry: the first key typed replaces the name (game._skipper_type). A box in
                     # the row-highlight colour would vanish on the selected row, so the box is gold with the
@@ -2798,6 +3011,16 @@ class UI:
                     self._fill(frame, value_x - 4, ry - 1, width + 8, body_h + 2, GOLD, 1.0)
                     color = (46, 42, 28)
                 self._text(frame, value, value_x, ry, body, color, shadow=False)
+            action = "creator_done" if key == "done" else "activate"
+            if not skipperlook.row_enabled(look, key) or (key == "name" and ui.skipper_typing):
+                action = "focus"
+            ui.pointer.add((x + m - 4, ry - 1, left + 8, row_h), action, "skipper_i", index)
+            if key != "done" and skipperlook.row_enabled(look, key) and not ui.skipper_typing:
+                controls_x = x + m + left - control_w * 2 - 6
+                self._pointer_button(frame, ui, "-", (controls_x, ry, control_w, row_h - 2),
+                                     "adjust_minus", "skipper_i", index)
+                self._pointer_button(frame, ui, "+", (controls_x + control_w + 6, ry, control_w, row_h - 2),
+                                     "adjust_plus", "skipper_i", index)
         col_x = x + m + left + m
         col_w = x + pw - m - col_x
         block = visible * row_h
@@ -2812,6 +3035,9 @@ class UI:
         for line in foot_lines:
             self._text(frame, line, x + m, foot_y, small, DIM, shadow=False)
             foot_y += small_h + 2
+        controls_y = y + ph - m - button_h
+        self._pointer_button(frame, ui, "Done", (x + pw - m - 182, controls_y, 86, button_h), "creator_done")
+        self._pointer_button(frame, ui, "Cancel", (x + pw - m - 86, controls_y, 86, button_h), "creator_cancel")
 
     def _skipper_foot(self, ui: UIState) -> str:
         """The creator's control hints for the device, the typing state and where Done returns."""
@@ -2867,8 +3093,8 @@ class UI:
         `state` supplies the saved key bindings for the keyboard tables and the captions
         setting. `fieldguide` lays out the pages and draws them, a sound's caption in the
         controls hint's place below them, and records the spread count in `ui`."""
-        hint = self._controls(ui, "WASD or arrows turn pages    Esc closes",
-                              "D-pad / stick turn pages    B closes")
+        hint = self._controls(ui, "Esc closes · WASD / arrows or wheel turn · Click page corners",
+                              "B closes · D-pad / stick turn pages")
         fieldguide.draw(self, frame, ui, help_topics(state, ui.input_device),
                         FIELD_GUIDE_TITLE, hint, self._shown_caption(state, ui))
 
@@ -2997,12 +3223,14 @@ _HELP = (
         "then Pescapedia when all 144 are verified.",
         "Mouse: click tabs, species, controls and week rows.",
         "The wheel scrolls the book. Kitchen lists take clicks.",
+        "Hover shares menu focus with keys and controllers.",
     )),
     ("THE CHART", (
         "On the chart: C hails, Space anchors, Q sails,",
         "R tows, B sends Bot. Tab or Esc closes the chart.",
         "",
         "Chart keys work only while the chart is open.",
+        "Click the chart's action buttons, or Close.",
     )),
     ("SHINIES AND TROPHIES", (
         "About 1 in 64 standard catches is a shiny. It is",
@@ -3138,6 +3366,11 @@ _HELP = (
         "Keyboard controls: Enter rebinds. Backspace or Esc",
         "cancels. Keys in use swap with the one you replace.",
         "Reset keyboard controls brings back the defaults.",
+        "",
+        "Menus: hover focuses, click selects; the wheel browses rows.",
+        "A menu click never steers or acts on the water.",
+        "Bait rows only choose; click Set to deploy the line.",
+        "Field Guide spreads turn on the wheel or page corners.",
     )),
     ("WHERE SAVES LIVE", (
         "The save is save.json in the game's user-data",
@@ -3391,7 +3624,7 @@ def help_topics(state, input_device: str) -> tuple:
 
     Args:
         state: the game state whose saved key bindings fill the keyboard tables, or None.
-        input_device: "gamepad" puts each authored line in its gamepad wording.
+        input_device: "gamepad" uses pad wording; keyboard and pointer retain keyboard hints.
 
     Returns:
         (title, lines) per help page, in `help_pages` order.
@@ -3432,13 +3665,6 @@ def _clamp(index: int, count: int) -> int:
     if index >= count:
         return count - 1
     return index
-
-
-def _window(index: int, count: int, visible: int) -> int:
-    if count <= visible:
-        return 0
-    start = index - visible // 2
-    return max(0, min(start, count - visible))
 
 
 def _phrase_lines(text: str, cells: int) -> list[str]:

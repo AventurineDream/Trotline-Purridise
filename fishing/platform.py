@@ -1,4 +1,4 @@
-"""SDL2 window, a shared OpenGL presenter, keyboard, and SDL_ttf text."""
+"""Resizable SDL2 presentation, UI-pixel pointer input, keyboard, and SDL_ttf text."""
 
 from __future__ import annotations
 
@@ -24,12 +24,21 @@ SDL_INIT_VIDEO = 0x00000020
 SDL_WINDOWPOS_CENTERED = 0x2FFF0000
 SDL_WINDOW_SHOWN = 0x00000004
 SDL_WINDOW_OPENGL = 0x00000002
+SDL_WINDOW_RESIZABLE = 0x00000020
+SDL_WINDOW_ALLOW_HIGHDPI = 0x00002000
 SDL_QUIT = 0x100
 SDL_WINDOWEVENT = 0x200
+SDL_WINDOWEVENT_RESIZED = 5
+SDL_WINDOWEVENT_SIZE_CHANGED = 6
+SDL_WINDOWEVENT_MINIMIZED = 7
+SDL_WINDOWEVENT_MAXIMIZED = 8
+SDL_WINDOWEVENT_RESTORED = 9
+SDL_WINDOWEVENT_LEAVE = 11
 SDL_WINDOWEVENT_FOCUS_GAINED = 12
 SDL_WINDOWEVENT_FOCUS_LOST = 13
 SDL_KEYDOWN = 0x300
 SDL_KEYUP = 0x301
+SDL_MOUSEMOTION = 0x400
 SDL_MOUSEBUTTONDOWN = 0x401
 SDL_MOUSEWHEEL = 0x403
 RGB24 = 0x17101803
@@ -127,6 +136,16 @@ class SDL_WindowEvent(ctypes.Structure):
     ]
 
 
+class SDL_MouseMotionEvent(ctypes.Structure):
+    """SDL2 pointer motion in logical window pixels, including relative deltas."""
+
+    _fields_ = [
+        ("type", c_uint32), ("timestamp", c_uint32), ("windowID", c_uint32),
+        ("which", c_uint32), ("state", c_uint32), ("x", c_int), ("y", c_int),
+        ("xrel", c_int), ("yrel", c_int),
+    ]
+
+
 class SDL_MouseButtonEvent(ctypes.Structure):
     # SDL2: https://wiki.libsdl.org/SDL2/SDL_MouseButtonEvent
     _fields_ = [("type", c_uint32), ("timestamp", c_uint32), ("windowID", c_uint32),
@@ -144,9 +163,12 @@ class SDL_MouseWheelEvent(ctypes.Structure):
 
 
 class SDL_Event(ctypes.Union):
+    """SDL2 event storage; all pointer coordinates start in logical window pixels."""
+
     _fields_ = [
         ("type", c_uint32), ("key", SDL_KeyboardEvent), ("window", SDL_WindowEvent),
         ("caxis", SDL_ControllerAxisEvent),
+        ("motion", SDL_MouseMotionEvent),
         ("button", SDL_MouseButtonEvent), ("wheel", SDL_MouseWheelEvent),
         ("cbutton", SDL_ControllerButtonEvent),
         # SDL2 uses 8-byte alignment for this 56-byte event union on 64-bit ABIs.
@@ -354,7 +376,18 @@ class Text:
 
 
 class Input:
+    """Reusable physical input sampled by :meth:`Platform.poll`.
+
+    ``mouse_pos`` and left-button ``mouse_click`` are UI presentation pixels,
+    or ``None`` when unknown/unavailable. ``mouse_moved`` records motion in this
+    poll only; resizing never claims pointer ownership. ``viewport`` is the
+    current presentation size in pixels, with ``(0, 0)`` while minimized.
+    ``resized`` invalidates geometry drawn before this poll. Click, wheel,
+    movement, and resize edges expire at the next poll; held/repeat state stays.
+    """
+
     def __init__(self):
+        """Initialize empty input with a default 1280-by-720 UI viewport."""
         self.held: set[str] = set()
         self.pressed: set[str] = set()
         self.keyboard_held: set[str] = set()
@@ -365,10 +398,13 @@ class Input:
         self.device = "keyboard"
         self.quit = False
         self.focused = True
+        self.mouse_pos = None
+        self.mouse_moved = False
         self.mouse_click = None
         self.mouse_wheel = 0
         self.mouse_wheel_remainder = 0.0
         self.viewport = (1280, 720)
+        self.resized = False
         self._rep: dict[str, float] = {}
 
     def tap(self, name: str, dt: float) -> bool:
@@ -386,12 +422,20 @@ class Input:
 
 
 class Platform:
+    """Own a resizable window and expose its current UI-pixel presentation size.
+
+    ``w``, ``h``, and ``viewport`` follow the GL drawable or software surface,
+    not SDL's logical window size. Poll before layout, and rebuild size-dependent
+    renderer/UI resources on a positive ``Input.resized`` viewport. A zero
+    viewport means rendering must wait; event polling can continue.
+    """
+
     def __init__(self, w: int, h: int, title: str = "Briar Lake", *, graphics=True, verify_pixels=False):
         """Create the SDL window and optionally configure its shared GL presenter.
 
         Args:
-            w: Logical window width in pixels.
-            h: Logical window height in pixels.
+            w: Initial logical window width in SDL window-coordinate pixels.
+            h: Initial logical window height in SDL window-coordinate pixels.
             title: Window title.
             graphics: Whether to request an OpenGL-backed presentation path.
             verify_pixels: Whether to retain an exact copy of the submitted frame.
@@ -402,6 +446,9 @@ class Platform:
         Side effects:
             Initializes SDL and creates a window; GL windows request adaptive
             swap interval first, then ordinary interval 1.
+            The resizable high-DPI window exposes its actual presentation size.
+        Raises:
+            RuntimeError: If SDL cannot initialize the window or presentation surface.
         """
         self.sdl = _load("libSDL2-2.0.so.0")
         s = self.sdl
@@ -412,6 +459,10 @@ class Platform:
         s.SDL_GetError.restype = c_char_p
         s.SDL_CreateWindow.argtypes = [c_char_p, c_int, c_int, c_int, c_int, c_uint32]
         s.SDL_CreateWindow.restype = c_void_p
+        s.SDL_GetWindowSize.argtypes = [c_void_p, ctypes.POINTER(c_int), ctypes.POINTER(c_int)]
+        s.SDL_GetWindowSize.restype = None
+        s.SDL_ShowCursor.argtypes = [c_int]
+        s.SDL_ShowCursor.restype = c_int
         s.SDL_GetWindowSurface.argtypes = [c_void_p]
         s.SDL_GetWindowSurface.restype = ctypes.POINTER(SDL_Surface)
         s.SDL_UpdateWindowSurface.argtypes = [c_void_p]
@@ -423,6 +474,8 @@ class Platform:
             ctypes.POINTER(SDL_Surface), ctypes.POINTER(SDL_Rect),
         ]
         s.SDL_UpperBlit.restype = c_int
+        s.SDL_UpperBlitScaled.argtypes = s.SDL_UpperBlit.argtypes
+        s.SDL_UpperBlitScaled.restype = c_int
         s.SDL_FreeSurface.argtypes = [ctypes.POINTER(SDL_Surface)]
         s.SDL_ConvertSurfaceFormat.argtypes = [ctypes.POINTER(SDL_Surface),c_uint32,c_uint32]
         s.SDL_ConvertSurfaceFormat.restype = ctypes.POINTER(SDL_Surface)
@@ -456,6 +509,12 @@ class Platform:
         self._shown_pixels = None
         self.verify_pixels = verify_pixels
         self.w,self.h = w,h
+        self._window_size = (w, h)
+        self.minimized = False
+        self._resize_pending = False
+        self._mouse_window_pos = None
+        self._pointer_visible = None
+        window_flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI
         # Video and audio initialization are idempotent.
         if s.SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK
                       | SDL_INIT_GAMECONTROLLER) < 0:
@@ -477,7 +536,7 @@ class Platform:
                     if s.SDL_GL_SetAttribute(attr,value)<0:
                         raise RuntimeError(self._err())
                 self.window = s.SDL_CreateWindow(title.encode(),SDL_WINDOWPOS_CENTERED,
-                    SDL_WINDOWPOS_CENTERED,w,h,SDL_WINDOW_SHOWN|SDL_WINDOW_OPENGL)
+                    SDL_WINDOWPOS_CENTERED,w,h,window_flags|SDL_WINDOW_OPENGL)
                 if not self.window:
                     raise RuntimeError(self._err())
                 self.gl_context = s.SDL_GL_CreateContext(self.window)
@@ -500,11 +559,68 @@ class Platform:
                 print(f"Window graphics unavailable ({exc}); using CPU scenery.",file=sys.stderr)
         if not self.window:
             self.window = s.SDL_CreateWindow(title.encode(),SDL_WINDOWPOS_CENTERED,
-                SDL_WINDOWPOS_CENTERED,w,h,SDL_WINDOW_SHOWN)
+                SDL_WINDOWPOS_CENTERED,w,h,window_flags)
         if not self.window:
             raise RuntimeError(self._err())
         self._input = Input()
         self._focused = True
+        self._refresh_viewport()
+        self._resize_pending = False
+        self._input.viewport = self.viewport
+
+    @property
+    def viewport(self) -> tuple[int, int]:
+        """Return the current UI presentation width and height in pixels."""
+        return self.w, self.h
+
+    def set_pointer_visible(self, visible: bool) -> None:
+        """Show/hide SDL's cursor for the active UI mode, without changing input.
+
+        Args:
+            visible: Whether the native pointer should be shown.
+        Raises:
+            RuntimeError: If SDL cannot update cursor visibility.
+        """
+        visible = bool(visible)
+        if self._pointer_visible == visible:
+            return
+        if self.sdl.SDL_ShowCursor(int(visible)) < 0:
+            raise RuntimeError(self._err())
+        self._pointer_visible = visible
+
+    def _refresh_viewport(self):
+        """Refresh logical-to-presentation mapping; return the software surface."""
+        previous = self._window_size, self.viewport
+        width, height = c_int(), c_int()
+        self.sdl.SDL_GetWindowSize(self.window, ctypes.byref(width), ctypes.byref(height))
+        self._window_size = max(0, width.value), max(0, height.value)
+        surface = None
+        if self.minimized or 0 in self._window_size:
+            self.w, self.h = 0, 0
+        elif self.context is not None:
+            self.sdl.SDL_GL_GetDrawableSize(
+                self.window, ctypes.byref(width), ctypes.byref(height),
+            )
+            self.w, self.h = max(0, width.value), max(0, height.value)
+            if not self.w or not self.h:
+                self.w, self.h = 0, 0
+        else:
+            surface = self.sdl.SDL_GetWindowSurface(self.window)
+            if not surface:
+                raise RuntimeError(self._err())
+            self.w, self.h = max(0, surface.contents.w), max(0, surface.contents.h)
+            if not self.w or not self.h:
+                self.w, self.h = 0, 0
+        if previous != (self._window_size, self.viewport):
+            self._resize_pending = True
+        return surface
+
+    def _ui_point(self, point):
+        """Map logical window coordinates to UI pixels without clamping misses."""
+        if point is None or not self.w or not self.h or 0 in self._window_size:
+            return None
+        window_w, window_h = self._window_size
+        return point[0] * self.w // window_w, point[1] * self.h // window_h
 
     def _setup_presenter(self):
         import moderngl
@@ -610,12 +726,25 @@ class Platform:
         return wheel_y
 
     def poll(self, dt: float = 0.0) -> Input:
+        """Sample one frame of physical input, refreshing the presentation mapping.
+
+        Args:
+            dt: Elapsed seconds for controller hold/repeat sampling.
+        Returns:
+            The reused :class:`Input`; pointer coordinates match ``viewport``.
+            ``resized`` is a one-poll edge, including resize discovered by the
+            previous ``present``. Unavailable/minimized windows clear action edges
+            and report an unfocused, zero-sized viewport until rendering can resume.
+        Raises:
+            RuntimeError: If SDL cannot query a software presentation surface.
+        """
         # Reuse one Input so key-repeat timers survive across frames.
         inp = self._input
         inp.quit = False
         inp.mouse_click = None
+        inp.mouse_moved = False
         inp.mouse_wheel = 0
-        inp.viewport = (self.w, self.h)
+        mouse_click = None
         keyboard_pressed: set[str] = set()
         keyboard_press_order: list[str] = []
         event = SDL_Event()
@@ -624,25 +753,59 @@ class Platform:
                 inp.quit = True
             elif event.type == SDL_WINDOWEVENT:
                 if event.window.event == SDL_WINDOWEVENT_FOCUS_LOST:
+                    self._mouse_window_pos = None
                     self._focused = False
                     keyboard_pressed.clear()
                     keyboard_press_order.clear()
                     inp._rep.clear()
                     self.gamepad.clear_input()
-                    inp.mouse_click = None
+                    mouse_click = None
+                    inp.mouse_moved = False
                     inp.mouse_wheel = 0
                     inp.mouse_wheel_remainder = 0.0
                 elif event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED:
                     self._focused = True
-            elif event.type == SDL_MOUSEBUTTONDOWN and self._focused:
-                if event.button.button == 1:
-                    inp.mouse_click = (event.button.x, event.button.y)
+                elif event.window.event == SDL_WINDOWEVENT_MINIMIZED:
+                    self.minimized = True
+                    keyboard_pressed.clear()
+                    keyboard_press_order.clear()
+                    inp._rep.clear()
+                    self.gamepad.clear_input()
+                    self._mouse_window_pos = None
+                    mouse_click = None
+                    inp.mouse_moved = False
+                    inp.mouse_wheel = 0
+                    inp.mouse_wheel_remainder = 0.0
+                elif event.window.event in (
+                    SDL_WINDOWEVENT_RESTORED, SDL_WINDOWEVENT_MAXIMIZED,
+                ):
+                    self.minimized = False
+                elif event.window.event == SDL_WINDOWEVENT_LEAVE:
+                    self._mouse_window_pos = None
+                    inp.mouse_moved = False
+            elif event.type == SDL_MOUSEMOTION and self._focused and not self.minimized:
+                point = event.motion.x, event.motion.y
+                moved = (point != self._mouse_window_pos
+                         or event.motion.xrel != 0 or event.motion.yrel != 0)
+                self._mouse_window_pos = point
+                if moved:
+                    inp.mouse_moved = True
                     self._last_device = "mouse"
-            elif event.type == SDL_MOUSEWHEEL and self._focused:
+            elif event.type == SDL_MOUSEBUTTONDOWN and self._focused and not self.minimized:
+                self._mouse_window_pos = event.button.x, event.button.y
+                if event.button.button == 1:
+                    mouse_click = self._mouse_window_pos
+                    self._last_device = "mouse"
+            elif event.type == SDL_MOUSEWHEEL and self._focused and not self.minimized:
+                # SDL 2.26 added wheel-event coordinates; older unions leave
+                # those bytes undefined, just as pre-2.0.18 did for preciseY.
+                if self._sdl_version >= (2, 26, 0):
+                    self._mouse_window_pos = event.wheel.mouseX, event.wheel.mouseY
                 wheel_y = self._wheel_delta(event.wheel)
                 inp.mouse_wheel += self._wheel_steps(wheel_y, event.wheel.direction)
                 self._last_device = "mouse"
-            elif event.type == SDL_KEYDOWN and self._focused and not event.key.repeat:
+            elif (event.type == SDL_KEYDOWN and self._focused and not self.minimized
+                  and not event.key.repeat):
                 name = _SCAN_NAMES.get(event.key.keysym.scancode)
                 if name is not None:
                     # A press and release can both arrive between slow frames.
@@ -650,16 +813,31 @@ class Platform:
                     keyboard_pressed.add(name)
                     keyboard_press_order.append(name)
                     self._last_device = "keyboard"
-            elif self._focused or event.type in (
+            elif (self._focused and not self.minimized) or event.type in (
                 SDL_CONTROLLERDEVICEADDED, SDL_CONTROLLERDEVICEREMOVED,
                 SDL_CONTROLLERDEVICEREMAPPED,
             ):
                 if self.gamepad.handle_event(event):
                     self._last_device = "gamepad"
+        self._refresh_viewport()
+        if not self.w or not self.h:
+            keyboard_pressed.clear()
+            keyboard_press_order.clear()
+            inp._rep.clear()
+            self.gamepad.clear_input()
+            mouse_click = None
+            inp.mouse_moved = False
+            inp.mouse_wheel = 0
+            inp.mouse_wheel_remainder = 0.0
+        inp.viewport = self.viewport
+        inp.resized = self._resize_pending
+        self._resize_pending = False
+        inp.mouse_pos = self._ui_point(self._mouse_window_pos)
+        inp.mouse_click = self._ui_point(mouse_click)
         n = c_int()
         state = self.sdl.SDL_GetKeyboardState(ctypes.byref(n))
         keyboard_held: set[str] = set()
-        if state and self._focused:
+        if state and self._focused and self.w and self.h:
             for name, code in SCAN.items():
                 if code < n.value and state[code]:
                     keyboard_held.add(name)
@@ -680,31 +858,49 @@ class Platform:
         # OS key-repeat events must never become additional one-shot actions.
         for name in inp._rep.keys() - inp.held:
             inp._rep.pop(name, None)
-        inp.focused = self._focused
+        inp.focused = self._focused and bool(self.w and self.h)
         return inp
 
     def present(self, rgb: np.ndarray):
-        """rgb is uint8 (H, W, 3), matching the window."""
-        if rgb.shape[0] != self.h or rgb.shape[1] != self.w:
-            raise ValueError(f"frame is {rgb.shape}, window is {self.h}x{self.w}")
+        """Present an RGB uint8 ``(height, width, 3)`` frame over the UI viewport.
+
+        Frame pixels scale to the complete current drawable/surface, so a resize
+        between poll and present does not clip an old-size frame. Such a resize
+        remains pending for the next poll. Minimized/zero-sized windows perform
+        no upload, allocation, blit, or swap.
+
+        Args:
+            rgb: Positive-size frame pixels; its size may precede a window resize.
+        Raises:
+            RuntimeError: If SDL or OpenGL presentation fails.
+        """
+        dst = self._refresh_viewport()
+        if not self.w or not self.h:
+            return
         frame = np.ascontiguousarray(rgb)
+        frame_h, frame_w = frame.shape[:2]
         if self.context is not None:
             import moderngl
             self.make_current()
             ctx = self.context
+            if self._present_texture.size != (frame_w, frame_h):
+                texture = ctx.texture((frame_w, frame_h), 3, alignment=1)
+                texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
+                self._gl_objects.remove(self._present_texture)
+                self._present_texture.release()
+                self._present_texture = texture
+                self._gl_objects.append(texture)
             self._present_texture.write(frame.tobytes(),alignment=1)
             self._present_texture.use(0)
             ctx.screen.use()
-            width,height = c_int(),c_int()
-            self.sdl.SDL_GL_GetDrawableSize(self.window,ctypes.byref(width),ctypes.byref(height))
-            ctx.viewport = (0,0,width.value,height.value)
+            ctx.viewport = (0,0,self.w,self.h)
             ctx.disable(moderngl.DEPTH_TEST|moderngl.BLEND|moderngl.CULL_FACE)
             self._present_vao.render()
             if self.verify_pixels:
-                pixels = np.empty((height.value,width.value,3),np.uint8)
+                pixels = np.empty((self.h,self.w,3),np.uint8)
                 self._read_buffer(0x0405)  # GL_BACK
                 self._pixel_store(0x0D05,1)  # GL_PACK_ALIGNMENT
-                self._read_pixels(0,0,width.value,height.value,0x1907,0x1401,
+                self._read_pixels(0,0,self.w,self.h,0x1907,0x1401,
                                   pixels.ctypes.data_as(c_void_p))  # RGB / UNSIGNED_BYTE
                 self._shown_pixels = pixels[::-1].copy()
             error = ctx.error
@@ -713,17 +909,16 @@ class Platform:
             self.sdl.SDL_GL_SwapWindow(self.window)
             return
         src = self.sdl.SDL_CreateRGBSurfaceWithFormatFrom(
-            frame.ctypes.data_as(c_void_p), self.w, self.h, 24, self.w * 3, RGB24,
+            frame.ctypes.data_as(c_void_p), frame_w, frame_h, 24, frame_w * 3, RGB24,
         )
         if not src:
             raise RuntimeError(self._err())
-        dst = self.sdl.SDL_GetWindowSurface(self.window)
-        if not dst:
-            self.sdl.SDL_FreeSurface(src)
-            raise RuntimeError(self._err())
-        rect = SDL_Rect(0, 0, self.w, self.h)
+        source_rect = SDL_Rect(0, 0, frame_w, frame_h)
+        destination_rect = SDL_Rect(0, 0, self.w, self.h)
         try:
-            if self.sdl.SDL_UpperBlit(src,ctypes.byref(rect),dst,ctypes.byref(rect))<0:
+            blit = (self.sdl.SDL_UpperBlit if (frame_w, frame_h) == self.viewport
+                    else self.sdl.SDL_UpperBlitScaled)
+            if blit(src,ctypes.byref(source_rect),dst,ctypes.byref(destination_rect))<0:
                 raise RuntimeError(self._err())
         finally:
             self.sdl.SDL_FreeSurface(src)

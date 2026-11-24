@@ -17,7 +17,7 @@ def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_me
         menu_meta: Optional status-line override.
 
     Returns:
-        None. Draws into ``frame`` and updates ``ui.kitchen_hitboxes``.
+        None. Draws into ``frame`` and publishes visible pixel-space targets in ``ui.pointer``.
     """
     from .ui import DIM, GOLD, INK, WARN, comfort_controls
     h, w = frame.shape[:2]
@@ -49,6 +49,8 @@ def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_me
         head -= 1
     text(title, x + 16, y + 12, head)
     top = y + 24 + renderer._render(title, head, INK, 'sans').shape[0]
+    if ui.mode == 'shop':
+        top = renderer._shop_tabs(frame, ui, x + 16, top, width - 32, body)
     if ui.mode in ('cook_confirm', 'cooking'):
         if ui.mode == 'cook_confirm':
             if ui.cook_kind == 'cookout':
@@ -72,6 +74,8 @@ def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_me
                 message += '\nReplaces ' + buff.name + '.'
             message += '\n' + renderer._controls(ui, 'Left / Right · Enter confirms · Esc back',
                                                   'Left / Right · A confirms · B back')
+            if ui.cook_kind in {'dish', 'cookout'}:
+                message += '\nScroll or click Previous / Next to choose a fish.'
             if ui.note:
                 message = ui.note + '\n' + message
         else:
@@ -89,6 +93,8 @@ def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_me
                     renderer._fill(frame, sx, cy - 5 - step * 3, 2, 2, DIM, .65)
         buttons = comfort_controls((w, h))
         limit = buttons[0][1] - 10 if ui.mode == 'cook_confirm' else int(h * .53)
+        if ui.mode == 'cook_confirm' and ui.cook_kind in {'dish', 'cookout'}:
+            limit -= max(24, renderer._render('Mg', small, INK, 'sans').shape[0] + 8) + 12
         size = body
         while size > 9:
             lines, line_h = renderer._comfort_lines(message, size, width - 32)
@@ -105,6 +111,17 @@ def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_me
                 glyph_h = renderer._render(label, body, INK, 'sans').shape[0]
                 renderer._center(frame, label, bx + bw / 2, by + (bh - glyph_h) / 2, body,
                                  (22, 39, 39) if index == ui.comfort_i else INK)
+                ui.pointer.add(box, 'activate', 'comfort_i', index)
+            if ui.cook_kind in {'dish', 'cookout'}:
+                selector_h = max(24, renderer._render('Mg', small, INK, 'sans').shape[0] + 8)
+                selector_y = buttons[0][1] - selector_h - 12
+                selector_w = min(150, (width - 40) // 2)
+                renderer._pointer_button(frame, ui, 'Previous fish',
+                                         (x + 16, selector_y, selector_w, selector_h), 'previous')
+                renderer._pointer_button(frame, ui, 'Next fish',
+                                         (x + width - 16 - selector_w, selector_y, selector_w, selector_h), 'next')
+        else:
+            ui.pointer.add((0, 0, w, h), 'activate')
         return
     buff = comfort.active_buff(state)
     meta = f'${state.money:.2f} · ' + (buff.name if buff else 'No picnic buff')
@@ -120,17 +137,18 @@ def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_me
     foot = renderer._controls(ui, 'Up / Down choose · Enter selects · Esc back',
                               'D-pad chooses · A selects · B back')
     if ui.mode == 'shop':
-        foot = renderer._controls(ui, 'Up / Down choose · A/D tabs · Enter · Esc',
-                                  'Up / Down choose · Left / Right tabs · A · B')
-    foot_lines, foot_h = renderer._comfort_lines(foot, small, width - 32)
-    foot_y = panel_bottom - len(foot_lines) * foot_h
-    detail_h = min(104, max(48, int(height * .22)))
-    list_bottom = foot_y - detail_h - 12
+        foot = renderer._controls(ui, 'Up / Down choose · A/D tabs · Enter',
+                                  'Up / Down choose · Left / Right tabs · A')
+    back_w = 72
+    foot_lines = (trim(foot, small, width - 48 - back_w),)
+    foot_h = renderer._render('Mg', small, INK, 'sans').shape[0] + 4
+    foot_y = panel_bottom - foot_h
     row_h = renderer._render('Mg', body, INK, 'sans').shape[0] + 8
+    detail_h = max(0, min(104, int(height * .22), foot_y - top - row_h - 20))
+    list_bottom = foot_y - detail_h - 12
     visible = max(1, (list_bottom - top) // row_h)
-    start = max(0, min(ui.shop_i - visible // 2, len(rows) - visible))
-    ui.kitchen_hitboxes = []
-    for offset, row in enumerate(rows[start:start + visible]):
+    start, end = ui.pointer.window('kitchen', ui.shop_i, len(rows), visible)
+    for offset, row in enumerate(rows[start:end]):
         index, ry = start + offset, top + offset * row_h
         chosen = index == ui.shop_i
         if chosen:
@@ -140,17 +158,21 @@ def draw(renderer, frame, state, ui, *, menu_rows=None, menu_title=None, menu_me
         label = trim(row.label, body, width - right_w - 56)
         text(label, x + 16, ry, body, color)
         text(row.right, x + width - 16 - right_w, ry, body, color)
-        ui.kitchen_hitboxes.append((index, (x + 8, ry - 2, width - 16, row_h)))
+        ui.pointer.add((x + 8, ry - 2, width - 16, row_h), 'activate', 'shop_i', index)
     selected = rows[ui.shop_i]
     detail = ui.note or selected.label + '. ' + selected.blurb
     lines, line_h = renderer._comfort_lines(detail, small, width - 32)
-    maximum = max(1, detail_h // line_h)
-    if len(lines) > maximum:
-        lines = (*lines[:maximum - 1], trim(' '.join(lines[maximum - 1:]), small, width - 32))
-    for index, line in enumerate(lines):
-        text(line, x + 16, list_bottom + 8 + index * line_h, small, WARN if ui.note else DIM)
+    maximum = max(0, detail_h // line_h)
+    if maximum:
+        if len(lines) > maximum:
+            lines = (*lines[:maximum - 1], trim(' '.join(lines[maximum - 1:]), small, width - 32))
+        for index, line in enumerate(lines):
+            text(line, x + 16, list_bottom + 8 + index * line_h, small, WARN if ui.note else DIM)
     for index, line in enumerate(foot_lines):
         text(line, x + 16, foot_y + index * foot_h, small, DIM)
+    renderer._pointer_button(frame, ui, 'Back',
+                             (x + width - 16 - back_w, panel_bottom - foot_h - 3,
+                              back_w, foot_h + 6))
 
 
 def kitchen_gallery(destination, *, text=None, world=None, background=None):
