@@ -1349,15 +1349,7 @@ class Session:
                     self._free_trip(chat.trip)
 
     def _anchor(self):
-        if self.state.anchored:
-            self.state.anchored = False
-            self.state.toast("Anchor up.")
-        else:
-            self.state.anchored = True
-            self.state.throttle_setting = 0.0
-            self.state.throttle = 0.0
-            self.state.sail_raised = False
-            self.state.toast("Anchor down.")
+        self.state.set_anchored(not self.state.anchored)
 
     def _sail(self):
         error = self.state.toggle_sail()
@@ -2211,6 +2203,8 @@ class Session:
             visible = not bool(settings.get("collar_visible", collar.get("visible", True)))
             settings["collar_visible"] = visible
             collar["visible"] = visible
+        elif row == 12:
+            settings["auto_anchor"] = not bool(settings.get("auto_anchor", False))
         self.save()
 
     def _keybindings_keys(self, keys, dt: float) -> None:

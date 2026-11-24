@@ -665,6 +665,9 @@ class State:
     stage_light: dict | None = field(default=None, repr=False, compare=False)
     # A legendary's scene stills the lake under the haul (V1-37), 0..1. Not saved.
     encounter_still: float = field(default=0.0, repr=False, compare=False)
+    # Seconds of hard decel left after dropping anchor at speed (issue #151 jerk).
+    # Runtime only; not saved.
+    _anchor_settle: float = field(default=0.0, repr=False, compare=False)
     # Brief visual only; guardian_seen is the persisted encounter latch.
     guardian_sighting_pending: bool = field(default=False, repr=False, compare=False)
     guardian_sighting_started_at: float | None = field(default=None, repr=False, compare=False)
@@ -755,11 +758,40 @@ class State:
     def fuel(self,value):
         self.fuel_tanks[self.boat_id] = max(0.0,min(self.boat.tank,float(value)))
 
+    def _auto_anchor(self) -> bool:
+        """Whether throttle/sail may lift the anchor without the anchor key.
+
+        Manual anchoring is the default (issue #151); the persisted
+        ``settings.auto_anchor`` flag restores the old convenience lift.
+        """
+        settings = self.v2.get("settings") if isinstance(self.v2, dict) else None
+        return bool(settings.get("auto_anchor")) if isinstance(settings, dict) else False
+
+    def set_anchored(self, value: bool) -> None:
+        """Weigh or lift the anchor, preserving propulsion state.
+
+        Dropping at speed kicks off ``_anchor_settle`` so ``drive`` applies a
+        short hard decel (the readable jerk) before the usual crawl decay.
+        Throttle setting and sail are left untouched: the engine is not
+        idled or shut off, and propulsion resumes when the anchor comes up.
+        """
+        if value == self.anchored:
+            return
+        self.anchored = value
+        if value:
+            if abs(self.speed) > 0.4:
+                self.speed *= 0.55
+                self._anchor_settle = 1.4
+            self.toast("Anchor down.")
+        else:
+            self._anchor_settle = 0.0
+            self.toast("Anchor up.")
+
     def toggle_sail(self) -> str | None:
         if not self.boat.sail_speed:
             return "This boat has no sail."
         self.sail_raised = not self.sail_raised
-        if self.sail_raised:
+        if self.sail_raised and self._auto_anchor():
             self.anchored = False
         self.toast("Sail raised. A/D steers; Q lowers it." if self.sail_raised else "Sail lowered.")
         return None
@@ -1213,17 +1245,22 @@ class State:
         elif throttle_in:
             self.throttle_setting = max(REVERSE_LIMIT,min(1.0,
                 self.throttle_setting+throttle_in*THROTTLE_RATE*dt))
-        if not idle and abs(throttle_in)>0.01 and self.anchored:
+        if not idle and abs(throttle_in)>0.01 and self.anchored and self._auto_anchor():
             self.anchored = False
             self.toast("Anchor up.")
         target = 0.0 if self.anchored else self.throttle_setting
         self.throttle += (target - self.throttle) * min(1.0, dt * 2.4)
         self.steer += (steer_in - self.steer) * min(1.0, dt * 6.0)
         if self.anchored:
-            self.speed *= math.exp(-dt * 2.8)
+            # Issue #151: dropping at speed gets a short hard decel (the jerk),
+            # then the usual crawl. Throttle setting and sail survive the drop:
+            # the engine idles at zero thrust but is not shut off.
+            if self._anchor_settle > 0.0:
+                self._anchor_settle = max(0.0, self._anchor_settle - dt)
+                self.speed *= math.exp(-dt * 5.0)
+            else:
+                self.speed *= math.exp(-dt * 2.8)
             self.throttle = 0.0
-            self.throttle_setting = 0.0
-            self.sail_raised = False
         else:
             engine = self.throttle
             movement_propulsion = None

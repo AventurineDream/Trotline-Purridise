@@ -36,7 +36,7 @@ class SettingsChecks(unittest.TestCase):
         session.ui.mode = "settings"
 
         # Values that cycle forward once reach a visibly different option.
-        for index in (0, 1, 2, 3, 5, 6, 11):
+        for index in (0, 1, 2, 3, 5, 6, 11, 12):
             session.ui.settings_i = index
             session.tick(Keys(pressed={"right"}), 0.05)
         for index in (7, 8, 9, 10):
@@ -56,6 +56,7 @@ class SettingsChecks(unittest.TestCase):
             "master": 0.9, "music": 0.9, "ambience": 0.9, "sfx": 0.9,
         })
         self.assertFalse(settings["collar_visible"])
+        self.assertTrue(settings["auto_anchor"])
         self.assertFalse(loaded.v2["profile"]["collar"]["visible"])
 
     def test_camera_view_toggle_is_saved_and_reloaded(self):
@@ -396,6 +397,7 @@ class SettingsPresentationChecks(unittest.TestCase):
             ("Ambience volume", "60%"),
             ("SFX volume", "50%"),
             ("Collar visibility", "Hidden"),
+            ("Auto anchor", "Off"),
             ("Keyboard controls", "Open  >"),
         ])
 

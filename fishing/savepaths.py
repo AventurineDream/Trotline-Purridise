@@ -293,6 +293,7 @@ def default_v2(state=None) -> dict:
                         "ambience": 1.0, "sfx": 1.0},
             "collar_visible": True,
             "third_person": False,
+            "auto_anchor": False,
             "key_bindings": default_key_bindings(),
         },
         # Quest claims remain in narrative_v1.reward_claims, the existing
