@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Callable, ClassVar
 from uuid import uuid4
 
-from .reading import reading_seconds
+from .reading import READ_MAX_SECONDS, reading_seconds
 from .data import (
     BAIT_BY_ID,
     BOX_PRICE,
@@ -79,6 +79,8 @@ SAVE_VERSION = 2
 # Dense reed beds (`reeds` zones) slow every boat to a crawl. Lines still need
 # the Reed Anchor there; see State.try_set.
 REEDS_CRAWL_SPEED = 0.6  # m/s
+# Issue #155: Bot gameplay toasts hold this much longer than other notices.
+BOT_TOAST_BONUS = 3.0
 # Flathead snow-mist chop slows every hull except an ice_hull (02 §9).
 SNOW_MIST_CHOP = 0.8
 # The reed dugout may set lines in reeds without the Reed Anchor (03 §6).
@@ -707,7 +709,12 @@ class State:
 
     def toast(self, text: str, seconds: float = 4.8):
         # Never gone before it can be read at a young reader's pace (V1-43).
-        self.toasts.append([text, reading_seconds(text, seconds)])
+        # Bot's short gameplay notes hold a few seconds longer than other
+        # notices (issue #155); the reading cap still bounds them.
+        duration = reading_seconds(text, seconds)
+        if str(text).startswith("Bot:"):
+            duration = min(READ_MAX_SECONDS, duration + BOT_TOAST_BONUS)
+        self.toasts.append([text, duration])
         if len(self.toasts) > 4:
             self.toasts = self.toasts[-4:]
 

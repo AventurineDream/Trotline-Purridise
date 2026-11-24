@@ -2211,8 +2211,8 @@ class UI:
             text = _toast_for_device(raw_text, input_device)
             if raw_text == "Shall we add that?":
                 text += " Hold Y to read." if input_device == "gamepad" else " J reads the page."
-            text = self._trim(text, size, w - 48)
-            tw = self._measure(text, size, "mono") + 16
+            text = self._trim(text, size, w - 48, "sans")
+            tw = self._measure(text, size, "sans") + 16
             x = (w - tw) // 2
             # A toast never covers the HUD's clock or boat panels: it drops below them (V1-43).
             for rx, ry, rw, rh in getattr(self, "_hud_rects", ()):
