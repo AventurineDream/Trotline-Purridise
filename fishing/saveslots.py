@@ -7,6 +7,7 @@ can start mornings without creating directories; display names live in the save.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import re
@@ -87,26 +88,33 @@ def list_slots(save_path: str | Path) -> list[Slot]:
     return result
 
 
-def _unique_slug(root: Path, name: str, excluding: str = "") -> str:
-    """Choose an unused case-insensitive directory key, excluding a renamed slot."""
+def _unique_slug(root: Path, name: str, excluding: str = "") -> tuple[str, int]:
+    """Choose an unused case-insensitive directory key, excluding a renamed slot.
+
+    Returns the slug and its numeric suffix (1 for the bare base, 2+ after
+    collisions) so callers can mirror the suffix in the displayed name.
+    """
     existing = {path.name.casefold() for path in root.iterdir()
                 if path.name != excluding} if root.exists() else set()
     base = slot_slug(name)
-    slug, suffix = base, 2
+    slug, suffix = base, 1
     while slug.casefold() in existing:
-        slug = f"{base}-{suffix}"
         suffix += 1
-    return slug
+        slug = f"{base}-{suffix}"
+    return slug, suffix
 
 
 def allocate_slot(save_path: str | Path, display_name: str) -> tuple[Path, str]:
-    """Return an unused slot file beside save_path and the unchanged display_name.
+    """Return an unused slot file beside save_path and its numbered display name.
 
-    Existing directory keys collide case-insensitively, including empty slots.
+    Existing directory keys collide case-insensitively, including empty slots;
+    a collision appends the same index to the shown name ("Mochi", "Mochi 2").
     No path is reserved or created until the caller saves; I/O errors propagate.
     """
     root = slot_root(save_path)
-    return root / _unique_slug(root, display_name) / "save.json", display_name
+    slug, suffix = _unique_slug(root, display_name)
+    shown = display_name if suffix == 1 else f"{display_name} {suffix}"
+    return root / slug / "save.json", shown
 
 
 def stamp_slot_name(state, name: str) -> None:
@@ -114,13 +122,18 @@ def stamp_slot_name(state, name: str) -> None:
     state.unknown_save_fields["slot_name"] = name
 
 
-def rename_slot(save_path: str | Path, old_slug: str, new_display: str) -> tuple[str, Path] | None:
+def rename_slot(save_path: str | Path, old_slug: str, new_display: str,
+                legacy_path: str | Path | None = None) -> tuple[str, Path] | None:
     """Rename old_slug beside the original save_path, preserving progress and backups.
 
-    An empty old_slug identifies the main save: move it and its backup directory
-    into a new named slot. Return the new slug and save path, or None if missing.
-    Metadata is replaced atomically before moving, so a failed directory rename
-    leaves the live save at its original path. Invalid JSON and I/O errors raise.
+    An empty old_slug identifies the main save: move it, its backup directory and
+    the install-era legacy file (when ``legacy_path`` is given and exists) into a
+    new named slot. The legacy copy lands in the slot's backup folder under a
+    ``briar.v1.*`` name so startup cannot re-import the stale v1 as a new main
+    save, and the bytes stay recoverable. Return the new slug and save path, or
+    None if missing. Metadata is replaced atomically before moving, so a failed
+    directory rename leaves the live save at its original path. Invalid JSON and
+    I/O errors raise.
     """
     default = Path(save_path)
     root = slot_root(default)
@@ -132,7 +145,7 @@ def rename_slot(save_path: str | Path, old_slug: str, new_display: str) -> tuple
     raw = json.loads(source.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("save root must be an object")
-    slug = _unique_slug(root, new_display, excluding=old_slug)
+    slug, _suffix = _unique_slug(root, new_display, excluding=old_slug)
     target = root / slug / "save.json"
     raw["slot_name"] = new_display
     temporary = source.with_suffix(".tmp")
@@ -149,10 +162,28 @@ def rename_slot(save_path: str | Path, old_slug: str, new_display: str) -> tuple
         moved_backup = backup.is_dir()
         if moved_backup:
             backup.rename(target.parent / "backup")
+        slot_backup = target.parent / "backup"
         try:
             source.rename(target)
         except OSError:
             if moved_backup:
-                (target.parent / "backup").rename(backup)
+                slot_backup.rename(backup)
             raise
+        if legacy_path is not None:
+            # Best effort: the save already moved, so a failed legacy move only
+            # means the stale v1 could be imported again — never lose the file.
+            legacy = Path(legacy_path)
+            if legacy.is_file() and not legacy.is_symlink():
+                try:
+                    slot_backup.mkdir(parents=True, exist_ok=True)
+                    instant = datetime.now(timezone.utc)
+                    stamp = instant.strftime("%Y%m%dT%H%M%S%fZ")
+                    legacy_target = slot_backup / f"briar.v1.{stamp}.json"
+                    while legacy_target.exists():
+                        instant += timedelta(microseconds=1)
+                        stamp = instant.strftime("%Y%m%dT%H%M%S%fZ")
+                        legacy_target = slot_backup / f"briar.v1.{stamp}.json"
+                    legacy.rename(legacy_target)
+                except OSError:
+                    pass
     return slug, target

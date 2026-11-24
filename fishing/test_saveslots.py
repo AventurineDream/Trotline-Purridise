@@ -60,12 +60,15 @@ class SlotStorageChecks(unittest.TestCase):
         self.assertEqual(display, "Mochi")
         self.assertFalse(self.root.exists())
         self.write_save(first, {"slot_name": display})
-        second, _ = saveslots.allocate_slot(self.default, "Mochi")
+        second, second_display = saveslots.allocate_slot(self.default, "Mochi")
         self.assertEqual(second.parent.name, "mochi-2")
+        # The shown name carries the same index so browser rows stay distinct.
+        self.assertEqual(second_display, "Mochi 2")
         second.parent.mkdir()
         (self.root / "MOCHI-3").mkdir()
-        fourth, _ = saveslots.allocate_slot(self.default, "MOCHI")
+        fourth, fourth_display = saveslots.allocate_slot(self.default, "MOCHI")
         self.assertEqual(fourth.parent.name, "mochi-4")
+        self.assertEqual(fourth_display, "MOCHI 4")
         self.assertFalse(fourth.exists())
 
     def test_slot_root_follows_an_explicit_save_override_uniformly(self):
@@ -148,6 +151,25 @@ class SlotStorageChecks(unittest.TestCase):
         self.assertEqual(json.loads(path.read_text()), {**raw, "slot_name": "Main Cat"})
         self.assertEqual(unrelated.read_text(), "untouched")
         self.assertTrue(saveslots.list_slots(self.default)[0].is_default)
+
+    def test_default_rename_retires_the_legacy_v1_into_the_slots_backups(self):
+        """Moving the main save also moves the install-era v1 so it cannot re-import."""
+        raw = {"version": 2, "money": 7}
+        self.write_save(self.default, raw)
+        legacy = self.default.parent / "install" / "saves" / "briar.json"
+        self.write_save(legacy, {"version": 1, "money": 1})
+        slug, path = saveslots.rename_slot(self.default, "", "Main Cat",
+                                           legacy_path=legacy)
+        self.assertEqual(slug, "main-cat")
+        self.assertFalse(legacy.exists())
+        moved = list((path.parent / "backup").glob("briar.v1.*.json"))
+        self.assertEqual(len(moved), 1)
+        self.assertEqual(json.loads(moved[0].read_text()), {"version": 1, "money": 1})
+        # Without a legacy path (a --save override) nothing outside moves.
+        self.write_save(self.default, raw)
+        self.write_save(legacy, {"version": 1})
+        slug, _ = saveslots.rename_slot(self.default, "", "Other Cat")
+        self.assertTrue(legacy.is_file())
 
     def test_missing_or_escaping_rename_does_not_create_paths(self):
         """Reject absent slots and path traversal before writing anything."""

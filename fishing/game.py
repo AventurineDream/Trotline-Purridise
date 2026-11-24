@@ -128,7 +128,8 @@ class MenuKeys:
 
 
 class Session:
-    def __init__(self, world: World, save_path: Path, state: State, has_save: bool, *, dev=False):
+    def __init__(self, world: World, save_path: Path, state: State, has_save: bool, *,
+                 dev=False, legacy_path=None):
         """Create a gameplay session with optional unsaved playtest controls.
 
         Args:
@@ -137,6 +138,9 @@ class Session:
             state: Loaded or newly-created simulation state.
             has_save: Whether a persistent save was loaded.
             dev: Enable the overlay and disable all save writes for this session.
+            legacy_path: Install-era save searched at startup, or None when an
+                explicit ``--save`` path bypassed it. Kept so renaming the main
+                save can retire the stale legacy copy instead of re-importing it.
 
         Returns:
             None.
@@ -146,6 +150,7 @@ class Session:
         self.slots_dir = saveslots.slot_root(self.default_save_path)
         self.save_path = self.default_save_path
         self.dev = bool(dev)
+        self.legacy_path = Path(legacy_path) if legacy_path is not None else None
         self.state = state
         self.dev_mode = None
         if dev:
@@ -1100,7 +1105,8 @@ class Session:
         slot = ui.slots[ui.slot_i % len(ui.slots)]
         name = skipperlook.clean_name(ui.slot_name_buf)
         try:
-            renamed = saveslots.rename_slot(self.default_save_path, slot.slug, name)
+            renamed = saveslots.rename_slot(self.default_save_path, slot.slug, name,
+                                          legacy_path=self.legacy_path)
         except (OSError, ValueError) as error:
             ui.note = f"That save could not be renamed: {error}"
             return
@@ -2529,7 +2535,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
     world, state, has_save = opened.world, opened.state, opened.has_save
     if opened.used_local_fallback:
         state.toast("Platform save folder unavailable; using the local save folder.")
-    session = Session(world, opened.path, state, has_save, dev=dev)
+    session = Session(world, opened.path, state, has_save, dev=dev,
+                      legacy_path=opened.legacy_path)
 
     dw, dh = Platform.display_size()
     width, height = _window_size(dw, dh)
