@@ -17,6 +17,16 @@ from .world import World
 
 
 class DialogueChecks(unittest.TestCase):
+    def test_bot_line_inside_another_cats_scene_speaks_as_bot(self):
+        from .dialogue import speaking_line
+        speaker, text = speaking_line("Bot: It is warm. I like it.", "grandmother_whiskers")
+        self.assertEqual(speaker, "bot")
+        self.assertNotIn("Bot:", text)
+        self.assertTrue(text.startswith("It is warm"))
+        speaker, text = speaking_line("The reeds are quiet today.", "grandmother_whiskers")
+        self.assertEqual(speaker, "grandmother_whiskers")
+        self.assertEqual(text, "The reeds are quiet today.")
+
     @classmethod
     def setUpClass(cls):
         cls.world = World()

@@ -1029,10 +1029,13 @@ class UI:
         # A conversation may carry runtime nodes (greetings, host turn-ins, letters).
         node = (chat.node(ui.dialogue_content) if hasattr(chat, "node")
                 else ui.dialogue_content.dialogue[chat.node_id])
-        name = ui.dialogue_content.name(chat.npc_id)
-        if chat.npc_id == "bot":
-            from .botidentity import name as bot_name
-            name = bot_name(state)  # Bot speaks a story scene in his own name (V1-34)
+        from .botidentity import format_text, name as bot_name
+        from .botportrait import BOT, look
+        from .dialogue import speaking_line
+        text = format_text(node['text'], state)
+        # Issue #154: resolve this line's speaker; the chat keeps its giver.
+        speaker, text = speaking_line(text, chat.npc_id)
+        name = bot_name(state) if speaker == BOT else ui.dialogue_content.name(speaker)
         h, w = frame.shape[:2]
         size = self._size(frame, "small")
         cw, ch = self.cell(size)
@@ -1041,20 +1044,17 @@ class UI:
         # The speaker's portrait sits at the left when the frame has room (V1-29), and breathes,
         # blinks and bobs as it speaks (portraitmotion). Bot's card wears his current shell and collar.
         from .catart import portrait_rig
-        from .botidentity import format_text
-        from .botportrait import BOT, look
         from .portraitmotion import portrait_motion
-        text = format_text(node['text'], state)
         side = min(176, max(96, h // 4))
         rig = None
         if w >= 640:
-            rig = (portrait_rig(BOT, side, look(state)) if chat.npc_id == BOT
-                   else portrait_rig(chat.npc_id, side))
+            rig = (portrait_rig(BOT, side, look(state)) if speaker == BOT
+                   else portrait_rig(speaker, side))
         portrait = None
         if rig is not None:
             v2 = getattr(state, "v2", {})
             reduced = bool(isinstance(v2, dict) and v2.get("settings", {}).get("reduced_motion", False))
-            portrait = rig.frame(portrait_motion(chat.npc_id, text, ui.dialogue_s, ui.dialogue_line_s,
+            portrait = rig.frame(portrait_motion(speaker, text, ui.dialogue_s, ui.dialogue_line_s,
                                                  reduced_motion=reduced))
         inset = side + margin if portrait is not None else 0
         cols = max(8, (width - margin*2 - inset) // cw)
