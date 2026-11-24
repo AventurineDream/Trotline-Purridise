@@ -177,6 +177,52 @@ class SkipperCreatorTests(unittest.TestCase):
         for i, card in enumerate(cards):
             for other in cards[i + 1:]:
                 self.assertFalse(np.array_equal(card, other))
+    def test_expanded_palettes_stay_distinguishable_and_render(self):
+        """New swatches keep unique names, clear colour gaps and visible previews."""
+        for swatches in (skipperlook.COAT_SWATCHES, skipperlook.EYE_SWATCHES, skipperlook.CLOTH_SWATCHES):
+            names = [name for name, _rgb in swatches]
+            self.assertEqual(len(names), len(set(names)), "swatch names must stay unique")
+            for name, rgb in swatches:
+                self.assertTrue(all(0.0 <= c <= 1.0 for c in rgb), name)
+        # Each addition stays clearly apart from every other swatch in its palette.
+        additions = {"coat": ("Red", "Seal brown", "Dusty blue", "Mink"),
+                     "eyes": ("Lemon", "Olive", "Turquoise", "Violet", "Grey"),
+                     "cloth": ("Sky blue", "Forest green", "Plum", "Mustard", "Charcoal")}
+        palettes = {"coat": skipperlook.COAT_SWATCHES, "eyes": skipperlook.EYE_SWATCHES,
+                    "cloth": skipperlook.CLOTH_SWATCHES}
+        for palette, new_names in additions.items():
+            swatches = palettes[palette]
+            for new_name in new_names:
+                _n, rgb = next(pair for pair in swatches if pair[0] == new_name)
+                for other_name, other in swatches:
+                    if other_name == new_name:
+                        continue
+                    gap = sum((x - y) ** 2 for x, y in zip(rgb, other))
+                    self.assertGreater(gap, 0.01, f"{palette}:{new_name} vs {other_name}")
+        # Representative additions from each palette change the rendered card.
+        self.open_from_pause()
+        look = self.look()
+        cards = []
+        for key, rgb in (("base", [0.72, 0.18, 0.14]), ("secondary", [0.55, 0.62, 0.70])):
+            changed = deepcopy(look)
+            changed["colors"][key] = list(rgb)
+            cards.append(skipperview.preview(changed, 0.0, 0.0, 240, True, 99.0))
+        changed = deepcopy(look)
+        changed["eyes"] = [0.35, 0.80, 0.75]
+        cards.append(skipperview.preview(changed, 0.0, 0.0, 240, True, 99.0))
+        navy = {"kind": "cap", "color": [0.16, 0.22, 0.40]}
+        sky = {"kind": "cap", "color": [0.35, 0.60, 0.85]}
+        for attire in (navy, sky):
+            changed = deepcopy(look)
+            changed["attire"] = [dict(attire)]
+            cards.append(skipperview.preview(changed, 0.0, 0.0, 240, True, 99.0))
+        # The two cap cards differ only in cloth colour; both differ from bare-headed.
+        self.assertFalse(np.array_equal(cards[3], cards[4]))
+        for card in cards:
+            self.assertFalse(np.array_equal(card, skipperview.preview(look, 0.0, 0.0, 240, True, 99.0)))
+        # An off-swatch saved colour is data, not an index: normalize keeps it exact.
+        saved = skipperlook.normalize({"skipper": {"colors": {"base": [0.31, 0.47, 0.59]}}})
+        self.assertEqual(saved["colors"]["base"], [0.31, 0.47, 0.59])
 
     def test_a_row_that_changes_nothing_does_not_wave(self):
         self.open_from_pause()
