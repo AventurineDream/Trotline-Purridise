@@ -1663,12 +1663,27 @@ class State:
             self.toast("Stop the boat and press F to set a trotline.")
         elif self.tutorial == 1 and self.lines:
             self.tutorial = 2
-            self.toast("Anchor and press T to let time run. E checks a line.")
+            # Issue #156: Bot explains time scaling when Grandmother's first
+            # conversation closes. This generic notice only covers saves that
+            # never see that conversation.
+            if not self.time_tip_given():
+                self.toast("Anchor and press T to let time run. E checks a line.")
         elif self.tutorial == 2 and self.hooked_total > 0:
             self.tutorial = 3
             self.toast("Nose into the landing and press E to sell.")
         elif self.tutorial == 3 and self.earned > 0:
             self.tutorial = 4
+
+    def time_tip_given(self) -> bool:
+        """Whether Bot already explained time scaling (issue #156, persisted)."""
+        story = self.v2.get("story") if isinstance(self.v2, dict) else None
+        return isinstance(story, dict) and bool(story.get("bot_time_tip"))
+
+    def mark_time_tip(self) -> None:
+        """Remember that Bot explained time scaling, across a reload."""
+        story = self.v2.setdefault("story", {})
+        if isinstance(story, dict):
+            story["bot_time_tip"] = True
 
     def hint(self, world: World | None = None) -> str | None:
         if self.tutorial == 0:

@@ -52,10 +52,10 @@ you show {Skipper} how you scout?
 story, you know. Come inside a moment.
 
 `pro_05` *(inside the landing; the book on the counter)*
-**Grandmother Whiskers:** This is the landing's old fish book. My grandmother
-started it. Anyone who ever tied up here wrote in it.
-**Grandmother Whiskers:** It's mostly stories. Some are true. Some are *very*
-true. The last pages are empty.
+**Grandmother Whiskers:** This is the landing's old fish book, the Fishypedia. My
+grandmother started it, and anyone who tied up here wrote in it.
+**Grandmother Whiskers:** It's mostly stories, and not every one happened quite the
+way it's told. The last pages are empty.
 **Grandmother Whiskers:** Would you carry it for a while? Bring back one useful new
 note from each water. Not the biggest fish. A useful note.
 *Choices:* **"I'd love to."** → `pro_06` · **"What kind of note?"** → `pro_05b`

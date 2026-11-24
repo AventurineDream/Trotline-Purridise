@@ -111,6 +111,15 @@ class ContentChecks(unittest.TestCase):
         text = c.dialogue[QUEST_IDS[5]+':dialogue:offer']['text']
         self.assertIn('around sunrise', text)
         self.assertNotIn('05:00', text)
+    def test_prologue_names_the_fishypedia_without_claiming_its_stories_true(self):
+        # Issue #157: Grandmother calls it the Fishypedia and flags its
+        # stories as unreliable, never "very true".
+        c = load_content()
+        lines = c.scenes["pro_05"]["lines"]
+        joined = " ".join(lines)
+        self.assertIn("Fishypedia", joined)
+        self.assertNotIn("very true", joined.lower())
+
 
     def test_missing_fields_and_duplicate_ids(self):
         for group, field in [('npcs','name'),('quests','objective'),('rewards','cash'),('dialogue','text')]:
