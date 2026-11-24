@@ -153,7 +153,7 @@ class SlotStorageChecks(unittest.TestCase):
         self.assertTrue(saveslots.list_slots(self.default)[0].is_default)
 
     def test_default_rename_retires_the_legacy_v1_into_the_slots_backups(self):
-        """Moving the main save also moves the install-era v1 so it cannot re-import."""
+        """Moving the main save retires the install-era v1 without deleting it."""
         raw = {"version": 2, "money": 7}
         self.write_save(self.default, raw)
         legacy = self.default.parent / "install" / "saves" / "briar.json"
@@ -161,15 +161,14 @@ class SlotStorageChecks(unittest.TestCase):
         slug, path = saveslots.rename_slot(self.default, "", "Main Cat",
                                            legacy_path=legacy)
         self.assertEqual(slug, "main-cat")
-        self.assertFalse(legacy.exists())
-        moved = list((path.parent / "backup").glob("briar.v1.*.json"))
+        # The marker suppresses re-import; the original bytes stay put, and a
+        # non-globbed archive copy lands in the slot's backups.
+        self.assertTrue(saveslots.legacy_retired(self.default))
+        self.assertTrue(legacy.is_file())
+        moved = list((path.parent / "backup").glob("briar.legacy.*.json"))
         self.assertEqual(len(moved), 1)
         self.assertEqual(json.loads(moved[0].read_text()), {"version": 1, "money": 1})
-        # Without a legacy path (a --save override) nothing outside moves.
-        self.write_save(self.default, raw)
-        self.write_save(legacy, {"version": 1})
-        slug, _ = saveslots.rename_slot(self.default, "", "Other Cat")
-        self.assertTrue(legacy.is_file())
+        self.assertFalse(list((path.parent / "backup").glob("briar.v1.*.json")))
 
     def test_missing_or_escaping_rename_does_not_create_paths(self):
         """Reject absent slots and path traversal before writing anything."""

@@ -11,7 +11,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from . import bundle, game, savepaths
+from . import bundle, game, savepaths, saveslots
 from . import platform as fishing_platform
 from .__main__ import main
 
@@ -78,6 +78,15 @@ class CheckSaveFlagTests(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertIn("version=none", out)
         self.assertIn("migrated=no", out)
+        self.assertFalse(self.save.exists())
+
+    def test_a_retired_legacy_save_is_not_reimported(self):
+        """The legacy-retired marker keeps a renamed-away v1 out of startup."""
+        self.platform_dir.mkdir(parents=True)
+        (self.platform_dir / saveslots.LEGACY_RETIRED_NAME).touch()
+        code, out, err = self.check()
+        self.assertEqual(code, 0, err)
+        self.assertIn("version=none", out)
         self.assertFalse(self.save.exists())
 
 

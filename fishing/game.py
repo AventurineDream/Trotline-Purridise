@@ -2507,8 +2507,12 @@ def open_save(save_path: str | Path | None = None, *, persist_changes: bool = Tr
         Reads saves; when enabled, migration/recovery may write backups and saves.
     """
     root = app_root()
-    legacy_path = root / LEGACY_SAVE if save_path is None else None
     target, used_local_fallback = _save_target(root, save_path)
+    # A renamed-away main save retires its install-era v1: the marker beside the
+    # save file keeps the stale legacy copy out of save_candidates forever.
+    legacy_path = (root / LEGACY_SAVE
+                   if save_path is None and not saveslots.legacy_retired(target)
+                   else None)
     started_from_legacy = (legacy_path is not None and legacy_path.is_file()
                            and not target.is_file())
     world, state, has_save = load_game_save(

@@ -126,14 +126,14 @@ def rename_slot(save_path: str | Path, old_slug: str, new_display: str,
                 legacy_path: str | Path | None = None) -> tuple[str, Path] | None:
     """Rename old_slug beside the original save_path, preserving progress and backups.
 
-    An empty old_slug identifies the main save: move it, its backup directory and
-    the install-era legacy file (when ``legacy_path`` is given and exists) into a
-    new named slot. The legacy copy lands in the slot's backup folder under a
-    ``briar.v1.*`` name so startup cannot re-import the stale v1 as a new main
-    save, and the bytes stay recoverable. Return the new slug and save path, or
-    None if missing. Metadata is replaced atomically before moving, so a failed
-    directory rename leaves the live save at its original path. Invalid JSON and
-    I/O errors raise.
+
+    An empty old_slug identifies the main save: move it and its backup directory
+    into a new named slot. When ``legacy_path`` names an existing install-era
+    file, it is retired via the ``legacy-retired`` marker and archived into the
+    slot's backups, so startup cannot re-import the stale v1 as a new main save.
+    Return the new slug and save path, or None if missing. Metadata is replaced
+    atomically before moving, so a failed directory rename leaves the live save
+    at its original path. Invalid JSON and I/O errors raise.
     """
     default = Path(save_path)
     root = slot_root(default)
@@ -170,20 +170,44 @@ def rename_slot(save_path: str | Path, old_slug: str, new_display: str,
                 slot_backup.rename(backup)
             raise
         if legacy_path is not None:
-            # Best effort: the save already moved, so a failed legacy move only
-            # means the stale v1 could be imported again — never lose the file.
-            legacy = Path(legacy_path)
-            if legacy.is_file() and not legacy.is_symlink():
-                try:
-                    slot_backup.mkdir(parents=True, exist_ok=True)
-                    instant = datetime.now(timezone.utc)
-                    stamp = instant.strftime("%Y%m%dT%H%M%S%fZ")
-                    legacy_target = slot_backup / f"briar.v1.{stamp}.json"
-                    while legacy_target.exists():
-                        instant += timedelta(microseconds=1)
-                        stamp = instant.strftime("%Y%m%dT%H%M%S%fZ")
-                        legacy_target = slot_backup / f"briar.v1.{stamp}.json"
-                    legacy.rename(legacy_target)
-                except OSError:
-                    pass
+            _retire_legacy(legacy_path, default, slot_backup)
     return slug, target
+
+
+# Marker beside the main save telling open_save the install-era v1 was retired
+# into a named slot; without it the missing main file would re-import the stale
+# legacy save on the next launch. Lives in the per-user save dir, not the slot.
+LEGACY_RETIRED_NAME = "legacy-retired"
+
+
+def legacy_retired(save_path: str | Path) -> bool:
+    """Return whether the install-era legacy save was retired for save_path's root."""
+    return (Path(save_path).parent / LEGACY_RETIRED_NAME).is_file()
+
+
+def _retire_legacy(legacy_path: str | Path, save_path: Path, slot_backup: Path) -> None:
+    """Retire the install-era v1 so startup cannot re-import it as a new main save.
+
+    Writes the ``legacy-retired`` marker beside ``save_path`` unconditionally —
+    that is the guarantee, and it only needs the per-user directory to be
+    writable. Then best-effort copies the legacy bytes into the slot's backup
+    folder under ``briar.legacy.*.json``: deliberately NOT ``briar.v1.*``, which
+    ``backup_candidates`` would rank as the newest recovery source. The original
+    file is left in place; archiving never deletes user data.
+    """
+    legacy = Path(legacy_path)
+    if not legacy.exists() and not legacy.is_symlink():
+        return
+    (save_path.parent / LEGACY_RETIRED_NAME).touch(exist_ok=True)
+    try:
+        slot_backup.mkdir(parents=True, exist_ok=True)
+        instant = datetime.now(timezone.utc)
+        stamp = instant.strftime("%Y%m%dT%H%M%S%fZ")
+        target = slot_backup / f"briar.legacy.{stamp}.json"
+        while target.exists():
+            instant += timedelta(microseconds=1)
+            stamp = instant.strftime("%Y%m%dT%H%M%S%fZ")
+            target = slot_backup / f"briar.legacy.{stamp}.json"
+        target.write_bytes(legacy.read_bytes())
+    except OSError:
+        pass
