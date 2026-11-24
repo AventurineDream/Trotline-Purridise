@@ -122,8 +122,10 @@ class StoryPlay(unittest.TestCase):
         return seen
 
     def reload(self):
-        """Quit (which saves) and continue the save in a new session."""
+        """Quit (which saves the active slot) and continue it in a new session."""
         self.session.tick(Keys(quit=True), 0.05)
+        # A new morning owns a named slot, not the default save path.
+        self.path = self.session.save_path
         self.state = State.load(self.path, World(self.state.lake_id))
         self.open_session()
 

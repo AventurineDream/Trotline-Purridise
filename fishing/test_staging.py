@@ -114,9 +114,11 @@ class InTheSession(unittest.TestCase):
     def test_a_replayed_scene_can_skip_its_staging_with_esc_but_not_its_bubbles(self):
         self.new_morning()
         self.session.tick(Keys(quit=True), 0.05)
-        world, state, _ = load_game_save(self.path, State, World)
+        # A new morning owns a named slot, not the default save path.
+        slot_path = self.session.save_path
+        world, state, _ = load_game_save(slot_path, State, World)
         with patch("fishing.game.load_content", return_value=self.content):
-            session = Session(world, self.path, state, True)
+            session = Session(world, slot_path, state, True)
         session.ui.mode = "play"
         session.tick(Keys(pressed={"x"}), 0.05)
         self.assertEqual(session.conversation.node_id, "scene:pro_01")

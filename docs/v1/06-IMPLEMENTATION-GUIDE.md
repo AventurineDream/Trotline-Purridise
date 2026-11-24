@@ -104,6 +104,10 @@ with `python -m fishing.content`.
   organization identifier; the GitHub repository is `AventurineDream/Trotline-Purridise`.
   If SDL cannot provide that folder, use the install-local `saves/save.json` and
   show a toast. Override with `--save PATH` for tests.
+- New mornings create `slots/<name>/save.json` beside the original main save.
+  The top-level `"slot_name"` is its display name; each slot owns its `backup/`.
+  The title's Saves screen lists the main save too, and can continue or rename slots.
+  `--save PATH` roots named slots at `PATH.parent/slots/`, without moving the main save.
 - On first launch, if `saves/briar.json` (v1) exists and no v2 save does: copy it
   to `<prefpath>/backup/briar.v1.<timestamp>.json`, migrate, write v2, and leave
   the original untouched. Do not make another backup on later launches after a
@@ -124,8 +128,9 @@ with `python -m fishing.content`.
 ### 3.2 Schema
 
 **One authority per domain.** Save v2 is the existing flat `State` JSON
-(`sim.State.to_json`) with `"version": 2` and **one new key, `v2`**, that holds
-only domains that didn't exist before. Existing fields stay where they are and
+(`sim.State.to_json`) with `"version": 2` and the `v2` extension, which holds
+only domains that didn't exist before. Optional top-level `"slot_name"` names a
+save slot. Existing gameplay fields stay where they are and
 remain the single source of truth: money, lines, well, `journal` (catch count,
 best, zone, bait, band), `narrative_v1` (quests, Ripples, reward claims,
 schedule seed, Bot notes), `boat_id`, `owned_boats`, and the fuel and battery

@@ -232,6 +232,7 @@ class ComfortChecks(unittest.TestCase):
         self.assertTrue(comfort.rested(state.v2, state.narrative.active_play_game_minutes))
 
     def test_new_game_selects_mode_defaults_cozy_and_cancel_keeps_existing_save(self):
+        """Choose a new slot's pace while cancellation preserves the main save bytes."""
         self.session.save()
         original = self.path.read_bytes()
         self.session.ui.mode, self.session.ui.confirm_new = "title", True
@@ -247,7 +248,9 @@ class ComfortChecks(unittest.TestCase):
         self.session.tick(Keys(pressed={"return"}), 0)
         finish_creator(self.session)
         self.assertEqual(comfort.mode(self.session.state.v2), "old_salt")
-        self.assertEqual(comfort.mode(State.load(self.path, self.world).v2), "old_salt")
+        # A new morning now owns a separate slot instead of replacing the main save.
+        self.assertEqual(comfort.mode(State.load(self.session.save_path, self.world).v2), "old_salt")
+        self.assertEqual(self.path.read_bytes(), original)
 
     def test_both_new_game_modes_can_hail_and_render_npc_dialogue(self):
         text = Text()
