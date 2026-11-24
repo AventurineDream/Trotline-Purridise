@@ -44,6 +44,8 @@ GESTURES = {"sit_fish": "wave", "craft": "wave", "helm": "helm_wave", "nap_curl"
 LYING = ("nap_curl", "nap_rouse")
 STANDING = ("helm", "helm_wave")
 PATTERNS = ("solid", "tabby", "mackerel", "calico", "tortoiseshell", "tuxedo", "point", "spotted", "bicolor")
+# Fur types, indexed for the cat.frag coat_kind uniform (keep the two in step).
+COAT_KINDS = ("short", "long", "rex", "hairless")
 _FOLDED_EARS = ("folded", "folded_left", "folded_right")
 
 
@@ -403,7 +405,7 @@ def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
     build_ = float(look["build"])
     legs = float(look.get("legs", 1.0))
     coat = look["coat"]
-    fluff = {"long": 1.12, "rex": 1.04, "hairless": 0.93}.get(coat, 1.0)
+    fluff = {"long": 1.12, "rex": 1.04, "hairless": 0.87}.get(coat, 1.0)
     c = _counts(lod)
     out = _Builder()
     s = size
@@ -416,7 +418,9 @@ def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
     def pear(v, u):
         widen = 1.0 + 0.32 * np.clip(v - 0.35, 0, 1)
         if coat == "rex":
-            widen = widen * (1.0 + 0.03 * np.sin(u * math.tau * 9) * np.sin(v * math.pi * 7))
+            # Two incommensurate harmonics read as a curly coat, not a smooth tube.
+            widen = widen * (1.0 + 0.07 * np.sin(u * math.tau * 9) * np.sin(v * math.pi * 7)
+                             + 0.03 * np.sin(u * math.tau * 23 + 1.7) * np.sin(v * math.pi * 13))
         return np.stack([widen, np.ones_like(widen), widen * 0.96], -1)
 
     # Legs shorten the sitting height for Munchkins and lift the standing body.
@@ -934,10 +938,17 @@ def coat_weights(pattern, coat, coat_n, part, along, size=1.0):
 
 
 def coat_rgb(look, coat, coat_n, part, along):
-    """Linear fur RGB for each vertex or pixel, before lighting (eyes, nose and inner ears too)."""
+    """Linear fur RGB for each vertex or pixel, before lighting (eyes, nose and inner ears too).
+
+    A hairless cat shows none of the pattern's secondary/accent fur colours:
+    cat.frag gates the same way on its coat_kind uniform.
+    """
     colors = look["colors"]
     base, sec_c, acc_c = (np.asarray(colors[k], np.float32) for k in ("base", "secondary", "accent"))
-    sec, acc = coat_weights(look["pattern"], coat, coat_n, part, along, size=float(look["size"]))
+    if look["coat"] == "hairless":
+        sec = acc = np.zeros(np.asarray(part).shape, np.float32)
+    else:
+        sec, acc = coat_weights(look["pattern"], coat, coat_n, part, along, size=float(look["size"]))
     rgb = base * (1 - sec - acc)[..., None] + sec_c * sec[..., None] + acc_c * acc[..., None]
     part = np.asarray(part)
     pink = np.array([0.86, 0.52, 0.56], np.float32)
@@ -978,7 +989,8 @@ def paint(mesh: CatMesh) -> tuple[np.ndarray, np.ndarray]:
         props = lit & (tags < 0)
         colour[props] = (0.95, 0.92, 0.84) if look["prop"] == "brush" else (0.55, 0.85, 1.0)
         glow[lo:hi][lit] = 1.0
-        if look.get("glow"):
+        if look.get("glow") and look["coat"] != "hairless":
+            # Emissive markings follow the same suppression as the fur colours.
             sec, _acc = coat_weights(look["pattern"], mesh.coat[lo:hi], mesh.coat_normals[lo:hi], part,
                                      mesh.along[lo:hi], size=float(look["size"]))
             fur = np.isin(part, FUR_PARTS)

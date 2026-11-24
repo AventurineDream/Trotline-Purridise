@@ -377,6 +377,42 @@ class Rig(unittest.TestCase):
         np.testing.assert_allclose(rgb[lens], np.broadcast_to((0.55, 0.85, 0.95), rgb[lens].shape),
                                    atol=1e-6)
 
+    def test_coat_kinds_move_real_geometry(self):
+        """Rex curls and the hairless slim build must displace vertices, not just labels."""
+        look = deepcopy(next(iter(ROSTER.values()))["appearance"])
+        look.pop("twin", None)
+        # Long adds the neck ruff, so only same-topology coats compare vertex-for-vertex.
+        look.update(attire=[], prop="none", pose="sit_fish", size=1.0)
+        reference = catmesh.build(dict(look, coat="short"), "sit_fish", LOD0)[0]
+        for coat in ("rex", "hairless"):
+            with self.subTest(coat=coat):
+                pos = catmesh.build(dict(look, coat=coat), "sit_fish", LOD0)[0]
+                self.assertEqual(pos.shape, reference.shape)
+                self.assertGreater(float(np.abs(pos - reference).max()), 0.004)
+
+    def test_hairless_cats_wear_no_fur_pattern_on_cpu_or_gpu(self):
+        """Hairless fur parts take only the base colour; cat.frag gates identically."""
+        look = deepcopy(next(iter(ROSTER.values()))["appearance"])
+        look.pop("twin", None)
+        look.update(attire=[], prop="none", coat="hairless", pattern="tabby",
+                    colors={"base": [0.6, 0.3, 0.2], "secondary": [0.1, 0.1, 0.1],
+                            "accent": [0.9, 0.9, 0.9]})
+        mesh = catmesh.look_mesh(look, LOD0)
+        rgb, _glow = catmesh.paint(mesh)
+        fur = np.isin(mesh.part, catmesh.FUR_PARTS)
+        base = np.asarray(look["colors"]["base"], np.float32)
+        np.testing.assert_allclose(rgb[fur], np.broadcast_to(base, rgb[fur].shape), atol=1e-6)
+        # Control: the same cat short-coated shows tabby markings on fur.
+        look["coat"] = "short"
+        mesh = catmesh.look_mesh(look, LOD0)
+        rgb, _glow = catmesh.paint(mesh)
+        fur = np.isin(mesh.part, catmesh.FUR_PARTS)
+        self.assertGreater(float(np.abs(rgb[fur] - base).max()), 0.05)
+        # The shader mirror: COAT_KINDS order is the uniform's contract.
+        source = (SHADERS / "cat.frag").read_text(encoding="utf-8")
+        self.assertIn("uniform int coat_kind", source)
+        self.assertIn(f"coat_kind == {catmesh.COAT_KINDS.index('hairless')}", source)
+
 
 class ShaderAgreement(unittest.TestCase):
     def test_cat_frag_coat_patterns_match_the_numpy_reference(self):
