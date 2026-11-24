@@ -53,6 +53,9 @@ from .world import World
 from .lakes import LoadingQuips, travel_caption, travel_lock_reason
 
 DRIVING = {"play"}
+# Modes that actually draw toasts (ui.py). The timer pauses in every other
+# mode so a menu cannot eat a notice the player never saw (issue #155).
+TOAST_VISIBLE_MODES = {"play", "title", "saves", "dialogue"}
 MENU_DIRECTIONS = {"up": "w", "down": "s", "left": "a", "right": "d"}
 NAVIGATION_KEYS = set(MENU_DIRECTIONS) | set(MENU_DIRECTIONS.values())
 DRIVING_KEYS = {"w", "s", "a", "d", "up", "down", "left", "right"}
@@ -590,7 +593,6 @@ class Session:
         if self.world_running():
             if comfort.doze_due(state.v2) and not self._settling_here():
                 self._start_catnap(forced=True)
-                state.tick_toasts(dt)
                 return
             comfort.active_time(state.v2, dt)
             # A held menu direction must be released before it drives or looks
@@ -649,7 +651,8 @@ class Session:
                     self.ui.comfort_i = 0
                     self.ui.mode = "needs"
                     self.save()
-        state.tick_toasts(dt)
+        if self.ui.mode in TOAST_VISIBLE_MODES:
+            state.tick_toasts(dt)
 
     def _speaker_left(self) -> bool:
         """A cat who has left ends the conversation. A story scene is read through wherever its
