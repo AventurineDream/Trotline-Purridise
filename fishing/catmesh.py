@@ -609,14 +609,81 @@ def _attire(out, look, j, s, build_, fluff, lift, head_c, head_rot, torso_rot, t
                 if kind == "vest":
                     # Open at the front: tuck the front strip under the coat.
                     widen = np.where(np.cos(u * math.tau) > 0.8, 0.8, widen)
-                if kind == "shawl":
-                    # A point that hangs down the back.
-                    widen = widen * (1.0 + 0.0 * u)
                 return np.stack([widen, np.ones_like(widen), widen * 0.96], -1)
 
             rings = max(3, int(counts["body"][0] * (v1 - v0)) + 2)
             p, n, f, a = _band(torso_c, r, torso_rot, v0, v1, rings, counts["body"][1], shape=shell)
             out.add(p, n, f, ATTIRE, a)
+            # Per-kind styling details, all ATTIRE-tagged so they take item["color"].
+            # shell_pt(v, t) is a point on the shell surface at polar fraction v and
+            # wrap angle t (t=0 fronts, t=pi backs), a hair proud for attachments.
+            def shell_pt(v, t, proud=1.0):
+                theta = v * math.pi
+                widen = 1.0 + 0.32 * max(v - 0.35, 0.0)
+                ring = math.sin(theta) * proud
+                rx = radii_torso[0] * grow * widen * ring
+                rz = radii_torso[2] * grow * widen * 0.96 * ring
+                ry = radii_torso[1] * 1.02 * math.cos(theta) * proud
+                return torso_c + torso_rot @ np.array([rx * math.sin(t), ry, rz * math.cos(t)])
+
+            if kind == "oilskin":
+                # High storm collar and a front storm flap with two toggles.
+                ang = np.linspace(0, math.tau, 9)
+                pts = [shell_pt(0.10, t, 1.05) + torso_rot @ np.array([0.0, 0.01 * s, 0.0]) for t in ang]
+                p, n, f, a = _tube(pts, [0.016 * s] * len(pts), max(3, counts["tube"] - 3), caps=False)
+                out.add(p, n, f, ATTIRE, a)
+                flap = shell_pt(0.45, 0.0, 1.03) + torso_rot @ np.array([0.0, 0.0, 0.006 * s])
+                p, n, f, a = _box(flap, np.array([0.026, 0.12, 0.005]) * s, torso_rot)
+                out.add(p, n, f, ATTIRE, a)
+                for side in (1, -1):
+                    toggle = flap + torso_rot @ np.array([side * 0.018 * s, 0.045 * s, 0.007 * s])
+                    p, n, f, a = _box(toggle, np.array([0.007, 0.007, 0.004]) * s, torso_rot)
+                    out.add(p, n, f, ATTIRE, a)
+            elif kind == "parka":
+                # A folded hood bump behind the neck, under the white ruff.
+                hood = neck + torso_rot @ np.array([0.0, 0.01 * s, -0.085 * s * build_])
+                p, n, f, a = _ellipsoid(hood, (0.085 * s * build_, 0.055 * s, 0.06 * s * build_),
+                                        torso_rot, *counts["nose"])
+                out.add(p, n, f, ATTIRE, a)
+            elif kind == "sweater":
+                # Ribbed hem and collar: proud rings at the shell's two edges.
+                for v in (0.10, 0.76):
+                    ang = np.linspace(0, math.tau, 9)
+                    pts = [shell_pt(v, t, 1.06) for t in ang]
+                    p, n, f, a = _tube(pts, [0.013 * s] * len(pts), max(3, counts["tube"] - 3), caps=False)
+                    out.add(p, n, f, ATTIRE, a)
+            elif kind == "vest":
+                # Patch pockets on the front flanks.
+                for side in (1, -1):
+                    pocket = shell_pt(0.52, side * 1.0, 1.02)
+                    p, n, f, a = _box(pocket + torso_rot @ np.array([0.0, 0.0, 0.004 * s]),
+                                      np.array([0.024, 0.032, 0.007]) * s, torso_rot)
+                    out.add(p, n, f, ATTIRE, a)
+            elif kind == "life_jacket":
+                # Shoulder straps over the shell and a chest strap across it.
+                for side in (1, -1):
+                    top = neck + torso_rot @ np.array([side * 0.045 * s, -0.01 * s, 0.01 * s])
+                    mid = shell_pt(0.18, side * 0.25, 1.03)
+                    low = shell_pt(0.48, side * 0.15, 1.03)
+                    p, n, f, a = _tube([top, mid, low], [0.013 * s, 0.013 * s, 0.011 * s],
+                                       max(3, counts["tube"] - 3))
+                    out.add(p, n, f, ATTIRE, a)
+                strap = shell_pt(0.34, 0.0, 1.04)
+                p, n, f, a = _box(strap + torso_rot @ np.array([0.0, 0.0, 0.004 * s]),
+                                  np.array([0.085 * build_, 0.011, 0.006]) * s, torso_rot)
+                out.add(p, n, f, ATTIRE, a)
+                whistle = shell_pt(0.30, 0.0, 1.06)
+                p, n, f, a = _box(whistle, np.array([0.008, 0.008, 0.008]) * s, torso_rot)
+                out.add(p, n, f, ATTIRE, a)
+            elif kind == "shawl":
+                # The drape: a tapered tail hanging down the back from the cape.
+                root = neck + torso_rot @ np.array([0.0, -0.01 * s, -0.06 * s * build_])
+                pts = [root,
+                       root + torso_rot @ np.array([0.0, -0.08 * s, -0.11 * s * build_]),
+                       root + torso_rot @ np.array([0.0, -0.16 * s, -0.07 * s * build_]),
+                       root + torso_rot @ np.array([0.0, -0.22 * s, -0.02 * s * build_])]
+                p, n, f, a = _tube(pts, [0.042 * s, 0.038 * s, 0.024 * s, 0.008 * s], max(3, counts["tube"] - 3))
+                out.add(p, n, f, ATTIRE, a)
             if kind == "parka":
                 ang = np.linspace(0, math.tau, counts["body"][1] + 1)
                 pts = [neck + torso_rot @ np.array([0.095 * s * math.sin(t), 0, 0.09 * s * math.cos(t)]) for t in ang]

@@ -114,6 +114,12 @@ def _poses_patterns_lods(out, roster):
     cells = [_labelled(_body(npc_id), f"{coat.upper()}  {roster[npc_id]['name'].upper()}")
              for coat, npc_id in _by(roster, "coat", catmesh.COAT_KINDS)]
     write_png(out / "cats-coats.png", _sheet(cells, 4))
+    cells = []
+    for kind in ("oilskin", "parka", "sweater", "vest", "life_jacket", "shawl"):
+        npc_id = next(npc for npc, row in roster.items()
+                      if any(item["kind"] == kind for item in row["appearance"]["attire"]))
+        cells.append(_labelled(_body(npc_id), f"{kind.upper()}  {roster[npc_id]['name'].upper()}"))
+    write_png(out / "cats-jackets.png", _sheet(cells, 3))
     rows = []
     for npc_id in ("grandmother_whiskers", "captain_huckleberry", "pip_pebble", "astra_9"):
         if npc_id not in roster:
