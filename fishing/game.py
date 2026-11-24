@@ -578,7 +578,10 @@ class Session:
             "elapsed_game_minutes": elapsed,
             "anchored": state.anchored,
             "engine_idle": (not state.sail_raised and abs(state.throttle) <= 0.01
-                            and abs(state.throttle_setting) <= 0.01),
+                            and abs(state.throttle_setting) <= 0.01
+                            # Issue #153: a fuelled engine idling in neutral is
+                            # not "at rest" until it is switched off.
+                            and (not state.boat.fuelled or not state.engine_on)),
             # For wait_weather and area checks (V1-31). A long advance can cross forecast changes.
             "weather": calendar.weather_at(state),
             "weather_spans": calendar.weather_spans(state, before, state.game_minutes),
@@ -969,6 +972,8 @@ class Session:
                 self._anchor()
             elif "q" in keys.pressed:
                 self._sail()
+            elif "v" in keys.pressed:
+                self._engine()
             elif "r" in keys.pressed:
                 self._map_tow()
             elif "b" in keys.pressed:
@@ -1239,6 +1244,8 @@ class Session:
             self._anchor()
         if "q" in keys.pressed:
             self._sail()
+        if "v" in keys.pressed:
+            self._engine()
         if "r" in keys.pressed:
             self._tow()
         if "t" in keys.pressed:
@@ -1358,6 +1365,12 @@ class Session:
         error = self.state.toggle_sail()
         if error:
             self.state.toast(error)
+
+    def _engine(self):
+        error = self.state.toggle_engine()
+        if error:
+            self.state.toast(error)
+
 
     def _bot(self):
         sound = summon_bot(self.state, self.world)
@@ -2117,6 +2130,9 @@ class Session:
             elif choice in ("Raise the sail", "Lower the sail"):
                 self.ui.mode = "play"
                 self._sail()
+            elif choice in ("Turn the engine off", "Turn the engine on"):
+                self.ui.mode = "play"
+                self._engine()
             elif choice == "Call a tow":
                 # A tow moves the world, so it runs from play; a refusal stays in the menu.
                 self.ui.mode = "play"
@@ -2677,7 +2693,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                          rain=float(weather_visuals(minutes, session.state)["rain"]),
                          sailing=session.state.sail_raised,
                          # A starlight barge glides without either sound.
-                         motorized=electric or (boat.fuelled and session.state.boat_id!="rowboat"),
+                         motorized=electric or (boat.fuelled and session.state.boat_id!="rowboat"
+                                 and session.state.engine_on),
                          electric=electric,
                          rowing=(boat.power in ("paddle", "oars") and not electric
                                  and abs(session.state.throttle)>0.01),

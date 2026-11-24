@@ -81,6 +81,8 @@ SAVE_VERSION = 2
 REEDS_CRAWL_SPEED = 0.6  # m/s
 # Issue #155: Bot gameplay toasts hold this much longer than other notices.
 BOT_TOAST_BONUS = 3.0
+# Issue #153: ignited idle burn, as a fraction of full-throttle fuel_burn.
+IDLE_FUEL_FRACTION = 0.04
 # Flathead snow-mist chop slows every hull except an ice_hull (02 §9).
 SNOW_MIST_CHOP = 0.8
 # The reed dugout may set lines in reeds without the Reed Anchor (03 §6).
@@ -91,7 +93,7 @@ _SAVE_FIELDS = frozenset({
     "rowboat_trolling_motor", "rowboat_battery_kwh",
     "rowboat_charge_kwh_this_visit", "seed", "game_minutes", "money",
     "earned", "spent", "bait", "held", "lines", "well", "x", "z",
-    "yaw", "anchored", "motor", "well_tier", "box_tier", "finder",
+    "yaw", "anchored", "engine_on", "motor", "well_tier", "box_tier", "finder",
     "light", "owned", "look", "journal", "narrative_v1", "tutorial",
     "traveled", "time_scale", "muted", "preferred_bait", "hooked_total",
     "stamp", "bot", "v2",
@@ -607,6 +609,9 @@ class State:
     rowboat_battery_kwh: float = 0.0
     rowboat_charge_kwh_this_visit: float = 0.0
     sail_raised: bool = False
+    # Manual ignition (issue #153): fuelled boats make no thrust and burn no
+    # idle fuel while off. Persisted; defaults on so old saves keep working.
+    engine_on: bool = True
     game_minutes: float = 0.0
     minute_acc: float = 0.0
     anim: float = 0.0
@@ -802,6 +807,19 @@ class State:
             self.anchored = False
         self.toast("Sail raised. A/D steers; Q lowers it." if self.sail_raised else "Sail lowered.")
         return None
+
+    def toggle_engine(self) -> str | None:
+        """Start or stop the engine. Unfuelled hulls have nothing to ignite.
+
+        Returns an error message, or None after toasting the new state.
+        Throttle setting is left alone so the lever resumes on restart.
+        """
+        if not self.boat.fuelled:
+            return "This boat has no engine."
+        self.engine_on = not self.engine_on
+        self.toast("Engine on. V stops it." if self.engine_on else "Engine off.")
+        return None
+
 
     def sail_drive(self):
         if not self.sail_raised or self.anchored:
@@ -1257,6 +1275,10 @@ class State:
             self.toast("Anchor up.")
         target = 0.0 if self.anchored else self.throttle_setting
         self.throttle += (target - self.throttle) * min(1.0, dt * 2.4)
+        # Issue #153: an unignited engine makes no thrust. The lever
+        # (throttle_setting) is preserved so it resumes on restart.
+        if self.boat.fuelled and not self.engine_on:
+            self.throttle = 0.0
         self.steer += (steer_in - self.steer) * min(1.0, dt * 6.0)
         if self.anchored:
             # Issue #151: dropping at speed gets a short hard decel (the jerk),
@@ -1308,6 +1330,18 @@ class State:
             self.speed += (target_speed - self.speed) * min(1.0, dt * rate)
             if world.zone_at(self.x, self.z) == "reeds":
                 self.speed = max(-REEDS_CRAWL_SPEED, min(REEDS_CRAWL_SPEED, self.speed))
+        # Issue #153: an ignited engine idling in neutral burns a small,
+        # deterministic share of the full-throttle rate. Docked hulls don't
+        # idle-burn (the shop is not an engine room).
+        if (self.boat.fuelled and self.engine_on and abs(self.throttle) <= 0.01
+                and self.slip_status(world) != "docked"):
+            needed = (self.boat.fuel_burn * IDLE_FUEL_FRACTION
+                      * comfort.fuel_factor(self) * dt / 60.0)
+            available = min(self.fuel, needed)
+            was_fueled = self.fuel > 0
+            self.fuel -= available
+            if was_fueled and self.fuel == 0:
+                self.toast("Tank empty. Refuel at the landing; R calls the tow boat.")
         auth = 0.40 + 0.60 * (1.0 - min(1.0, abs(self.speed) / max(0.5, self.max_speed())))
         if abs(self.speed) < 0.2 and abs(self.throttle) < 0.1:
             auth *= 0.2
@@ -2194,7 +2228,7 @@ class State:
             "lines": [ln.to_json() for ln in self.lines],
             "well": [c.to_json() for c in self.well],
             "x": round(self.x, 2), "z": round(self.z, 2), "yaw": round(self.yaw, 4),
-            "anchored": self.anchored,
+            "anchored": self.anchored, "engine_on": self.engine_on,
             "motor": self.motor, "well_tier": self.well_tier, "box_tier": self.box_tier,
             "finder": self.finder, "light": self.light,
             "owned": self.owned, "look": self.look_paint,
@@ -2296,6 +2330,7 @@ class State:
             catch.disposition = "kept"
         st.x, st.z, st.yaw = float(raw["x"]), float(raw["z"]), float(raw["yaw"])
         st.anchored = bool(raw.get("anchored", False))
+        st.engine_on = bool(raw.get("engine_on", True))
         st.motor = int(raw["motor"])
         st.well_tier = int(raw["well_tier"])
         st.box_tier = int(raw["box_tier"])

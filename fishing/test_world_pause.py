@@ -28,6 +28,7 @@ class WorldPauseChecks(unittest.TestCase):
         self.state.anchored = True
         self.state.throttle = 0.0
         self.state.throttle_setting = 0.0
+        self.state.engine_on = False  # #153: a fuelled engine at rest is switched off
         self.state.lines = [SetLine(
             "std", "worm", 0, 10, 0, 30, "open", [Hook(True) for _ in range(12)]
         )]

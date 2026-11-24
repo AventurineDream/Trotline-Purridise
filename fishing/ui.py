@@ -98,7 +98,7 @@ KEY_ACTION_LABELS = {
     "pause": "Pause / cancel", "mute": "Mute audio", "hail": "Hail / continue",
     "chart": "Chart", "journal": "Journal", "livewell": "Livewell",
     "bot": "Send / recall Bot", "time_scale": "Time scale",
-    "sail": "Raise / lower sail", "tow": "Call a tow",
+    "sail": "Raise / lower sail", "tow": "Call a tow", "engine": "Engine on/off",
     "new_game": "New morning", "catnap": "Catnap",
     "bot_tool": "Bot tool", "galley": "Galley",
     "menu_up": "Menu up", "menu_down": "Menu down",
@@ -740,6 +740,9 @@ def pause_options(state) -> list[str]:
     boat = getattr(state, "boat", None)
     if getattr(boat, "sail_speed", 0):
         items.append("Lower the sail" if getattr(state, "sail_raised", False) else "Raise the sail")
+    # Issue #153: pad players reach ignition here (V has no pad button).
+    if getattr(boat, "fuelled", False):
+        items.append("Turn the engine off" if getattr(state, "engine_on", True) else "Turn the engine on")
     scale = getattr(state, "time_scale", 1)
     items += ["Call a tow", f"Time {scale}x", "Settings", "Help", "Main menu", "Quit"]
     return items
@@ -1635,7 +1638,8 @@ class UI:
             power = {"paddle":"PADDLE","oars":"OARS","starlight":"GLIDE"}[state.boat.power]
             throttle = f"{power}  IDLE" if gear=="IDLE" else f"{power}  {gear} {percent}%"
         else:
-            throttle = "THROTTLE  IDLE" if gear=="IDLE" else f"THROTTLE  {gear} {percent}%"
+            power = "ENGINE OFF" if not state.engine_on else "THROTTLE"
+        throttle = f"{power}  IDLE" if gear=="IDLE" else f"{power}  {gear} {percent}%"
         self._text(frame,throttle,rx+16,m+int(91*unit),small,
                    DIM if gear=="IDLE" else GOLD,False,"sans")
         if state.boat_id=="rowboat":
@@ -3206,6 +3210,7 @@ class UI:
 _HELP = (
     ("ON THE WATER", (
         "W/S row, or run the motor when one is installed",
+        "V starts or stops the engine on fuel boats",
         "Power stays set       Shift returns it to idle",
         "A D or arrows steer   arrows look up and down",
         "Space drops or raises the anchor",
@@ -3492,6 +3497,8 @@ _HELP = (
 _GAMEPAD_HELP_CONTROLS = {
     "W/S row, or run the motor when one is installed":
         "Left stick / LT / RT row or run the motor",
+    "V starts or stops the engine on fuel boats":
+        "Pause menu starts or stops the engine on fuel boats",
     "Power stays set       Shift returns it to idle":
         "Power stays set       Shift idles (keyboard)",
     "A D or arrows steer   arrows look up and down":
@@ -3635,6 +3642,7 @@ _KEYBOARD_ROWS = (
         (("Check/land", ("check_or_land",)), ("Raise sail", ("sail",))),
         (("Call a tow", ("tow",)), ("Bot out/back", ("bot",))),
         (("Bot's chime", ("bot_tool",)), ("Hail, talk", ("hail",))),
+        (("Engine", ("engine",)), None),
     )),
     ("KEYBOARD: THE REST", (
         (("Time scale", ("time_scale",)), ("Catnap", ("catnap",))),

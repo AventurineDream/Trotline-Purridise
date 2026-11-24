@@ -225,6 +225,7 @@ class OfflineSoakChecks(unittest.TestCase):
         state = self.soaker("old_salt", self.lines(1))
         state.time_scale = 1  # the frame after Continue adds no whole game minute
         state.anchored, state.throttle, state.throttle_setting = True, 0.0, 0.0
+        state.engine_on = False  # #153: a fuelled engine at rest is switched off
         state.x, state.z = self.world.anchors["briar:inlet"].position
         timed = state.narrative.quests[QUEST_IDS[6]]
         timed.status = "active"
