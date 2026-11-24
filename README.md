@@ -136,7 +136,8 @@ Graphics are designed for a **3 GB RAM budget**. The 3D scene target is capped a
 
 The shared cat rig embeds long, plume, bobbed and Manx-like tail roots inside
 the posed rump at both detail levels, keeping their joins hidden through idle
-motion, turns and greetings without adding a collar or extra geometry.
+motion, turns and greetings without adding a collar or extra geometry. Shortened
+tails keep an even root-to-tip transition so greeting lift cannot pinch their tips.
 
 ## Run
 

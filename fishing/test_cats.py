@@ -289,6 +289,44 @@ class Rig(unittest.TestCase):
                             self._assert_tail_root_inside_torso(pos, mesh.part, mesh.along, mesh.triangles,
                                                                 appearance["size"])
 
+    def test_short_tail_rings_stay_ordered_through_greeting_lift(self):
+        """Greeting lift must not push adjacent bob/Manx ring surfaces through each other."""
+        look = deepcopy(next(iter(ROSTER.values()))["appearance"])
+        look.pop("twin", None)
+        look.update(size=1.0, legs=1.0, attire=[], prop="none")
+        frames = ((0.0, 0.0), (2.9, 0.5), (7.3, 1.0), (11.2, 1.0))
+        for build, coat in ((0.7, "hairless"), (1.0, "short"), (1.4, "long"), (0.7, "rex")):
+            for pose in POSES:
+                for tail in ("none", "bob"):
+                    appearance = dict(look, build=build, coat=coat, pose=pose, tail=tail)
+                    actor = actors.Actor("tail-fold", "Tail", 0.0, 0.0, 0.0, 0.9, None, {}, [],
+                                         seed=0.3, appearance=appearance)
+                    for lod in (LOD0, LOD1):
+                        mesh = actor.mesh(lod)
+                        counts = catmesh._counts(lod)
+                        ring_vertices = counts["tail"] * counts["tail_sides"]
+                        for t, blend in frames:
+                            params = actors.pose_state(actor, -6.0, 3.0, t, False, gesture=blend)
+                            for sway in (True, False):
+                                motion = params if sway else dict(params, tail=0.0, tail_curl=0.0)
+                                with self.subTest(build=build, coat=coat, pose=pose, tail=tail, lod=lod,
+                                                  t=t, blend=blend, sway=sway):
+                                    pos = actors.animate(mesh, motion)[0][mesh.part == catmesh.TAIL]
+                                    # Exclude the buried ring and both cap vertices. Centre order alone
+                                    # misses folds where an edge crosses the neighboring ring's plane.
+                                    rings = pos[:ring_vertices].reshape(-1, counts["tail_sides"], 3)[1:]
+                                    centres = rings.mean(axis=1)
+                                    tangents = np.cross(rings[:, 1] - rings[:, 0], rings[:, 2] - rings[:, 0])
+                                    tangents /= np.linalg.norm(tangents, axis=1, keepdims=True)
+                                    forward = np.sum((rings[1:] - centres[:-1, None, :])
+                                                     * tangents[:-1, None, :], axis=2)
+                                    backward = np.sum((centres[1:, None, :] - rings[:-1])
+                                                      * tangents[1:, None, :], axis=2)
+                                    self.assertGreater(float(forward.min()), 1e-6,
+                                                       "a tail ring crosses back through its predecessor")
+                                    self.assertGreater(float(backward.min()), 1e-6,
+                                                       "a tail ring crosses forward through its successor")
+
     def test_the_lod0_mesh_cache_stays_bounded(self):
         catmesh.clear_caches()
         for npc_id in list(ROSTER)[:40]:

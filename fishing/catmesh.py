@@ -553,9 +553,14 @@ def build(look: dict, pose: str, lod: int = LOD0) -> tuple:
     root = pts[0] - centre
     root_distance = np.linalg.norm((root @ torso_rot) / torso_r)
     # The inner 30% leaves room for the whole ring and cap even on thin, low-LOD
-    # torsos. Fade the inset over the *shortened* curve so a Manx tuft is not buried.
+    # torsos. Fade over the shortened curve so a Manx tuft is not buried.
     inset = centre + root * (0.30 / root_distance) - pts[0]
-    pts += inset * (1 - u[:, None]) ** 3
+    # A cubic fade bunches a stub's outer rings where greeting lift bends it up.
+    # Shorter tails need a more even inset gradient to keep those ring planes apart;
+    # full-length tails retain their authored cubic transition and tip tangent.
+    remaining = 1 - u
+    fade = (1 - length) * remaining + length * remaining ** 3
+    pts += inset * fade[:, None]
     thick = (0.034 if tail_kind == "plume" else 0.022) * s * fluff
     radii = thick * (1.0 - 0.55 * u ** 1.5)
     if tail_kind == "plume":
