@@ -19,6 +19,20 @@ HOST_TURN_IN_LINE = "Finished something for a neighbor? I'll see that they hear 
 HOST_HANDED_IN_LINE = "Lovely work. They left this with me for you."
 LETTER_LINE = "Letter for you, {Skipper}! From {name}."
 
+BOT_LINE_PREFIX = "Bot:"
+
+
+def speaking_line(text: str, npc_id: str) -> tuple[str, str]:
+    """Who speaks this line, and the text with any speaker prefix removed.
+
+    A line starting ``Bot:`` is Bot talking inside another cat's scene
+    (issue #154). The conversation keeps its giver; only the displayed card
+    changes. Every other line speaks as the conversation's NPC.
+    """
+    if text.startswith(BOT_LINE_PREFIX):
+        return "bot", text[len(BOT_LINE_PREFIX):].lstrip()
+    return npc_id, text
+
 
 def nearby_npc(state):
     if abs(state.speed) >= HAIL_SPEED_MPS:
