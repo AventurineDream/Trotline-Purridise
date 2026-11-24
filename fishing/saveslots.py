@@ -155,6 +155,11 @@ def rename_slot(save_path: str | Path, old_slug: str, new_display: str,
         if source.parent != target.parent:
             source.parent.rename(target.parent)
     else:
+        legacy = Path(legacy_path) if legacy_path is not None else None
+        # The marker lands before anything moves: if it cannot be written the
+        # rename fails cleanly with every file still at its original path.
+        if legacy is not None and (legacy.exists() or legacy.is_symlink()):
+            (default.parent / LEGACY_RETIRED_NAME).touch(exist_ok=True)
         target.parent.mkdir(parents=True)
         backup = default.parent / "backup"
         # Move backups first: if moving the save fails, restore their old location
@@ -169,8 +174,8 @@ def rename_slot(save_path: str | Path, old_slug: str, new_display: str,
             if moved_backup:
                 slot_backup.rename(backup)
             raise
-        if legacy_path is not None:
-            _retire_legacy(legacy_path, default, slot_backup)
+        if legacy is not None:
+            _archive_legacy(legacy, slot_backup)
     return slug, target
 
 
@@ -185,20 +190,16 @@ def legacy_retired(save_path: str | Path) -> bool:
     return (Path(save_path).parent / LEGACY_RETIRED_NAME).is_file()
 
 
-def _retire_legacy(legacy_path: str | Path, save_path: Path, slot_backup: Path) -> None:
-    """Retire the install-era v1 so startup cannot re-import it as a new main save.
+def _archive_legacy(legacy: Path, slot_backup: Path) -> None:
+    """Copy the install-era v1 into the slot's backups; never deletes or moves it.
 
-    Writes the ``legacy-retired`` marker beside ``save_path`` unconditionally —
-    that is the guarantee, and it only needs the per-user directory to be
-    writable. Then best-effort copies the legacy bytes into the slot's backup
-    folder under ``briar.legacy.*.json``: deliberately NOT ``briar.v1.*``, which
-    ``backup_candidates`` would rank as the newest recovery source. The original
-    file is left in place; archiving never deletes user data.
+    The copy is named ``briar.legacy.*.json`` — deliberately NOT ``briar.v1.*``,
+    which ``backup_candidates`` would rank as the newest recovery source. The
+    ``legacy-retired`` marker (written by the caller before the move) is what
+    actually suppresses re-import, so this archive is best-effort only.
     """
-    legacy = Path(legacy_path)
     if not legacy.exists() and not legacy.is_symlink():
         return
-    (save_path.parent / LEGACY_RETIRED_NAME).touch(exist_ok=True)
     try:
         slot_backup.mkdir(parents=True, exist_ok=True)
         instant = datetime.now(timezone.utc)
