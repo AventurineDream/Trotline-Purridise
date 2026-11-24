@@ -81,12 +81,17 @@ In play, **Pause → Your Skipper** reopens the creator. Done saves and returns 
 
 ### Where your save lives
 
-The game saves to `save.json` in your per-user app-data folder, not the install
-folder. (Only if that folder cannot be found does it use `saves/save.json` beside
-the game.) It autosaves about every 45 seconds and when you quit. An older
-`saves/briar.json` is migrated, and a backup of the original is kept in a
-`backup` folder beside the new save. Start the game with `--save PATH` to use a
-different file.
+The original main save is `save.json` in your per-user app-data folder, not the
+install folder. (Only if that folder cannot be found does it use
+`saves/save.json` beside the game.) It autosaves about every 45 seconds and when
+you quit. An older `saves/briar.json` is migrated, and a backup of the original is
+kept in a `backup` folder beside the main save. Start the game with `--save PATH`
+to use a different file.
+
+Use **Saves** on the title screen to continue or rename a save, or start a new one.
+New mornings use `slots/<name>/save.json`, with a display name in `"slot_name"`
+and a separate `backup/` folder per slot; the original main save stays selectable.
+With `--save PATH`, named slots live in `PATH.parent/slots/`.
 
 ## The current build
 

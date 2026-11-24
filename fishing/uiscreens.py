@@ -7,11 +7,13 @@ and gamepad and pointer (uishots.py), including shared row focus and action-butt
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from . import comfort, skipperlook
 from .data import BAIT_RECIPES, DISHES, PANTRY
 from .sim import Catch, Hook, SetLine, State
+from .saveslots import Slot
 from .ui import HELP_SPREADS, SHOP_TABS, SPECIES, UIState, pause_options
 from .world import World
 
@@ -88,6 +90,12 @@ def screens(ui, world, dyslexia_font, text_size=LARGEST_TEXT):
     add("title", base, UIState(mode="title", has_save=True))
     add("title new game", base, UIState(mode="title", has_save=False))
     add("title confirmation", base, UIState(mode="title", has_save=True, confirm_new=True))
+    slots = [Slot("", "Main Skipper", Path("save.json"), True)]
+    slots += [Slot(f"skipper-{i}", f"Skipper {i}", Path("slots") / f"skipper-{i}" / "save.json", False)
+              for i in range(1, 20)]
+    add("saves", base, UIState(mode="saves", slots=slots, slot_i=10))
+    add("saves rename", base, UIState(mode="saves", slots=slots, slot_renaming=True,
+                                     slot_name_buf="Captain Marmalade", slot_name_fresh=True))
     add("play", base, UIState(mode="play"))
     add("map", base, UIState(mode="map"))
     add("dialogue", base, UIState(

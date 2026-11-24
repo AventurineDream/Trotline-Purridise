@@ -14,11 +14,16 @@ from .bookview import BOOK_TABS
 from .game import Keys, Session
 from .platform import Input
 from .sim import Catch, HeldLine, State
-from .ui import HELP_SPREADS, check_rows, pause_options, shop_rows
+from .ui import HELP_SPREADS, check_rows, pause_options, shop_rows, title_options
 from .weather import celestial, lighting_at, weather_visuals
 
 
 def interface_checks(world):
+    """Check native menu routing in world, using temporary saves and no window.
+
+    world supplies the authored lake. Returns None; assertion failures identify
+    broken menu or clock contracts, and fixture saves are removed on return.
+    """
     with tempfile.TemporaryDirectory(prefix="briar-menus-") as temp:
         state = State.new(world, seed=51)
         state.x = state.z = state.yaw = 0.0
@@ -32,7 +37,8 @@ def interface_checks(world):
 
         # Every selectable menu accepts W/S and wraps just like the arrows.
         for mode, field, count in (
-            ("title", "title_i", 2), ("pause", "pause_i", len(pause_options(state))),
+            ("title", "title_i", len(title_options(True))),  # Saves is now a title choice too.
+            ("pause", "pause_i", len(pause_options(state))),
             ("shop", "shop_i", len(shop_rows(state, 1))), ("setbait", "set_bait", len(BAITS)),
             ("check", "check_i", len(check_rows(state, 0))),
             ("journal", "journal_i", len(BOOK_SPECIES_IDS)), ("well", "well_i", 2),

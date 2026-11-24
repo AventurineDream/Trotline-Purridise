@@ -56,12 +56,14 @@ class Prologue(unittest.TestCase):
         self.state, self.world = self.session.state, self.session.world
 
     def reload(self):
-        """Quit (which saves) and continue the save in a new session."""
+        """Quit (which saves the active slot) and continue it in a new session."""
         self.session.tick(Keys(quit=True), 0.05)
-        world, state, has_save = load_game_save(self.path, State, World)
+        # A new morning owns a named slot, not the default save path.
+        slot_path = self.session.save_path
+        world, state, has_save = load_game_save(slot_path, State, World)
         self.assertTrue(has_save)
         with patch("fishing.game.load_content", return_value=self.content):
-            self.session = Session(world, self.path, state, True)
+            self.session = Session(world, slot_path, state, True)
         self.session.ui.mode = "play"
         self.state, self.world = state, world
 

@@ -10,8 +10,9 @@ from dataclasses import dataclass, field
 def context(state, ui):
     """Return the content/layout identity whose displayed targets may still be used.
 
-    Hover-owned row indices do not participate: hovering must not retire the
-    frame it came from. Tabs, pages, content changes and submodes do invalidate it.
+    Most hover-owned row indices do not participate, keeping their frames live.
+    Save selection does: its action row and rename draft belong to that slot.
+    Tabs, pages, content changes and submodes also invalidate displayed targets.
     Only read each screen's actual model contract, so lightweight settings/title
     renderers need not manufacture unrelated gameplay state.
     """
@@ -53,7 +54,8 @@ def context(state, ui):
             getattr(chat, "node_id", None), getattr(chat, "npc_id", None),
             repr(settings), content, ui.check_line, ui.needs_kind, ui.skipper_origin,
             ui.kitchen_from, ui.cook_from, ui.help_from, ui.stage_skip, ui.whale_return,
-            ui.haul_phase, ui.haul_index)
+            ui.haul_phase, ui.haul_index, tuple(ui.slots), ui.slot_i, ui.slot_action_i,
+            ui.slot_renaming, ui.slot_name_buf, ui.slot_name_fresh)
 
 
 @dataclass(frozen=True)

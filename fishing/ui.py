@@ -484,6 +484,12 @@ class UIState:
     help_from: str = "play"
     title_i: int = 0
     confirm_new: bool = False
+    slots: list = field(default_factory=list)
+    slot_i: int = 0
+    slot_action_i: int = 0
+    slot_renaming: bool = False
+    slot_name_buf: str = ""
+    slot_name_fresh: bool = False
     new_mode_i: int = 0
     comfort_i: int = 0
     needs_kind: str = ""
@@ -740,9 +746,13 @@ def pause_options(state) -> list[str]:
 
 
 def title_options(has_save: bool) -> list[str]:
+    """Return title choices for has_save, always including the named-save browser.
+
+    The returned labels define keyboard and pointer order; no state is changed.
+    """
     if has_save:
-        return ["Continue", "New morning"]
-    return ["Start the morning"]
+        return ["Continue", "New morning", "Saves"]
+    return ["Start the morning", "Saves"]
 
 
 class UI:
@@ -804,7 +814,7 @@ class UI:
         self._hud_rects = []  # the HUD's top panels this frame; toasts keep clear of them
         mode = ui.mode
         h, w = frame.shape[:2]
-        scroll = {"title": "title", "pause": "pause", "settings": "settings",
+        scroll = {"title": "title", "saves": "saves", "pause": "pause", "settings": "settings",
                   "skipper": "skipper", "dialogue": "dialogue", "shop": "shop",
                   "kitchen": "kitchen", "setbait": "bait", "check": "check",
                   "well": "well", "help": "help", "journal": "book"}.get(mode, "")
@@ -812,13 +822,25 @@ class UI:
             scroll = "keys"
         elif mode == "cook_confirm" and ui.cook_kind in {"dish", "cookout"}:
             scroll = "cook_fish"
+        save_window = (ui.pointer.windows.get("saves")
+                       if mode == "saves" and ui.pointer.owner == "pointer"
+                       and ui.pointer.viewport == (w, h) else None)
         ui.pointer.begin(pointer.context(state, ui), (w, h), scroll)
+        if save_window is not None:
+            # Selection changes retire action targets, not the rows under a
+            # stationary pointer. The new draw still replaces all hit geometry.
+            ui.pointer.windows["saves"] = save_window
         self._caption_floor = None
         if mode == "play":
             draw_sighting(frame, state, camera)
         if mode == "title":
             self._title(frame, state, ui)
             self._caption(frame, state, ui)
+            self._toasts(frame, state, ui.input_device)
+            self._pointer_outline(frame, state, ui)
+            return
+        if mode == "saves":
+            self._saves(frame, state, ui)
             self._toasts(frame, state, ui.input_device)
             self._pointer_outline(frame, state, ui)
             return
@@ -2231,15 +2253,24 @@ class UI:
         title_h, body_h, small_h = (self._actual_size(value)
                                     for value in (title, body, small))
         gap_scale = getattr(self, "_text_scale", 1.0)
-        x,y = int(w*0.075),int(h*(0.12 if h<480 else 0.43))
+        options = title_options(ui.has_save)
+        option_step = body_h + (10 if h < 480 else 27) * gap_scale
+        option_h = body_h + (8 if h < 480 else 24) * gap_scale
+        guide_y = h - small_h - 28 * gap_scale
+        header_h = title_h + small_h + body_h + (20 if h < 480 else 48) * gap_scale
+        menu_h = (len(options) - 1) * option_step + option_h - 4 * gap_scale
+        # Three rows at accessible text sizes need more air above the footer,
+        # including medium windows where the full-size title used to sit lower.
+        x = int(w * 0.075)
+        y = min(int(h * (0.12 if h < 480 else 0.43)),
+                max(8, int(guide_y - 12 - header_h - menu_h)))
         self._text(frame,"A   T R O T L I N E   L A K E",x,y,small,GOLD,False,"sans")
         self._text(frame,GAME_TITLE,x,y+small_h+10*gap_scale,title,INK,True,"serif")
         self._text(frame,"Set your lines. Stay a while.",x,y+title_h+small_h+20*gap_scale,body,DIM,False,"sans")
-        options = title_options(ui.has_save)
         ui.title_i %= len(options)
-        y2 = y+title_h+small_h+body_h+(20 if h<480 else 48)*gap_scale
+        y2 = y + header_h
         if ui.confirm_new:
-            msg = "New morning? The save on disk stays until you overwrite it."
+            msg = "New morning? Your existing saves will stay untouched."
             self._backed(frame, self._trim(msg, small, w - x * 2), x, y2, small, WARN)
             button_y = y2 + small_h + 12 * gap_scale
             button_h = body_h + 18 * gap_scale
@@ -2250,7 +2281,7 @@ class UI:
                                  "back", size=body)
             return
         for i, label in enumerate(options):
-            oy = y2+i*(body_h+27*gap_scale)
+            oy = y2 + i * option_step
             from .botidentity import name as bot_name
             display = label + ' · ' + bot_name(state) if label == 'Continue' else label
             button_w = min(w - x * 2, max(210, int(w * .21), self._measure(display, body, 'sans') + 90 * gap_scale))
@@ -2258,16 +2289,15 @@ class UI:
             while option_size > 9 and self._measure(display, option_size, 'sans') > button_w - 80 * gap_scale:
                 option_size -= 1
             if i==ui.title_i:
-                self._round_fill(frame,x,oy-4*gap_scale,button_w,body_h+24*gap_scale,GOLD,0.95)
+                self._round_fill(frame,x,oy-4*gap_scale,button_w,option_h,GOLD,0.95)
                 self._text(frame,display,x+15,oy+4,option_size,(22,39,39),False,"sans")
                 select = "A" if ui.input_device == "gamepad" else "ENTER"
                 self._text(frame,select,x+button_w-55*gap_scale,oy+9*gap_scale,small,(42,56,50),False,"sans")
             else:
                 self._text(frame,display,x+15,oy+4,option_size,INK,False,"sans")
             ui.pointer.add((int(x), int(oy - 4 * gap_scale), int(button_w),
-                            int(body_h + 24 * gap_scale)), "activate", "title_i", i)
+                            int(option_h)), "activate", "title_i", i)
         guide_w = self._measure("Field guide", small, "sans") + 24
-        guide_y = h - small_h - 28 * gap_scale
         self._pointer_button(frame, ui, "Field guide", (x, guide_y, guide_w, small_h + 12), "help")
         controls = self._controls(ui, "H Help · W / S Choose · Enter selects",
                                   "D-pad / stick choose · A select")
@@ -2276,6 +2306,79 @@ class UI:
         if w >= 960:
             mark = "ONE LAKE. NO HURRY."
             self._backed(frame,mark,w-x-self._measure(mark,small,"sans"),guide_y-20,small,DIM,"sans")
+
+    def _saves(self, frame, state, ui: UIState):
+        """Draw the scrollable slot browser or its rename draft in frame pixels.
+
+        ui owns the selected slot, action and draft; state is not mutated. Each
+        visible row and button publishes pointer geometry for Session to route.
+        """
+        h, w = frame.shape[:2]
+        head, body, small = (self._size(frame, key) for key in ("head", "body", "small"))
+        head_h, body_h, small_h = (self.cell(size)[1] for size in (head, body, small))
+        m = max(14, min(24, int(w * 0.025)))
+        pw, ph = min(w - 20, max(int(w * 0.74), 760)), h - 24
+        x, y = (w - pw) // 2, (h - ph) // 2
+        self._panel(frame, x, y, pw, ph, 0.96)
+        self._text(frame, "RENAME SAVE" if ui.slot_renaming else "SAVES",
+                   x + m, y + m, head, INK, False, "sans")
+        content_w = pw - 2 * m
+        ui.slot_i = _clamp(ui.slot_i, len(ui.slots))
+        ui.slot_action_i %= 4
+        list_top = y + m + head_h + 14
+        button_h = max(26, small_h + 12)
+        footer_y = y + ph - m - small_h
+        button_y = footer_y - button_h - 12
+        note_y = button_y - small_h - 10
+        if ui.slot_renaming:
+            name = ui.slot_name_buf + "_"
+            self._round_fill(frame, x + m, list_top, content_w, body_h + 16,
+                             (46, 66, 62), 1)
+            self._text(frame, self._trim(name, body, content_w - 20), x + m + 10,
+                       list_top + 6, body, GOLD, False)
+            hint = self._controls(ui, "Type a name · Enter saves · Esc cancels",
+                                  "Type on keyboard · A saves · B cancels")
+            gap = 12
+            button_w = (content_w - gap) // 2
+            self._pointer_button(frame, ui, "Save name",
+                                 (x + m, button_y, button_w, button_h),
+                                 "slot_rename_done", selected=True)
+            self._pointer_button(frame, ui, "Cancel",
+                                 (x + m + button_w + gap, button_y, button_w, button_h))
+        else:
+            row_h = body_h + 12
+            capacity = max(1, (note_y - 12 - list_top) // row_h)
+            start, end = ui.pointer.window("saves", ui.slot_i, len(ui.slots), capacity)
+            for index in range(start, end):
+                slot = ui.slots[index]
+                ry = list_top + (index - start) * row_h
+                selected = index == ui.slot_i
+                if selected:
+                    self._round_fill(frame, x + m, ry, content_w, row_h - 2,
+                                     (46, 42, 28), 1)
+                label = ("> " if selected else "  ") + slot.name
+                if slot.is_default:
+                    label += " · main save"
+                self._text(frame, self._trim(label, body, content_w - 16), x + m + 8,
+                           ry + 3, body, GOLD if selected else INK, False)
+                ui.pointer.add((x + m, ry, content_w, row_h - 2), "activate", "slot_i", index)
+            if not ui.slots:
+                self._text(frame, "No saves yet.", x + m, list_top, body, DIM, False)
+            hint = self._controls(ui, "W/S saves · A/D actions · Enter selects · Esc back",
+                                  "D-pad up/down saves · Left/right actions · A select · B back")
+            gap = 8
+            button_w = (content_w - 3 * gap) // 4
+            for index, label in enumerate(("Continue", "Rename", "New save", "Back")):
+                self._pointer_button(frame, ui, label,
+                                     (x + m + index * (button_w + gap), button_y, button_w, button_h),
+                                     "activate", "slot_action_i", index,
+                                     selected=index == ui.slot_action_i)
+        note = ui.note or ("The first typed key replaces the name." if ui.slot_renaming
+                           else "New mornings get their own save.")
+        self._text(frame, self._trim(note, small, content_w, "sans"), x + m, note_y,
+                   small, WARN if ui.note else DIM, False, "sans")
+        self._text(frame, self._trim(hint, small, content_w, "sans"), x + m, footer_y,
+                   small, DIM, False, "sans")
 
     def _comfort_lines(self, value, size, width):
         cache = getattr(self, "_comfort_line_cache", None)

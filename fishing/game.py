@@ -34,7 +34,7 @@ from .guardian import maybe_start_sighting, pause_sighting_clock
 from .haul import haul_cadence
 from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_rumor
 from .book import take_dream_clue
-from . import comfort, skipperlook
+from . import comfort, saveslots, skipperlook
 from . import pointer
 from . import encounter
 from . import soundscape
@@ -133,7 +133,7 @@ class Session:
 
         Args:
             world: Authored lake world bound to ``state``.
-            save_path: Target used by ordinary sessions when saving.
+            save_path: Original main-save file; its parent also roots named slots.
             state: Loaded or newly-created simulation state.
             has_save: Whether a persistent save was loaded.
             dev: Enable the overlay and disable all save writes for this session.
@@ -142,7 +142,10 @@ class Session:
             None.
         """
         self.world = world
-        self.save_path = Path(save_path)
+        self.default_save_path = Path(save_path)
+        self.slots_dir = saveslots.slot_root(self.default_save_path)
+        self.save_path = self.default_save_path
+        self.dev = bool(dev)
         self.state = state
         self.dev_mode = None
         if dev:
@@ -521,15 +524,16 @@ class Session:
             self._npc_key = key
 
     def save(self) -> None:
-        """Save ordinary sessions; Devmode preserves all state in memory only.
+        """Persist the active game, not Devmode or an unsaved browser preview.
 
         Returns:
             None.
 
         Side effects:
-            Writes the state to ``save_path`` only when Devmode is disabled.
+            Writes to ``save_path`` unless Devmode is enabled or the save browser
+            is showing a bootstrap state with no existing active save.
         """
-        if self.dev_mode is not None:
+        if self.dev_mode is not None or (self.ui.mode == "saves" and not self.ui.has_save):
             return
         if self._title_catchup_pending and self.ui.has_save:
             self.state.catch_up(now=self._continue_catchup_at)
@@ -676,6 +680,8 @@ class Session:
                 baits = list(ui.set_section_baits)
                 baits[ui.set_section] = ui.set_bait
                 ui.set_section_baits = tuple(baits)
+            if target.field == "slot_i":
+                ui.slot_action_i = 0
 
     def _route_pointer(self, keys):
         """Consume input against displayed geometry, then dispatch at most once.
@@ -708,7 +714,7 @@ class Session:
         hovered = registry.hovered
         if (valid and registry.owner == "pointer" and hovered is not None
                 and not hovered.field and keys.pressed & {"return", "space"}
-                and not ui.skipper_typing and not ui.capturing_key):
+                and not ui.skipper_typing and not ui.slot_renaming and not ui.capturing_key):
             return self._pointer_action(hovered.action, hovered.value)
         if keys.pressed or (keys.held & NAVIGATION_KEYS and not moved and click is None):
             registry.owner = "keyboard"
@@ -718,7 +724,7 @@ class Session:
             registry.hovered = None
             return click is not None or bool(wheel)
         if wheel:
-            if ui.skipper_typing or ui.capturing_key:
+            if ui.skipper_typing or ui.slot_renaming or ui.capturing_key:
                 # Swallow the wheel but still run native handlers: they read
                 # physical_keyboard_pressed for typed letters and Backspace.
                 return False
@@ -734,7 +740,7 @@ class Session:
         target = registry.hovered
         if target is None:
             return click is not None
-        if not ui.skipper_typing or click is not None:
+        if not (ui.skipper_typing or ui.slot_renaming) or click is not None:
             self._pointer_focus(target)
         if click is None:
             return False
@@ -753,6 +759,7 @@ class Session:
             return
         counts = {
             "title": ("title_i", len(title_options(ui.has_save))),
+            "saves": ("slot_i", len(ui.slots)),
             "pause": ("pause_i", len(pause_options(self.state))),
             "settings": ("settings_i", SETTINGS_ROW_COUNT),
             "keys": ("key_binding_i", len(ACTION_SYMBOLS)
@@ -798,6 +805,8 @@ class Session:
             self._pointer_back()
         elif action == "help":
             self._open_help(mode)
+        elif action == "slot_rename_done" and mode == "saves":
+            self._finish_slot_rename()
         elif action == "creator_done":
             self._close_skipper(confirm=True)
         elif action in {"previous", "next"}:
@@ -859,6 +868,12 @@ class Session:
         ui, mode = self.ui, self.ui.mode
         if mode == "title":
             ui.confirm_new = False
+        elif mode == "saves":
+            if ui.slot_renaming:
+                ui.slot_renaming = ui.slot_name_fresh = False
+                ui.note = ""
+            else:
+                ui.mode = "title"
         elif mode == "help":
             ui.mode = ui.help_from
         elif mode == "skipper":
@@ -895,9 +910,9 @@ class Session:
         self._pointer_activate = False
         if self._route_pointer(keys):
             return
-        # Typing a Skipper name uses Shift for capitals and M as a letter, so neither idles
-        # the throttle nor mutes until the name is set.
-        typing = mode == "skipper" and self.ui.skipper_typing
+        # Names use M and Shift as text, not mute or throttle actions.
+        typing = ((mode == "skipper" and self.ui.skipper_typing)
+                  or (mode == "saves" and self.ui.slot_renaming))
         if mode!="title" and not typing and keys.held & {"shift","rshift"}:
             self.state.throttle_setting = 0.0
             self.state.throttle = 0.0
@@ -905,6 +920,8 @@ class Session:
             self.state.muted = not self.state.muted
         if mode == "title":
             self._title_keys(keys, dt)
+        elif mode == "saves":
+            self._saves_keys(keys, dt)
         elif mode in {"new_mode", "needs"}:
             self._comfort_keys(keys, dt)
         elif mode == "catnap":
@@ -997,9 +1014,145 @@ class Session:
                     self.state.toast("Dress your Skipper: Esc, then Your Skipper.")
             elif choice == "New morning":
                 self.ui.confirm_new = True
+            elif choice == "Saves":
+                self._open_saves()
             else:
                 self.ui.new_mode_i = 0
                 self.ui.mode = "new_mode"
+
+    def _open_saves(self):
+        """Refresh the slot browser without changing the active save or writing files."""
+        ui = self.ui
+        try:
+            ui.slots = saveslots.list_slots(self.default_save_path)
+        except OSError as error:
+            self.state.toast(f"Saves could not be listed: {error}")
+            return
+        ui.slot_i = next((i for i, slot in enumerate(ui.slots)
+                          if slot.path == self.save_path), 0)
+        ui.slot_action_i = 0
+        ui.slot_renaming = ui.slot_name_fresh = False
+        ui.slot_name_buf = ui.note = ""
+        ui.mode = "saves"
+
+    def _saves_keys(self, keys, dt):
+        """Browse saves with menu directions; physical name keys never trigger actions."""
+        ui = self.ui
+        if ui.slot_renaming:
+            physical = set(getattr(keys, "physical_keyboard_pressed", keys.pressed))
+            gamepad = set(getattr(keys, "gamepad_pressed", ()))
+            if "esc" in physical or "esc" in gamepad:
+                ui.slot_renaming = ui.slot_name_fresh = False
+                ui.note = ""
+                return
+            ordered = [key for key in getattr(keys, "physical_keyboard_press_order", ())
+                       if key in physical]
+            typed = [key for key in ordered + sorted(physical - set(ordered))
+                     if key == "backspace" or key in skipperlook.NAME_KEYS]
+            if typed:
+                current = "" if ui.slot_name_fresh else ui.slot_name_buf
+                ui.slot_name_buf = skipperlook.type_name(current, typed)
+                ui.slot_name_fresh = False
+            if "return" in physical or "return" in gamepad:
+                self._finish_slot_rename()
+            return
+        if "esc" in keys.pressed:
+            ui.mode = "title"
+            return
+        if ui.slots:
+            step = int(keys.tap("down", dt)) - int(keys.tap("up", dt))
+            if step:
+                ui.slot_i = (ui.slot_i + step) % len(ui.slots)
+                ui.slot_action_i = 0
+                ui.note = ""
+        step = int(keys.tap("right", dt)) - int(keys.tap("left", dt))
+        if step:
+            ui.slot_action_i = (ui.slot_action_i + step) % 4
+            ui.note = ""
+        if not self._menu_selected(keys):
+            return
+        if ui.slot_action_i == 2:
+            ui.new_mode_i = 0
+            ui.mode = "new_mode"
+        elif ui.slot_action_i == 3:
+            ui.mode = "title"
+        elif ui.slots:
+            slot = ui.slots[ui.slot_i % len(ui.slots)]
+            if ui.slot_action_i == 1:
+                if self.dev:
+                    ui.note = "Devmode does not rename saves."
+                elif not slot.path.is_file():
+                    ui.note = "No save to rename yet."
+                else:
+                    ui.slot_name_buf = slot.name
+                    ui.slot_renaming = ui.slot_name_fresh = True
+            else:
+                try:
+                    self._load_slot(slot)
+                except (OSError, ValueError, KeyError) as error:
+                    ui.note = f"That save could not be loaded: {error}"
+
+    def _finish_slot_rename(self):
+        """Commit the browser's draft and keep the active path and metadata in sync."""
+        ui = self.ui
+        if not ui.slot_renaming or self.dev or not ui.slots:
+            return
+        slot = ui.slots[ui.slot_i % len(ui.slots)]
+        name = skipperlook.clean_name(ui.slot_name_buf)
+        try:
+            renamed = saveslots.rename_slot(self.default_save_path, slot.slug, name)
+        except (OSError, ValueError) as error:
+            ui.note = f"That save could not be renamed: {error}"
+            return
+        if renamed is None:
+            ui.note = "That save is no longer there."
+            return
+        _slug, path = renamed
+        if self.save_path == slot.path:
+            self.save_path = path
+            saveslots.stamp_slot_name(self.state, name)
+        self._open_saves()
+        ui.slot_i = next((i for i, entry in enumerate(ui.slots) if entry.path == path), 0)
+        ui.note = f"Renamed to {name}."
+
+    def _load_slot(self, slot: saveslots.Slot):
+        """Load slot's own lake and state; apply offline catch-up once before play.
+
+        slot supplies the save path and toast name. Loading may migrate/recover
+        ordinary saves but is read-only in Devmode. Missing/unrecoverable slots
+        leave the current session untouched and show an explanation. I/O/version
+        errors propagate; every non-error path returns None.
+        """
+        world, state, has_save = load_game_save(
+            slot.path, State, World, persist_changes=not self.dev)
+        if not has_save:
+            message = f"{slot.name} could not be loaded."
+            self.state.toast(message)
+            self.ui.note = message
+            return
+        self._close_dialogue()
+        self.world, self.state, self.save_path = world, state, slot.path
+        autostart_story(self.state, self._npc_content)
+        self._replays = self._saved_pending()
+        self._attach_quest_manager()
+        self._continue_catchup_at = time.time()
+        self._title_catchup_pending = bool(has_save)
+        if self._title_catchup_pending:
+            state.catch_up(now=self._continue_catchup_at)
+            self._title_catchup_pending = False
+        self.stage = self.whale_clock = None
+        self.whale_wait = 0.0
+        self._whale_recorded = False
+        self._heard_hour = None
+        self._heard_days = {}
+        self.ui = UIState(mode="play", has_save=has_save, input_device=self.ui.input_device,
+                          dialogue_content=self._npc_content)
+        self._refresh_npcs()
+        if has_save:
+            state.toast(f"Loaded {slot.name}.")
+            if not self._skipper_hint_shown and not skipperlook.saved(state)["created"]:
+                self._skipper_hint_shown = True
+                state.toast("Dress your Skipper: Esc, then Your Skipper.")
 
     def _comfort_keys(self, keys, dt):
         choosing_mode = self.ui.mode == "new_mode"
@@ -2248,10 +2401,12 @@ class Session:
         ui.mode = "pause"
 
     def _start_new_game(self, mode: str, look: dict) -> None:
-        """Begin a new morning in `mode`, wearing the Skipper's `look`, and save it.
+        """Begin a new morning in mode with the Skipper's look in a fresh named save.
 
-        The player's settings and the collar's visibility carry over from the title. The
-        prologue starts here, after the creator, as it did when the pace was chosen.
+        mode is a comfort mode id; look is the creator's normalized appearance.
+        Settings and collar visibility carry over. The prologue starts after the
+        creator; only this new slot is written (nothing is written in Devmode).
+        Returns None and propagates save I/O errors.
         """
         previous = deepcopy(self.state.v2["settings"])
         if self.world.id != "briar":
@@ -2262,6 +2417,10 @@ class Session:
         state.v2["profile"]["collar"]["visible"] = previous.get("collar_visible", True)
         state.v2["skipper"] = look
         begin_prologue(state)
+        name = skipperlook.clean_name(look.get("name")) or "Skipper"
+        slot_path, display = saveslots.allocate_slot(self.default_save_path, name)
+        saveslots.stamp_slot_name(state, display)
+        self.save_path = slot_path
         self.state = state
         self._replays = set()
         self._attach_quest_manager()

@@ -223,6 +223,7 @@ class SkipperCreatorTests(unittest.TestCase):
 
     # --- the two origins --------------------------------------------------------------
     def test_a_new_morning_starts_only_after_the_creator_is_done(self):
+        """Done starts the prologue and writes only a fresh named slot, not main."""
         session = self.session
         old_state = session.state
         session.ui.mode, session.ui.new_mode_i = "new_mode", 1  # Old Salt
@@ -237,7 +238,9 @@ class SkipperCreatorTests(unittest.TestCase):
         self.assertEqual(scene_state(session.state, "prologue"), "pending")
         self.assertEqual(comfort.mode(session.state.v2), "old_salt")
         self.assertTrue(session.state.v2["skipper"]["created"])
-        self.assertTrue(self.path.exists())
+        # Done writes the newly allocated named slot, never the original main file.
+        self.assertTrue(session.save_path.exists())
+        self.assertFalse(self.path.exists())
 
     def test_escape_from_a_new_morning_returns_to_the_pace_choice_and_starts_nothing(self):
         session = self.session
