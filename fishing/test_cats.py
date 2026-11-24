@@ -233,6 +233,62 @@ class Rig(unittest.TestCase):
                     np.testing.assert_allclose(left[:, 1:], neutral[:, 1:], atol=1e-6)
                     np.testing.assert_allclose(right[:, 1:], neutral[:, 1:], atol=1e-6)
 
+    def _assert_tail_root_inside_torso(self, pos, part, along, triangles, size):
+        """Check the ring and start cap against the actual posed torso facets."""
+        root = pos[(part == catmesh.TAIL) & (along == 0)]
+        self.assertGreaterEqual(len(root), 5)
+        faces = pos[triangles[np.all(part[triangles] == catmesh.TORSO, axis=1)]]
+        normals = np.cross(faces[:, 1] - faces[:, 0], faces[:, 2] - faces[:, 0])
+        lengths = np.linalg.norm(normals, axis=1)
+        valid = lengths > 1e-10 * size * size
+        faces, normals = faces[valid], normals[valid] / lengths[valid, None]
+        centre = pos[part == catmesh.TORSO].mean(axis=0)
+        outward = np.sum(normals * (faces.mean(axis=1) - centre), axis=1)
+        normals *= np.where(outward < 0, -1.0, 1.0)[:, None]
+        distances = np.sum((root[:, None, :] - faces[None, :, 0]) * normals[None, :, :], axis=2)
+        self.assertLessEqual(float(distances.max()), 2e-6 * size,
+                             "the tail's first ring and start cap must stay hidden inside the torso")
+
+    def test_tail_roots_are_embedded_for_every_pose_lod_kind_and_body_extreme(self):
+        """Both LODs must hide every tail's root, including lying and greeting poses."""
+        look = deepcopy(next(iter(ROSTER.values()))["appearance"])
+        look.pop("twin", None)
+        look.update(attire=[], prop="none")
+        bodies = ((0.5, 0.7, 0.5, "hairless"), (1.0, 1.0, 1.0, "short"),
+                  (1.4, 1.4, 1.3, "long"), (1.0, 0.7, 1.3, "rex"))
+        for size, build, legs, coat in bodies:
+            look.update(size=size, build=build, legs=legs, coat=coat)
+            for pose in catmesh.POSE_JOINTS:
+                for tail in ("long", "bob", "none", "plume"):
+                    look["tail"] = tail
+                    for lod in (LOD0, LOD1):
+                        with self.subTest(pose=pose, tail=tail, lod=lod, body=(size, build, legs, coat)):
+                            pos, _nrm, part, along, triangles, _tags, _pivots = catmesh.build(look, pose, lod)
+                            self.assertEqual(int(np.count_nonzero((part == catmesh.TAIL) & (along == 0))),
+                                             catmesh._counts(lod)["tail_sides"] + 1)
+                            self._assert_tail_root_inside_torso(pos, part, along, triangles, size)
+
+    def test_tail_roots_stay_embedded_during_idle_turns_and_pose_blends(self):
+        """Breathing, tail sway, whole-body turns and greetings cannot expose a root."""
+        look = deepcopy(next(iter(ROSTER.values()))["appearance"])
+        look.pop("twin", None)
+        look.update(size=0.5, build=0.7, legs=0.5, coat="hairless", attire=[], prop="none")
+        frames = ((0.0, 0.0, -1.0), (2.9, 0.5, 1.0), (7.3, 1.0, -1.0), (11.2, 0.5, 1.0))
+        for pose in POSES:
+            for tail in ("long", "bob", "none", "plume"):
+                appearance = dict(look, pose=pose, tail=tail)
+                actor = actors.Actor("tail-test", "Tail", 3.0, 0.0, -2.0, 0.9, None, {}, [],
+                                     seed=0.3, appearance=appearance)
+                for lod in (LOD0, LOD1):
+                    mesh = actor.mesh(lod)
+                    for t, blend, side in frames:
+                        with self.subTest(pose=pose, tail=tail, lod=lod, t=t, blend=blend, side=side):
+                            params = actors.pose_state(actor, actor.x + side * 6, actor.z + 3, t, False,
+                                                       gesture=blend, steer=side)
+                            pos = actor.local_to_world(actors.animate(mesh, params)[0])
+                            self._assert_tail_root_inside_torso(pos, mesh.part, mesh.along, mesh.triangles,
+                                                                appearance["size"])
+
     def test_the_lod0_mesh_cache_stays_bounded(self):
         catmesh.clear_caches()
         for npc_id in list(ROSTER)[:40]:

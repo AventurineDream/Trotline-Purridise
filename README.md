@@ -134,6 +134,10 @@ the fractional lake clock so lighting moves smoothly between game minutes.
 
 Graphics are designed for a **3 GB RAM budget**. The 3D scene target is capped at 1440×810 and scales with its detail tier (low 55%, standard 60%, high 90%, ultra 100% of the window); UI remains native-size. The GPU upscales the scene before final readback. Low/standard use 1× sampling, while high/ultra use up to 4× antialiasing. Reflections use half the internal render resolution. Mesa software graphics uses at most 640×360. Text and UI layer caches are bounded by the tier (text 8–64 MiB, UI layers 32–256 MiB). There are no large downloaded texture packs or retained frame histories.
 
+The shared cat rig embeds long, plume, bobbed and Manx-like tail roots inside
+the posed rump at both detail levels, keeping their joins hidden through idle
+motion, turns and greetings without adding a collar or extra geometry.
+
 ## Run
 
 Pull requests follow the [review and CI policy](docs/PR-REVIEW-POLICY.md).
