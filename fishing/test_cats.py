@@ -413,6 +413,34 @@ class Rig(unittest.TestCase):
         self.assertIn("uniform int coat_kind", source)
         self.assertIn(f"coat_kind == {catmesh.COAT_KINDS.index('hairless')}", source)
 
+    def test_each_jacket_kind_has_its_own_styling_geometry(self):
+        """The six body kinds must not share one silhouette: details differ per kind."""
+        look = deepcopy(next(iter(ROSTER.values()))["appearance"])
+        look.pop("twin", None)
+        look.update(attire=[], prop="none", pose="sit_fish", size=1.0)
+        signatures = {}
+        for kind in ("oilskin", "parka", "sweater", "vest", "life_jacket", "shawl"):
+            with self.subTest(kind=kind):
+                item = {"kind": kind, "color": [0.5, 0.5, 0.5]}
+                pos, _nrm, part, _along, _tris, tags, _pivots = catmesh.build(
+                    dict(look, attire=[item]), "sit_fish", LOD0)
+                worn = tags == 0
+                self.assertTrue(worn.any())
+                verts = pos[worn]
+                # Signature: vertex count plus the extent of the worn geometry.
+                lo, hi = verts.min(axis=0), verts.max(axis=0)
+                signatures[kind] = (len(verts), tuple(np.round(hi - lo, 2)))
+        # No two kinds may produce the same worn-geometry signature.
+        self.assertEqual(len(set(signatures.values())), len(signatures))
+        # The shawl's drape is the only kind reaching well behind the torso:
+        # its tail hangs down the back past every other jacket's rear extent.
+        item = {"kind": "shawl", "color": [0.5, 0.5, 0.5]}
+        pos, _nrm, part, _along, _tris, tags, _pivots = catmesh.build(
+            dict(look, attire=[item]), "sit_fish", LOD0)
+        worn = (tags == 0) & (part == catmesh.ATTIRE)
+        tail = pos[worn]
+        self.assertLess(float(tail[:, 2].min()), -0.15)
+
 
 class ShaderAgreement(unittest.TestCase):
     def test_cat_frag_coat_patterns_match_the_numpy_reference(self):
