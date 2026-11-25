@@ -16,7 +16,7 @@ from .data import ZONE_ORDER, paint_rgb
 from .raster import blit_sprite, clip_near, raster_tri
 from .sprites import bake
 from .world import Face, World, hash21, noise2
-from .boat import HULL_BOW, HULL_STERN, HULL_HALF_BEAM, HULL_INNER_BEAM
+from .boat import HULL_BOW, HULL_STERN, HULL_HALF_BEAM, HULL_INNER_BEAM, wake_along
 from .weather import lighting_at
 from . import comfort
 
@@ -739,7 +739,8 @@ class SoftwareRenderer:
         rx, rz = math.cos(state.yaw), -math.sin(state.yaw)
         relx = hx - state.x
         relz = hz - state.z
-        along = relx * fx + relz * fz
+        # Mirrored about the hull's middle when reversing, so the wake trails the travel.
+        along = wake_along(relx * fx + relz * fz, state.speed, state.boat)
         side = np.abs(relx * rx + relz * rz)
         behind = -along
         spread = 0.35 + behind * 0.15
