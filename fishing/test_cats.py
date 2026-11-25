@@ -966,23 +966,80 @@ class Skipper(unittest.TestCase):
 
 
 class ChartPins(unittest.TestCase):
-    def test_pins_wear_each_cats_coat(self):
+    def test_pins_wear_chart_palette_colours(self):
+        # Issue #159: pins use the chart-only palette, not coat colours, and stay unique per lake.
+        from .platform import Text
+        from .ui import UI, CHART_RESIDENT_PALETTE, resident_pin_color
+        world, state = _lake("briar")
+        text = Text()
+        try:
+            ui = UI(text, world)
+            frame = np.zeros((400, 400, 3), np.uint8)
+            residents = ui._plot_npcs(frame, state, 0, 0, 400, 400)
+            lake_ids = tuple(sorted(npc.id for npc in state.npcs
+                                    if npc.anchor.lake_id == world.id))
+            self.assertEqual(len(residents), len(lake_ids))
+            pins = [pin for _name, pin in residents]
+            self.assertEqual(len(set(pins)), len(pins), "pin colours must be unique per lake")
+            for npc in state.npcs:
+                if npc.anchor.lake_id != world.id:
+                    continue
+                u, v = world.map_pixel(npc.anchor.x, npc.anchor.z, 400, 400)
+                expected = resident_pin_color(npc.id, lake_ids)
+                self.assertIn(expected, CHART_RESIDENT_PALETTE)
+                with self.subTest(npc=npc.id):
+                    np.testing.assert_array_equal(frame[int(v), int(u)], expected)
+        finally:
+            text.close()
+    def test_palette_is_distinct_and_readable_on_the_chart(self):
+        # Issue #159: every palette colour is unique, far from the others, and keeps
+        # enough contrast against the dark chart paper to read as a pin.
+        from .ui import CHART_RESIDENT_PALETTE
+        self.assertGreaterEqual(len(CHART_RESIDENT_PALETTE), 10)
+        self.assertEqual(len(set(CHART_RESIDENT_PALETTE)), len(CHART_RESIDENT_PALETTE))
+
+        def luminance(rgb):
+            def channel(c):
+                c = c / 255.0
+                return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+            r, g, b = (channel(c) for c in rgb)
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+        def contrast(a, b):
+            la, lb = luminance(a), luminance(b)
+            hi, lo = max(la, lb), min(la, lb)
+            return (hi + 0.05) / (lo + 0.05)
+
+        # Chart paper is near-black land/sea; check against the darkest plausible paper.
+        paper = (34, 48, 30)
+        for color in CHART_RESIDENT_PALETTE:
+            with self.subTest(color=color):
+                self.assertGreaterEqual(contrast(color, paper), 3.0,
+                                        f"{color} reads poorly on chart paper")
+
+    def test_legend_reuses_the_pin_colours(self):
+        # Issue #159: the chart key's resident dots must match the pins on the chart.
         from .platform import Text
         from .ui import UI
         world, state = _lake("briar")
         text = Text()
         try:
             ui = UI(text, world)
-            frame = np.zeros((400, 400, 3), np.uint8)
-            ui._plot_npcs(frame, state, 0, 0, 400, 400)
-            for npc in state.npcs:
-                u, v = world.map_pixel(npc.anchor.x, npc.anchor.z, 400, 400)
-                coat = [int(c * 255 + 0.5) for c in ROSTER[npc.id]["appearance"]["colors"]["base"]]
-                with self.subTest(npc=npc.id):
-                    np.testing.assert_array_equal(frame[int(v), int(u)], coat)
+            captured = {}
+            original = ui._map_key
+
+            def spy(frame, state_, x, y, w, h, places, residents, sonar_visible):
+                captured["residents"] = list(residents)
+                return original(frame, state_, x, y, w, h, places, residents, sonar_visible)
+
+            ui._map_key = spy
+            frame = np.zeros((720, 1280, 3), np.uint8)
+            from .ui import UIState
+            ui.draw(frame, state, UIState(mode="map"))
+            plotted = ui._plot_npcs(np.zeros((400, 400, 3), np.uint8), state, 0, 0, 400, 400)
+            self.assertEqual(captured["residents"], plotted)
         finally:
             text.close()
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -66,6 +66,41 @@ WARN = (220, 126, 96)
 # Shallow to deep; the last colour also covers anything deeper.
 SONAR_BAND_COLORS = ((120, 204, 214), (92, 172, 196), (70, 136, 176), (52, 104, 150))
 GOOD = (150, 196, 140)
+# Chart-only resident pin palette (issue #159): vibrant, distinguishable colours that do
+# not recolour the cats themselves. Assigned per lake by sorted NPC id so the same cat
+# keeps the same pin on every chart of that lake, and legend dots reuse the returned colour.
+CHART_RESIDENT_PALETTE = (
+    (233, 84, 107),    # rose
+    (38, 166, 154),    # teal
+    (150, 100, 255),   # violet
+    (94, 201, 98),     # green
+    (255, 176, 32),    # amber
+    (47, 143, 249),    # azure
+    (255, 82, 168),    # pink
+    (0, 172, 193),     # cyan
+    (205, 91, 60),     # rust
+    (112, 90, 255),    # indigo
+    (255, 213, 79),    # yellow
+    (0, 184, 148),     # emerald
+    (233, 30, 99),     # crimson
+    (41, 182, 246),    # sky
+    (255, 143, 0),     # orange
+    (118, 255, 3),     # lime
+)
+
+def resident_pin_color(npc_id, lake_npc_ids):
+    """Return the chart pin colour for `npc_id` among `lake_npc_ids`.
+
+    `lake_npc_ids` is the sorted tuple of resident ids on the lake being charted; the
+    colour is the palette slot of the id's position, so every resident on one lake gets a
+    distinct colour while the same cat keeps it across chart sizes and sessions.
+    """
+    try:
+        index = lake_npc_ids.index(npc_id)
+    except ValueError:
+        index = 0
+    return CHART_RESIDENT_PALETTE[index % len(CHART_RESIDENT_PALETTE)]
+GOOD = (150, 196, 140)
 # The backing behind text that sits on the lake itself (haul, credits, encounter): at this
 # strength every text colour above reads at 4.5:1 or better over the brightest sky (V1-43).
 TEXT_BACKING = (9, 17, 19)
@@ -1926,7 +1961,7 @@ class UI:
         """Explain the chart's numbered places, resident pins and marker shapes in a side panel.
 
         `places` holds (number, name, ...) tuples from `_plot_habitats`; `residents` holds
-        (name, coat rgb) pairs from `_plot_npcs`. Residents are omitted when the full list
+        (name, palette rgb) pairs from `_plot_npcs`. Residents are omitted when the full list
         would push the marker legend off the panel.
         """
         self._panel(frame, x, y, width, height, 0.88)
@@ -2040,15 +2075,15 @@ class UI:
         self._shape(frame, "diamond ring", x + u, y + v, 4, (240, 198, 112))
 
     def _plot_npcs(self, frame, state, x, y, mw, mh, large=False, protected=()):
-        """Pin each resident cat on the chart in its coat colour.
+        """Pin each resident cat on the chart in its chart-palette colour.
 
         `large` draws the full-chart pin size; `protected` lists (x, y, radius) frame-pixel
         markers that a pin must not cover, so it steps aside from them. Returns
-        (name, coat rgb) pairs for the chart key.
+        (name, palette rgb) pairs for the chart key.
         """
-        from .actors import roster
         fallback = (128, 206, 240)
-        cats = roster()
+        lake_ids = tuple(sorted(npc.id for npc in state.npcs
+                                if npc.anchor.lake_id == self.world.id))
         residents = []
         radius = 3 if large else 2
         obstacles = [
@@ -2084,11 +2119,11 @@ class UI:
                             break
                     if moved:
                         break
-            # Each pin wears its cat's coat, ringed so pale coats read on the chart (V1-29),
-            # and is round so no colour vision mistakes it for a fish or the Bot (V1-43).
-            row = cats.get(npc.id)
-            pin = (tuple(int(c * 255 + 0.5) for c in row["appearance"]["colors"]["base"])
-                   if row is not None else fallback)
+            # Each pin wears a chart-only palette colour, ringed so it reads on the chart
+            # (V1-29), and is round so no colour vision mistakes it for a fish or the Bot
+            # (V1-43). The palette keeps pins distinct from one another and from the coat
+            # colours used in the 3D scene (issue #159).
+            pin = resident_pin_color(npc.id, lake_ids) if npc.id in lake_ids else fallback
             self._shape(frame, "disc", pin_x, pin_y, radius, pin)
             residents.append((npc.name, pin))
         return residents

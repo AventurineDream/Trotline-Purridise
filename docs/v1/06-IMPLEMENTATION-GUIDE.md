@@ -1299,7 +1299,7 @@ first need and kept in a 24-entry LRU (`catart.portrait_layers`, which also
 keeps the cat's coverage and eye pixels), more than a lake's cats, hosts and
 travelers. Twins share the frame. The dialogue panel shows the portrait at
 the left, 96–176 px, whenever the frame is at least 640 px wide, and wraps the
-text beside it. Chart pins wear each cat's base coat colour, ringed in ink.
+text beside it. Chart pins wear a chart-only palette colour (issue #159), ringed in ink.
 
 **Animated portraits.** In the Celeste manner, the speaker is alive in its frame.
 `catart.portrait_rig(npc_id, side)` scales the layers to the panel with open,
@@ -2274,7 +2274,7 @@ V1-43 (#71) went over every screen at every text size, for keyboard and for game
 | Tired fish | cross |
 | Baited hook | dot |
 | Soaking line | dashed |
-| Cat | round pin in its coat colour |
+| Cat | round pin in its chart-palette colour |
 | Bot | triangle |
 | You | square with a heading tick |
 | Trinidad Cove | hollow diamond |
