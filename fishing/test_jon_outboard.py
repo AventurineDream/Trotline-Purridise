@@ -57,17 +57,29 @@ class JonStern(unittest.TestCase):
 
     def test_no_back_to_back_skins_share_a_plane(self):
         # The GL pass draws both sides of every face, so two opposite-facing quads in one
-        # plane depth-fight into speckle. Checked across the transom and the outboard.
+        # plane depth-fight into speckle. Checked on every axis across the stern and outboard.
         faces = [f for f in self.faces(0.0) if f.pts[:, 2].min() < HULL_STERN + 0.05]
-        flat = [(f, float(f.pts[0, 2])) for f in faces
-                if abs(f.normal[2]) > 0.99 and np.ptp(f.pts[:, 2]) < 1e-5]
-        for i, (a, za) in enumerate(flat):
-            for b, zb in flat[i + 1:]:
-                if a.normal[2] * b.normal[2] > 0 or abs(za - zb) > 1e-3:
-                    continue
-                overlap = all(min(a.pts[:, k].max(), b.pts[:, k].max())
-                              > max(a.pts[:, k].min(), b.pts[:, k].min()) + 1e-4 for k in (0, 1))
-                self.assertFalse(overlap, f"back-to-back quads at z={za:.3f}")
+        for axis in range(3):
+            others = [k for k in range(3) if k != axis]
+            flat = [(f, float(f.pts[0, axis])) for f in faces
+                    if abs(f.normal[axis]) > 0.99 and np.ptp(f.pts[:, axis]) < 1e-5]
+            for i, (a, pa) in enumerate(flat):
+                for b, pb in flat[i + 1:]:
+                    if a.normal[axis] * b.normal[axis] > 0 or abs(pa - pb) > 1e-3:
+                        continue
+                    overlap = all(min(a.pts[:, k].max(), b.pts[:, k].max())
+                                  > max(a.pts[:, k].min(), b.pts[:, k].min()) + 1e-4 for k in others)
+                    self.assertFalse(overlap, f"back-to-back quads in plane {'xyz'[axis]}={pa:.3f}")
+
+    def test_the_transom_shades_the_cockpit_in_gl_lighting(self):
+        from .landfx import _jon_boxes
+        walls = [(c, h) for c, h in _jon_boxes(self.state())
+                 if c[2] - h[2] <= HULL_STERN <= c[2] + h[2] and h[0] >= HULL_INNER_BEAM - 1e-4]
+        self.assertEqual(len(walls), 1, "no occluder box spans the transom wall")
+        (cx, cy, cz), (hx, hy, hz) = walls[0]
+        self.assertLessEqual(cy - hy, COCKPIT_FLOOR + 1e-4)
+        self.assertGreaterEqual(cy + hy, RAIL_TOP - 0.04)
+        self.assertLessEqual(cz + hz, HULL_STERN + 1e-4, "the transom box intrudes into the cockpit")
 
     def test_outboard_hangs_astern_with_cowl_above_and_prop_below_the_water(self):
         pts = self.aft()

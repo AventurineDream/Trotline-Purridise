@@ -26,15 +26,16 @@ def glow_hull(state, faces):
 OUTBOARD_PIVOT = (0.0, -0.84)  # (x, z) of the clamp's steering axis
 OUTBOARD_YAW = 0.45  # radians of motor yaw at full steer
 _PROP = (-1.45, -0.34, 0.11)  # hub y, hub local z, blade radius
-# (name, local centre, half size, paint): local -z is astern of the pivot.
+# (name, local centre, half size, paint): local -z is astern of the pivot. Stacked parts sink
+# into the part above rather than meeting face to face, so no two skins share a plane.
 _OUTBOARD_PARTS = (
-    ("clamp", (0.0, -0.43, 0.02), (0.10, 0.03, 0.05), "steel"),
+    ("clamp", (0.0, -0.433, 0.02), (0.10, 0.03, 0.05), "steel"),  # 2-3 mm clear of rail and cowl
     ("cowl", (0.0, -0.24, -0.24), (0.17, 0.16, 0.22), "cowl"),
     ("pan", (0.0, -0.44, -0.225), (0.15, 0.05, 0.19), "leg"),
-    ("midsection", (0.0, -0.915, -0.12), (0.055, 0.425, 0.08), "leg"),
+    ("midsection", (0.0, -0.905, -0.12), (0.055, 0.435, 0.08), "leg"),
     ("plate", (0.0, -1.35, -0.16), (0.13, 0.012, 0.15), "leg"),
     ("gearcase", (0.0, -1.45, -0.16), (0.05, 0.07, 0.16), "leg"),
-    ("skeg", (0.0, -1.60, -0.20), (0.012, 0.08, 0.08), "leg"),
+    ("skeg", (0.0, -1.59, -0.20), (0.012, 0.09, 0.08), "leg"),
     ("hub", (0.0, -1.45, -0.34), (0.035, 0.035, 0.03), "steel"),
 )
 
