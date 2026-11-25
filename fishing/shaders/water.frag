@@ -144,11 +144,16 @@ void main() {
         }
     }
     // The boat's wake: the authored V rails and centre streak, a bow wave
-    // spreading from the stem at the Kelvin angle, and churn astern.
+    // spreading from the leading end at the Kelvin angle, and churn astern.
     vec2 rel = pos.xz-boat_pos;
     float along = dot(rel,boat_forward);
     vec2 beside = rel-boat_forward*along;
     float side = length(beside);
+    // The terms below are authored for forward travel. Reversing, the stern
+    // leads: mirror along about the hull's middle (boat.wake_along) so the wake
+    // trails the bow and the bow wave forms at the stern. Every term fades
+    // with |speed|, so the flip at zero speed cannot be seen.
+    if (speed < 0.0) along = boat_ends.x+boat_ends.y-along;
     float behind = -along;
     float spd = clamp(abs(speed)/2.0,0.0,1.0);
     float spread = 0.38+behind*0.10;
@@ -157,9 +162,9 @@ void main() {
     float rail = exp(-square(side-spread)/max(0.045,0.045+behind*0.010));
     float wake = rail*smoothstep(0.55,1.3,behind)*(1.0-smoothstep(5.0,16.0,behind))*spd;
     float streak = exp(-square(side)/0.07)*smoothstep(0.25,0.9,behind)*(1.0-smoothstep(2.2,9.0,behind))*spd;
-    float bow_side = 0.72+max(0.0,2.86-along)*0.36;
-    float bow = exp(-square(side-bow_side)/(0.018+max(0.0,2.86-along)*0.012))
-              *smoothstep(-3.5,-0.5,along)*(1.0-smoothstep(2.7,3.0,along))*spd;
+    float bow_side = 0.72+max(0.0,boat_ends.y-along)*0.36;
+    float bow = exp(-square(side-bow_side)/(0.018+max(0.0,boat_ends.y-along)*0.012))
+              *smoothstep(-3.5,-0.5,along)*(1.0-smoothstep(boat_ends.y-0.16,boat_ends.y+0.14,along))*spd;
     float churn = smoothstep(0.75,1.2,behind)*(1.0-smoothstep(2.5,5.5,behind))
                 *(1.0-smoothstep(0.35+behind*0.08,0.75+behind*0.12,side))*spd;
     vec2 outward = beside/max(side,1e-3);

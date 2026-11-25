@@ -613,6 +613,7 @@ class LakeRenderer(SoftwareRenderer):
                 lake_grid=(self.world.nx,self.world.nz),lake_shore=3,lake_depth=4,reflection_depth=5,
                 lily_centre=next((tuple(row[1:3]) for row in self.world.zones if row[0]=="lilies"),(-175,-115)),
                 boat_pos=(state.x,state.z),boat_forward=(math.sin(state.yaw),math.cos(state.yaw)),
+                boat_ends=(float(state.boat.stern),float(state.boat.bow)),
                 speed=float(state.speed),spotlight=float(state.light),comfort_fog_radius=comfort.fog_radius(state),
                 slip_origin=(sl.ox,sl.oz),slip_inland=(sl.ix,sl.iz),slip_side=(sl.sx,sl.sz),
                 slip_size=(sl.half_w,sl.land_ext,sl.water_ext))

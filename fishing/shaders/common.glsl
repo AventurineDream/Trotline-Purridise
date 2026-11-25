@@ -2,6 +2,7 @@ uniform vec3 eye, view_right, view_up, view_forward;
 uniform float tanx, tany, anim, sun_i, moon_i, night, gold;
 uniform vec3 sun, moon, horizon, zenith;
 uniform vec2 viewport, boat_pos, boat_forward, slip_origin, slip_inland, slip_side;
+uniform vec2 boat_ends;  // (stern, bow) along boat_forward from boat_pos, metres
 uniform vec3 slip_size;
 uniform float cloud_cover, rain, mist, speed, spotlight;
 uniform float comfort_fog_radius;
