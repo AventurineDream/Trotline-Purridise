@@ -1009,8 +1009,10 @@ class ChartPins(unittest.TestCase):
                             self.assertEqual(seen.setdefault(npc_id, colour), colour, npc_id)
             self.assertGreater(len(seen), 4, f"{lake}: the week showed too few cats to test")
 
-    def test_palette_is_separated_clear_of_markers_and_reads_on_every_lake(self):
-        from .ui import CHART_RESIDENT_PALETTE, GOLD, INK, WARN, chart_order
+    def test_palette_is_vibrant_separated_clear_of_markers_and_reads_on_every_lake(self):
+        import colorsys
+
+        from .ui import CHART_RESIDENT_PALETTE, GOLD, INK, SONAR_BAND_COLORS, WARN, chart_order
 
         def linear(rgb):
             return [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
@@ -1020,34 +1022,78 @@ class ChartPins(unittest.TestCase):
             r, g, b = linear(rgb)
             return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
+        def contrast(a, b):
+            la, lb = luminance(a), luminance(b)
+            return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
         def lab(rgb):
-            # sRGB (D65) to CIELAB, so separation tracks what eyes see rather than raw RGB.
             r, g, b = linear(rgb)
             xyz = ((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, luminance(rgb),
                    (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883)
             fx, fy, fz = (t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116 for t in xyz)
-            return np.array([116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)])
+            return (116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz))
 
-        palette = [lab(c) for c in CHART_RESIDENT_PALETTE]
-        for i, a in enumerate(palette):
-            for j in range(i + 1, len(palette)):
-                self.assertGreaterEqual(np.linalg.norm(a - palette[j]), 35,
-                                        (CHART_RESIDENT_PALETTE[i], CHART_RESIDENT_PALETTE[j]))
-        # Fish, Bot, tired, gold badge, boat and the neutral cat key, from UI._marker.
-        markers = [(255, 214, 120), (255, 148, 48), WARN, GOLD, (236, 224, 180), INK]
-        for colour, colour_lab in zip(CHART_RESIDENT_PALETTE, palette):
+        def delta_e00(c1, c2):
+            # CIEDE2000 (Sharma, Wu & Dalal 2005): perceptual distance between two sRGB colours.
+            (l1, a1, b1), (l2, a2, b2) = lab(c1), lab(c2)
+            c_bar = (math.hypot(a1, b1) + math.hypot(a2, b2)) / 2
+            g = 0.5 * (1 - math.sqrt(c_bar ** 7 / (c_bar ** 7 + 25 ** 7)))
+            a1, a2 = a1 * (1 + g), a2 * (1 + g)
+            c1p, c2p = math.hypot(a1, b1), math.hypot(a2, b2)
+            h1, h2 = math.degrees(math.atan2(b1, a1)) % 360, math.degrees(math.atan2(b2, a2)) % 360
+            dh = 0.0 if c1p * c2p == 0 else (h2 - h1 + 180) % 360 - 180
+            d_h = 2 * math.sqrt(c1p * c2p) * math.sin(math.radians(dh / 2))
+            l_bar, c_barp = (l1 + l2) / 2, (c1p + c2p) / 2
+            if c1p * c2p == 0:
+                h_bar = h1 + h2
+            elif abs(h1 - h2) <= 180:
+                h_bar = (h1 + h2) / 2
+            else:
+                h_bar = (h1 + h2 + 360) / 2 if h1 + h2 < 360 else (h1 + h2 - 360) / 2
+            t = (1 - 0.17 * math.cos(math.radians(h_bar - 30)) + 0.24 * math.cos(math.radians(2 * h_bar))
+                 + 0.32 * math.cos(math.radians(3 * h_bar + 6)) - 0.20 * math.cos(math.radians(4 * h_bar - 63)))
+            r_t = (-2 * math.sqrt(c_barp ** 7 / (c_barp ** 7 + 25 ** 7))
+                   * math.sin(math.radians(60 * math.exp(-(((h_bar - 275) / 25) ** 2)))))
+            s_l = 1 + 0.015 * (l_bar - 50) ** 2 / math.sqrt(20 + (l_bar - 50) ** 2)
+            s_c, s_h = 1 + 0.045 * c_barp, 1 + 0.015 * c_barp * t
+            d_l, d_c = (l2 - l1) / s_l, (c2p - c1p) / s_c
+            return math.sqrt(d_l ** 2 + d_c ** 2 + (d_h / s_h) ** 2 + r_t * d_c * (d_h / s_h))
+
+        # Sanity: the measure must separate the near-identical greens plain Lab distance passed.
+        self.assertLess(delta_e00((0, 255, 0), (0, 255, 136)), 19)
+        for colour in CHART_RESIDENT_PALETTE:
+            self.assertGreaterEqual(colorsys.rgb_to_hsv(*(c / 255 for c in colour))[1], 0.45,
+                                    f"{colour} is too washed out for a chart pin")
+        for i, a in enumerate(CHART_RESIDENT_PALETTE):
+            for b in CHART_RESIDENT_PALETTE[i + 1:]:
+                self.assertGreaterEqual(delta_e00(a, b), 19, (a, b))
+        # Everything else drawn on the chart: UI._marker (fish, Bot, tired, gold badge,
+        # boat, tip, soak, empty, neutral cat key), UI._line_color and the sonar bands.
+        markers = [(255, 214, 120), (255, 148, 48), WARN, GOLD, (236, 224, 180), INK,
+                   (232, 196, 110), (186, 214, 196), (90, 104, 98), (232, 176, 72),
+                   (126, 168, 146), *SONAR_BAND_COLORS]
+        for colour in CHART_RESIDENT_PALETTE:
             for marker in markers:
-                self.assertGreaterEqual(np.linalg.norm(colour_lab - lab(marker)), 20, (colour, marker))
+                self.assertGreaterEqual(delta_e00(colour, marker), 10, (colour, marker))
 
+        # The pin's own dark ring (UI._shape's edge), then each lake's paper: the most
+        # common colour of its chart image.
+        backgrounds = {(28, 34, 38)}
         for lake in self.LAKES:
-            # Each lake's paper is the most common colour of its own chart image.
             colours, counts = np.unique(World(lake).map_rgb.reshape(-1, 3), axis=0, return_counts=True)
-            paper = luminance(colours[counts.argmax()])
-            for colour in CHART_RESIDENT_PALETTE:
-                with self.subTest(lake=lake, colour=colour):
-                    self.assertGreaterEqual((luminance(colour) + 0.05) / (paper + 0.05), 3.0)
+            backgrounds.add(tuple(int(v) for v in colours[counts.argmax()]))
             # Every cat with a fixed slot fits, leaving spares for a visiting legacy cat.
             self.assertLess(len(chart_order(lake)), len(CHART_RESIDENT_PALETTE), lake)
+        for colour in CHART_RESIDENT_PALETTE:
+            for background in backgrounds:
+                with self.subTest(colour=colour, background=background):
+                    self.assertGreaterEqual(contrast(colour, background), 3.0)
+
+    def test_more_cats_than_colours_is_refused_not_doubled_up(self):
+        from .ui import CHART_RESIDENT_PALETTE, chart_order, resident_pin_colors
+        visitors = [f"visitor_{i}" for i in range(len(CHART_RESIDENT_PALETTE) - len(chart_order("briar")) + 1)]
+        with self.assertRaises(ValueError):
+            resident_pin_colors("briar", visitors)
 
     def test_legend_reuses_the_pin_colours(self):
         from .platform import Text

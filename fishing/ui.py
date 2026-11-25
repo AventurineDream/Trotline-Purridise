@@ -69,34 +69,37 @@ GOOD = (150, 196, 140)
 
 
 # Chart-only resident pin palette (issue #159). It never recolours the cats themselves.
-# Every pair is at least 35 apart in CIELAB (ΔE76), every colour at least 20 from the
-# chart's marker colours (fish, Bot, tired, gold badges, boat, INK), and at least 3:1
-# against every lake's chart paper; test_cats.ChartPins checks all three. Slots run in
+# Each colour is vibrant (HSV saturation >= 0.45) and keeps 3:1 contrast against its own
+# dark pin ring and each lake's chart paper; darker water shades rely on that ring. Every
+# pair is at least 19 apart in CIEDE2000, which, unlike plain Lab distance, does not
+# overrate gaps between saturated greens, and every colour is at least 10 from each chart
+# marker, line and sonar band colour. test_cats.ChartPins checks all of it. Slots run in
 # farthest-first order, so a lake with few cats gets the most distinct pins.
 CHART_RESIDENT_PALETTE = (
-    (64, 191, 0),      # green
-    (234, 0, 255),     # magenta
-    (255, 64, 0),      # red-orange
-    (0, 191, 255),     # sky
-    (255, 115, 173),   # pink
-    (255, 212, 0),     # gold
-    (0, 255, 212),     # aqua
-    (115, 115, 255),   # periwinkle
-    (191, 128, 0),     # ochre
-    (213, 255, 0),     # lime
-    (255, 38, 92),     # crimson
-    (169, 191, 57),    # olive
-    (255, 0, 191),     # hot pink
-    (57, 191, 191),    # teal
-    (86, 191, 104),    # leaf
+    (17, 170, 85),     # green
+    (255, 0, 238),     # magenta
+    (221, 102, 0),     # orange
+    (0, 170, 255),     # azure
+    (255, 221, 0),     # yellow
+    (0, 255, 255),     # cyan
+    (255, 34, 85),     # red
+    (153, 136, 51),    # khaki
+    (136, 255, 17),    # lime
+    (119, 119, 238),   # indigo
+    (0, 153, 153),     # teal
+    (255, 187, 136),   # peach
+    (255, 136, 187),   # pink
+    (102, 255, 187),   # mint
 )
 
 
+@lru_cache(maxsize=None)
 def chart_order(lake_id):
     """The lake's fixed pin order: its host, day and night cats sorted by id, then the travelers.
 
     Slots come from the roster, not from who is out right now, so a cat keeps its pin
-    colour through the day, night, cookouts and reloads.
+    colour through the day, night, cookouts and reloads. Cached: the roster is fixed
+    content and the chart asks every frame.
     """
     from .npcs import TRAVELER_MOORINGS, cast
     roster = cast()
@@ -115,14 +118,19 @@ def resident_pin_colors(lake_id, present_ids):
 
     Returns:
         dict of npc id -> (r, g, b) 0-255.
+
+    Raises:
+        ValueError: more cats than palette slots, which would force two pins to share.
     """
     order = chart_order(lake_id)
-    spare = CHART_RESIDENT_PALETTE[len(order):] or CHART_RESIDENT_PALETTE
     colours = {npc_id: CHART_RESIDENT_PALETTE[order.index(npc_id)]
                for npc_id in present_ids if npc_id in order}
     visitors = sorted(npc_id for npc_id in present_ids if npc_id not in order)
+    if len(order) + len(visitors) > len(CHART_RESIDENT_PALETTE):
+        raise ValueError(f"{lake_id}: {len(order)} roster cats and {len(visitors)} visitors "
+                         f"outnumber {len(CHART_RESIDENT_PALETTE)} chart pin colours")
     for i, npc_id in enumerate(visitors):
-        colours[npc_id] = spare[i % len(spare)]
+        colours[npc_id] = CHART_RESIDENT_PALETTE[len(order) + i]
     return colours
 
 
