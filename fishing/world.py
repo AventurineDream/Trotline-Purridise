@@ -841,8 +841,14 @@ class World:
         small = rgb[::2, ::2].copy()
         return rgb, small
 
-    def map_pixel(self, x: float, z: float, w: int, h: int) -> tuple[int, int]:
-        x0,z0,x1,z1 = self.bounds
+    def map_pixel(self, x: float, z: float, w: int, h: int, bounds=None) -> tuple[int, int]:
+        """Pixel (u, v) of world point (x, z) metres on a w×h chart; north is up.
+
+        `bounds` is the world (x0, z0, x1, z1) the chart spans from its first pixel to
+        its last. It defaults to the whole lake; a zoomed chart passes its window.
+        Points outside the bounds map outside the chart, and callers clip them.
+        """
+        x0,z0,x1,z1 = self.bounds if bounds is None else bounds
         u = int((x-x0)/(x1-x0)*(w-1))
         v = int((z1-z)/(z1-z0)*(h-1))
         return u, v

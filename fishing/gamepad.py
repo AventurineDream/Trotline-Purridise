@@ -28,6 +28,7 @@ BUTTON_X = 2
 BUTTON_Y = 3
 BUTTON_BACK = 4
 BUTTON_START = 6
+BUTTON_RIGHTSTICK = 8  # pressing the right stick in
 BUTTON_LEFTSHOULDER = 9
 BUTTON_RIGHTSHOULDER = 10
 BUTTON_DPAD_UP = 11
@@ -74,7 +75,7 @@ ACTION_SYMBOLS = {
     "mute": "m", "hail": "c", "chart": "tab", "journal": "j",
     "livewell": "i", "bot": "b", "time_scale": "t", "sail": "q",
     "tow": "r", "engine": "v", "new_game": "n", "dialogue_continue": "c",
-    "catnap": "z", "bot_tool": "g", "galley": "k",
+    "catnap": "z", "bot_tool": "g", "galley": "k", "chart_zoom": "x",
     "menu_up": "up", "menu_down": "down", "menu_left": "left",
     "menu_right": "right",
     "select": "return", "alternate_select": "space", "cancel": "esc",
@@ -88,7 +89,7 @@ DEFAULT_KEY_BINDINGS = {
     "mute": "m", "hail": "c", "chart": "tab", "journal": "j",
     "livewell": "i", "bot": "b", "time_scale": "t", "sail": "q",
     "tow": "r", "engine": "v", "new_game": "n", "dialogue_continue": "c",
-    "catnap": "z", "bot_tool": "g", "galley": "k",
+    "catnap": "z", "bot_tool": "g", "galley": "k", "chart_zoom": "x",
     "menu_up": "up", "menu_down": "down", "menu_left": "left",
     "menu_right": "right",
     "select": "return", "alternate_select": "space", "cancel": "esc",
@@ -116,6 +117,7 @@ BUTTON_ACTIONS = {
     BUTTON_B: ("esc",),
     BUTTON_X: ("f",),
     BUTTON_BACK: ("tab",),
+    BUTTON_RIGHTSTICK: ("x",),
     BUTTON_START: ("esc",),
     BUTTON_LEFTSHOULDER: ("g",),
     BUTTON_RIGHTSHOULDER: ("c",),
@@ -147,6 +149,18 @@ def _bindings(saved) -> dict[str, str]:
             key = bindings[changed[0] if changed else aliases[0]]
             for action in aliases:
                 bindings[action] = key
+        # A save from before an action existed never names it. When the player
+        # already gave that action's default key to something else, their choice
+        # wins: the newcomer moves to the first unused letter, so one key press
+        # never fires two actions. Aliases share keys on purpose and are skipped.
+        grouped = {action for aliases in ACTION_ALIASES for action in aliases}
+        for action in bindings:
+            if action in saved or action in grouped:
+                continue
+            others = {key for other, key in bindings.items() if other != action}
+            if bindings[action] in others:
+                bindings[action] = next(letter for letter in "abcdefghijklmnopqrstuvwxyz"
+                                        if letter not in others)
     return bindings
 
 

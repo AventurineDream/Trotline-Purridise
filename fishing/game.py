@@ -47,7 +47,7 @@ from .bot import tick as tick_bot
 from .sim import Catch, State
 from .savepaths import LEGACY_SAVE, load_game_save, resolve_save_path
 from .ui import (UI, UIState, SHOP_TABS, HELP_SPREADS, GAME_TITLE, CREDITS_HOLD_S, check_rows,
-                 pause_options, shop_rows, title_options,
+                 pause_options, shop_rows, title_options, CHART_ZOOMS,
                  SETTINGS_ROW_COUNT, SETTINGS_KEYBOARD_CONTROLS_ROW)
 from .world import World
 from .lakes import LoadingQuips, travel_caption, travel_lock_reason
@@ -1268,6 +1268,14 @@ class Session:
             self._open_set()
         if "e" in keys.pressed:
             self._open_e()
+        if "x" in keys.pressed:
+            self._cycle_chart_zoom()
+
+    def _cycle_chart_zoom(self):
+        """Step the corner chart to its next CHART_ZOOMS level, back to 1x after the last."""
+        zooms = CHART_ZOOMS
+        current = self.ui.chart_zoom if self.ui.chart_zoom in zooms else zooms[0]
+        self.ui.chart_zoom = zooms[(zooms.index(current) + 1) % len(zooms)]
 
     def _open_book(self):
         self.ui.mode = "journal"
