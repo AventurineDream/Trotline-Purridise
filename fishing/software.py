@@ -1070,18 +1070,19 @@ class SoftwareRenderer:
             lamp = np.array([0.16, 0.16, 0.15], np.float32)
             faces.append(q([(-0.08, gy + 0.02, 2.66), (0.08, gy + 0.02, 2.66), (0.08, gy + 0.02, 2.78), (-0.08, gy + 0.02, 2.78)], (0, 1, 0), lamp))
             faces.append(q([(-0.08, gy + 0.02, 2.66), (0.08, gy + 0.02, 2.66), (0.08, gy + 0.10, 2.66), (-0.08, gy + 0.10, 2.66)], (0, 0, -1), lamp))
-        # Issue #160: the stern was open. A transom plate (inner and outer skins, capped by
-        # the rail) closes it, and the outboard is clamped to it from astern.
-        faces.append(q([(-beam, fy, z_near), (-beam, gy, z_near), (beam, gy, z_near), (beam, fy, z_near)],
-                       (0, 0, 1), wall))
+        # A transom plate closes the stern; the outboard clamps to it from astern. The inner
+        # skin sits 5 mm inside the outer one, because the GL pass draws both sides and two
+        # coplanar skins would depth-fight there.
+        faces.append(q([(-beam, fy, z_near + 0.005), (-beam, gy, z_near + 0.005), (beam, gy, z_near + 0.005),
+                        (beam, fy, z_near + 0.005)], (0, 0, 1), wall))
         faces.append(q([(-rail_o, -1.46, z_near), (rail_o, -1.46, z_near), (rail_o, gy, z_near),
                         (-rail_o, gy, z_near)], (0, 0, -1), hull))
         faces.append(q([(-rail_o, gy + 0.035, z_near - 0.02), (rail_o, gy + 0.035, z_near - 0.02),
                         (rail_o, gy + 0.035, z_near + 0.06), (-rail_o, gy + 0.035, z_near + 0.06)],
                        (0, 1, 0), rail))
         faces.extend(outboard_faces(state.steer, till))
-        # The forward box is the tiller extension's steering mount, not the engine; the
-        # engine is the outboard on the transom.
+        # The forward box is the steering mount the Skipper's paw holds, kept in first-person
+        # view; the engine is the outboard on the transom, which steer yaws with it.
         motor = np.array([0.14, 0.15, 0.16], np.float32)
         faces.append(q([(0.20, -0.66, 1.52), (0.42, -0.66, 1.52), (0.42, -0.66, 1.72), (0.20, -0.66, 1.72)], (0, 1, 0), motor))
         faces.append(q([(0.20, -0.80, 1.52), (0.42, -0.80, 1.52), (0.42, -0.66, 1.52), (0.20, -0.66, 1.52)], (0, 0, -1), motor))
