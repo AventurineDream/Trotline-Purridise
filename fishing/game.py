@@ -7,7 +7,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 import sys
+import threading
 import time
+import traceback
 
 import numpy as np
 
@@ -20,7 +22,7 @@ from .story import (begin_prologue, due_scene, scene_conversation, settle_near, 
 from . import staging
 from .npcs import active_npcs, schedule_key
 from .audio import Audio
-from .data import BAITS, BAIT_BY_ID, SPECIES, hour_of_day
+from .data import BAITS, BAIT_BY_ID, LAKES, SPECIES, hour_of_day
 from .weather import weather_visuals
 from . import calendar
 from .platform import Platform, Text
@@ -186,6 +188,11 @@ class Session:
         self._whale_recorded = False
         self._replays = self._saved_pending()
         self._skipper_hint_shown = False  # the Continue toast nudging an uncreated Skipper: once a session
+        # Windowed play sets this so a trip only records `pending_lake`; the run loop then builds
+        # the lake off the GL thread behind the travel card (_enter_lake). Headless callers
+        # (tests, Devmode checks, expansion checks) keep travel synchronous.
+        self.defer_travel = False
+        self.pending_lake: str | None = None
 
     def _saved_pending(self) -> set:
         """Scenes (and the credits) left pending in the save: they replay, and can be skipped."""
@@ -1439,8 +1446,27 @@ class Session:
         self._travel_to(lake_id)
 
     def _travel_to(self, lake_id: str) -> None:
-        caption = travel_caption(self.world.id, lake_id)
-        destination = World(lake_id)
+        """Travel to `lake_id`, now or (with `defer_travel`) once the run loop has built it.
+
+        Callers have already checked that the trip is allowed. Deferred, nothing changes
+        until `arrive`: the old lake, its save and the player's place all stay as they
+        are, so a quit or a failed load mid-trip leaves them at this landing.
+        """
+        if self.defer_travel:
+            self.pending_lake = lake_id
+            return None
+        self.arrive(World(lake_id))
+        return None
+
+    def arrive(self, destination: World) -> None:
+        """Commit a trip to the already-built `destination`: bind, park, save and announce it.
+
+        Side effects:
+            Replaces `world`, parks the boat at the new landing, resets Bot, returns the UI
+            to play, toasts the travel caption, and saves.
+        """
+        caption = travel_caption(self.world.id, destination.id)
+        self.pending_lake = None
         self.world = destination
         self.state.bind(destination)
         self.state.rowboat_charge_kwh_this_visit = 0.0
@@ -1452,7 +1478,6 @@ class Session:
         self.ui.note = ""
         self.state.toast(caption)
         self.save()
-        return None
 
     def _open_help(self, origin: str):
         self.ui.help_from = origin
@@ -2582,6 +2607,7 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
         state.toast("Platform save folder unavailable; using the local save folder.")
     session = Session(world, opened.path, state, has_save, dev=dev,
                       legacy_path=opened.legacy_path)
+    session.defer_travel = True  # trips load behind the travel card (_enter_lake)
 
     dw, dh = Platform.display_size()
     width, height = _window_size(dw, dh)
@@ -2665,7 +2691,7 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                 ui.fish_card_renderer = getattr(renderer, "fish_card", None)
                 loading = np.empty((height, width, 3), np.uint8)
                 low = None
-            if renderer.world is not session.world:
+            if renderer.world is not session.world or session.pending_lake is not None:
                 # The transition runs on the last lake image without its HUD.
                 scene = low
                 if scene is not None and scene.shape[:2] != (height, width):
@@ -2749,6 +2775,61 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
         platform.close()
 
 
+class _WorldLoad:
+    """Build one lake's World on a worker thread while the GL thread keeps the window alive.
+
+    World generation is pure NumPy and Python on data owned by the new World, with no GL
+    and no shared state, so the worker's result is the same World a synchronous build
+    gives. The GL thread reads `world` or `error` only after `done` is set. The thread is
+    a daemon, so quitting mid-load does not wait for it.
+    """
+
+    def __init__(self, lake_id: str):
+        self.lake_id = lake_id
+        self.world: World | None = None
+        self.error: BaseException | None = None
+        self.done = threading.Event()
+        threading.Thread(target=self._build, name=f"world-{lake_id}", daemon=True).start()
+
+    def _build(self) -> None:
+        try:
+            self.world = World(self.lake_id)
+        except Exception as exc:  # reported on the GL thread by _await_world
+            self.error = exc
+        finally:
+            self.done.set()
+
+
+def _pump_events(platform, session) -> None:
+    """Service window events once, so the compositor sees the game answering.
+
+    Safe between GL build stages: `poll` reads SDL events and the drawable size, and
+    touches no GL state. Input edges seen here are dropped, but a quit is kept.
+    """
+    if platform.poll(0.0).quit:
+        session.quit = True
+
+
+def _await_world(platform, session, load: _WorldLoad, frame) -> World | None:
+    """Keep presenting `frame` and servicing window events until `load` finishes.
+
+    Returns:
+        The built World. None when the player quit (`session.quit` is set) or the build
+        failed (reported on stderr and in a toast). Either way the session is untouched.
+    """
+    while not load.done.wait(1 / 30):
+        if platform.poll(0.0).quit:
+            session.quit = True
+            return None
+        platform.present(frame)
+    if load.error is not None:
+        traceback.print_exception(load.error, file=sys.stderr)
+        session.state.toast(f"{LAKES[load.lake_id]['name']} would not open. "
+                            f"You're still at {session.world.name}.")
+        return None
+    return load.world
+
+
 def _enter_lake(platform, session, renderer, ui, text, loading, software_backend,
                 software_tier, last_frame, *, quips: LoadingQuips | None = None):
     """Swap to the session's new lake and return its renderer and UI.
@@ -2758,20 +2839,41 @@ def _enter_lake(platform, session, renderer, ui, text, loading, software_backend
     starfield, which carries the travel card's text. Other routes show the
     plain loading card. Both name the destination and add a quip from
     `quips` (a fresh picker when None) for the destination lake.
+
+    A deferred trip (`session.pending_lake`) builds the World on a worker thread
+    behind that card, servicing window events throughout, and then commits it with
+    `session.arrive`. The GL renderer is then built on this thread, with an event
+    pump between its stages. A quit or a failed build leaves the old lake, renderer
+    and UI in place, and clears the pending trip.
     """
     from . import starlight
     height, width = loading.shape[:2]
+    destination = session.pending_lake or session.world.id
+    name = LAKES[destination]["name"]
+    load = _WorldLoad(destination) if session.pending_lake is not None else None
     starlit = (last_frame is not None
-               and starlight.touches_starlight(renderer.world.id, session.world.id))
+               and starlight.touches_starlight(renderer.world.id, destination))
     reduced = bool(session.state.v2.get("settings", {}).get("reduced_motion", False))
-    quip = (quips if quips is not None else LoadingQuips()).pick(session.world.id)
+    quip = (quips if quips is not None else LoadingQuips()).pick(destination)
     if starlit:
         _play_starlight(platform, session, last_frame, None, 0.0, starlight.TIP_END, reduced,
-                        card=(ui, session.world.name, quip))
+                        card=(ui, name, quip))
+        hold = None
+        if load is not None:
+            # The tip's last frame, card and all, stays up until the lake is built.
+            hold = starlight.frame(last_frame, None, starlight.TIP_END, reduced_motion=reduced)
+            _travel_card_text(ui, hold, name, quip)
     else:
         loading[:] = (17,31,32)
-        _travel_card_text(ui, loading, session.world.name, quip)
+        _travel_card_text(ui, loading, name, quip)
         platform.present(loading)
+        hold = loading
+    if load is not None:
+        world = None if session.quit else _await_world(platform, session, load, hold)
+        if world is None:
+            session.pending_lake = None
+            return renderer, ui
+        session.arrive(world)
     # The starlight card spans the UI swap; keep the player's text size and font on it.
     text_style = (ui._text_scale, ui._dyslexia_font)
     ui.close()
@@ -2782,7 +2884,8 @@ def _enter_lake(platform, session, renderer, ui, text, loading, software_backend
         width, height, software=software_tier)
     renderer = Renderer(session.world,render_width,render_height,
                         software=software_backend, context=platform.context,
-                        output_size=(width, height))
+                        output_size=(width, height),
+                        progress=lambda: _pump_events(platform, session))
     ui.fish_card_renderer = getattr(renderer, "fish_card", None)
     if starlit and not session.quit:
         platform.make_current()

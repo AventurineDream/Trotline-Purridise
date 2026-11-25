@@ -52,6 +52,9 @@ class LakeRenderer(SoftwareRenderer):
         height: Internal scene-target height in pixels.
         context: Optional current OpenGL context.
         output_size: Final output dimensions in pixels; defaults to the scene target.
+        progress: Optional no-argument callable run between build stages (each well under a
+            second). The game passes a window-event pump, so a lake change never looks hung.
+            It runs on this thread with the context current, and must not touch GL state.
     Returns:
         None.
     Side effects:
@@ -60,7 +63,9 @@ class LakeRenderer(SoftwareRenderer):
         RuntimeError: If OpenGL setup fails.
     """
 
-    def __init__(self, world, width=960, height=540, *, context=None, output_size=None):
+    def __init__(self, world, width=960, height=540, *, context=None, output_size=None,
+                 progress=None):
+        self._progress = progress or (lambda: None)
         self.world = world
         self.ctx = context
         self._owns_context = context is None
@@ -150,6 +155,7 @@ class LakeRenderer(SoftwareRenderer):
         self.water_p = self.program("water.vert","water.frag")
         self.post_p = self.program("sky.vert","post.frag")
         self.cat_p = self.program("cat.vert","cat.frag")
+        self._progress()  # shader compiles
         quad = self.own(ctx.buffer(np.array([[-1,-1],[3,-1],[-1,3]],np.float32).tobytes()))
         self.sky_vao = self.own(ctx.vertex_array(self.sky_p,[(quad,"2f","in_xy")]))
         self.post_vao = self.own(ctx.vertex_array(self.post_p,[(quad,"2f","in_xy")]))
@@ -192,6 +198,7 @@ class LakeRenderer(SoftwareRenderer):
             tex.repeat_x = tex.repeat_y = False
             setattr(self,name,tex)
         self.terrain = self._terrain()
+        self._progress()
         self.camp = self.mesh(self._pack_faces(self.world.faces))
         self.boat_buf = self.own(ctx.buffer(reserve=500000,dynamic=True))
         self.boat_vao = self.mesh_vao(self.boat_buf)
@@ -204,6 +211,7 @@ class LakeRenderer(SoftwareRenderer):
         # Spare layers for the distant cats' impostors, written as actors arrive.
         from .actors import MAX_ACTORS
         self.flora_atlas = FloraAtlas(self, paint_rgb("buoy","orange"), MAX_ACTORS)
+        self._progress()  # the largest single stage: tree and reed bakes
         self.layers = self.flora_atlas.layers
         self.actor_layer0 = self.flora_atlas.reserve0
         self._nebula_arrays = self._nebula_uniforms()
@@ -212,6 +220,7 @@ class LakeRenderer(SoftwareRenderer):
         corners = np.array([[-.5,0],[.5,0],[.5,1],[-.5,0],[.5,1],[-.5,1]],np.float32)
         self.tree_quad = self.own(ctx.buffer(corners.tobytes()))
         self.prop_data = self._props()
+        self._progress()
         self.prop_buf = self.own(ctx.buffer(self.prop_data.tobytes() or bytes(7*4)))
         self.prop_vao = self.tree_vao(self.prop_buf)
         self.buoy_buf = self.own(ctx.buffer(reserve=7*4*24,dynamic=True))
@@ -232,6 +241,7 @@ class LakeRenderer(SoftwareRenderer):
             self.fx.append(layer(self, self.detail))
             self.scene_fb.use()
             ctx.viewport = (0, 0, self.w, self.h)
+            self._progress()
 
     def fx_memory_bytes(self) -> int:
         """GPU bytes held by the effect layers' baked textures and buffers."""

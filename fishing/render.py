@@ -19,6 +19,8 @@ class Renderer:
         context: Optional current OpenGL context.
         output_size: Optional final frame size in pixels; GPU rendering upscales
             on-GPU, while software backends retain their existing cap.
+        progress: Optional callable run between OpenGL build stages (see
+            `LakeRenderer`). The CPU renderer builds in tens of milliseconds and never calls it.
     Returns:
         A renderer-compatible backend with `render` and `close`.
     Side effects:
@@ -26,11 +28,12 @@ class Renderer:
     """
 
     def __new__(cls, world, width=VIEW_W, height=VIEW_H, *, software=False,
-                context=None, output_size=None):
+                context=None, output_size=None, progress=None):
         if not software:
             try:
                 from .glrender import LakeRenderer
-                return LakeRenderer(world, width, height, context=context, output_size=output_size)
+                return LakeRenderer(world, width, height, context=context, output_size=output_size,
+                                    progress=progress)
             except (ImportError, RuntimeError) as exc:
                 print(f"Graphics unavailable ({exc}); using the CPU renderer.", file=sys.stderr)
         from .software import SoftwareRenderer
