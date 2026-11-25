@@ -966,7 +966,11 @@ class Skipper(unittest.TestCase):
 
 
 class ChartPins(unittest.TestCase):
-    def test_pins_wear_each_cats_coat(self):
+    """Issue #159: chart pins wear a chart-only palette that is stable per cat and distinct."""
+
+    LAKES = ("briar", "cedar", "flathead", "crater", "nebula")
+
+    def test_each_pin_is_drawn_in_its_key_colour_not_its_coat(self):
         from .platform import Text
         from .ui import UI
         world, state = _lake("briar")
@@ -974,12 +978,144 @@ class ChartPins(unittest.TestCase):
         try:
             ui = UI(text, world)
             frame = np.zeros((400, 400, 3), np.uint8)
-            ui._plot_npcs(frame, state, 0, 0, 400, 400)
-            for npc in state.npcs:
+            key = dict(ui._plot_npcs(frame, state, 0, 0, 400, 400))
+            here = [npc for npc in state.npcs if npc.anchor.lake_id == world.id]
+            self.assertEqual(len(key), len(here))
+            self.assertEqual(len(set(key.values())), len(key), "two pins share a colour")
+            for npc in here:
                 u, v = world.map_pixel(npc.anchor.x, npc.anchor.z, 400, 400)
-                coat = [int(c * 255 + 0.5) for c in ROSTER[npc.id]["appearance"]["colors"]["base"]]
+                coat = tuple(int(c * 255 + 0.5) for c in ROSTER[npc.id]["appearance"]["colors"]["base"])
                 with self.subTest(npc=npc.id):
-                    np.testing.assert_array_equal(frame[int(v), int(u)], coat)
+                    np.testing.assert_array_equal(frame[int(v), int(u)], key[npc.name])
+                    self.assertNotEqual(key[npc.name], coat)
+        finally:
+            text.close()
+
+    def test_a_cat_keeps_its_pin_colour_through_every_day_and_night(self):
+        from .ui import resident_pin_colors
+        for lake in self.LAKES:
+            world = World(lake)
+            state = State.new(world, seed=12345)
+            seen = {}
+            for day in range(7):
+                for hour in (10, 22):
+                    state.game_minutes = day * 24 * 60 + hour * 60
+                    ids = [npc.id for npc in active_npcs(state, world, NARRATIVE)
+                           if npc.anchor.lake_id == lake]
+                    pins = resident_pin_colors(lake, ids)
+                    with self.subTest(lake=lake, day=day, hour=hour):
+                        self.assertEqual(len(set(pins.values())), len(pins))
+                        for npc_id, colour in pins.items():
+                            self.assertEqual(seen.setdefault(npc_id, colour), colour, npc_id)
+            self.assertGreater(len(seen), 4, f"{lake}: the week showed too few cats to test")
+
+    def test_palette_is_vibrant_separated_clear_of_markers_and_reads_on_every_lake(self):
+        import colorsys
+
+        from .ui import (CHART_EDGE, CHART_RESIDENT_PALETTE, GOLD, INK, SONAR_BAND_COLORS, WARN,
+                         chart_order, resident_pin_colors)
+
+        def linear(rgb):
+            return [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+                    for c in np.asarray(rgb, float) / 255.0]
+
+        def luminance(rgb):
+            r, g, b = linear(rgb)
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+        def contrast(a, b):
+            la, lb = luminance(a), luminance(b)
+            return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+        def lab(rgb):
+            r, g, b = linear(rgb)
+            xyz = ((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, luminance(rgb),
+                   (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883)
+            fx, fy, fz = (t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116 for t in xyz)
+            return (116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz))
+
+        def delta_e00(c1, c2):
+            # CIEDE2000 (Sharma, Wu & Dalal 2005): perceptual distance between two sRGB colours.
+            (l1, a1, b1), (l2, a2, b2) = lab(c1), lab(c2)
+            c_bar = (math.hypot(a1, b1) + math.hypot(a2, b2)) / 2
+            g = 0.5 * (1 - math.sqrt(c_bar ** 7 / (c_bar ** 7 + 25 ** 7)))
+            a1, a2 = a1 * (1 + g), a2 * (1 + g)
+            c1p, c2p = math.hypot(a1, b1), math.hypot(a2, b2)
+            h1, h2 = math.degrees(math.atan2(b1, a1)) % 360, math.degrees(math.atan2(b2, a2)) % 360
+            dh = 0.0 if c1p * c2p == 0 else (h2 - h1 + 180) % 360 - 180
+            d_h = 2 * math.sqrt(c1p * c2p) * math.sin(math.radians(dh / 2))
+            l_bar, c_barp = (l1 + l2) / 2, (c1p + c2p) / 2
+            if c1p * c2p == 0:
+                h_bar = h1 + h2
+            elif abs(h1 - h2) <= 180:
+                h_bar = (h1 + h2) / 2
+            else:
+                h_bar = (h1 + h2 + 360) / 2 if h1 + h2 < 360 else (h1 + h2 - 360) / 2
+            t = (1 - 0.17 * math.cos(math.radians(h_bar - 30)) + 0.24 * math.cos(math.radians(2 * h_bar))
+                 + 0.32 * math.cos(math.radians(3 * h_bar + 6)) - 0.20 * math.cos(math.radians(4 * h_bar - 63)))
+            r_t = (-2 * math.sqrt(c_barp ** 7 / (c_barp ** 7 + 25 ** 7))
+                   * math.sin(math.radians(60 * math.exp(-(((h_bar - 275) / 25) ** 2)))))
+            s_l = 1 + 0.015 * (l_bar - 50) ** 2 / math.sqrt(20 + (l_bar - 50) ** 2)
+            s_c, s_h = 1 + 0.045 * c_barp, 1 + 0.015 * c_barp * t
+            d_l, d_c = (l2 - l1) / s_l, (c2p - c1p) / s_c
+            return math.sqrt(d_l ** 2 + d_c ** 2 + (d_h / s_h) ** 2 + r_t * d_c * (d_h / s_h))
+
+        # Sanity: the measure must separate the near-identical greens plain Lab distance passed.
+        self.assertLess(delta_e00((0, 255, 0), (0, 255, 136)), 19)
+        for colour in CHART_RESIDENT_PALETTE:
+            self.assertGreaterEqual(colorsys.rgb_to_hsv(*(c / 255 for c in colour))[1], 0.45,
+                                    f"{colour} is too washed out for a chart pin")
+        for i, a in enumerate(CHART_RESIDENT_PALETTE):
+            for b in CHART_RESIDENT_PALETTE[i + 1:]:
+                self.assertGreaterEqual(delta_e00(a, b), 19, (a, b))
+        # Everything else drawn on the chart: UI._marker (fish, Bot, tired, gold badge,
+        # boat, tip, soak, empty, neutral cat key), UI._line_color and the sonar bands.
+        markers = [(255, 214, 120), (255, 148, 48), WARN, GOLD, (236, 224, 180), INK,
+                   (232, 196, 110), (186, 214, 196), (90, 104, 98), (232, 176, 72),
+                   (126, 168, 146), *SONAR_BAND_COLORS]
+        for colour in CHART_RESIDENT_PALETTE:
+            for marker in markers:
+                self.assertGreaterEqual(delta_e00(colour, marker), 10, (colour, marker))
+
+        # The pin's own dark ring, then each lake's paper: the most common colour of its chart.
+        backgrounds = {CHART_EDGE}
+        for lake in self.LAKES:
+            colours, counts = np.unique(World(lake).map_rgb.reshape(-1, 3), axis=0, return_counts=True)
+            backgrounds.add(tuple(int(v) for v in colours[counts.argmax()]))
+            # The fullest chart a lake can show (whole roster and both travelers), plus one
+            # hypothetical outside visitor that today's content never produces: the spare
+            # slots must still give every pin its own colour.
+            fullest = resident_pin_colors(lake, [*chart_order(lake), "legacy_visitor"])
+            self.assertEqual(len(set(fullest.values())), len(fullest), lake)
+        for colour in CHART_RESIDENT_PALETTE:
+            for background in backgrounds:
+                with self.subTest(colour=colour, background=background):
+                    self.assertGreaterEqual(contrast(colour, background), 3.0)
+
+    def test_more_cats_than_colours_is_refused_not_doubled_up(self):
+        from .ui import CHART_RESIDENT_PALETTE, chart_order, resident_pin_colors
+        visitors = [f"visitor_{i}" for i in range(len(CHART_RESIDENT_PALETTE) - len(chart_order("briar")) + 1)]
+        with self.assertRaises(ValueError):
+            resident_pin_colors("briar", visitors)
+
+    def test_legend_reuses_the_pin_colours(self):
+        from .platform import Text
+        from .ui import UI, UIState
+        world, state = _lake("briar")
+        text = Text()
+        try:
+            ui = UI(text, world)
+            captured = {}
+            original = ui._map_key
+
+            def spy(frame, state_, x, y, w, h, places, residents, sonar_visible):
+                captured["residents"] = list(residents)
+                return original(frame, state_, x, y, w, h, places, residents, sonar_visible)
+
+            ui._map_key = spy
+            ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="map"))
+            plotted = ui._plot_npcs(np.zeros((400, 400, 3), np.uint8), state, 0, 0, 400, 400)
+            self.assertEqual(captured["residents"], plotted)
         finally:
             text.close()
 

@@ -28,7 +28,7 @@ Captured on commit 91d3e38 with Mesa llvmpipe, which caps native frames at 640×
   - followed by the head reflection when idle and when moving.
 - **`reflection-{idle,moving}-{native,software}.png`:** the Skipper's head silhouette on calm water at idle (ears down, past the bow), gone once under way.
 - **`dialogue-portrait-{briar,cedar}.png`:** the host's portrait at the left of the dialogue panel, at 1280×720.
-- **`chart-pins-{briar,cedar}.png`:** the chart, with pins in each cat's coat colour.
+- **`chart-pins-{briar,cedar}.png`:** the chart as captured for this issue, with pins in each cat's coat colour. Issue #159 later moved pins to a chart-only palette; these sheets predate that.
 
 ## Numbers
 

@@ -66,6 +66,82 @@ WARN = (220, 126, 96)
 # Shallow to deep; the last colour also covers anything deeper.
 SONAR_BAND_COLORS = ((120, 204, 214), (92, 172, 196), (70, 136, 176), (52, 104, 150))
 GOOD = (150, 196, 140)
+
+
+# Chart-only resident pin palette (issue #159). It never recolours the cats themselves.
+# Each colour is vibrant (HSV saturation >= 0.45) and keeps 3:1 contrast against its own
+# dark ring (CHART_EDGE, the pin's adjacent colour) and each lake's chart paper. On the
+# mid-tone bank shade (92, 78, 52) that every lake but Nebula draws, a pin body can drop to
+# about 2.2:1, and to about 2.6:1 on Nebula's violet shallows (79, 58, 105). That is the
+# chosen limit: demanding 3:1 on every shade leaves only a yellow-green-cyan gamut too
+# small for a lake's cast, so the dark ring carries those spots. Every pair is at least 19
+# apart in CIEDE2000, which, unlike plain Lab distance, does not overrate gaps between
+# saturated greens, and every colour is at least 10 from each chart marker, line and sonar
+# band colour. test_cats.ChartPins checks all of it. Slots run in farthest-first order, so
+# a lake with few cats gets the most distinct pins.
+CHART_EDGE = (28, 34, 38)  # the dark edge UI._shape draws round every chart symbol, pins included
+CHART_RESIDENT_PALETTE = (
+    (17, 170, 85),     # green
+    (255, 0, 238),     # magenta
+    (221, 102, 0),     # orange
+    (0, 170, 255),     # azure
+    (255, 221, 0),     # yellow
+    (0, 255, 255),     # cyan
+    (255, 34, 85),     # red
+    (153, 136, 51),    # khaki
+    (136, 255, 17),    # lime
+    (119, 119, 238),   # indigo
+    (0, 153, 153),     # teal
+    (255, 187, 136),   # peach
+    (255, 136, 187),   # pink
+    (102, 255, 187),   # mint
+)
+
+
+@lru_cache(maxsize=None)
+def chart_order(lake_id):
+    """The lake's fixed pin order: its host, day and night cats sorted by id, then the travelers.
+
+    Slots come from the roster, not from who is out right now, so a cat keeps its pin
+    colour through the day, night, cookouts and reloads. Cached: the roster is fixed
+    content and the chart asks every frame.
+    """
+    from .npcs import TRAVELER_MOORINGS, cast
+    roster = cast()
+    residents = set(roster.day.get(lake_id, ())) | set(roster.night.get(lake_id, ()))
+    if lake_id in roster.hosts:
+        residents.add(roster.hosts[lake_id])
+    return (*sorted(residents), *sorted(TRAVELER_MOORINGS))
+
+
+def resident_pin_colors(lake_id, present_ids):
+    """Map each cat in `present_ids` to its chart pin colour on `lake_id`.
+
+    A cat in `chart_order(lake_id)` takes its own palette slot. Any other visitor (a
+    legacy cat from another lake) takes the spare slots past the fixed order, in id order,
+    so every pin on one chart stays distinct.
+
+    Returns:
+        dict of npc id -> (r, g, b) 0-255.
+
+    Raises:
+        ValueError: more cats than palette slots, which would force two pins to share.
+            Unreachable with today's content: npcs.present_ids only admits cats already
+            in chart_order (legacy cats are the lake's own day cats; travelers are in
+            the order). The spare slots and this raise guard future content.
+    """
+    order = chart_order(lake_id)
+    colours = {npc_id: CHART_RESIDENT_PALETTE[order.index(npc_id)]
+               for npc_id in present_ids if npc_id in order}
+    visitors = sorted(npc_id for npc_id in present_ids if npc_id not in order)
+    if len(order) + len(visitors) > len(CHART_RESIDENT_PALETTE):
+        raise ValueError(f"{lake_id}: {len(order)} roster cats and {len(visitors)} visitors "
+                         f"outnumber {len(CHART_RESIDENT_PALETTE)} chart pin colours")
+    for i, npc_id in enumerate(visitors):
+        colours[npc_id] = CHART_RESIDENT_PALETTE[len(order) + i]
+    return colours
+
+
 # The backing behind text that sits on the lake itself (haul, credits, encounter): at this
 # strength every text colour above reads at 4.5:1 or better over the brightest sky (V1-43).
 TEXT_BACKING = (9, 17, 19)
@@ -1933,7 +2009,7 @@ class UI:
         colour, so the key reads with any colour vision (V1-43)."""
         from .botidentity import name as bot_name
         items = [("fish", "fish on"), ("tired", "tired fish"), ("soak", "soaking line"),
-                 ("cat", "cat"), ("bot", bot_name(state)), ("tip", bot_name(state) + "'s weather tip"),
+                 ("cat", "cat pin"), ("bot", bot_name(state)), ("tip", bot_name(state) + "'s weather tip"),
                  ("boat", "you")]
         if sonar_bands:
             items.append(("sonar", "sonar depth"))
@@ -1943,7 +2019,7 @@ class UI:
         """Explain the chart's numbered places, resident pins and marker shapes in a side panel.
 
         `places` holds (number, name, ...) tuples from `_plot_habitats`; `residents` holds
-        (name, coat rgb) pairs from `_plot_npcs`. Residents are omitted when the full list
+        (name, palette rgb) pairs from `_plot_npcs`. Residents are omitted when the full list
         would push the marker legend off the panel.
         """
         self._panel(frame, x, y, width, height, 0.88)
@@ -2057,15 +2133,14 @@ class UI:
         self._shape(frame, "diamond ring", x + u, y + v, 4, (240, 198, 112))
 
     def _plot_npcs(self, frame, state, x, y, mw, mh, large=False, protected=()):
-        """Pin each resident cat on the chart in its coat colour.
+        """Pin each resident cat on the chart in its chart-palette colour.
 
         `large` draws the full-chart pin size; `protected` lists (x, y, radius) frame-pixel
         markers that a pin must not cover, so it steps aside from them. Returns
-        (name, coat rgb) pairs for the chart key.
+        (name, palette rgb) pairs for the chart key.
         """
-        from .actors import roster
-        fallback = (128, 206, 240)
-        cats = roster()
+        pins = resident_pin_colors(self.world.id, [npc.id for npc in state.npcs
+                                                   if npc.anchor.lake_id == self.world.id])
         residents = []
         radius = 3 if large else 2
         obstacles = [
@@ -2101,11 +2176,10 @@ class UI:
                             break
                     if moved:
                         break
-            # Each pin wears its cat's coat, ringed so pale coats read on the chart (V1-29),
-            # and is round so no colour vision mistakes it for a fish or the Bot (V1-43).
-            row = cats.get(npc.id)
-            pin = (tuple(int(c * 255 + 0.5) for c in row["appearance"]["colors"]["base"])
-                   if row is not None else fallback)
+            # Each pin wears its chart-palette colour (issue #159), ringed so it reads on the
+            # chart (V1-29), and is round so no colour vision mistakes it for a fish or the
+            # Bot (V1-43). The RESIDENTS key names each pin by the same colour.
+            pin = pins[npc.id]
             self._shape(frame, "disc", pin_x, pin_y, radius, pin)
             residents.append((npc.name, pin))
         return residents
@@ -2160,7 +2234,8 @@ class UI:
             for k in (-6, -2, 2, 6):
                 self._dot(frame, x + k, y, 1, (186, 214, 196))
         elif kind == "cat":
-            self._shape(frame, "disc", x, y, 4 if legend else 3, (200, 162, 118))
+            # Shape only: each cat's own colour is in the RESIDENTS key (issue #159).
+            self._shape(frame, "disc", x, y, 4 if legend else 3, INK)
         elif kind == "bot":
             self._shape(frame, "triangle", x, y, 5 if legend else 4, (255, 148, 48))
         elif kind == "tip":
@@ -2203,7 +2278,7 @@ class UI:
         edge, body = mask_for(r + 1), mask_for(r)
         if shape == "diamond ring":
             body = body & (np.abs(xx) + np.abs(yy) >= r - 1)
-        for mask, color in ((edge, (28, 34, 38)), (body, rgb)):
+        for mask, color in ((edge, CHART_EDGE), (body, rgb)):
             ys, xs = np.nonzero(mask)
             px, py = xs - rr + cx, ys - rr + cy
             keep = (px >= 0) & (px < w) & (py >= 0) & (py < h)
