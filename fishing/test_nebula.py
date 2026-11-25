@@ -250,7 +250,8 @@ class NebulaSky(unittest.TestCase):
         ui._text = lambda frame, label, *args, **kwargs: (drawn.append(label), original(frame, label, *args, **kwargs))
         try:
             ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play", has_save=True))
-            self.assertTrue(any(label.startswith("RISING  /  ") for label in drawn))
+            # The labelled weather line on the right HUD leads with the sky band.
+            self.assertTrue(any(label.startswith("WEATHER  RISING  /  ") for label in drawn))
             ui._text = original
             chart = np.zeros((720, 1280, 3), np.uint8)
             places = ui._plot_habitats(chart, 50, 50, 360, 360)
