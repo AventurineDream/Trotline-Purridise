@@ -2068,17 +2068,17 @@ class State:
     def _return_bait(self, line: SetLine) -> str:
         """Put the bait still on `line`'s unused hooks back in the bait box.
 
-        Only hooks that are baited and empty count. A bite, a nibble, or a fish taken
-        off has already spent its hook's bait, and those hooks read unbaited. Bait the
-        keep_bait perk put on for free (comfort.FREE_BAIT) was never paid for, so it is
-        not returned. Each hook returns its own section's bait. The box fills up to
-        `box_cap()` one hook at a time in hook order, and any bait past that goes over
-        the side. Ids missing from BAIT_BY_ID (e.g. from an old save) are not returned,
-        because the box only holds bait it can name.
+        Only hooks that are baited and empty count. A bite, a fish that got away, and a
+        fish taken off or released have all spent their hook's bait, and those hooks read
+        unbaited. Bait the keep_bait perk put on for free (comfort.FREE_BAIT) was never
+        paid for, so it is not returned. Each hook returns its own section's bait. The
+        box fills up to `box_cap()` one hook at a time in hook order, and any bait past
+        that goes over the side. Ids missing from BAIT_BY_ID (e.g. from an old save) are
+        not returned, because the box only holds bait it can name.
 
         Returns:
-            Feedback to append to the coil toast, starting with a space, or "" when
-            nothing came back.
+            Feedback to append to the coil toast, starting with a space: the refunded
+            counts, the over-the-side count, or both. Empty only when no hook had unused bait.
         """
         room = max(0, self.box_cap() - self.bait_count())
         back: dict[str, int] = {}

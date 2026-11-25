@@ -40,26 +40,38 @@ class BaitComesBackOnPull(unittest.TestCase):
     def coil_toast(self):
         return [text for text, _ in self.state.toasts if text.startswith("Line coiled")][-1]
 
-    def test_setting_then_pulling_an_untouched_line_returns_every_bait(self):
-        self.state.bait = {"worm": 24, "liver": 12, "shad": 12}
-        before = dict(self.state.bait)
-        # Any legal open-water spot: try_set alone decides what counts as legal.
+    def set_somewhere(self, sections):
+        """Set held line 0 at the first legal open-water spot; try_set alone decides legality."""
         for radius in range(40, 400, 20):
             for step in range(16):
                 angle = step * math.tau / 16
                 self.state.x, self.state.z = radius * math.sin(angle), radius * math.cos(angle)
-                if self.state.try_set(self.world, 0, ["worm", "liver", "shad"]) is None:
-                    break
-            if self.state.lines:
-                break
-        self.assertTrue(self.state.lines, "no legal place to set a line")
+                if self.state.try_set(self.world, 0, sections) is None:
+                    return
+        self.fail("no legal place to set a line")
+
+    def test_setting_then_pulling_an_untouched_line_returns_every_bait(self):
+        self.state.bait = {"worm": 24, "liver": 12, "shad": 12}
+        before = dict(self.state.bait)
+        self.set_somewhere(["worm", "liver", "shad"])
         self.assertLess(sum(self.state.bait.values()), sum(before.values()))
         self.assertIsNone(self.state.pull_line(0))
         self.assertEqual(self.state.bait, before)
 
+    def test_a_soaked_line_returns_only_the_bait_nothing_took(self):
+        self.state.bait = {"worm": 24}
+        self.set_somewhere("worm")
+        self.state.advance_bulk(8 * 60)  # real bites and escapes spend real bait
+        line = self.state.lines[0]
+        spent = sum(not hook.baited for hook in line.hooks)
+        self.assertGreater(spent, 0, "the soak should take some bait")
+        self.state.well = []  # room for whatever is on the hooks
+        self.assertIsNone(self.state.pull_line(0))
+        self.assertEqual(self.state.bait, {"worm": 24 - spent})
+
     def test_only_hooks_still_baited_and_empty_come_back_by_their_section(self):
         hooks = [Hook(True) for _ in range(12)]  # sections: 0-3 worm, 4-7 liver, 8-11 shad
-        hooks[0] = Hook(False)                  # bait taken by a nibble
+        hooks[0] = Hook(False)                  # a fish got away with this bait
         hooks[1] = Hook(False, fish())          # a fish on: its bait is spent
         hooks[5] = Hook(False, fish("release"))
         hooks[9] = Hook(False)
