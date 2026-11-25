@@ -105,7 +105,7 @@ def footprint(model):
 
 
 def wake_along(along, speed, model):
-    """Where a point lies along the hull's travel, for the wake art, metres ahead of the eye.
+    """Where a point lies along the hull's travel, for the wake art, metres ahead of (x, z).
 
     The wake terms in software.py and water.frag are authored for forward travel. Reversing,
     the stern leads, so `along` mirrors about the hull's middle: the wake trails the bow and
@@ -113,7 +113,8 @@ def wake_along(along, speed, model):
     zero speed cannot be seen. water.frag mirrors the same way from its boat_ends uniform.
 
     Args:
-        along: distance ahead of the eye along the heading, metres (scalar or array).
+        along: distance ahead of the boat's position (state.x, state.z) along the heading,
+            metres (scalar or array); `stern` and `bow` are measured from the same point.
         speed: signed boat speed, m/s; negative is reversing.
         model: the BoatModel whose `stern` and `bow` bound the hull.
 

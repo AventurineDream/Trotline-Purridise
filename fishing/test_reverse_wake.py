@@ -36,10 +36,10 @@ class SoftwareReverseWake(unittest.TestCase):
         cls.renderer.close()
 
     def wake(self, speed, along, side, boat_id="jon"):
-        """Wake light added at points `along` ahead / `side` to starboard of the eye."""
+        """Wake light added at points `along` ahead / `side` to starboard of the boat's position."""
         state = State.new(self.world, seed=3)
         state.boat_id = boat_id
-        state.x, state.z = _open_water(self.world)
+        state.x, state.z = _open_water(self.world, boat_id)
         state.yaw, state.speed, state.lines = 0.7, 0.0, []
         fx, fz = math.sin(state.yaw), math.cos(state.yaw)
         rx, rz = math.cos(state.yaw), -math.sin(state.yaw)
@@ -108,6 +108,13 @@ class GLReverseWake(unittest.TestCase):
                 for speed in (0.0, FULL, -FULL, CREEP, -CREEP):
                     state.speed = speed
                     cls.frames[speed] = renderer.render(state, cam).astype(np.float64)
+                # The shader mirrors about each hull's own ends: a stale or unset uniform
+                # would mirror every boat about the jon's middle, or about the eye.
+                cls.ends = {}
+                for boat_id in ("jon", "houseboat"):
+                    state.boat_id, state.speed = boat_id, -FULL
+                    renderer.render(state, cam)
+                    cls.ends[boat_id] = tuple(renderer.water_p["boat_ends"].value)
             finally:
                 renderer.close()
 
@@ -129,11 +136,18 @@ class GLReverseWake(unittest.TestCase):
         astern, ahead = self.halves(-FULL)
         self.assertGreater(ahead, 5 * astern)
 
+    def test_each_hull_mirrors_about_its_own_ends(self):
+        for boat_id, ends in self.ends.items():
+            with self.subTest(boat=boat_id):
+                np.testing.assert_allclose(ends, (BOATS[boat_id].stern, BOATS[boat_id].bow), atol=1e-6)
+
     def test_creeping_through_zero_barely_marks_the_water(self):
+        # A flipped full-strength wake at creep speed would score near 1; today's fade
+        # measures about 0.03, so 0.1 leaves room for retuning it.
         full = sum(self.halves(FULL))
         for speed in (CREEP, -CREEP):
             with self.subTest(speed=speed):
-                self.assertLess(sum(self.halves(speed)), 0.05 * full)
+                self.assertLess(sum(self.halves(speed)), 0.1 * full)
 
 
 if __name__ == "__main__":
