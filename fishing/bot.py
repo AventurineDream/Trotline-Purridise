@@ -1,7 +1,8 @@
 """Bot, the tin deckhand. He rides the bow until you send him out.
 
 He does not change bite rates, prices, or the boat. B launches him toward
-the nearest line, or a short way ahead, and B calls him back.
+the nearest line, or a short way ahead, and B calls him back. Pulling the
+line he is watching brings him home too.
 """
 
 from __future__ import annotations
@@ -82,6 +83,29 @@ def summon(state, world) -> str | None:
     state._bot_called_bite = False
     state.toast(f"Bot shoves off toward {where}.")
     return "bot"
+
+
+def line_pulled(state, line_id) -> bool:
+    """Send Bot home when the line he was sent to watch comes aboard.
+
+    Only the watched line counts, so pulling any other line leaves him where he is. A recall
+    or reset has already cleared his target, so a pull after one never doubles the trip home.
+
+    Args:
+        state: the sim State; its Bot fields change in place.
+        line_id: the stable id of the line just pulled.
+
+    Returns:
+        True when he turned for home, else False.
+    """
+    if line_id is None or state.bot_target_line_id != line_id:
+        return False
+    state.bot_target_line_id = None
+    if state.bot_phase not in ("go", "out"):
+        return False
+    state.bot_phase = "back"
+    state.toast("Bot: Line's in. Coming aboard.")
+    return True
 
 
 def tick(state, world, dt: float) -> str | None:

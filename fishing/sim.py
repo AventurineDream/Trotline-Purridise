@@ -70,6 +70,7 @@ from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, confirm_shiny, lose_sh
                    shiny_tracker, stage_up_events)
 from .savepaths import (UnsupportedSaveVersionError, V2_REWARD_KINDS,
                         merge_v2_defaults)
+from . import bot
 from . import comfort
 from . import bottools
 from . import fleet
@@ -2046,10 +2047,9 @@ class State:
             if result.startswith("The livewell"):
                 return result
         self.lines.pop(line_index)
-        if self.bot_target_line_id == line.line_id:
-            self.bot_target_line_id = None
         self.held.append(HeldLine(line.tier))
         self.toast("Line coiled in the boat.")
+        bot.line_pulled(self, line.line_id)
         return None
 
     # --- shop -----------------------------------------------------------
