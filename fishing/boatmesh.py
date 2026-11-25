@@ -1,4 +1,4 @@
-"""Small, detailed first-person daysailer and pontoon meshes."""
+"""Small, detailed first-person daysailer and pontoon meshes, and the jon's outboard."""
 
 import math
 from dataclasses import replace
@@ -17,6 +17,108 @@ def glow_hull(state, faces):
     if "glow" not in state.boat.traits:
         return faces
     return [face if face.emissive is not None else replace(face, emissive=HULL_GLOW) for face in faces]
+
+
+# The jon's tiller outboard, eye frame, metres. The clamp bracket straddles the transom
+# plane at HULL_STERN (-0.80); the steering axis sits 4 cm astern of it. The cowl rides
+# above the rail; the propeller is submerged below the 1.22 m eye-height waterline and the
+# skeg stays inside the jon's 0.47 m draft, so it never reaches below what navigation allows.
+OUTBOARD_PIVOT = (0.0, -0.84)  # (x, z) of the clamp's steering axis
+OUTBOARD_YAW = 0.45  # radians of motor yaw at full steer
+_PROP = (-1.45, -0.34, 0.11)  # hub y, hub local z, blade radius
+# (name, local centre, half size, paint): local -z is astern of the pivot. Stacked parts sink
+# into the part above rather than meeting face to face, so no two skins share a plane.
+_OUTBOARD_PARTS = (
+    ("clamp", (0.0, -0.433, 0.02), (0.10, 0.03, 0.05), "steel"),  # 2-3 mm clear of rail and cowl
+    ("cowl", (0.0, -0.24, -0.24), (0.17, 0.16, 0.22), "cowl"),
+    ("pan", (0.0, -0.44, -0.225), (0.15, 0.05, 0.19), "leg"),
+    ("midsection", (0.0, -0.905, -0.12), (0.055, 0.435, 0.08), "leg"),
+    ("plate", (0.0, -1.35, -0.16), (0.13, 0.012, 0.15), "leg"),
+    ("gearcase", (0.0, -1.45, -0.16), (0.05, 0.07, 0.16), "leg"),
+    ("skeg", (0.0, -1.59, -0.20), (0.012, 0.09, 0.08), "leg"),
+    ("hub", (0.0, -1.45, -0.34), (0.035, 0.035, 0.03), "steel"),
+)
+
+
+def _outboard_frame(steer):
+    """`place(lx, y, lz)` and `turn(nx, ny, nz)` for the outboard yawed by `steer` about its clamp."""
+    yaw = float(steer) * OUTBOARD_YAW
+    c, s = math.cos(yaw), math.sin(yaw)
+    px, pz = OUTBOARD_PIVOT
+
+    def place(lx, y, lz):
+        # Rotating by +yaw carries an aft (-z) point toward +x.
+        return (px + lx * c - lz * s, y, pz + lx * s + lz * c)
+
+    def turn(nx, ny, nz):
+        return (nx * c - nz * s, ny, nx * s + nz * c)
+
+    return place, turn, (c, s)
+
+
+def outboard_faces(steer, cowl_rgb):
+    """The jon's outboard as camera-space faces, yawed about its clamp by `steer`.
+
+    The GL path tags these like the rest of the boat's hardware, so close up they share
+    the hull's sheet-seam detail; at this size that reads as metalwork and is accepted.
+
+    Args:
+        steer: The boat's steer, -1..1. Positive turns to starboard, so the lower unit's
+            aft end swings to starboard (+x), as a real tiller motor does.
+        cowl_rgb: The `motor` paint, 0-1 RGB, for the cowl.
+
+    Returns:
+        A list of `Face`s: clamp bracket, cowl and pan, midsection, cavitation plate,
+        gearcase, skeg and a three-blade propeller. Each box has outward normals.
+    """
+    place, turn, _cs = _outboard_frame(steer)
+    paints = {"cowl": np.asarray(cowl_rgb, np.float32),
+              "leg": np.array([0.20, 0.21, 0.22], np.float32),
+              "steel": np.array([0.55, 0.58, 0.60], np.float32)}
+    faces = []
+
+    def quad(points, normal, colour):
+        faces.append(Face(np.array([place(*p) for p in points], np.float32),
+                          np.array(turn(*normal), np.float32), np.asarray(colour, np.float32), "cam"))
+
+    for _name, (x, y, z), (a, b, d), paint in _OUTBOARD_PARTS:
+        colour = paints[paint]
+        quad([(x-a,y+b,z-d),(x+a,y+b,z-d),(x+a,y+b,z+d),(x-a,y+b,z+d)], (0,1,0), colour)
+        quad([(x-a,y-b,z+d),(x+a,y-b,z+d),(x+a,y-b,z-d),(x-a,y-b,z-d)], (0,-1,0), colour * 0.7)
+        quad([(x-a,y-b,z+d),(x-a,y+b,z+d),(x+a,y+b,z+d),(x+a,y-b,z+d)], (0,0,1), colour * 0.9)
+        quad([(x+a,y-b,z-d),(x+a,y+b,z-d),(x-a,y+b,z-d),(x-a,y-b,z-d)], (0,0,-1), colour * 0.85)
+        quad([(x-a,y-b,z-d),(x-a,y+b,z-d),(x-a,y+b,z+d),(x-a,y-b,z+d)], (-1,0,0), colour * 0.8)
+        quad([(x+a,y-b,z+d),(x+a,y+b,z+d),(x+a,y+b,z-d),(x+a,y-b,z-d)], (1,0,0), colour * 0.8)
+    # Three blades round the hub. Each blade is two one-sided quads, the forward one 4 mm
+    # ahead so the GL pass, which draws both, never depth-fights them.
+    hub_y, hub_z, radius = _PROP
+    for k in range(3):
+        angle = k * math.tau / 3 + 0.3
+        tip_x, tip_y = math.cos(angle) * radius, hub_y + math.sin(angle) * radius
+        side_x, side_y = -math.sin(angle) * 0.035, math.cos(angle) * 0.035
+        blade = [(-side_x, hub_y - side_y), (side_x, hub_y + side_y),
+                 (tip_x + side_x, tip_y + side_y), (tip_x - side_x, tip_y - side_y)]
+        quad([(bx, by, hub_z) for bx, by in blade], (0, 0, -1), paints["steel"])
+        quad([(bx, by, hub_z + 0.004) for bx, by in blade[::-1]], (0, 0, 1), paints["steel"] * 0.8)
+    return faces
+
+
+def outboard_boxes(steer):
+    """Boat-space occluder boxes for the outboard's cowl and midsection at `steer`.
+
+    Uses the same yaw as `outboard_faces`. Each box is the axis-aligned bound of the
+    yawed part, because the lighting shader's boxes cannot rotate.
+
+    Returns:
+        [(centre, half size)] as float32 (3,) arrays, eye frame, metres.
+    """
+    place, _turn, (c, s) = _outboard_frame(steer)
+    boxes = []
+    for name, centre, (a, b, d), _paint in _OUTBOARD_PARTS:
+        if name in ("cowl", "midsection"):
+            half = (abs(a * c) + abs(d * s), b, abs(a * s) + abs(d * c))
+            boxes.append((np.asarray(place(*centre), np.float32), np.asarray(half, np.float32)))
+    return boxes
 
 
 def boat_faces(state):

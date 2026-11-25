@@ -25,6 +25,10 @@ HULL_STERN = -0.80
 HULL_HALF_BEAM = 0.70
 HULL_INNER_BEAM = 0.64
 HULL_CLEARANCE = 0.04
+# The jon's outboard hangs astern of its hull. These bound boatmesh.outboard_faces at every
+# steer (test_jon_outboard checks it), in the eye frame, metres.
+JON_OUTBOARD_AFT = -1.34
+JON_OUTBOARD_HALF_WIDTH = 0.36
 THROTTLE_RATE = 0.50
 REVERSE_LIMIT = -0.45
 FUEL_PRICE = 1.40  # game dollars per litre
@@ -87,11 +91,25 @@ BOATS = {
     for row in BOAT_DATA
 }
 
-# Perimeter and interior samples, including every corner. Narrow solid props
-# are checked geometrically as well, rather than relying on these samples.
+
+def footprint(model):
+    """The boat's plan-view parts as (aft z, fore z, half width) boxes in the eye frame, metres.
+
+    Every boat has its hull box. The jon adds a narrow box for the outboard astern of its
+    transom, so docks, posts and shallows stop the motor as well as the hull.
+    """
+    parts = [(model.stern, model.bow, model.half_beam)]
+    if model.id == "jon":
+        parts.append((JON_OUTBOARD_AFT, model.stern, JON_OUTBOARD_HALF_WIDTH))
+    return parts
+
+
+# Perimeter and interior samples of every footprint part, including every corner. Narrow
+# solid props are checked geometrically as well, rather than relying on these samples.
 _LOCAL = {
-    model.id: np.array([(s,a) for a in np.linspace(model.stern-HULL_CLEARANCE,model.bow+HULL_CLEARANCE,8)
-                       for s in (-model.half_beam-HULL_CLEARANCE,0,model.half_beam+HULL_CLEARANCE)],np.float64)
+    model.id: np.array([(s,a) for aft,fore,half in footprint(model)
+                        for a in np.linspace(aft-HULL_CLEARANCE,fore+HULL_CLEARANCE,8 if fore-aft>1.0 else 2)
+                        for s in (-half-HULL_CLEARANCE,0,half+HULL_CLEARANCE)],np.float64)
     for model in BOATS.values()
 }
 
@@ -107,33 +125,35 @@ def hull_samples(x,z,yaw,boat_id="jon"):
 
 
 def hits_rectangles(x,z,yaw,slip,rectangles,boat_id="jon"):
-    """SAT between the entire hull and fixed rectangles in the dock's axes."""
+    """SAT between each footprint part and fixed rectangles in the dock's axes."""
     forward,right = axes(yaw)
-    model = BOATS[boat_id]
-    centre = np.array([x,z])+forward*(model.bow+model.stern)*0.5
-    a,s = slip.local(*centre)
-    centre = np.array([float(a),float(s)])
     f = np.array([forward@[slip.ix,slip.iz],forward@[slip.sx,slip.sz]])
     r = np.array([right@[slip.ix,slip.iz],right@[slip.sx,slip.sz]])
-    half_l,half_w = model.length*0.5+HULL_CLEARANCE,model.half_beam+HULL_CLEARANCE
-    delta = centre-rectangles[:,:2]
     extents = rectangles[:,2:]
-    separate_a = abs(delta[:,0])>half_l*abs(f[0])+half_w*abs(r[0])+extents[:,0]
-    separate_s = abs(delta[:,1])>half_l*abs(f[1])+half_w*abs(r[1])+extents[:,1]
-    separate_f = abs(delta@f)>half_l+extents@abs(f)
-    separate_r = abs(delta@r)>half_w+extents@abs(r)
-    return bool(np.any(~(separate_a|separate_s|separate_f|separate_r)))
+    for aft,fore,half in footprint(BOATS[boat_id]):
+        a,s = slip.local(*(np.array([x,z])+forward*(fore+aft)*0.5))
+        delta = np.array([float(a),float(s)])-rectangles[:,:2]
+        half_l,half_w = (fore-aft)*0.5+HULL_CLEARANCE,half+HULL_CLEARANCE
+        separate_a = abs(delta[:,0])>half_l*abs(f[0])+half_w*abs(r[0])+extents[:,0]
+        separate_s = abs(delta[:,1])>half_l*abs(f[1])+half_w*abs(r[1])+extents[:,1]
+        separate_f = abs(delta@f)>half_l+extents@abs(f)
+        separate_r = abs(delta@r)>half_w+extents@abs(r)
+        if np.any(~(separate_a|separate_s|separate_f|separate_r)):
+            return True
+    return False
 
 
 def hits_round_props(x,z,yaw,props,boat_id="jon"):
-    model = BOATS[boat_id]
     forward,right = axes(yaw)
     delta = props[:,:2]-np.array([x,z])
     a = delta@forward
     s = delta@right
-    da = np.maximum(np.maximum(model.stern-a,a-model.bow),0)
-    ds = np.maximum(abs(s)-model.half_beam,0)
-    return bool(np.any(da*da+ds*ds<(props[:,2]+HULL_CLEARANCE)**2))
+    for aft,fore,half in footprint(BOATS[boat_id]):
+        da = np.maximum(np.maximum(aft-a,a-fore),0)
+        ds = np.maximum(abs(s)-half,0)
+        if np.any(da*da+ds*ds<(props[:,2]+HULL_CLEARANCE)**2):
+            return True
+    return False
 
 
 def sailing_speed(yaw, wind_to, wind_speed, maximum=4.6):

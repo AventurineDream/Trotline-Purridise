@@ -190,12 +190,15 @@ def _cookout_anchor(world, host_anchor, npc_id, index, count):
 
     Every place is beside the docked stretch of the slip (more than 2 m in), so a
     boat docked alongside hails that cat: `at_landing` chats and `attend_event` need it.
+    The deepest row stops 1.6 m short of the landing: a jon backed in with its outboard
+    against the landing cannot get its helm further in than that, and it must still be
+    nearer that row than the one before.
     """
     from dataclasses import replace
     slip = world.slip
     side = 1 if index % 2 else -1
     rows = max(1, (count + 1) // 2)
-    step = min(2.2, (slip.land_ext - 1.0 - 2.6) / max(1, rows - 1))
+    step = min(2.2, (slip.land_ext - 1.6 - 2.6) / max(1, rows - 1))
     along = 2.6 + step * (index // 2)
     x, z = slip.world(along, side * (slip.half_w + 0.85))
     return replace(host_anchor, id=world.id + ":cookout:" + npc_id, x=float(x), z=float(z), kind="dock",

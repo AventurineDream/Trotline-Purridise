@@ -615,7 +615,11 @@ def _hull(state):
 
 
 def _jon_boxes(state):
-    """The jon's bench, livewell, motor cap and bow deck, which are open shells in its mesh."""
+    """The jon's bench, livewell, steering mount and bow deck, which are open shells in its
+    mesh; the transom, which shades the cockpit when the sun is astern; and the outboard's
+    cowl and midsection, yawed by steer through boatmesh.outboard_boxes like its mesh.
+    Seven boxes, so the Bot's perch still fits MAX_BOXES."""
+    from .boatmesh import outboard_boxes
     cy1 = -0.96 + 0.36 * (1.0 + state.well_tier * 0.12)
     beam = HULL_INNER_BEAM
     boxes = [
@@ -623,8 +627,9 @@ def _jon_boxes(state):
         ((-0.31, (-0.96 + cy1) * 0.5, 2.06), (0.17, (cy1 + 0.96) * 0.5, 0.14)),
         ((0.31, -0.81, 1.62), (0.11, 0.15, 0.10)),
         ((0.0, -0.54, 2.63), (beam, 0.04, 0.23)),
+        ((0.0, -0.73, HULL_STERN - 0.01), (beam, 0.23, 0.01)),
     ]
-    return [(np.asarray(c, np.float32), np.asarray(h, np.float32)) for c, h in boxes]
+    return [(np.asarray(c, np.float32), np.asarray(h, np.float32)) for c, h in boxes] + outboard_boxes(state.steer)
 
 
 # --- the layer ---------------------------------------------------------------------
@@ -802,9 +807,13 @@ class LandFx(Fx):
         self.detail_tex.use(DETAIL_UNIT)
 
     def _boat(self, state):
-        """Hull and occluder-box uniforms for the player's boat, rebuilt when the boat changes."""
+        """Hull and occluder-box uniforms for the player's boat, rebuilt when the boat changes.
+
+        The jon's outboard yaws with steer, so its key holds steer in 1/32 steps: the boxes
+        follow the motor without rebuilding on every tiny tiller twitch."""
         key = (state.boat_id, state.well_tier, bool(state.light), bool(state.rowboat_trolling_motor),
-               bool(state.sail_raised), state.bot_phase == "home")
+               bool(state.sail_raised), state.bot_phase == "home",
+               round(state.steer * 32) if state.boat_id == "jon" else 0)
         if key == self._boat_key:
             return self._boat_values
         hull, shape, flags, ramp = _hull(state)
