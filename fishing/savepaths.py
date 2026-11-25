@@ -15,7 +15,7 @@ from typing import Callable, Sequence, Type
 
 from .book import BOOK_STAGES, book_stage, seed_stage_claims
 from .bundle import bundled_library
-from .gamepad import KEY_NAMES, default_key_bindings
+from .gamepad import default_key_bindings, normalize_key_bindings
 from .comfort import DEFAULT_NEEDS, normalize_needs
 
 
@@ -372,8 +372,6 @@ def _valid_leaf(value, default, path: str) -> bool:
                     and 0.0 <= value <= 1.0)
         except OverflowError:
             return False
-    if path.startswith("v2.settings.key_bindings."):
-        return isinstance(value, str) and value in KEY_NAMES
     if path == "v2.buff":
         return value is None or isinstance(value, dict)
     if path == "v2.needs.last_prompt_real_s":
@@ -397,6 +395,11 @@ def _valid_leaf(value, default, path: str) -> bool:
 
 def _normalize_known_v2(default, saved, path: str):
     """Default malformed known fields while retaining unknown JSON fields."""
+    if path == "v2.settings.key_bindings":
+        # Resolve the map as a whole, before defaults fill any gap. A save from
+        # before an action existed must reach normalize_key_bindings still lacking
+        # it, so a key the player already uses is not handed to the newcomer too.
+        return normalize_key_bindings(saved if isinstance(saved, dict) else None)
     if isinstance(default, dict):
         if not isinstance(saved, dict):
             return deepcopy(default)

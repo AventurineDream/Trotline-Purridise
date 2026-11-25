@@ -2,6 +2,7 @@
 pixels and inside its panel, the zoom key cycles levels, and old key bindings keep
 their key."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,7 @@ import numpy as np
 from .game import Keys, Session
 from .gamepad import DEFAULT_KEY_BINDINGS, normalize_key_bindings, remap_keyboard
 from .platform import Text
+from .savepaths import load_game_save
 from .sim import State
 from .ui import CHART_ZOOMS, UI, chart_window
 from .world import World
@@ -119,6 +121,22 @@ class ZoomedCornerChart(unittest.TestCase):
         self.assertIsNone(self.painter._chart_view)  # the full chart is never left zoomed
         np.testing.assert_array_equal(self.draw(1)[0], frames[0])
 
+    def test_a_zoomed_chart_draws_the_boat_where_the_window_puts_it(self):
+        # 30% across the lake: the 4x window centres on the boat there without
+        # meeting the shore, while the whole-lake chart would draw it 30% across.
+        x0, z0, x1, z1 = self.world.bounds
+        self.state.x, self.state.z = x0 + 0.3 * (x1 - x0), (z0 + z1) / 2
+        self.state.bot_phase = "home"
+        del self.state.v2["calendar"]["invitation_mark"]
+        frame, _height = self.draw(4)
+        rows, cols = np.nonzero(np.all(frame == (236, 224, 180), axis=2))  # the boat disc
+        self.assertGreater(len(rows), 20)
+        mw = max(96, int(1280 * 0.14))
+        mh = max(64, int(mw * self.world.map_small.shape[0] / self.world.map_small.shape[1]))
+        chart_left, chart_top = 20 + 8, 700 - mh - 7
+        self.assertLessEqual(abs(cols.mean() - (chart_left + (mw - 1) / 2)), 2)
+        self.assertLessEqual(abs(rows.mean() - (chart_top + (mh - 1) / 2)), 2)
+
 
 class ZoomKey(unittest.TestCase):
     def session(self, bindings=None):
@@ -141,6 +159,14 @@ class ZoomKey(unittest.TestCase):
         self.assertEqual(seen, [*CHART_ZOOMS, CHART_ZOOMS[0]])
         self.assertEqual(session.ui.mode, "play")
 
+    def test_the_right_stick_zooms_even_when_x_naps_on_the_keyboard(self):
+        # RS click arrives as the canonical zoom symbol; keyboard bindings never remap it.
+        session = self.session(dict(DEFAULT_KEY_BINDINGS, catnap="x", chart_zoom="l"))
+        pad = Keys({"x"})
+        pad.device = "gamepad"
+        session.tick(pad, 0.05)
+        self.assertEqual(session.ui.chart_zoom, CHART_ZOOMS[1])
+
     def test_a_save_that_already_bound_x_keeps_it(self):
         # Settings saved before the zoom existed: a full map without it, catnap on X.
         old = {action: key for action, key in DEFAULT_KEY_BINDINGS.items() if action != "chart_zoom"}
@@ -154,6 +180,22 @@ class ZoomKey(unittest.TestCase):
         session = self.session(old)
         session.tick(_physical(bindings["chart_zoom"]), 0.05)
         self.assertEqual(session.ui.chart_zoom, CHART_ZOOMS[1])
+
+    def test_loading_an_old_save_with_x_bound_does_not_double_fire(self):
+        old = {action: key for action, key in DEFAULT_KEY_BINDINGS.items() if action != "chart_zoom"}
+        old["catnap"] = "x"
+        session = self.session()
+        session.save()
+        # Rewrite the settings as a save from before the zoom existed would hold them.
+        saved = json.loads(session.save_path.read_text())
+        saved["v2"]["settings"]["key_bindings"] = old
+        session.save_path.write_text(json.dumps(saved))
+        _world, loaded, _has_save = load_game_save(session.save_path, State, World)
+        bindings = loaded.v2["settings"]["key_bindings"]
+        self.assertEqual(bindings["catnap"], "x")
+        self.assertNotEqual(bindings["chart_zoom"], "x")
+        pressed, _held = remap_keyboard({"x"}, {"x"}, bindings)
+        self.assertEqual(pressed, {"z"})  # X still naps, and only naps
 
 
 if __name__ == "__main__":

@@ -1868,10 +1868,14 @@ class UI:
             bindings = normalize_key_bindings(_saved_bindings(state))
             zoom_key = self._key_name(bindings["chart_zoom"]).upper()
             shortcut = self._key_name(bindings["chart"]).upper()
-        hint = f"{zoom_key} {zoom}x   {shortcut}"
-        if len(hint) + len("LAKE CHART") + 2 > mw // self.cell(size)[0]:
-            hint = f"{zoom}x"
-        self._text(frame, hint, x + 8 + mw - len(hint) * self.cell(size)[0], y-21, size, DIM, False, "sans")
+        # Drop detail as the panel narrows, but always keep the chart key that the
+        # corner has always shown.
+        room = mw - self._measure("LAKE CHART", size) - 12
+        for hint in (f"{zoom_key} {zoom}x   {shortcut}", f"{zoom}x   {shortcut}", shortcut):
+            hint_w = self._measure(hint, size)
+            if hint_w <= room:
+                break
+        self._text(frame, hint, x + 8 + mw - hint_w, y-21, size, DIM, False, "sans")
         x += 8
         frame[y:y + mh, x:x + mw] = scaled
         chart_px = frame[y:y + mh, x:x + mw]
@@ -3639,7 +3643,7 @@ _GAMEPAD_HELP_CONTROLS = {
     "F sets a trotline     E checks a line or the landing":
         "X sets a trotline     A checks a line or the landing",
     "Tab chart    X zooms the corner chart    J journal    I livewell":
-        "Back chart    RS click zooms the corner chart    J / I (keyboard)",
+        "Back chart    RS click zooms the chart    J journal / I livewell (keyboard)",
     "C hails a paw-wave NPC: within 20 m, below 3 knots":
         "RB hails a paw-wave NPC: within 20 m, below 3 knots",
     "T changes time: 1x 3x 6x 12x, while you are still":

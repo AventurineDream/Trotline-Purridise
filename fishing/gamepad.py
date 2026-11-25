@@ -153,6 +153,8 @@ def _bindings(saved) -> dict[str, str]:
         # already gave that action's default key to something else, their choice
         # wins: the newcomer moves to the first unused letter, so one key press
         # never fires two actions. Aliases share keys on purpose and are skipped.
+        # This only works on the map as saved, so the save loader passes it here
+        # before filling any defaults (savepaths._normalize_known_v2).
         grouped = {action for aliases in ACTION_ALIASES for action in aliases}
         for action in bindings:
             if action in saved or action in grouped:
