@@ -1082,8 +1082,9 @@ class ChartPins(unittest.TestCase):
         for lake in self.LAKES:
             colours, counts = np.unique(World(lake).map_rgb.reshape(-1, 3), axis=0, return_counts=True)
             backgrounds.add(tuple(int(v) for v in colours[counts.argmax()]))
-            # The fullest chart npcs.present_ids can produce: the whole roster and both
-            # travelers, plus a legacy cat from another lake. It must draw without raising.
+            # The fullest chart a lake can show (whole roster and both travelers), plus one
+            # hypothetical outside visitor that today's content never produces: the spare
+            # slots must still give every pin its own colour.
             fullest = resident_pin_colors(lake, [*chart_order(lake), "legacy_visitor"])
             self.assertEqual(len(set(fullest.values())), len(fullest), lake)
         for colour in CHART_RESIDENT_PALETTE:
