@@ -966,61 +966,92 @@ class Skipper(unittest.TestCase):
 
 
 class ChartPins(unittest.TestCase):
-    def test_pins_wear_chart_palette_colours(self):
-        # Issue #159: pins use the chart-only palette, not coat colours, and stay unique per lake.
+    """Issue #159: chart pins wear a chart-only palette that is stable per cat and distinct."""
+
+    LAKES = ("briar", "cedar", "flathead", "crater", "nebula")
+
+    def test_each_pin_is_drawn_in_its_key_colour_not_its_coat(self):
         from .platform import Text
-        from .ui import UI, CHART_RESIDENT_PALETTE, resident_pin_color
+        from .ui import UI
         world, state = _lake("briar")
         text = Text()
         try:
             ui = UI(text, world)
             frame = np.zeros((400, 400, 3), np.uint8)
-            residents = ui._plot_npcs(frame, state, 0, 0, 400, 400)
-            lake_ids = tuple(sorted(npc.id for npc in state.npcs
-                                    if npc.anchor.lake_id == world.id))
-            self.assertEqual(len(residents), len(lake_ids))
-            pins = [pin for _name, pin in residents]
-            self.assertEqual(len(set(pins)), len(pins), "pin colours must be unique per lake")
-            for npc in state.npcs:
-                if npc.anchor.lake_id != world.id:
-                    continue
+            key = dict(ui._plot_npcs(frame, state, 0, 0, 400, 400))
+            here = [npc for npc in state.npcs if npc.anchor.lake_id == world.id]
+            self.assertEqual(len(key), len(here))
+            self.assertEqual(len(set(key.values())), len(key), "two pins share a colour")
+            for npc in here:
                 u, v = world.map_pixel(npc.anchor.x, npc.anchor.z, 400, 400)
-                expected = resident_pin_color(npc.id, lake_ids)
-                self.assertIn(expected, CHART_RESIDENT_PALETTE)
+                coat = tuple(int(c * 255 + 0.5) for c in ROSTER[npc.id]["appearance"]["colors"]["base"])
                 with self.subTest(npc=npc.id):
-                    np.testing.assert_array_equal(frame[int(v), int(u)], expected)
+                    np.testing.assert_array_equal(frame[int(v), int(u)], key[npc.name])
+                    self.assertNotEqual(key[npc.name], coat)
         finally:
             text.close()
-    def test_palette_is_distinct_and_readable_on_the_chart(self):
-        # Issue #159: every palette colour is unique, far from the others, and keeps
-        # enough contrast against the dark chart paper to read as a pin.
-        from .ui import CHART_RESIDENT_PALETTE
-        self.assertGreaterEqual(len(CHART_RESIDENT_PALETTE), 10)
-        self.assertEqual(len(set(CHART_RESIDENT_PALETTE)), len(CHART_RESIDENT_PALETTE))
+
+    def test_a_cat_keeps_its_pin_colour_through_every_day_and_night(self):
+        from .ui import resident_pin_colors
+        for lake in self.LAKES:
+            world = World(lake)
+            state = State.new(world, seed=12345)
+            seen = {}
+            for day in range(7):
+                for hour in (10, 22):
+                    state.game_minutes = day * 24 * 60 + hour * 60
+                    ids = [npc.id for npc in active_npcs(state, world, NARRATIVE)
+                           if npc.anchor.lake_id == lake]
+                    pins = resident_pin_colors(lake, ids)
+                    with self.subTest(lake=lake, day=day, hour=hour):
+                        self.assertEqual(len(set(pins.values())), len(pins))
+                        for npc_id, colour in pins.items():
+                            self.assertEqual(seen.setdefault(npc_id, colour), colour, npc_id)
+            self.assertGreater(len(seen), 4, f"{lake}: the week showed too few cats to test")
+
+    def test_palette_is_separated_clear_of_markers_and_reads_on_every_lake(self):
+        from .ui import CHART_RESIDENT_PALETTE, GOLD, INK, WARN, chart_order
+
+        def linear(rgb):
+            return [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+                    for c in np.asarray(rgb, float) / 255.0]
 
         def luminance(rgb):
-            def channel(c):
-                c = c / 255.0
-                return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-            r, g, b = (channel(c) for c in rgb)
+            r, g, b = linear(rgb)
             return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
-        def contrast(a, b):
-            la, lb = luminance(a), luminance(b)
-            hi, lo = max(la, lb), min(la, lb)
-            return (hi + 0.05) / (lo + 0.05)
+        def lab(rgb):
+            # sRGB (D65) to CIELAB, so separation tracks what eyes see rather than raw RGB.
+            r, g, b = linear(rgb)
+            xyz = ((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, luminance(rgb),
+                   (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883)
+            fx, fy, fz = (t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116 for t in xyz)
+            return np.array([116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)])
 
-        # Chart paper is near-black land/sea; check against the darkest plausible paper.
-        paper = (34, 48, 30)
-        for color in CHART_RESIDENT_PALETTE:
-            with self.subTest(color=color):
-                self.assertGreaterEqual(contrast(color, paper), 3.0,
-                                        f"{color} reads poorly on chart paper")
+        palette = [lab(c) for c in CHART_RESIDENT_PALETTE]
+        for i, a in enumerate(palette):
+            for j in range(i + 1, len(palette)):
+                self.assertGreaterEqual(np.linalg.norm(a - palette[j]), 35,
+                                        (CHART_RESIDENT_PALETTE[i], CHART_RESIDENT_PALETTE[j]))
+        # Fish, Bot, tired, gold badge, boat and the neutral cat key, from UI._marker.
+        markers = [(255, 214, 120), (255, 148, 48), WARN, GOLD, (236, 224, 180), INK]
+        for colour, colour_lab in zip(CHART_RESIDENT_PALETTE, palette):
+            for marker in markers:
+                self.assertGreaterEqual(np.linalg.norm(colour_lab - lab(marker)), 20, (colour, marker))
+
+        for lake in self.LAKES:
+            # Each lake's paper is the most common colour of its own chart image.
+            colours, counts = np.unique(World(lake).map_rgb.reshape(-1, 3), axis=0, return_counts=True)
+            paper = luminance(colours[counts.argmax()])
+            for colour in CHART_RESIDENT_PALETTE:
+                with self.subTest(lake=lake, colour=colour):
+                    self.assertGreaterEqual((luminance(colour) + 0.05) / (paper + 0.05), 3.0)
+            # Every cat with a fixed slot fits, leaving spares for a visiting legacy cat.
+            self.assertLess(len(chart_order(lake)), len(CHART_RESIDENT_PALETTE), lake)
 
     def test_legend_reuses_the_pin_colours(self):
-        # Issue #159: the chart key's resident dots must match the pins on the chart.
         from .platform import Text
-        from .ui import UI
+        from .ui import UI, UIState
         world, state = _lake("briar")
         text = Text()
         try:
@@ -1033,13 +1064,12 @@ class ChartPins(unittest.TestCase):
                 return original(frame, state_, x, y, w, h, places, residents, sonar_visible)
 
             ui._map_key = spy
-            frame = np.zeros((720, 1280, 3), np.uint8)
-            from .ui import UIState
-            ui.draw(frame, state, UIState(mode="map"))
+            ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="map"))
             plotted = ui._plot_npcs(np.zeros((400, 400, 3), np.uint8), state, 0, 0, 400, 400)
             self.assertEqual(captured["residents"], plotted)
         finally:
             text.close()
+
 
 if __name__ == "__main__":
     unittest.main()

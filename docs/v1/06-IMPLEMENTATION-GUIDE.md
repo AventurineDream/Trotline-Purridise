@@ -2274,7 +2274,7 @@ V1-43 (#71) went over every screen at every text size, for keyboard and for game
 | Tired fish | cross |
 | Baited hook | dot |
 | Soaking line | dashed |
-| Cat | round pin in its chart-palette colour |
+| Cat | round pin; its chart-palette colour is fixed per cat and named in the key |
 | Bot | triangle |
 | You | square with a heading tick |
 | Trinidad Cove | hollow diamond |
