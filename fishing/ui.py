@@ -70,11 +70,16 @@ GOOD = (150, 196, 140)
 
 # Chart-only resident pin palette (issue #159). It never recolours the cats themselves.
 # Each colour is vibrant (HSV saturation >= 0.45) and keeps 3:1 contrast against its own
-# dark pin ring and each lake's chart paper; darker water shades rely on that ring. Every
-# pair is at least 19 apart in CIEDE2000, which, unlike plain Lab distance, does not
-# overrate gaps between saturated greens, and every colour is at least 10 from each chart
-# marker, line and sonar band colour. test_cats.ChartPins checks all of it. Slots run in
-# farthest-first order, so a lake with few cats gets the most distinct pins.
+# dark ring (CHART_EDGE, the pin's adjacent colour) and each lake's chart paper. On mid-tone
+# shore and shallows shades (Cedar's banks, Nebula's violet shallows) a pin body can drop
+# to about 2.2:1; that is the chosen limit, because demanding 3:1 on every shade leaves
+# only a yellow-green-cyan gamut too small for a lake's cast. The ring and the named key
+# entry carry those spots. Every pair is at least 19 apart in CIEDE2000, which, unlike plain
+# Lab distance, does not overrate gaps between saturated greens, and every colour is at
+# least 10 from each chart marker, line and sonar band colour. test_cats.ChartPins checks
+# all of it. Slots run in farthest-first order, so a lake with few cats gets the most
+# distinct pins.
+CHART_EDGE = (28, 34, 38)  # the dark edge UI._shape draws round every chart symbol, pins included
 CHART_RESIDENT_PALETTE = (
     (17, 170, 85),     # green
     (255, 0, 238),     # magenta
@@ -121,6 +126,9 @@ def resident_pin_colors(lake_id, present_ids):
 
     Raises:
         ValueError: more cats than palette slots, which would force two pins to share.
+            A backstop for future content only: npcs.present_ids admits at most one
+            outside visitor (the legacy cat), and test_cats checks every lake's order
+            leaves room for it.
     """
     order = chart_order(lake_id)
     colours = {npc_id: CHART_RESIDENT_PALETTE[order.index(npc_id)]
@@ -2253,7 +2261,7 @@ class UI:
         edge, body = mask_for(r + 1), mask_for(r)
         if shape == "diamond ring":
             body = body & (np.abs(xx) + np.abs(yy) >= r - 1)
-        for mask, color in ((edge, (28, 34, 38)), (body, rgb)):
+        for mask, color in ((edge, CHART_EDGE), (body, rgb)):
             ys, xs = np.nonzero(mask)
             px, py = xs - rr + cx, ys - rr + cy
             keep = (px >= 0) & (px < w) & (py >= 0) & (py < h)

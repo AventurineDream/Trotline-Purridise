@@ -1012,7 +1012,8 @@ class ChartPins(unittest.TestCase):
     def test_palette_is_vibrant_separated_clear_of_markers_and_reads_on_every_lake(self):
         import colorsys
 
-        from .ui import CHART_RESIDENT_PALETTE, GOLD, INK, SONAR_BAND_COLORS, WARN, chart_order
+        from .ui import (CHART_EDGE, CHART_RESIDENT_PALETTE, GOLD, INK, SONAR_BAND_COLORS, WARN,
+                         chart_order, resident_pin_colors)
 
         def linear(rgb):
             return [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
@@ -1076,14 +1077,15 @@ class ChartPins(unittest.TestCase):
             for marker in markers:
                 self.assertGreaterEqual(delta_e00(colour, marker), 10, (colour, marker))
 
-        # The pin's own dark ring (UI._shape's edge), then each lake's paper: the most
-        # common colour of its chart image.
-        backgrounds = {(28, 34, 38)}
+        # The pin's own dark ring, then each lake's paper: the most common colour of its chart.
+        backgrounds = {CHART_EDGE}
         for lake in self.LAKES:
             colours, counts = np.unique(World(lake).map_rgb.reshape(-1, 3), axis=0, return_counts=True)
             backgrounds.add(tuple(int(v) for v in colours[counts.argmax()]))
-            # Every cat with a fixed slot fits, leaving spares for a visiting legacy cat.
-            self.assertLess(len(chart_order(lake)), len(CHART_RESIDENT_PALETTE), lake)
+            # The fullest chart npcs.present_ids can produce: the whole roster and both
+            # travelers, plus a legacy cat from another lake. It must draw without raising.
+            fullest = resident_pin_colors(lake, [*chart_order(lake), "legacy_visitor"])
+            self.assertEqual(len(set(fullest.values())), len(fullest), lake)
         for colour in CHART_RESIDENT_PALETTE:
             for background in backgrounds:
                 with self.subTest(colour=colour, background=background):
