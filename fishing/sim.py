@@ -2039,6 +2039,7 @@ class State:
         for hook in line.hooks:
             if hook.catch is None and not hook.baited:
                 hook.baited = True
+                hook.extra_fields.pop(comfort.FREE_BAIT, None)  # paid for now
         self.toast(f"Rebaited {need} hook{'s' if need != 1 else ''} with their section baits.")
         return None
 
@@ -2046,8 +2047,9 @@ class State:
         """Pull line `line_index` aboard and coil it into the held lines.
 
         Any fish on it are taken or released first. When the livewell refuses a keeper,
-        that message comes back and nothing changes. When the line was the one Bot is
-        watching, he turns for home (bot.line_pulled).
+        that message comes back and the line stays out with its bait. Bait still on
+        unused hooks goes back into the bait box (`_return_bait`). When the line was the
+        one Bot is watching, he turns for home (bot.line_pulled).
 
         Returns:
             None once the line is aboard, else the livewell's refusal.
@@ -2059,9 +2061,45 @@ class State:
                 return result
         self.lines.pop(line_index)
         self.held.append(HeldLine(line.tier))
-        self.toast("Line coiled in the boat.")
+        self.toast("Line coiled in the boat." + self._return_bait(line))
         bot.line_pulled(self, line.line_id)
         return None
+
+    def _return_bait(self, line: SetLine) -> str:
+        """Put the bait still on `line`'s unused hooks back in the bait box.
+
+        Only hooks that are baited and empty count. A bite, a fish that got away, and a
+        fish taken off or released have all spent their hook's bait, and those hooks read
+        unbaited. Bait the keep_bait perk put on for free (comfort.FREE_BAIT) was never
+        paid for, so it is not returned. Each hook returns its own section's bait. The
+        box fills up to `box_cap()` one hook at a time in hook order, and any bait past
+        that goes over the side. Ids missing from BAIT_BY_ID (e.g. from an old save) are
+        not returned, because the box only holds bait it can name.
+
+        Returns:
+            Feedback to append to the coil toast, starting with a space: the refunded
+            counts, the over-the-side count, or both. Empty only when no hook had unused bait.
+        """
+        room = max(0, self.box_cap() - self.bait_count())
+        back: dict[str, int] = {}
+        lost = 0
+        for index, hook in enumerate(line.hooks):
+            if not hook.baited or hook.catch is not None or hook.extra_fields.get(comfort.FREE_BAIT):
+                continue
+            bait = line.bait_for_hook(index)
+            if bait not in BAIT_BY_ID:
+                continue
+            if room == 0:
+                lost += 1
+                continue
+            room -= 1
+            back[bait] = back.get(bait, 0) + 1
+            self.bait[bait] = self.bait.get(bait, 0) + 1
+        returned = ", ".join(f"{count} {BAIT_BY_ID[bait].name.lower()}" for bait, count in back.items())
+        feedback = f" {returned} back in the bait box." if returned else ""
+        if lost:
+            feedback += f" The box is full; {lost} went over the side."
+        return feedback
 
     # --- shop -----------------------------------------------------------
 
