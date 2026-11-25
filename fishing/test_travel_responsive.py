@@ -2,11 +2,12 @@
 
 The windowed loop defers a trip: the World builds on a worker thread behind the travel
 card while the GL thread keeps servicing window events, and only then is the trip
-committed. These tests drive `_enter_lake` with a fake platform. Each worker blocks
-until the platform has been polled a set number of times, so the checks depend on
-events rather than timing. Covered: events during the build, an all-or-nothing commit,
-a quit mid-load, a failed build, the worker's World matching a synchronous one, and
-the GL renderer pumping between its build stages.
+committed. These tests drive `_enter_lake` with a fake platform. The slow worker blocks
+until the platform has been polled a set number of times, and the quit tests hold their
+worker on an event the test releases, so the checks depend on events rather than timing.
+Covered: events during the build, an all-or-nothing commit, the queuing tick stopping, the
+run loop's swap trigger, a quit or failed build on plain and starlit routes, the worker's
+World matching a synchronous one, and the GL renderer pumping between its build stages.
 """
 import io
 import random
@@ -50,7 +51,8 @@ class FakePlatform:
 
     def wait_for_polls(self, count):
         with self.polled:
-            self.polled.wait_for(lambda: self.polls >= count, timeout=30)
+            if not self.polled.wait_for(lambda: self.polls >= count, timeout=30):
+                raise AssertionError(f"only {self.polls} of {count} polls arrived")
 
     def present(self, _frame):
         self.presented += 1
@@ -88,10 +90,24 @@ class DeferredTravel(unittest.TestCase):
         self.renderer = Renderer(world, 160, 90, software=True)
         self.ui = UI(self.text, world)
 
-    def enter(self, platform):
+    def enter(self, platform, last_frame=None):
         loading = np.empty((90, 160, 3), np.uint8)
         return _enter_lake(platform, self.session, self.renderer, self.ui, self.text, loading,
-                           True, True, None, quips=LoadingQuips(random.Random(1)))
+                           True, True, last_frame, quips=LoadingQuips(random.Random(1)))
+
+    def held_world(self):
+        """A World factory that blocks until released; returns (factory, started, release, finished)."""
+        started, release, finished = threading.Event(), threading.Event(), threading.Event()
+        real = World
+
+        def build(lake_id):
+            started.set()
+            try:
+                release.wait(30)
+                return real(lake_id)
+            finally:
+                finished.set()
+        return build, started, release, finished
 
     def slow_world(self, platform, polls, fail=False):
         """A World factory that finishes only after `polls` polls (or raises)."""
@@ -126,14 +142,12 @@ class DeferredTravel(unittest.TestCase):
     def test_quitting_mid_load_leaves_the_old_lake_and_save_alone(self):
         self.session.change_lake("crater")
         platform = FakePlatform(self.session, quit_at=2)
-        release = threading.Event()
-
-        def build(lake_id):
-            release.wait(30)
-            return World(lake_id)
+        build, started, release, finished = self.held_world()
         with patch("fishing.game.World", build):
             renderer, ui = self.enter(platform)
+            self.assertTrue(started.wait(30))  # the worker really was held, under the patch
         release.set()
+        self.assertTrue(finished.wait(60))
         self.assertTrue(self.session.quit)
         self.assertIs(renderer, self.renderer)
         self.assertIs(ui, self.ui)
@@ -153,9 +167,61 @@ class DeferredTravel(unittest.TestCase):
         self.assertIsNone(self.session.pending_lake)
         self.assertFalse(self.session.quit)
         self.assertIn("terrain exploded", stderr.getvalue())
-        toasts = [text for text, _ in self.session.state.toasts]
-        self.assertIn("Crater Caldera would not open. You're still at Flathead Alpine Lake.", toasts)
+        # The trip began in the shop, which shows notes rather than toasts.
+        self.assertEqual(self.session.ui.note,
+                         "Crater Caldera would not open. You're still at Flathead Alpine Lake.")
         self.assertFalse(self.save_path.exists())
+
+    def test_starlit_routes_keep_the_card_up_and_fall_back_cleanly(self):
+        frame = np.full((90, 160, 3), 40, np.uint8)
+        for outcome in ("fail", "quit"):
+            with self.subTest(outcome=outcome):
+                self.setUp()
+                self.session.change_lake("nebula")  # every Lagoon route tips into starlight
+                if outcome == "fail":
+                    platform = FakePlatform(self.session)
+                    factory = self.slow_world(platform, 3, fail=True)
+                else:
+                    platform = FakePlatform(self.session, quit_at=3)
+                    factory, started, release, finished = self.held_world()
+                with patch("fishing.game.World", factory), redirect_stderr(io.StringIO()):
+                    presented_before = platform.presented
+                    renderer, ui = self.enter(platform, last_frame=frame)
+                    if outcome == "quit":
+                        self.assertTrue(started.wait(30))
+                if outcome == "quit":
+                    release.set()
+                    self.assertTrue(finished.wait(60))
+                self.assertGreaterEqual(platform.polls, 3)
+                self.assertGreater(platform.presented, presented_before)
+                self.assertIs(renderer, self.renderer)
+                self.assertEqual((self.session.world.id, self.session.state.lake_id),
+                                 ("flathead", "flathead"))
+                self.assertIsNone(self.session.pending_lake)
+                self.assertEqual(self.session.quit, outcome == "quit")
+                self.assertFalse(self.save_path.exists())
+
+    def test_the_tick_that_queues_a_trip_stops_the_departing_lake(self):
+        self.session.ui.mode = "play"
+        before = (self.session.state.game_minutes, self.session.state.minute_acc)
+        with patch.object(self.session, "_keys", lambda *_: self.session.change_lake("crater")):
+            self.session.tick(game.Keys(), 0.25)
+        self.assertEqual(self.session.pending_lake, "crater")
+        # The old lake's clock, sub-minute remainder included, did not run on.
+        self.assertEqual((self.session.state.game_minutes, self.session.state.minute_acc), before)
+
+    def test_a_second_trip_cannot_replace_a_queued_one(self):
+        self.assertIsNone(self.session.change_lake("crater"))
+        self.assertEqual(self.session.change_lake("cedar"), "The boat is already on its way.")
+        self.assertEqual(self.session.pending_lake, "crater")
+
+    def test_the_run_loop_enters_a_queued_lake(self):
+        self.addCleanup(self.renderer.close)
+        self.assertFalse(game._lake_swap_due(self.renderer, self.session))
+        self.session.change_lake("crater")
+        self.assertTrue(game._lake_swap_due(self.renderer, self.session))
+        self.session.arrive(World("crater"))
+        self.assertTrue(game._lake_swap_due(self.renderer, self.session))  # the renderer lags
 
 
 class WorkerWorld(unittest.TestCase):
@@ -163,17 +229,25 @@ class WorkerWorld(unittest.TestCase):
         load = game._WorldLoad("briar")  # the heaviest authored lake
         self.assertTrue(load.done.wait(120))
         self.assertIsNone(load.error)
-        built, direct = load.world, World("briar")
-        self.assertEqual(built.bounds, direct.bounds)
-        arrays = [key for key, value in vars(direct).items() if isinstance(value, np.ndarray)]
-        self.assertTrue(arrays)
-        self.assertEqual(arrays, [key for key, value in vars(built).items() if isinstance(value, np.ndarray)])
-        for key in arrays:
-            np.testing.assert_array_equal(getattr(built, key), getattr(direct, key), err_msg=key)
-        self.assertEqual(len(built.faces), len(direct.faces))
-        for ours, theirs in zip(built.faces, direct.faces):
-            np.testing.assert_array_equal(ours.pts, theirs.pts)
-            np.testing.assert_array_equal(ours.color, theirs.color)
+        self.assert_same(load.world, World("briar"), "world")
+
+    def assert_same(self, ours, theirs, path):
+        """Compare two built values field by field: arrays, containers and plain objects."""
+        if isinstance(theirs, np.ndarray):
+            np.testing.assert_array_equal(ours, theirs, err_msg=path)
+        elif isinstance(theirs, dict):
+            self.assertEqual(ours.keys(), theirs.keys(), path)
+            for key in theirs:
+                self.assert_same(ours[key], theirs[key], f"{path}[{key!r}]")
+        elif isinstance(theirs, (list, tuple)):
+            self.assertEqual(len(ours), len(theirs), path)
+            for i, (a, b) in enumerate(zip(ours, theirs)):
+                self.assert_same(a, b, f"{path}[{i}]")
+        elif hasattr(theirs, "__dict__") and not callable(theirs):
+            self.assertIs(type(ours), type(theirs), path)
+            self.assert_same(vars(ours), vars(theirs), path)
+        else:
+            self.assertEqual(ours, theirs, path)
 
 
 class GLBuildPumps(unittest.TestCase):
