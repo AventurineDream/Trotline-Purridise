@@ -197,6 +197,17 @@ class ZoomKey(unittest.TestCase):
         pressed, _held = remap_keyboard({"x"}, {"x"}, bindings)
         self.assertEqual(pressed, {"z"})  # X still naps, and only naps
 
+    def test_loading_keeps_bindings_for_actions_from_a_newer_build(self):
+        session = self.session()
+        session.save()
+        saved = json.loads(session.save_path.read_text())
+        saved["v2"]["settings"]["key_bindings"]["future_action"] = "p"
+        session.save_path.write_text(json.dumps(saved))
+        _world, loaded, _has_save = load_game_save(session.save_path, State, World)
+        bindings = loaded.v2["settings"]["key_bindings"]
+        self.assertEqual(bindings["future_action"], "p")
+        self.assertEqual(normalize_key_bindings(bindings), normalize_key_bindings(None))
+
 
 if __name__ == "__main__":
     unittest.main()

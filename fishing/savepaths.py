@@ -399,7 +399,13 @@ def _normalize_known_v2(default, saved, path: str):
         # Resolve the map as a whole, before defaults fill any gap. A save from
         # before an action existed must reach normalize_key_bindings still lacking
         # it, so a key the player already uses is not handed to the newcomer too.
-        return normalize_key_bindings(saved if isinstance(saved, dict) else None)
+        if not isinstance(saved, dict):
+            return normalize_key_bindings(None)
+        normalized = normalize_key_bindings(saved)
+        # Entries for actions this build does not know (from a newer save) ride along.
+        normalized.update({action: deepcopy(key) for action, key in saved.items()
+                           if action not in normalized})
+        return normalized
     if isinstance(default, dict):
         if not isinstance(saved, dict):
             return deepcopy(default)
