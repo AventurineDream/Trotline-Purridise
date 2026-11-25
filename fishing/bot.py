@@ -88,8 +88,10 @@ def summon(state, world) -> str | None:
 def line_pulled(state, line_id) -> bool:
     """Send Bot home when the line he was sent to watch comes aboard.
 
-    Only the watched line counts, so pulling any other line leaves him where he is. A recall
-    or reset has already cleared his target, so a pull after one never doubles the trip home.
+    Only the watched line counts, so pulling any other line leaves him where he is. A recall,
+    leash turnaround or reset has already cleared his target, so a pull after one never
+    doubles the trip home. Turning him also toasts that he is coming aboard; every other
+    call is silent.
 
     Args:
         state: the sim State; its Bot fields change in place.
@@ -98,7 +100,7 @@ def line_pulled(state, line_id) -> bool:
     Returns:
         True when he turned for home, else False.
     """
-    if line_id is None or state.bot_target_line_id != line_id:
+    if state.bot_target_line_id != line_id:
         return False
     state.bot_target_line_id = None
     if state.bot_phase not in ("go", "out"):

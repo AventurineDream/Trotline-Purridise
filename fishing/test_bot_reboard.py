@@ -101,21 +101,29 @@ class BotReboardsOnWatchedPull(unittest.TestCase):
         bot.summon(self.state, self.world)
         self.assertEqual(self.state.bot_phase, "back")
         self.state.pull_line(self.index_of(target))
+        self.state.pull_line(0)
         self.assertEqual(self.state.bot_phase, "back")
         self.assertEqual(self.toasts(), 0)
         self.ride_home()
-        # Aboard again, a later pull of the other line moves nobody.
-        self.state.pull_line(0)
-        self.assertEqual(self.state.bot_phase, "home")
 
-    def test_a_replacement_line_in_the_same_water_is_not_his_line(self):
+    def test_a_leash_turnaround_then_the_pull_is_one_trip_home_not_two(self):
+        target = self.send_out(settle=False)
+        self.state.x = 500.0  # the boat runs off; Bot passes his leash on the next tick
+        bot.tick(self.state, self.world, 0.05)
+        self.assertEqual(self.state.bot_phase, "back")
+        self.assertEqual(self.toasts("Bot is turning around. That's far enough."), 1)
+        self.state.pull_line(self.index_of(target))
+        self.assertEqual(self.state.bot_phase, "back")
+        self.assertEqual(self.toasts(), 0)
+
+    def test_a_replacement_line_pulled_on_his_way_home_changes_nothing(self):
         target = self.send_out()
         self.state.pull_line(self.index_of(target))
-        self.ride_home()
         self.state.lines.insert(0, self.line(10))
         self.assertNotEqual(self.state.lines[0].line_id, target)
         self.state.pull_line(0)
-        self.assertEqual(self.state.bot_phase, "home")
+        self.assertEqual(self.state.bot_phase, "back")
+        self.assertIsNone(self.state.bot_target_line_id)
         self.assertEqual(self.toasts(), 1)
 
     def test_scouting_open_water_ignores_line_pulls(self):
