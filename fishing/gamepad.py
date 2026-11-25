@@ -259,6 +259,7 @@ def session_input(keys, saved_bindings, repeat_state: dict[str, float]):
             self.device = keys.device
             self.mouse_pos = getattr(keys, "mouse_pos", None)
             self.mouse_moved = getattr(keys, "mouse_moved", False)
+            self.mouse_delta = getattr(keys, "mouse_delta", (0.0, 0.0))
             self.mouse_click = getattr(keys, "mouse_click", None)
             self.mouse_wheel = getattr(keys, "mouse_wheel", 0)
             self.viewport = getattr(keys, "viewport", (1280, 720))

@@ -25,6 +25,9 @@ class Camera:
         # The camera the boat and the Skipper's paws ride with. None is this one, as in play;
         # a staged story view (V1-35) sets the Skipper's own, so the boat stays where it floats.
         self.boat = None
+        # The unturned eye a mouse-turned view keeps its hull and paws on (Camera.turned). Setting
+        # `boat` instead would draw the whole Skipper at the helm, dropping the paws and reflection.
+        self.hull = None
         self._build()
 
     def _build(self):
@@ -80,6 +83,47 @@ class Camera:
         pts = np.asarray(pts, dtype=np.float32)
         return (self.eye + pts[..., 0:1] * self.right + pts[..., 1:2] * self.up
                 + pts[..., 2:3] * self.forward).astype(np.float32)
+
+    def world_to_eye(self, pts: np.ndarray) -> np.ndarray:
+        """World points as level eye coordinates: x right, y up, z ahead, before pitch and roll.
+
+        Args:
+            pts: (..., 3) world-space points in metres.
+
+        Returns:
+            (..., 3) float32 points in metres, the inverse of :meth:`eye_to_world`.
+        """
+        v = np.asarray(pts, dtype=np.float32) - self.eye
+        return np.stack([v @ self.right, v @ self.up, v @ self.forward], axis=-1).astype(np.float32)
+
+    def turned(self, yaw: float, pitch: float) -> Camera:
+        """This unturned eye turned by mouse look, with the hull and paws kept on it.
+
+        Args:
+            yaw: Radians added to the yaw. Positive turns east.
+            pitch: Radians added to the pitch. Positive looks up.
+
+        Returns:
+            A new camera at the same eye, roll, field and size. Its ``hull`` is this camera,
+            so the boat stays where it floats while only the view moves. Call it on an
+            unturned camera only.
+        """
+        view = Camera(self.x, self.y, self.z, self.yaw + yaw, self.pitch + pitch, self.roll,
+                      self.fov_x, self.w, self.h, build_rays=self.build_rays)
+        view.hull = self
+        return view
+
+    def boat_frame(self) -> Camera:
+        """The camera whose eye and axes place the hull and the Skipper's paws in this view.
+
+        Returns:
+            ``boat`` for a staged or chase view, ``hull`` for a turned view, else this camera.
+            Presentation still branches on ``boat`` alone, so a turned view keeps the standing
+            Skipper's paws and head reflection as first person draws them.
+        """
+        if self.boat is not None:
+            return self.boat
+        return self if self.hull is None else self.hull
 
     def world_to_cam(self, pts: np.ndarray) -> np.ndarray:
         v = np.asarray(pts, dtype=np.float32) - self.eye

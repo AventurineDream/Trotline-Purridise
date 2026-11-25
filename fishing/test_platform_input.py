@@ -174,6 +174,62 @@ class PlatformInputChecks(unittest.TestCase):
         self.assertTrue(self.platform.poll().mouse_moved)
         self.assertEqual(inp.device, "mouse")
 
+    def _poll_with_window(self, width, height):
+        """Poll once while SDL reports a width x height logical window."""
+        with patch.object(self.platform.sdl, 'SDL_GetWindowSize',
+                          side_effect=self._size_query(width, height)):
+            return self.platform.poll()
+
+    def test_mouse_delta_sums_each_motion_in_one_poll_and_resets_next_poll(self):
+        """Look input is the frame's total travel; it never carries into the next poll."""
+        self._motion(10, 10, dx=8, dy=0)
+        self._motion(12, 10, dx=8, dy=-4)
+        self.assertEqual(self._poll_with_window(200, 100).mouse_delta, (16 / 200, -4 / 200))
+        self.assertEqual(self.platform.poll().mouse_delta, (0.0, 0.0))
+
+    def test_mouse_delta_is_a_fraction_of_window_width_on_both_axes(self):
+        """A full-width sweep turns the view the same at any size; height never scales it."""
+        self._motion(0, 0, dx=200, dy=50)
+        self.assertEqual(self._poll_with_window(200, 100).mouse_delta, (1.0, 0.25))
+        self._motion(0, 0, dx=400, dy=50)
+        self.assertEqual(self._poll_with_window(400, 200).mouse_delta, (1.0, 0.125))
+
+    def test_an_unknown_window_size_gives_no_turn_instead_of_dividing_by_zero(self):
+        """Before SDL reports a size, pointer travel is dropped rather than divided."""
+        self._motion(10, 10, dx=8)
+        self.assertEqual(self._poll_with_window(0, 0).mouse_delta, (0.0, 0.0))
+
+    def test_focus_loss_drops_pending_motion_and_unfocused_motion_never_pans(self):
+        """Alt-tabbing away mid-drag must not leave the view turning when focus returns."""
+        self._motion(10, 10, dx=8)
+        self.focus(False)
+        self.assertEqual(self._poll_with_window(200, 100).mouse_delta, (0.0, 0.0))
+        self._motion(12, 10, dx=8)
+        self.assertEqual(self._poll_with_window(200, 100).mouse_delta, (0.0, 0.0))
+        self.focus(True)
+        self._motion(14, 10, dx=8)
+        self.assertEqual(self._poll_with_window(200, 100).mouse_delta, (8 / 200, 0.0))
+
+    def test_minimize_and_pointer_leave_drop_pending_motion(self):
+        """Travel queued before the window hides or the pointer leaves never turns the view."""
+        self._motion(10, 10, dx=8)
+        self._window_event(SDL_WINDOWEVENT_MINIMIZED)
+        self.assertEqual(self._poll_with_window(200, 100).mouse_delta, (0.0, 0.0))
+        self._window_event(SDL_WINDOWEVENT_RESTORED)
+        self._motion(10, 10, dx=8)
+        self._window_event(SDL_WINDOWEVENT_LEAVE)
+        self.assertEqual(self._poll_with_window(200, 100).mouse_delta, (0.0, 0.0))
+
+    def test_an_empty_presentation_surface_drops_pending_motion(self):
+        """A zero-width frame (a hidden or resizing window) drops pending travel."""
+        class EmptySurface(ctypes.Structure):
+            _fields_ = [('w', ctypes.c_int), ('h', ctypes.c_int)]
+
+        self._motion(10, 10, dx=8)
+        empty = ctypes.pointer(EmptySurface(0, 32))
+        with patch.object(self.platform.sdl, 'SDL_GetWindowSurface', return_value=empty):
+            self.assertEqual(self.platform.poll().mouse_delta, (0.0, 0.0))
+
     def test_button_position_does_not_synthesize_motion_or_keyboard_actions(self):
         """Clicks carry their own position; only left presses activate menus."""
         self._click(12, 17)

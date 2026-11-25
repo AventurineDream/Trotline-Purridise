@@ -226,6 +226,9 @@ class SoftwareRenderer:
         pos, nrm, rgb, tris = paw_mesh(state, bool(state.v2.get("settings", {}).get("reduced_motion", False)))
         if not len(tris):
             return
+        frame = cam.boat_frame()
+        if frame is not cam:  # a mouse-turned view keeps the paws on the body, not on the look
+            pos = cam.world_to_eye(frame.eye_to_world(pos))
         with np.errstate(divide="ignore", invalid="ignore"):
             sx, sy, zz = cam.cam_to_screen(pos)
         pixels, owner, bary, depth = cover(sx, sy, zz, tris, self.w, self.h, near=0.22)
@@ -308,8 +311,9 @@ class SoftwareRenderer:
         self._faces(cam, world.faces, light, boat=False)
         self._actors(cam, state, light)
         boat = self._boat_faces(state)
-        if cam.boat is not None:  # a staged view sees the boat where it floats (V1-35)
-            boat = [Face(cam.boat.eye_to_world(f.pts), cam.boat.eye_to_world(f.normal) - cam.boat.eye, f.color,
+        frame = cam.boat_frame()
+        if frame is not cam:  # a staged or mouse-turned view sees the boat where it floats (V1-35)
+            boat = [Face(frame.eye_to_world(f.pts), frame.eye_to_world(f.normal) - frame.eye, f.color,
                          "world", f.emissive) for f in boat]
         self._faces(cam, boat, light, boat=True)
         if cam.boat is None:

@@ -310,11 +310,13 @@ class GamepadChecks(unittest.TestCase):
         keys.viewport = (2560, 1440)
         keys.resized = True
         keys.device = "mouse"
+        keys.mouse_delta = (0.25, -0.1)
         mapped = session_input(keys, saved, {})
         self.assertEqual(mapped.mouse_pos, keys.mouse_pos)
         self.assertTrue(mapped.mouse_moved)
         self.assertEqual(mapped.mouse_click, keys.mouse_click)
         self.assertEqual(mapped.mouse_wheel, -2)
+        self.assertEqual(mapped.mouse_delta, (0.25, -0.1))
         self.assertEqual(mapped.viewport, (2560, 1440))
         self.assertTrue(mapped.resized)
         self.assertTrue(mapped.focused)
