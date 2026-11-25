@@ -615,14 +615,20 @@ def _hull(state):
 
 
 def _jon_boxes(state):
-    """The jon's bench, livewell, motor cap and bow deck, which are open shells in its mesh."""
+    """The jon's bench, livewell, steering mount and bow deck, which are open shells in its
+    mesh, plus the outboard's cowl and leg (issue #160) at rest; steer is not in the cache key,
+    so the boxes stay unyawed."""
+    from .boatmesh import OUTBOARD_PIVOT
     cy1 = -0.96 + 0.36 * (1.0 + state.well_tier * 0.12)
     beam = HULL_INNER_BEAM
+    ox, oz = OUTBOARD_PIVOT
     boxes = [
         ((0.0, -0.768, 1.77), (beam - 0.035, 0.032, 0.07)),
         ((-0.31, (-0.96 + cy1) * 0.5, 2.06), (0.17, (cy1 + 0.96) * 0.5, 0.14)),
         ((0.31, -0.81, 1.62), (0.11, 0.15, 0.10)),
         ((0.0, -0.54, 2.63), (beam, 0.04, 0.23)),
+        ((ox, -0.24, oz - 0.24), (0.17, 0.16, 0.22)),
+        ((ox, -0.98, oz - 0.12), (0.055, 0.49, 0.08)),
     ]
     return [(np.asarray(c, np.float32), np.asarray(h, np.float32)) for c, h in boxes]
 

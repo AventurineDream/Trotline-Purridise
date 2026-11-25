@@ -1,4 +1,4 @@
-"""Small, detailed first-person daysailer and pontoon meshes."""
+"""Small, detailed first-person daysailer and pontoon meshes, and the jon's outboard."""
 
 import math
 from dataclasses import replace
@@ -17,6 +17,76 @@ def glow_hull(state, faces):
     if "glow" not in state.boat.traits:
         return faces
     return [face if face.emissive is not None else replace(face, emissive=HULL_GLOW) for face in faces]
+
+
+# The jon's tiller outboard (issue #160), eye frame, metres. It clamps to the transom at
+# HULL_STERN, cowl above the rail and lower unit below the 1.22 m eye-height waterline.
+OUTBOARD_PIVOT = (0.0, -0.84)  # (x, z) of the clamp's steering axis, just astern of the transom
+OUTBOARD_YAW = 0.45  # radians of motor yaw at full steer
+
+
+def outboard_faces(steer, cowl_rgb):
+    """The jon's outboard as camera-space faces, yawed about its clamp by `steer`.
+
+    Args:
+        steer: The boat's steer, -1..1. Positive turns to starboard, so the lower unit's
+            aft end swings to starboard (+x), as a real tiller motor does.
+        cowl_rgb: The `motor` paint, 0-1 RGB, for the cowl.
+
+    Returns:
+        A list of `Face`s: cowl, clamp bracket, midsection, cavitation plate, gearcase,
+        skeg and a three-blade propeller. Each box has outward normals.
+    """
+    yaw = float(steer) * OUTBOARD_YAW
+    c, s = math.cos(yaw), math.sin(yaw)
+    px, pz = OUTBOARD_PIVOT
+    cowl = np.asarray(cowl_rgb, np.float32)
+    leg = np.array([0.20, 0.21, 0.22], np.float32)
+    steel = np.array([0.55, 0.58, 0.60], np.float32)
+    faces = []
+
+    def place(lx, y, lz):
+        # Local -z is astern. Rotating by +yaw carries an aft point toward +x.
+        return (px + lx * c - lz * s, y, pz + lx * s + lz * c)
+
+    def turn(nx, ny, nz):
+        return (nx * c - nz * s, ny, nx * s + nz * c)
+
+    def quad(points, normal, colour):
+        faces.append(Face(np.array([place(*p) for p in points], np.float32),
+                          np.array(turn(*normal), np.float32), np.asarray(colour, np.float32), "cam"))
+
+    def cuboid(centre, half, colour):
+        x, y, z = centre
+        a, b, d = half
+        quad([(x-a,y+b,z-d),(x+a,y+b,z-d),(x+a,y+b,z+d),(x-a,y+b,z+d)], (0,1,0), colour)
+        quad([(x-a,y-b,z+d),(x+a,y-b,z+d),(x+a,y-b,z-d),(x-a,y-b,z-d)], (0,-1,0), colour * 0.7)
+        quad([(x-a,y-b,z+d),(x-a,y+b,z+d),(x+a,y+b,z+d),(x+a,y-b,z+d)], (0,0,1), colour * 0.9)
+        quad([(x+a,y-b,z-d),(x+a,y+b,z-d),(x-a,y+b,z-d),(x-a,y-b,z-d)], (0,0,-1), colour * 0.85)
+        quad([(x-a,y-b,z-d),(x-a,y+b,z-d),(x-a,y+b,z+d),(x-a,y-b,z+d)], (-1,0,0), colour * 0.8)
+        quad([(x+a,y-b,z+d),(x+a,y+b,z+d),(x+a,y+b,z-d),(x+a,y-b,z-d)], (1,0,0), colour * 0.8)
+
+    # Clamp bracket on the transom's rail cap, then the powerhead cowl and its darker lower pan.
+    cuboid((0.0, -0.43, 0.02), (0.10, 0.03, 0.05), steel)
+    cuboid((0.0, -0.24, -0.24), (0.17, 0.16, 0.22), cowl)
+    cuboid((0.0, -0.44, -0.22), (0.15, 0.05, 0.19), leg)
+    # Midsection down past the waterline, the cavitation plate, gearcase and skeg.
+    cuboid((0.0, -0.98, -0.12), (0.055, 0.49, 0.08), leg)
+    cuboid((0.0, -1.48, -0.16), (0.13, 0.012, 0.15), leg)
+    cuboid((0.0, -1.58, -0.14), (0.05, 0.07, 0.18), leg)
+    cuboid((0.0, -1.73, -0.20), (0.012, 0.09, 0.08), leg)
+    # Propeller: three blades round a hub at the gearcase's aft end.
+    hub_z = -0.34
+    cuboid((0.0, -1.58, hub_z), (0.035, 0.035, 0.03), steel)
+    for k in range(3):
+        a = k * math.tau / 3 + 0.3
+        tip_x, tip_y = math.cos(a) * 0.13, -1.58 + math.sin(a) * 0.13
+        side_x, side_y = -math.sin(a) * 0.035, math.cos(a) * 0.035
+        blade = [(-side_x, -1.58 - side_y, hub_z), (side_x, -1.58 + side_y, hub_z),
+                 (tip_x + side_x, tip_y + side_y, hub_z), (tip_x - side_x, tip_y - side_y, hub_z)]
+        quad(blade, (0, 0, -1), steel)
+        quad(blade[::-1], (0, 0, 1), steel * 0.8)
+    return faces
 
 
 def boat_faces(state):
