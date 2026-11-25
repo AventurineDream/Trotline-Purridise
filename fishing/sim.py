@@ -2046,8 +2046,9 @@ class State:
         """Pull line `line_index` aboard and coil it into the held lines.
 
         Any fish on it are taken or released first. When the livewell refuses a keeper,
-        that message comes back and nothing changes. When the line was the one Bot is
-        watching, he turns for home (bot.line_pulled).
+        that message comes back and the line stays out with its bait. Bait still on
+        unused hooks goes back into the bait box (`_return_bait`). When the line was the
+        one Bot is watching, he turns for home (bot.line_pulled).
 
         Returns:
             None once the line is aboard, else the livewell's refusal.
@@ -2059,9 +2060,43 @@ class State:
                 return result
         self.lines.pop(line_index)
         self.held.append(HeldLine(line.tier))
-        self.toast("Line coiled in the boat.")
+        self.toast("Line coiled in the boat." + self._return_bait(line))
         bot.line_pulled(self, line.line_id)
         return None
+
+    def _return_bait(self, line: SetLine) -> str:
+        """Put the bait still on `line`'s unused hooks back in the bait box.
+
+        Only hooks that are baited and empty count. A bite, a nibble, or a fish taken
+        off has already spent its hook's bait, and those hooks read unbaited. Each hook
+        returns its own section's bait. The box fills up to `box_cap()` in hook order,
+        and any bait past that goes over the side. Ids missing from BAIT_BY_ID (e.g.
+        from an old save) are not returned, because the box only holds bait it can name.
+
+        Returns:
+            Feedback to append to the coil toast, starting with a space, or "" when
+            nothing came back.
+        """
+        unused: dict[str, int] = {}
+        for index, hook in enumerate(line.hooks):
+            if hook.baited and hook.catch is None:
+                bait = line.bait_for_hook(index)
+                if bait in BAIT_BY_ID:
+                    unused[bait] = unused.get(bait, 0) + 1
+        room = max(0, self.box_cap() - self.bait_count())
+        returned: list[str] = []
+        lost = 0
+        for bait, count in unused.items():
+            back = min(count, room)
+            room -= back
+            lost += count - back
+            if back:
+                self.bait[bait] = self.bait.get(bait, 0) + back
+                returned.append(f"{back} {BAIT_BY_ID[bait].name.lower()}")
+        feedback = f" {', '.join(returned)} back in the bait box." if returned else ""
+        if lost:
+            feedback += f" The box is full; {lost} went over the side."
+        return feedback
 
     # --- shop -----------------------------------------------------------
 
