@@ -1576,8 +1576,8 @@ class UI:
         weather = calendar.weather_at(state).replace("_", " ").upper()
         clock = calendar.day_name(state.game_minutes)[:3] + " " + clock_string(state.game_minutes)
         clock_size = max(22,int(30*unit))
-        # Issue #158: the left panel keeps the clock and time scale; weather
-        # moves to the right HUD and the quest tracker becomes its own pill.
+        # The clock panel holds only the clock and time scale, so its width never depends
+        # on weather text; weather sits in the right panel and the quest in its own pill.
         meta = ""
         if state.time_scale!=1:
             meta = f"{state.time_scale}x" + ("" if state.fast_ok() else " held")
@@ -1619,9 +1619,20 @@ class UI:
             self._text(frame,quest_progress,m+16,q_progress_y,small,INK,False,"sans")
         zone = self.world.zone_name(self.world.zone_at(state.x, state.z))
         zone_width = self._measure(zone,size+4,"serif")
-        rx = w-m-max(int(194*unit),zone_width+32)
+        if self.world.id == "nebula":
+            from .data import hour_of_day
+            from .nebula import band_label
+            weather_line = band_label(hour_of_day(state.game_minutes)).upper() + "  /  " + weather
+        else:
+            weather_line = weather
+        weather_text = "WEATHER  " + weather_line
+        # Widen for the weather line rather than trim it: a short zone such as Nebula's
+        # "Bank" leaves the panel at its minimum, narrower than a long weather name.
+        rx = w-m-max(int(194*unit),zone_width+32,self._measure(weather_text,small,"sans")+32)
+        rx = max(m, rx)
         rw = w-m-rx
-        rh = int(160*unit)+10
+        # Tall enough for the bottom line's own glyph box at every resolution and text size.
+        rh = int(151*unit)+self.cell(small)[1]+max(6,int(8*unit))
         self._panel(frame,rx,m,rw,rh,HUD_PANEL_ALPHA)
         self._hud_rects.append((rx, m, rw, rh))
         self._text(frame,"ON THE WATER",rx+16,m+int(11*unit),small,GOLD,False,"sans")
@@ -1632,14 +1643,7 @@ class UI:
         if state.finder:
             navigation += f"  /  {float(self.world.depth(state.x,state.z))*3.28084:.0f} FT"
         self._text(frame,navigation,rx+16,m+int(71*unit),small,DIM,False,"sans")
-        # Issue #158: weather lives on the right HUD, clearly labeled.
-        if self.world.id == "nebula":
-            from .data import hour_of_day
-            from .nebula import band_label
-            weather_line = band_label(hour_of_day(state.game_minutes)).upper() + "  /  " + weather
-        else:
-            weather_line = weather
-        self._text(frame,"WEATHER  "+weather_line,rx+16,m+int(91*unit),small,DIM,False,"sans")
+        self._text(frame,weather_text,rx+16,m+int(91*unit),small,DIM,False,"sans")
         lever = state.throttle_setting
         gear = "IDLE" if abs(lever)<0.005 else ("FWD" if lever>0 else "REV")
         percent = round(abs(lever)/(1.0 if lever>=0 else 0.45)*100)
@@ -2221,8 +2225,8 @@ class UI:
         h, w = frame.shape[:2]
         unit = h / 720
         margin = max(12, int(26 * unit))
-        # Leave the tallest right-hand HUD panel unobscured (sail/wind, Bot,
-        # or scanner status can extend it beyond the location label).
+        # Fallback top for screens that draw no HUD (title, saves). In play, the
+        # _hud_rects loop below moves a toast under any HUD panel it overlaps.
         y = margin + int(140 * unit) + 18
         for raw_text, _ttl in state.toasts[-3:]:
             text = _toast_for_device(raw_text, input_device)
@@ -2552,8 +2556,8 @@ class UI:
         size = max(11, int(h / 60))
         label = " · ".join(labels)
         width = self._measure(label, size) + 24
-        # Sit below the HUD panels in this column: the quest tracker makes the clock
-        # panel taller than its old fixed int(92*unit)+10, and a fixed offset covered it.
+        # Sit below every HUD panel in this column (clock, quest pill), which grow
+        # taller at larger text sizes, so the label never covers one.
         y = margin
         for rx, ry, rw, rh in getattr(self, "_hud_rects", ()):
             if rx < margin + width and margin < rx + rw:

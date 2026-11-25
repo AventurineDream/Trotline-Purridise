@@ -255,40 +255,53 @@ class GuideLayoutChecks(unittest.TestCase):
         self.assertTrue(quest_step_text.endswith("to scout."), quest_step_text)
         self.assertGreater(quest_title, clock_y)
         self.assertGreater(quest_step, quest_title)
+
     def test_weather_sits_on_the_right_hud_and_quest_is_its_own_pill(self):
-        """Issue #158: weather moves right; the quest tracker is a separate pill."""
+        """Weather is inside the right panel at every text size, even beside a short zone
+        name, and the quest tracker is its own registered pill under the clock."""
         from . import calendar
 
-        world = World()
-        state = State.new(world, seed=53)
-        state.narrative.quests["q01_tea_leaves_deep_holes"].status = "active"
-        ui = UI(self.text, world)
-        panels, texts = [], []
-        original_panel, original_text = ui._panel, ui._text
+        for lake in ("briar", "nebula"):
+            world = World(lake)
+            if "shore" in world.zone_names:
+                # Nebula's short "Bank" leaves the zone line narrower than the weather.
+                world.zone_at = lambda _x, _z: "shore"
+            ui = UI(self.text, world)
+            for size in (0, 1, 2):
+                state = uiscreens.settled_state(world, 53, False, size)
+                state.narrative.quests["q01_tea_leaves_deep_holes"].status = "active"
+                # A long weather name plus Nebula's band prefix: wider than the zone line.
+                state.game_minutes = state.game_minutes // (24 * 60) * 24 * 60 + 6 * 60
+                panels, texts = [], []
+                original_panel, original_text = UI._panel, UI._text
 
-        def panel(frame, x, y, width, height, *args, **kwargs):
-            panels.append((int(x), int(y), int(width), int(height)))
-            return original_panel(frame, x, y, width, height, *args, **kwargs)
+                def panel(frame, x, y, width, height, *args, _p=original_panel, **kwargs):
+                    panels.append((int(x), int(y), int(width), int(height)))
+                    return _p(ui, frame, x, y, width, height, *args, **kwargs)
 
-        def text(frame, label, x, y, size, color, shadow=True, family="mono"):
-            texts.append((label, int(x), int(y)))
-            return original_text(frame, label, x, y, size, color, shadow, family)
+                def text(frame, label, x, y, size_, color, shadow=True, family="mono", _t=original_text):
+                    texts.append((label, int(x), int(y), size_, family))
+                    return _t(ui, frame, label, x, y, size_, color, shadow, family)
 
-        ui._panel, ui._text = panel, text
-        ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play"))
-        weather = calendar.weather_at(state).replace("_", " ").upper()
-        weather_label = next((x for label, x, _y in texts if label.startswith("WEATHER")), None)
-        quest_title = next((x for label, x, _y in texts if label.startswith("QUEST ·")), None)
-        self.assertIsNotNone(weather_label, "no WEATHER line on the HUD")
-        self.assertIn("WEATHER  " + weather, next(label for label, _x, _y in texts if label.startswith("WEATHER")))
-        self.assertIsNotNone(quest_title)
-        # The quest pill is a panel below the left clock panel, not inside it.
-        left_panel = panels[0]
-        quest_panel = next((p for p in panels if p[1] > left_panel[1] + left_panel[3]), None)
-        self.assertIsNotNone(quest_panel, "quest tracker has no separate pill")
-        self.assertEqual(quest_panel[0], left_panel[0])
-        self.assertGreater(quest_panel[1], left_panel[1] + left_panel[3] - 4)
-
+                ui._panel, ui._text = panel, text
+                with patch("fishing.calendar.weather_at", return_value="snow_mist"):
+                    ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play"))
+                del ui._panel, ui._text
+                with self.subTest(lake=lake, size=size):
+                    label, x, y, size_, family = next(t for t in texts if t[0].startswith("WEATHER  "))
+                    self.assertIn("SNOW MIST", label)
+                    if lake == "nebula":
+                        self.assertIn("  /  ", label, "Nebula's weather line lost its sky band")
+                    rx, ry, rw, rh = next(p for p in panels if p[0] > 640)
+                    self.assertTrue(rx < x and ry < y < ry + rh, (label, x, y, (rx, ry, rw, rh)))
+                    self.assertLessEqual(x + ui._measure(label, size_, family), rx + rw,
+                                         f"{label!r} runs past the right panel")
+                    if lake != "briar":
+                        continue  # q01 is a Little Briar quest; other lakes show no tracker.
+                    clock = ui._hud_rects[0]
+                    title = next(t for t in texts if t[0].startswith("QUEST ·"))
+                    pill = next(r for r in ui._hud_rects[1:] if r[0] == clock[0] and r[1] <= title[2] < r[1] + r[3])
+                    self.assertGreaterEqual(pill[1], clock[1] + clock[3], "quest pill overlaps the clock")
 
     def test_comfort_status_sits_below_the_quest_tracker(self):
         """A picnic buff or Old Salt needs label never covers the quest's next step."""
@@ -617,16 +630,23 @@ class PanelFitChecks(unittest.TestCase):
         self.addCleanup(text.close)
         ui = UI(text, world)
         for size in (0, 1, 2):
-            state = uiscreens.settled_state(world, 51, False, size)
-            state.toasts = [["Dawn on Little Briar. The landing is behind the stern.", 4.8]]
-            panels, texts = self._records(ui)
-            ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play"))
-            toast = panels[-1]
-            with self.subTest(size=size):
-                for rx, ry, rw, rh in ui._hud_rects:
-                    overlaps = (toast[0] < rx + rw and rx < toast[0] + toast[2]
-                                and toast[1] < ry + rh and ry < toast[1] + toast[3])
-                    self.assertFalse(overlaps, (toast, (rx, ry, rw, rh)))
+            for quest, toast_text in ((False, "Dawn on Little Briar. The landing is behind the stern."),
+                                      (True, "Dawn on Little Briar. " * 6)):
+                state = uiscreens.settled_state(world, 51, False, size)
+                if quest:
+                    state.narrative.quests["q01_tea_leaves_deep_holes"].status = "active"
+                state.toasts = [[toast_text, 4.8]]
+                panels, texts = self._records(ui)
+                ui.draw(np.zeros((720, 1280, 3), np.uint8), state, UIState(mode="play"))
+                toast = panels[-1]
+                with self.subTest(size=size, quest=quest):
+                    if quest:
+                        # Wide enough to reach under the right panel, so the move-down path runs.
+                        self.assertGreater(toast[0] + toast[2], max(r[0] for r in ui._hud_rects))
+                    for rx, ry, rw, rh in ui._hud_rects:
+                        overlaps = (toast[0] < rx + rw and rx < toast[0] + toast[2]
+                                    and toast[1] < ry + rh and ry < toast[1] + toast[3])
+                        self.assertFalse(overlaps, (toast, (rx, ry, rw, rh)))
 
 
 class MinimapControlChecks(unittest.TestCase):
