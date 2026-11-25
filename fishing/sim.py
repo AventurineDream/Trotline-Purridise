@@ -70,6 +70,9 @@ from .book import (LEGENDARY_IDS, SHINY_VALUE_MULTIPLIER, confirm_shiny, lose_sh
                    shiny_tracker, stage_up_events)
 from .savepaths import (UnsupportedSaveVersionError, V2_REWARD_KINDS,
                         merge_v2_defaults)
+# bot.py imports sim only inside its functions. Keep it that way: a top-level sim import
+# there would break `import fishing.sim` on a partly loaded module.
+from . import bot
 from . import comfort
 from . import bottools
 from . import fleet
@@ -2040,16 +2043,24 @@ class State:
         return None
 
     def pull_line(self, line_index: int) -> str | None:
+        """Pull line `line_index` aboard and coil it into the held lines.
+
+        Any fish on it are taken or released first. When the livewell refuses a keeper,
+        that message comes back and nothing changes. When the line was the one Bot is
+        watching, he turns for home (bot.line_pulled).
+
+        Returns:
+            None once the line is aboard, else the livewell's refusal.
+        """
         line = self.lines[line_index]
         if any(hook.catch is not None for hook in line.hooks):
             result = self.take_all(line_index)
             if result.startswith("The livewell"):
                 return result
         self.lines.pop(line_index)
-        if self.bot_target_line_id == line.line_id:
-            self.bot_target_line_id = None
         self.held.append(HeldLine(line.tier))
         self.toast("Line coiled in the boat.")
+        bot.line_pulled(self, line.line_id)
         return None
 
     # --- shop -----------------------------------------------------------
@@ -2212,8 +2223,8 @@ class State:
     # --- save -----------------------------------------------------------
 
     def to_json(self) -> dict:
-        bot = deepcopy(self.unknown_bot_fields)
-        bot.update({
+        bot_fields = deepcopy(self.unknown_bot_fields)
+        bot_fields.update({
             "phase": self.bot_phase,
             "x": round(self.bot_x, 2), "z": round(self.bot_z, 2),
             "yaw": round(self.bot_yaw, 4),
@@ -2254,7 +2265,7 @@ class State:
             "preferred_bait": self.preferred_bait,
             "hooked_total": self.hooked_total,
             "stamp": self.stamp,
-            "bot": bot,
+            "bot": bot_fields,
             "v2": merge_v2_defaults(self, self.v2),
         })
         return result
