@@ -2039,6 +2039,7 @@ class State:
         for hook in line.hooks:
             if hook.catch is None and not hook.baited:
                 hook.baited = True
+                hook.extra_fields.pop(comfort.FREE_BAIT, None)  # paid for now
         self.toast(f"Rebaited {need} hook{'s' if need != 1 else ''} with their section baits.")
         return None
 
@@ -2068,32 +2069,34 @@ class State:
         """Put the bait still on `line`'s unused hooks back in the bait box.
 
         Only hooks that are baited and empty count. A bite, a nibble, or a fish taken
-        off has already spent its hook's bait, and those hooks read unbaited. Each hook
-        returns its own section's bait. The box fills up to `box_cap()` in hook order,
-        and any bait past that goes over the side. Ids missing from BAIT_BY_ID (e.g.
-        from an old save) are not returned, because the box only holds bait it can name.
+        off has already spent its hook's bait, and those hooks read unbaited. Bait the
+        keep_bait perk put on for free (comfort.FREE_BAIT) was never paid for, so it is
+        not returned. Each hook returns its own section's bait. The box fills up to
+        `box_cap()` one hook at a time in hook order, and any bait past that goes over
+        the side. Ids missing from BAIT_BY_ID (e.g. from an old save) are not returned,
+        because the box only holds bait it can name.
 
         Returns:
             Feedback to append to the coil toast, starting with a space, or "" when
             nothing came back.
         """
-        unused: dict[str, int] = {}
-        for index, hook in enumerate(line.hooks):
-            if hook.baited and hook.catch is None:
-                bait = line.bait_for_hook(index)
-                if bait in BAIT_BY_ID:
-                    unused[bait] = unused.get(bait, 0) + 1
         room = max(0, self.box_cap() - self.bait_count())
-        returned: list[str] = []
+        back: dict[str, int] = {}
         lost = 0
-        for bait, count in unused.items():
-            back = min(count, room)
-            room -= back
-            lost += count - back
-            if back:
-                self.bait[bait] = self.bait.get(bait, 0) + back
-                returned.append(f"{back} {BAIT_BY_ID[bait].name.lower()}")
-        feedback = f" {', '.join(returned)} back in the bait box." if returned else ""
+        for index, hook in enumerate(line.hooks):
+            if not hook.baited or hook.catch is not None or hook.extra_fields.get(comfort.FREE_BAIT):
+                continue
+            bait = line.bait_for_hook(index)
+            if bait not in BAIT_BY_ID:
+                continue
+            if room == 0:
+                lost += 1
+                continue
+            room -= 1
+            back[bait] = back.get(bait, 0) + 1
+            self.bait[bait] = self.bait.get(bait, 0) + 1
+        returned = ", ".join(f"{count} {BAIT_BY_ID[bait].name.lower()}" for bait, count in back.items())
+        feedback = f" {returned} back in the bait box." if returned else ""
         if lost:
             feedback += f" The box is full; {lost} went over the side."
         return feedback

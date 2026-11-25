@@ -328,6 +328,11 @@ def fog_factor(state, distance):
     return np.where(np.asarray(distance) <= radius, .25, 1.) if radius else 1.
 
 
+# Hook.extra_fields key for bait the keep_bait perk put on for free. Pulling the line does
+# not refund it (State._return_bait), and the next paid rebait of that hook clears it.
+FREE_BAIT = "free_bait"
+
+
 def haul_factor(state):
     dish = active_buff(state)
     return dish.value if dish and dish.effect == "quick_haul" else 1.0
@@ -340,8 +345,9 @@ def begin_haul(state, line):
         return 1.0
     if dish.effect == "keep_bait":
         for hook in line.hooks:
-            if hook.catch is None:
+            if hook.catch is None and not hook.baited:
                 hook.baited = True
+                hook.extra_fields[FREE_BAIT] = True
     if dish.effect == "shiny_credit":
         from .book import tracker_unlocked
         book = state.v2["book"]

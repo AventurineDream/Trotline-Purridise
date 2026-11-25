@@ -1,14 +1,17 @@
 """Pulling a line puts the bait still on its unused hooks back in the bait box.
 
 Covers a set-then-pull round trip through try_set, mixed used and unused hooks across
-bait sections, the bait box's capacity, a pull the livewell refuses and then allows,
-and the refunded counts surviving save and load.
+bait sections, the bait box's capacity filling in hook order, free bait from the
+Ember Hotpot perk (never refunded unless paid for later), a pull the livewell refuses
+and then allows, and the refunded counts surviving save and load.
 """
 import math
 import tempfile
 import unittest
 from pathlib import Path
 
+from . import comfort
+from .data import DISHES
 from .sim import Catch, Hook, SetLine, State
 from .world import World
 
@@ -115,6 +118,40 @@ class BaitComesBackOnPull(unittest.TestCase):
         self.assertEqual(loaded.bait, {"worm": 9, "shad": 6})
         self.assertEqual(loaded.lines, [])
         self.assertEqual(len(loaded.held), len(self.state.held))
+
+    def test_a_full_box_keeps_the_earliest_hooks_when_one_bait_spans_two_sections(self):
+        # Sections worm / liver / worm: hook order is 4 worm, then 4 liver, then 4 worm.
+        self.state.bait = {"dough": self.state.box_cap() - 6}
+        self.state.lines = [self.line(["worm", "liver", "worm"], [Hook(True) for _ in range(12)])]
+        self.state.pull_line(0)
+        self.assertEqual(self.state.bait, {"dough": self.state.box_cap() - 6, "worm": 4, "liver": 2})
+
+    def test_bait_the_hotpot_put_on_for_free_does_not_come_back(self):
+        self.state.bait = {"worm": 0}
+        line = self.line("worm", [Hook(True)] + [Hook(False) for _ in range(11)])
+        self.state.lines = [line]
+        comfort.serve_dish(self.state, DISHES["ember_hotpot"])
+        comfort.begin_haul(self.state, line)
+        self.assertTrue(all(hook.baited for hook in line.hooks))
+        # Through a save, as a player would quit between the check and the pull.
+        with tempfile.TemporaryDirectory(prefix="bait-refund-") as temp:
+            path = Path(temp) / "save.json"
+            self.state.save(path)
+            loaded = State.load(path, self.world)
+        loaded.pull_line(0)
+        self.assertEqual(loaded.bait.get("worm", 0), 1)
+
+    def test_paid_rebait_after_a_free_one_comes_back(self):
+        self.state.bait = {"worm": 12}
+        line = self.line("worm", [Hook(False) for _ in range(12)])
+        self.state.lines = [line]
+        comfort.serve_dish(self.state, DISHES["ember_hotpot"])
+        comfort.begin_haul(self.state, line)
+        for hook in line.hooks[:3]:
+            hook.baited = False  # three bites strip free bait
+        self.assertIsNone(self.state.rebait(0))
+        self.state.pull_line(0)
+        self.assertEqual(self.state.bait, {"worm": 12})  # 3 paid, 3 back; the 9 free stay gone
 
 
 if __name__ == "__main__":
