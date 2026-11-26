@@ -17,6 +17,7 @@ from .book import BOOK_STAGES, book_stage, seed_stage_claims
 from .bundle import bundled_library
 from .gamepad import default_key_bindings, normalize_key_bindings
 from .comfort import DEFAULT_NEEDS, normalize_needs
+from .mouselook import LEVELS as MOUSE_LOOK_LEVELS
 
 
 SAVE_FILENAME = "save.json"
@@ -294,6 +295,7 @@ def default_v2(state=None) -> dict:
             "collar_visible": True,
             "third_person": False,
             "auto_anchor": False,
+            "mouse_look": "normal",
             "key_bindings": default_key_bindings(),
         },
         # Quest claims remain in narrative_v1.reward_claims, the existing
@@ -362,6 +364,8 @@ def _valid_leaf(value, default, path: str) -> bool:
         return type(value) is int and value in (0, 1, 2)
     if path == "v2.settings.haul_speed":
         return value in ("normal", "quick", "instant")
+    if path == "v2.settings.mouse_look":
+        return value in MOUSE_LOOK_LEVELS
     if path in ("v2.settings.dyslexia_font", "v2.settings.reduced_motion",
                 "v2.settings.captions", "v2.settings.collar_visible",
                 "v2.settings.third_person", "v2.profile.collar.visible"):

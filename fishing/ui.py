@@ -57,7 +57,7 @@ from .boat import (
 from .lakes import LAKES, LAKE_ZONE_NAMES, travel_lock_reason
 from .data import weight_string
 from .weather import wind_at
-from . import comfort, detail, fieldguide, pointer, skipperlook
+from . import comfort, detail, fieldguide, mouselook, pointer, skipperlook
 
 INK = (238, 233, 216)
 DIM = (169, 183, 175)
@@ -157,7 +157,7 @@ SHOP_TABS = ("Sell", "Bait", "Gear", "Paint", "Boats", "Lakes", "Kitchen", "Bot"
 _TABS = SHOP_TABS
 TEXT_SIZE_SCALES = (0.9, 1.0, 1.15)
 MODES = comfort.MODES
-SETTINGS_ROW_COUNT = 14
+SETTINGS_ROW_COUNT = 15
 SETTINGS_KEYBOARD_CONTROLS_ROW = SETTINGS_ROW_COUNT - 1
 VOLUME_NAMES = ("master", "music", "ambience", "sfx")
 VOLUME_LABELS = {
@@ -3063,6 +3063,7 @@ class UI:
         rows.extend([
             ("Collar visibility", "Visible" if collar_visible else "Hidden"),
             ("Auto anchor", "On" if settings.get("auto_anchor") else "Off"),
+            ("Mouse look", mouselook.label(mouselook.level(settings))),
             ("Keyboard controls", "Open  >"),
         ])
         return rows
@@ -3346,6 +3347,7 @@ _HELP = (
         "V starts or stops the engine on fuel boats",
         "Power stays set       Shift returns it to idle",
         "A D or arrows steer   arrows look up and down",
+        "Mouse: move to turn the view. Settings: Mouse look sets how far.",
         "Space drops or raises the anchor",
         "Settings: Auto anchor lets W/S pull it up too",
         "",
@@ -3636,6 +3638,8 @@ _GAMEPAD_HELP_CONTROLS = {
         "Power stays set       Shift idles (keyboard)",
     "A D or arrows steer   arrows look up and down":
         "Left stick steers. The pad has no look control.",
+    "Mouse: move to turn the view. Settings: Mouse look sets how far.":
+        "Mouse look needs a mouse. The pad has no look control.",
     "Space drops or raises the anchor":
         "Space anchors (keyboard)",
     "Settings: Auto anchor lets W/S pull it up too":

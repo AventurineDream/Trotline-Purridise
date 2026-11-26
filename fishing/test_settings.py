@@ -380,6 +380,7 @@ class SettingsPresentationChecks(unittest.TestCase):
                 "volumes": {"master": 0.8, "music": 0.7,
                             "ambience": 0.6, "sfx": 0.5},
                 "collar_visible": False,
+                "mouse_look": "quick",
             },
             "profile": {"collar": {"visible": False}},
         })
@@ -398,6 +399,7 @@ class SettingsPresentationChecks(unittest.TestCase):
             ("SFX volume", "50%"),
             ("Collar visibility", "Hidden"),
             ("Auto anchor", "Off"),
+            ("Mouse look", "Quick"),
             ("Keyboard controls", "Open  >"),
         ])
 

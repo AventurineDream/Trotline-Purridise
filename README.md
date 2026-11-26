@@ -324,6 +324,17 @@ default) and **Third person**. The preference is saved. Third person keeps a
 fixed position behind and above the boat, without bob or smoothing. Authored
 story shots take priority; the selected view returns when staging ends.
 
+**Pause → Settings → Mouse look** lets the pointer turn the view on the water. Moving it
+sideways turns the view, and moving it up looks up. Off, Gentle, Normal (the default) and
+Quick set how far one sweep across the window turns it: about 46°, 75° and 115° for
+Gentle, Normal and Quick. The pointer is hidden during play and shows again in menus, so
+clicks and menus work as before. Turning stops about 70° either side. Pitch uses the arrow
+keys' limits; a turn past them is dropped when the arrow keys reach their limit, so Down
+works at once. Without pointer motion the view eases back to centre after about 1.2 seconds;
+with Reduced motion on it snaps. Menus, dialogue, story shots and a lost window focus start
+the recentre at once. Third person swings its orbit by the same turn. The setting is saved;
+the turn is not.
+
 Short taps are retained even when pressed and released between rendered frames.
 Losing window focus clears pending input and menu repeat, while held steering
 and throttle still follow the current keyboard state.
