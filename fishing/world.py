@@ -91,9 +91,10 @@ def shore_radius(theta: float) -> float:
     """Metres from the origin to the water's edge along angle theta (radians), by bisection."""
     lo, hi = 0.0, 900.0
     # Each of the 28 halvings of the 900 m bracket halves the interval; the final width is
-    # 900 / 2**28, about 3.4 micrometres. The solids fixture was built with this count. Another
-    # count moves shore-placed solids by micrometres, inside test_foliage's 1 mm position
-    # tolerance, so the test would not catch it: regenerate the fixture if the count changes.
+    # 900 / 2**28, about 3.4 micrometres. The solids fixture was built with this count.
+    # Counts from 20 to 28 move Briar's shore-placed solids by at most 0.81 mm, inside
+    # test_foliage's 1 mm position tolerance, so the test would not catch them. 19 or fewer
+    # exceed the tolerance. Regenerate the fixture if the count changes.
     for _ in range(28):
         mid = (lo + hi) * 0.5
         x = math.cos(theta) * mid
