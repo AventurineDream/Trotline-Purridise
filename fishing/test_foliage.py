@@ -227,15 +227,12 @@ class ClearanceTests(unittest.TestCase):
                 self.assertTrue(in_landing_envelope(lake, mid, -(half - 0.01)))
 
     def test_landing_envelopes_stay_clear(self):
-        """Tree lakes keep every prop out of the envelope; the nebula keeps its spires out."""
+        """Every lake keeps every placed prop, of any kind, out of its landing envelope."""
         for lake in LANDING_ENVELOPE:
             with self.subTest(lake=lake):
                 world = _world(lake)
-                kinds = NEBULA_SCENERY[:1] if lake == "nebula" else None
                 inside = []
                 for p in world.props:
-                    if kinds is not None and p.kind not in kinds:
-                        continue
                     a, s = (float(v) for v in world.slip.local(p.x, p.z))
                     if in_landing_envelope(lake, a, s):
                         inside.append((p.kind, round(p.x, 1), round(p.z, 1)))
