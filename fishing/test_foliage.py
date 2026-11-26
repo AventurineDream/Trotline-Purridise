@@ -23,11 +23,12 @@ freed after its check, since the ultra tier's atlas alone is hundreds of MiB.
 
 from __future__ import annotations
 
-import hashlib
+import json
 import math
 import unittest
 from collections import Counter
 from functools import lru_cache
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -58,14 +59,11 @@ BASE_NEBULA = {"spire": 110, "lightreed": 70, "starlily": 29}
 
 # The collision set is pinned: density work must not move a single solid (rocks, stumps, knees,
 # deadpine snags, kelp and meteors), because solids are walls the boat and fish collide with.
-SOLID_COUNT = {"briar": 31, "cedar": 42, "flathead": 26, "crater": 28, "nebula": 54}
-SOLID_SHA256 = {
-    "briar": "8c53c90d9b97c9bd",
-    "cedar": "190d32bb6313cdec",
-    "flathead": "072c72fdbc18e6ab",
-    "crater": "0bb4338780584da1",
-    "nebula": "7f01f8d0c778378a",
-}
+# The fixture holds the pre-change (x, z, radius) rows in metres. They are compared within a
+# tolerance, not by hashing their bytes, because NumPy's trig can differ in the last bits between
+# CPUs (it dispatches SIMD kernels per machine), which flips a hash of rounded floats on CI.
+SOLIDS_FIXTURE = Path(__file__).with_name("fixtures") / "foliage_solids.json"
+SOLID_TOLERANCE_M = 1e-3
 
 # Slip-local (a, s) in metres: trees and spires are kept out of lo < a < hi with |s| < half.
 LANDING_ENVELOPE = {
@@ -170,14 +168,16 @@ class DeterminismTests(unittest.TestCase):
 
 
 class CollisionTests(unittest.TestCase):
-    """Density work leaves every solid exactly where the pre-change build put it."""
+    """Density work leaves every solid where the pre-change build put it, to the millimetre."""
 
     def test_solids_match_the_pre_change_build(self):
+        expected = json.loads(SOLIDS_FIXTURE.read_text(encoding="utf-8"))["solids"]
         for lake in ALL_LAKES:
             with self.subTest(lake=lake):
-                solids = np.round(np.asarray(_world(lake).solid_props, np.float64), 4)
-                self.assertEqual(len(solids), SOLID_COUNT[lake])
-                self.assertEqual(hashlib.sha256(solids.tobytes()).hexdigest()[:16], SOLID_SHA256[lake])
+                solids = np.asarray(_world(lake).solid_props, np.float64)
+                pinned = np.asarray(expected[lake], np.float64)
+                self.assertEqual(solids.shape, pinned.shape)
+                np.testing.assert_allclose(solids, pinned, rtol=0.0, atol=SOLID_TOLERANCE_M)
 
 
 class DensityTests(unittest.TestCase):
