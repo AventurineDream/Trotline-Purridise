@@ -541,11 +541,12 @@ class LakeRenderer(SoftwareRenderer):
         return faces
 
     def _props(self):
+        from .forest import TREE_KINDS
         from .sprites import PROP_ASPECTS, WATERLINE_KINDS
         rows = []
         self._prop_variant = []
         for i,prop in enumerate(self.world.props):
-            tree = prop.kind in ("pine","oak","cypress","larch","spruce","hemlock","whitebark","deadpine")
+            tree = prop.kind in TREE_KINDS
             # Painted variants are picked by position so neighbours differ.
             variant = self.flora_atlas.variant(prop.kind,prop.x,prop.z)
             self._prop_variant.append(variant)

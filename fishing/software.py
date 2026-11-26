@@ -108,17 +108,22 @@ class SoftwareRenderer:
         self.z = np.full((self.h, self.w), 1e6, dtype=np.float32)
         tile = np.tile(_BAYER, (self.h // 4 + 1, self.w // 4 + 1))[: self.h, : self.w]
         self.bayer = tile
-        self.sprites = bake(paint_rgb("buoy", "orange"))
+        # Leafy parts take this lake's palette, as the GL atlas does (sprites.sprite_hd, forest.tree_hd).
+        self.sprites = bake(paint_rgb("buoy", "orange"), lake=world.id)
         self._buoy_id = "orange"
         if world.nebula:
             from .nebula import lane_circles
             from .sprites import nebula_sprites
             self.sprites.update(nebula_sprites())
             self._lanes = lane_circles(world)
-        elif world.generated:
-            from .forest import tree
-            kinds = ("hemlock", "whitebark", "deadpine") if world.caldera else ("larch", "larchgold", "spruce")
-            self.sprites.update({kind: tree(kind, 0) for kind in kinds})
+        else:
+            # Trees the baked set lacks take this lake's palette, as the GL atlas does (forest.tree_hd).
+            from .forest import TREE_KINDS, tree
+            placed = {prop.kind for prop in world.props} & set(TREE_KINDS)
+            kinds = sorted(kind for kind in placed if kind not in self.sprites)
+            if "larch" in placed:
+                kinds.append("larchgold")
+            self.sprites.update({kind: tree(kind, 0, lake=world.id) for kind in kinds})
         self.last_ms = 0.0
         self.splashes: list[tuple[float, float, float]] = []
         px = np.array([p.x for p in world.props],np.float32)
@@ -906,6 +911,7 @@ class SoftwareRenderer:
         ambient = 0.22 + 0.70 * (1.0 - light["night"]) + light["moon_i"] * 0.4
         fog_c = light["horizon"]
         items = []
+        from .forest import TREE_KINDS
         from .lakegen import larch_gold
         gold = self.world.generated and larch_gold(state)
         pts = cam.world_to_cam(self.prop_positions)
@@ -915,7 +921,7 @@ class SoftwareRenderer:
             prop = self.world.props[i]
             if zz > 750 or sx < -80 or sx > self.w + 80:
                 continue
-            tree = prop.kind in ("pine", "oak", "cypress", "larch", "spruce", "hemlock", "whitebark", "deadpine")
+            tree = prop.kind in TREE_KINDS
             kind = prop.kind
             if kind == "larch":
                 kind = "larchgold" if gold else kind

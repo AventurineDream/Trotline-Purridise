@@ -23,6 +23,7 @@ def reflection_strength(state, light):
 
 
 def caldera_props(world, prop_type):
+    from .forest import index_draw, pick_tree
     parameters=world.environment
     rng=np.random.default_rng(parameters['seed'])
     result=[]
@@ -33,7 +34,7 @@ def caldera_props(world, prop_type):
         a,s=world.slip.local(x,z)
         if -65<float(a)<80 and abs(float(s))<85:
             continue
-        kind='hemlock' if index%3 else 'whitebark'
+        kind=pick_tree(world.id,"main",index_draw(index))
         result.append(prop_type(kind,x,z,float(rng.uniform(13,23)),float(rng.uniform(.82,1.03))))
         if len(result)==parameters['tree_count']:
             break

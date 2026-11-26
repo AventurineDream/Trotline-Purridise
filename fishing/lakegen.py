@@ -117,6 +117,7 @@ def larch_gold(state):
 
 
 def alpine_props(world, prop_type):
+    from .forest import index_draw, pick_tree
     parameters = world.environment
     rng = np.random.default_rng(parameters['seed'])
     result = []
@@ -129,7 +130,7 @@ def alpine_props(world, prop_type):
             continue
         if float(world.sample_height(x, z)) > parameters["snow_line"]-15:
             continue
-        kind = 'larch' if index % 3 else 'spruce'
+        kind = pick_tree(world.id, "main", index_draw(index))
         result.append(prop_type(kind, x, z, float(rng.uniform(13, 25)), float(rng.uniform(.82, 1.05))))
         if len(result) == parameters['tree_count']:
             break

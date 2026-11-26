@@ -25,6 +25,11 @@ WATERLINE = frozenset(("kelp", "meteor", "lightreed"))
 SOLID_RADIUS = {"kelp": 0.12, "meteor": 0.45}  # fraction of the prop height
 DASH_CELL = 6.0  # metres between current dashes
 DASH_RATE = 0.11  # dash cycles per animation second
+# Denser scenery beyond the baseline counts. `nebula_props` draws these last, from a
+# separate stream, so the kelp and meteor solids keep their exact places (issue #167).
+EXTRA_SPIRES = 30
+EXTRA_LILIES = 8
+EXTRA_REEDS = 20
 
 
 def band_label(hour: float) -> str:
@@ -272,6 +277,38 @@ def nebula_props(world, prop_type):
         if float(world.shore_sd(x, z)) < -2.5:
             result.append(prop_type("lightreed", x, z, float(rng.uniform(1.3, 2.2)),
                                     GLOW_SHADE + float(rng.uniform(.5, .8))))
+    # Denser scenery from a separate stream, last: the kelp and meteor solids above keep
+    # their exact places, and every baseline spire, lily and light-reed is unchanged.
+    extra = np.random.default_rng(parameters["seed"] + 9000)
+    spires = reeds = 0
+    for _ in range(EXTRA_SPIRES * 4):
+        if spires == EXTRA_SPIRES:
+            break
+        angle = float(extra.uniform(0, math.tau))
+        radius = float(world.fields.radius(angle)) + float(extra.uniform(10, 170))
+        x, z = math.cos(angle) * radius, math.sin(angle) * radius
+        a, s = world.slip.local(x, z)
+        if -60 < float(a) < 75 and abs(float(s)) < 85:
+            continue
+        result.append(prop_type("spire", x, z, float(extra.uniform(6, 16)),
+                                GLOW_SHADE + float(extra.uniform(.30, .60))))
+        spires += 1
+    drifts = parameters["drifts"]
+    for _ in range(EXTRA_LILIES):
+        cx, cz, rx, rz = drifts[int(extra.integers(len(drifts)))]
+        angle, reach = float(extra.uniform(0, math.tau)), math.sqrt(float(extra.random())) * .6
+        result.append(prop_type("starlily", cx + math.cos(angle) * rx * reach,
+                                cz + math.sin(angle) * rz * reach,
+                                float(extra.uniform(.9, 1.4)), GLOW_SHADE + .7))
+    for _ in range(EXTRA_REEDS * 4):
+        if reeds == EXTRA_REEDS:
+            break
+        angle, reach = float(extra.uniform(0, math.tau)), math.sqrt(float(extra.random())) * rr * .9
+        x, z = rx_ + math.cos(angle) * reach, rz_ + math.sin(angle) * reach
+        if float(world.shore_sd(x, z)) < -2.5:
+            result.append(prop_type("lightreed", x, z, float(extra.uniform(1.3, 2.2)),
+                                    GLOW_SHADE + float(extra.uniform(.5, .8))))
+            reeds += 1
     return result
 
 

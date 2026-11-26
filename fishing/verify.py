@@ -235,7 +235,7 @@ WEATHER_SPAN_HOURS = 168 * 12  # twelve forecast weeks; each lake reaches its we
 # 06 §7 budgets in MB, one per table row the benchmark estimates.
 MEMORY_BUDGET_MB = {
     "terrain_zones_depth": 350,
-    "foliage": 250,
+    "foliage": detail_tiers.FOLIAGE_BUDGET_MB,
     "render_targets": 300,
     "cat_actors": 150,
     "fish_meshes_and_cards": 120,
@@ -302,6 +302,27 @@ def _weather_minutes(seed, lake_id):
     return sorted(first.items())
 
 
+def foliage_bytes(renderer) -> int:
+    """Bytes the renderer holds for trees and shore plants, from its real buffers.
+
+    GL: the painted flora atlas at its real layer size, both textures with their mip chains.
+    The cat-impostor reserve is left out because `actor_memory` already counts it. CPU: the
+    sprite sheets and the prop positions. Counting layers at base size ignores the tier's
+    atlas scale and mip chain, so this reads the atlas itself.
+
+    Args:
+        renderer: A `LakeRenderer` (GL) or `SoftwareRenderer` (CPU).
+
+    Returns:
+        Estimated bytes, as an int.
+    """
+    atlas = getattr(renderer, "flora_atlas", None)
+    if atlas is not None:
+        return int(atlas.memory_bytes(include_reserve=False))
+    total = sum(sprite.nbytes for sprite in getattr(renderer, "sprites", {}).values())
+    return total + getattr(getattr(renderer, "prop_positions", None), "nbytes", 0)
+
+
 def _memory_report(renderer, world, state, text, mesh_bytes, audio_bytes) -> dict:
     """Per-subsystem MB estimates for the 06 §7 table, each beside its budget.
 
@@ -311,15 +332,11 @@ def _memory_report(renderer, world, state, text, mesh_bytes, audio_bytes) -> dic
     from .boatmesh import boat_faces
     from .content import load_content, load_content_v2
     from .fishmesh import cache_bytes as card_cache_bytes
-    from .forest import H as ATLAS_H, W as ATLAS_W
     mb = 1024 ** 2
     # Terrain: every array the lake holds (height grid, map images, zone and depth grids).
     terrain = _deep_bytes([world], skip=(renderer,))
-    # Foliage: GL keeps one RGBA atlas layer per tree or prop sprite; the CPU renderer keeps
-    # its sprite sheets and the prop positions. Both are read from the renderer.
-    foliage = sum(sprite.nbytes for sprite in getattr(renderer, "sprites", {}).values())
-    foliage += len(getattr(renderer, "layers", {})) * ATLAS_W * ATLAS_H * 4
-    foliage += getattr(getattr(renderer, "prop_positions", None), "nbytes", 0)
+    # Foliage: the GL flora atlas, or the CPU sprite sheets and prop positions.
+    foliage = foliage_bytes(renderer)
     # Render targets at the 1440x810, 4x MSAA target size: colour and depth per sample
     # (4 + 4 bytes), a full-size RGBA16F post target (8 bytes), and a half-size reflection
     # target (4 bytes). The CPU renderer also keeps its colour, depth and bayer arrays.

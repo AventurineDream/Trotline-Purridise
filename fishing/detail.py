@@ -19,6 +19,10 @@ from dataclasses import dataclass
 MIB = 1024 * 1024
 GIB = 1024 * MIB
 
+# GPU bytes the painted foliage layers may use, in MiB. Reserve layers are charged to the
+# actor budget (glrender.actor_memory), so they are not counted here.
+FOLIAGE_BUDGET_MB = 250
+
 # Free memory a tier needs beyond its own budget before Auto will pick it, so
 # the desktop and its page cache keep room and the game never drives swapping.
 AUTO_HEADROOM = 1.3
@@ -37,7 +41,8 @@ class Detail:
             cousin, Mesa software GL, tight memory) clamps highlights at 1.0;
             every tier otherwise runs the same shaders at its own texture sizes.
         atlas_scale: Foliage/prop atlas texels per base texel (base 160x256).
-        foliage_variants: Distinct sprites per tree species.
+        foliage_variants: Distinct sprites per tree species. The atlas paints fewer where
+            FOLIAGE_BUDGET_MB binds (florafx.fit_variants).
         terrain_texels: Edge of the baked ground colour and normal maps.
         wave_texels: Edge of one frame of the looping water normal volume.
         wave_frames: Frames in that loop.
@@ -70,6 +75,12 @@ class Detail:
     render_scale: float = 1.0
 
 
+# Foliage atlas per tier: scale (texels per base texel) and tree variants. Painted MiB on
+# Briar, the lake that needs the most layers, from the GL textures: low 19.17, standard 83.33,
+# high 217.50, ultra 247.50. Ultra painted at scale 4 until issue #167; it now paints at scale
+# 3, like high, so each of its layers has about 44 percent fewer texels. In exchange it keeps 8
+# tree variants (high has 6) inside the 250 MiB budget; at scale 4 those 66 layers would take
+# about 440 MiB.
 TIERS: dict[str, Detail] = {
     tier.name: tier for tier in (
         Detail("low", 600 * MIB, False, 1, 3, 1024, 128, 16, 1024, 512, 64,
@@ -78,7 +89,7 @@ TIERS: dict[str, Detail] = {
                44100, 30, 96 * MIB, 16 * MIB, render_scale=0.60),
         Detail("high", 1900 * MIB, True, 3, 6, 4096, 384, 48, 4096, 2048, 512,
                44100, 60, 192 * MIB, 32 * MIB, render_scale=0.90),
-        Detail("ultra", 2600 * MIB, True, 4, 8, 8192, 512, 64, 8192, 4096, 768,
+        Detail("ultra", 2600 * MIB, True, 3, 8, 8192, 512, 64, 8192, 4096, 768,
                44100, 80, 256 * MIB, 64 * MIB, render_scale=1.0),
     )
 }

@@ -651,6 +651,7 @@ class World:
             return alpine_props(self, Prop)
         if self.id=="cedar":
             return self._cedar_props()
+        from .forest import pick_tree
         rng = np.random.default_rng(7)
         props: list[Prop] = []
 
@@ -696,19 +697,21 @@ class World:
             x, z = shore_xy(theta, extra)
             t = (theta + math.pi) % (2 * math.pi) - math.pi
             if abs(t) < 0.95 and extra < 20:
-                kind = "cypress" if rng.random() < 0.7 else "oak"
+                kind = pick_tree("briar", "cypress_shore", float(rng.random()))
             elif -2.05 < t < -0.85:
-                kind = "pine" if rng.random() < 0.65 else "oak"
+                kind = pick_tree("briar", "north", float(rng.random()))
             else:
-                kind = "pine" if rng.random() < 0.55 else "oak"
+                kind = pick_tree("briar", "main", float(rng.random()))
             if kind == "cypress":
                 h = float(rng.uniform(14.0, 20.0))
             elif kind == "pine":
                 h = float(rng.uniform(10.0, 16.0))
+            elif kind == "birch":
+                h = float(rng.uniform(11.0, 16.0))
             else:
                 h = float(rng.uniform(8.0, 12.5))
             add(kind, x, z, h, float(rng.uniform(0.78, 1.05)), 6.5)
-            if sum(1 for p in props if p.kind in ("pine", "oak", "cypress")) >= 330:
+            if sum(1 for p in props if p.kind in ("pine", "oak", "cypress", "birch")) >= 330:
                 break
 
         # A second forest layer gives the bank a continuous, varied silhouette.
@@ -717,7 +720,7 @@ class World:
             theta = float(rng.uniform(-math.pi, math.pi))
             extra = rng.uniform(38.0,135.0) if i<260 else rng.uniform(140.0,320.0)
             x, z = shore_xy(theta, float(extra))
-            kind = "oak" if rng.random() < 0.45 else "pine"
+            kind = pick_tree("briar", "outer", float(rng.random()))
             add(kind, x, z, float(rng.uniform(12.0, 23.0)),
                 float(rng.uniform(0.75, 1.0)), 9.0)
 
@@ -742,9 +745,27 @@ class World:
             x, z = shore_xy(theta, float(rng.uniform(-7.0, -1.2)))
             add("reed", x, z, float(rng.uniform(1.6, 2.4)), 0.95, 4.0)
 
+        # The outer woodland draws from its own stream (seed 7201), so the placements above,
+        # solids included, stay put when this pass changes. Trees skip the dock sector, as above
+        # (DOCK_THETA, 0.28 rad either side). 190 is the target count of trees; 2000 caps the
+        # candidate draws, so a crowded shore ends the pass with fewer.
+        extra_rng = np.random.default_rng(7201)
+        wanted, tries, added = 190, 2000, 0
+        for _ in range(tries):
+            if added == wanted:
+                break
+            theta = float(extra_rng.uniform(-math.pi, math.pi))
+            if abs(theta - DOCK_THETA) < 0.28:
+                continue
+            x, z = shore_xy(theta, float(extra_rng.uniform(40.0, 320.0)))
+            kind = pick_tree("briar", "outer", float(extra_rng.random()))
+            h = float(extra_rng.uniform(11.0, 22.0))
+            if add(kind, x, z, h, float(extra_rng.uniform(0.75, 1.0)), 9.0):
+                added += 1
         return props
 
     def _cedar_props(self):
+        from .forest import pick_tree
         rng = np.random.default_rng(152)
         props = []
         for i in range(2800):
@@ -756,12 +777,13 @@ class World:
                 continue
             if float(self.shore_sd(x,z))<2:
                 continue
-            kind = "oak" if rng.random()<0.7 else "pine"
+            kind = pick_tree("cedar", "main", float(rng.random()))
             props.append(Prop(kind,x,z,float(rng.uniform(10,22)),float(rng.uniform(0.78,1.02))))
         # Denser groves around the fishing coves and the landing make nearby
         # banks feel inhabited without loading an unbounded reservoir forest.
-        targets = [(self.slip.ox,self.slip.oz),*[(row[1],row[2]) for row in self.zones]]
-        for tx,tz in targets:
+        targets = [(self.slip.ox,self.slip.oz,"grove"),
+                   *[(row[1],row[2],"flooded" if row[0]=="cypress" else "grove") for row in self.zones]]
+        for tx,tz,role in targets:
             nearby = np.flatnonzero(np.hypot(self.coast[:,0]-tx,self.coast[:,1]-tz)<280)
             for _ in range(100):
                 if not len(nearby):
@@ -772,7 +794,7 @@ class World:
                 a,s = self.slip.local(x,z)
                 if (-8<float(a)<35 and abs(float(s))<22) or float(self.shore_sd(x,z))<2:
                     continue
-                props.append(Prop("oak" if rng.random()<0.75 else "pine",x,z,
+                props.append(Prop(pick_tree("cedar",role,float(rng.random())),x,z,
                                   float(rng.uniform(11,21)),float(rng.uniform(0.78,1.02))))
         for i in range(80):
             x,z,nx,nz = self.coast[int(rng.integers(len(self.coast)))]
@@ -786,13 +808,32 @@ class World:
         props.extend([
             Prop("cypress", 173.8, -866.7, 17.0, 0.88),
             Prop("cypress", 170.4, -860.0, 15.5, 0.91),
-            Prop("oak", 176.6, -851.6, 12.5, 0.85),
+            Prop("cottonwood", 176.6, -851.6, 12.5, 0.85),
             Prop("reed", 184.0, -861.0, 1.9, 0.92),
             Prop("reed", 187.0, -862.1, 1.7, 0.86),
             Prop("reed", 191.4, -859.7, 1.8, 0.90),
             Prop("rock", 180.2, -861.8, 1.2, 0.88),
             Prop("rock", 178.7, -856.1, 1.0, 0.82),
         ])
+        # Extra groves draw from their own stream, so the base trees, reeds, rocks and Trinidad's
+        # props keep their places. The flooded cove's quota is larger (180 against 75): it is the
+        # cypress-shade role in TREE_MIX.
+        extra = np.random.default_rng(2152)
+        for tx,tz,role in targets:
+            nearby = np.flatnonzero(np.hypot(self.coast[:,0]-tx,self.coast[:,1]-tz)<280)
+            wanted = 180 if role == "flooded" else 75
+            placed = tries = 0
+            while len(nearby) and placed < wanted and tries < 4*wanted:
+                tries += 1
+                x,z,nx,nz = self.coast[int(extra.choice(nearby))]
+                distance = float(extra.uniform(8,95))
+                x,z = float(x+nx*distance),float(z+nz*distance)
+                a,s = self.slip.local(x,z)
+                if (-8<float(a)<35 and abs(float(s))<22) or float(self.shore_sd(x,z))<2:
+                    continue
+                props.append(Prop(pick_tree("cedar",role,float(extra.random())),x,z,
+                                  float(extra.uniform(11,21)),float(extra.uniform(0.78,1.02))))
+                placed += 1
         return props
 
     def _bake_map(self):

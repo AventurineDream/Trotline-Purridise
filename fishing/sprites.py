@@ -4,16 +4,18 @@ Shapes are big on purpose. A tree on the far bank is only a few dozen
 pixels tall, so the silhouette has to read before the texture does.
 
 Two families live here. The small RGBA sprites (`bake`, `nebula_sprites`)
-feed the CPU renderer and tests and must keep their exact pixels. The
-`Painter` below records the GL foliage atlas sprites as resolution-free
-primitive lists that `florafx.PaintBaker` rasterises on the GPU: every
-primitive also carries a height, normal, translucency and leaf/wood mask so
-`foliage.frag` can light the sprite instead of trusting baked shading.
-Only the small soft fields (canopy AO, openness) are NumPy, on a grid of
-about one texel per design unit.
+feed the CPU renderer and tests; `bake()` with no lake and `nebula_sprites()`
+must keep their exact pixels. The `Painter` below records the GL foliage atlas
+sprites as resolution-free primitive lists that `florafx.PaintBaker` rasterises
+on the GPU: every primitive also carries a height, normal, translucency and
+leaf/wood mask so `foliage.frag` can light the sprite instead of trusting baked
+shading. Only the small soft fields (canopy AO, openness) are NumPy, on a
+grid of about one texel per design unit.
 """
 
 from __future__ import annotations
+
+import zlib
 
 import numpy as np
 
@@ -22,11 +24,15 @@ def _img(w, h) -> np.ndarray:
     return np.zeros((h, w, 4), dtype=np.uint8)
 
 
-def _stamp(img, color, mask):
+def _stamp(img, color, mask, foliage=None, leafy=True):
+    # A paint that passes `foliage` sets that pixel's leafy flag, so wood painted with
+    # leafy=False over foliage clears it. Paints without `foliage` leave the flag as it was.
     img[mask] = color
+    if foliage is not None:
+        foliage[mask] = leafy
 
 
-def _tri(img, ax, ay, bx, by, cx, cy, color):
+def _tri(img, ax, ay, bx, by, cx, cy, color, foliage=None, leafy=True):
     h, w, _ = img.shape
     minx = max(int(min(ax, bx, cx)), 0)
     maxx = min(int(max(ax, bx, cx)) + 1, w - 1)
@@ -47,17 +53,28 @@ def _tri(img, ax, ay, bx, by, cx, cy, color):
         mask = (w0 >= 0) & (w1 >= 0) & (w2 >= 0)
     region = img[miny:maxy + 1, minx:maxx + 1]
     region[mask] = color
+    if foliage is not None:
+        foliage[miny:maxy + 1, minx:maxx + 1][mask] = leafy
 
 
-def _ellipse(img, cx, cy, rx, ry, color):
+def _ellipse(img, cx, cy, rx, ry, color, foliage=None, leafy=True):
     h, w, _ = img.shape
     yy, xx = np.mgrid[0:h, 0:w]
     mask = (xx - cx) ** 2 / (rx * rx) + (yy - cy) ** 2 / (ry * ry) <= 1
-    _stamp(img, color, mask)
+    _stamp(img, color, mask, foliage, leafy)
 
 
-def pine() -> np.ndarray:
+def pine(gain=None) -> np.ndarray:
+    """The baked pine: five stacked tiers on a stem, 56x112 RGBA.
+
+    Args:
+        gain: Lake palette gain for the foliage (`tint_foliage`); None keeps it as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(56, 112)
+    foliage = np.zeros(img.shape[:2], bool)
     img[78:108, 25:32] = (96, 68, 42, 255)
     img[100:110, 22:35] = (78, 54, 34, 255)
     tiers = (
@@ -70,28 +87,50 @@ def pine() -> np.ndarray:
     for apex_y, left, right, g0, g1, g2 in tiers:
         mid = 28
         base = apex_y + 28
-        _tri(img, mid, apex_y, left, base, right, base, (g0, g1, g2, 255))
-        _tri(img, mid, apex_y + 10, left + 2, base, right - 2, base, (g0 - 6, g1 - 18, g2 - 8, 255))
-    return img
+        _tri(img, mid, apex_y, left, base, right, base, (g0, g1, g2, 255), foliage)
+        _tri(img, mid, apex_y + 10, left + 2, base, right - 2, base, (g0 - 6, g1 - 18, g2 - 8, 255), foliage)
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
-def oak() -> np.ndarray:
+def oak(gain=None) -> np.ndarray:
+    """The baked oak: a round canopy over a short stem, 72x88 RGBA.
+
+    Args:
+        gain: Lake palette gain for the canopy (`tint_foliage`); None keeps it as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(72, 88)
+    foliage = np.zeros(img.shape[:2], bool)
     # Canopy first, trunk stamped over it so the stem stays visible.
-    _ellipse(img, 36, 36, 28, 24, (28, 78, 36, 255))
-    _ellipse(img, 28, 30, 16, 14, (46, 108, 48, 255))
-    _ellipse(img, 46, 42, 14, 12, (18, 58, 26, 255))
-    _ellipse(img, 34, 26, 10, 8, (62, 124, 58, 255))
+    _ellipse(img, 36, 36, 28, 24, (28, 78, 36, 255), foliage)
+    _ellipse(img, 28, 30, 16, 14, (46, 108, 48, 255), foliage)
+    _ellipse(img, 46, 42, 14, 12, (18, 58, 26, 255), foliage)
+    _ellipse(img, 34, 26, 10, 8, (62, 124, 58, 255), foliage)
+    # The stem is painted over the crown, so those pixels are wood, not foliage.
     img[52:84, 32:41] = (102, 72, 46, 255)
+    foliage[52:84, 32:41] = False
     img[76:86, 28:46] = (86, 60, 38, 255)
+    foliage[76:86, 28:46] = False
     img[54:80, 33:36] = (128, 96, 64, 255)
-    return img
+    foliage[54:80, 33:36] = False
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
-def cypress() -> np.ndarray:
+def cypress(gain=None) -> np.ndarray:
+    """The baked cypress: a narrow crown on a flared trunk, 48x128 RGBA.
+
+    Args:
+        gain: Lake palette gain for the crown and moss (`tint_foliage`); None keeps it as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(48, 128)
     h, w = img.shape[:2]
     yy, xx = np.mgrid[0:h, 0:w]
+    foliage = np.zeros((h, w), bool)
     # Flared buttress. Wide at the water, narrow through the middle.
     t = np.clip((yy - 28) / 96.0, 0.0, 1.0)
     half = 3.0 + t * t * 14.0
@@ -99,12 +138,12 @@ def cypress() -> np.ndarray:
     _stamp(img, (86, 64, 44, 255), trunk)
     _stamp(img, (118, 90, 62, 255), trunk & (xx < 22) & (yy > 40))
     _stamp(img, (62, 46, 32, 255), trunk & (xx > 28) & (yy > 70))
-    _ellipse(img, 24, 24, 12, 20, (16, 58, 36, 255))
-    _ellipse(img, 22, 18, 7, 10, (28, 78, 44, 255))
+    _ellipse(img, 24, 24, 12, 20, (16, 58, 36, 255), foliage)
+    _ellipse(img, 22, 18, 7, 10, (28, 78, 44, 255), foliage)
     # Moss hangs off the crown in a few strands.
     drape = (yy > 20) & (yy < 78) & (np.abs(xx - 24) < 11) & (((xx * 3 + yy) % 5) == 0)
-    _stamp(img, (14, 42, 28, 255), drape)
-    return img
+    _stamp(img, (14, 42, 28, 255), drape, foliage)
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
 def rock() -> np.ndarray:
@@ -139,16 +178,30 @@ def knee() -> np.ndarray:
     return img
 
 
-def reed() -> np.ndarray:
+def reed(gain=None) -> np.ndarray:
+    """The baked reed: green stems with dry sheaths and a plume at each tip, 24x48 RGBA.
+
+    Args:
+        gain: Lake palette gain for the stems and plumes (`tint_foliage`); None keeps them
+            as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(24, 48)
+    foliage = np.zeros(img.shape[:2], bool)
     for x, lean in ((6, 0), (11, 1), (16, -1)):
         for y in range(16, 46):
             xx = x + lean * (y // 16)
             if 0 <= xx < 24:
                 img[y, xx] = (48, 78, 36, 255)
+                foliage[y, xx] = True
+        # The sheath is dry wood. The plume stays leafy, as the GL reed's plume blob does.
         img[12:18, x - 1:x + 2] = (92, 64, 36, 255)
+        foliage[12:18, x - 1:x + 2] = False
         img[10:13, x:x + 1] = (120, 86, 48, 255)
-    return img
+        foliage[10:13, x:x + 1] = True
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
 def buoy(rgb: tuple[int, int, int], flagged: bool) -> np.ndarray:
@@ -166,14 +219,49 @@ def buoy(rgb: tuple[int, int, int], flagged: bool) -> np.ndarray:
 # World-space aspect ratios match the small CPU sprites and the shared GL atlas.
 PROP_ASPECTS = {
     "cattail": 2/3, "grass": 1.5, "flowers": 1.2, "shrub": 7/6,
+    "palmetto": 1.5,
     "driftwood": 7/3, "shore_stone": 2.4, "heron": 3/7, "duck": 5/3,
     "spire": 40/112, "starlily": 4/3, "kelp": 28/96, "meteor": 1.3, "lightreed": 1/2,
 }
 WATERLINE_KINDS = frozenset(("reed", "knee", "cattail", "heron", "duck", "kelp", "meteor", "lightreed"))
 
+# Per-lake palettes: channel gains that `Painter.tint` applies to each lake's leafy
+# primitives, so one species reads warmer, cooler or greyer from lake to lake.
+# Nebula's flora glows and stays neutral.
+LAKE_TINT = {
+    "briar": (1.00, 1.04, 0.90),
+    "cedar": (1.12, 1.02, 0.78),
+    "flathead": (0.84, 1.00, 1.16),
+    "crater": (0.92, 0.96, 1.02),
+    "nebula": (1.00, 1.00, 1.00),
+}
 
-def _stroke(img, a, b, width, color):
-    """A bounded rounded line, used for stems, twigs and bird silhouettes."""
+
+def tint_foliage(img: np.ndarray, foliage: np.ndarray, gain) -> np.ndarray:
+    """A copy of a baked sprite with the RGB of its foliage scaled by a lake palette gain.
+
+    Args:
+        img: uint8 RGBA sprite, shape (h, w, 4).
+        foliage: Bool mask, shape (h, w), True where a pixel is leafy: canopy, hanging green,
+            blades, fronds or leaf clumps. Wood, stone and empty pixels stay as painted, so
+            trunks never take a palette.
+        gain: Three channel multipliers (`LAKE_TINT[lake]`); 1.0 leaves a channel as it is.
+
+    Returns:
+        A new uint8 array of the same shape; `img` is not modified. Scaled channels clip
+        to 255. Rounds rather than truncates, so a gain of exactly 1.0 is an identity.
+    """
+    out = img.copy()
+    scaled = out[foliage, :3].astype(np.float32) * np.asarray(gain, np.float32)
+    out[foliage, :3] = np.clip(np.rint(scaled), 0, 255).astype(np.uint8)
+    return out
+
+
+def _stroke(img, a, b, width, color, foliage=None, leafy=True):
+    """A bounded rounded line, used for stems, twigs and bird silhouettes.
+
+    With `foliage`, the pixels this line paints take `leafy` in that mask (see `_stamp`).
+    """
     h, w = img.shape[:2]
     ax, ay = a
     bx, by = b
@@ -186,62 +274,103 @@ def _stroke(img, a, b, width, color):
     t = np.clip(((xx-ax)*dx+(yy-ay)*dy)/max(dx*dx+dy*dy,0.001),0,1)
     mask = (xx-ax-t*dx)**2+(yy-ay-t*dy)**2<=width*width
     img[y0:y1,x0:x1][mask] = color
+    if foliage is not None:
+        foliage[y0:y1,x0:x1][mask] = leafy
 
 
-def cattail() -> np.ndarray:
+def cattail(gain=None) -> np.ndarray:
+    """The baked cattail stand: green blades and stalks with dry brown seed heads, 64x96 RGBA.
+
+    Args:
+        gain: Lake palette gain for the leafy parts (`tint_foliage`); None keeps them as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(64,96)
+    foliage = np.zeros(img.shape[:2], bool)
     rng = np.random.default_rng(1003)
     for i in range(15):
         x = float(rng.uniform(15,50))
         tip = float(rng.uniform(20,65))
         lean = float(rng.uniform(-23,23))
         c = (int(rng.uniform(55,90)),int(rng.uniform(89,121)),45,255)
-        _tri(img,x,94,x+lean,tip,x+3,92,c)
+        _tri(img,x,94,x+lean,tip,x+3,92,c,foliage)
         if i%3==0:
-            _stroke(img,(x+1,92),(x+lean*0.75,tip+12),0.5,(115,136,65,255))
+            _stroke(img,(x+1,92),(x+lean*0.75,tip+12),0.5,(115,136,65,255),foliage)
+    # Seed heads and their dry tips are wood, painted over the green stalks.
     for x,tip,lean in ((16,24,-3),(30,13,1),(44,28,5),(37,38,3)):
-        _stroke(img,(x,94),(x+lean,tip),0.8,(87,105,53,255))
-        _stroke(img,(x+lean,tip+1),(x+lean,tip-11),2.2,(89,60,35,255))
-        _stroke(img,(x+lean-0.8,tip),(x+lean-0.8,tip-9),0.6,(135,97,55,255))
-        _stroke(img,(x+lean,tip-11),(x+lean,tip-16),0.5,(125,116,72,255))
-    return img
+        _stroke(img,(x,94),(x+lean,tip),0.8,(87,105,53,255),foliage)
+        _stroke(img,(x+lean,tip+1),(x+lean,tip-11),2.2,(89,60,35,255),foliage,leafy=False)
+        _stroke(img,(x+lean-0.8,tip),(x+lean-0.8,tip-9),0.6,(135,97,55,255),foliage,leafy=False)
+        _stroke(img,(x+lean,tip-11),(x+lean,tip-16),0.5,(125,116,72,255),foliage,leafy=False)
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
-def grass() -> np.ndarray:
+def grass(gain=None) -> np.ndarray:
+    """The baked grass tussock: layered green blades with a few seed heads, 96x64 RGBA.
+
+    Args:
+        gain: Lake palette gain for the leafy parts (`tint_foliage`); None keeps them as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(96,64)
+    foliage = np.zeros(img.shape[:2], bool)
     rng = np.random.default_rng(1041)
     for i in range(27):
         x = float(rng.uniform(22,75))
         lean = float(rng.uniform(-29,26))
         tip = float(rng.uniform(5,45))
         c = ((64,99,46,255),(87,119,55,255),(117,129,66,255))[i%3]
-        _tri(img,x,62,x+lean,tip,x+float(rng.uniform(1.5,3.5)),62,c)
+        _tri(img,x,62,x+lean,tip,x+float(rng.uniform(1.5,3.5)),62,c,foliage)
         if i%5==0:
-            _stroke(img,(x,61),(x+lean,tip+2),0.6,(138,137,83,255))
-            _ellipse(img,x+lean,tip+2,1.5,4,(153,140,86,255))
-    return img
+            _stroke(img,(x,61),(x+lean,tip+2),0.6,(138,137,83,255),foliage)
+            _ellipse(img,x+lean,tip+2,1.5,4,(153,140,86,255),foliage)
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
-def flowers() -> np.ndarray:
+def flowers(gain=None) -> np.ndarray:
+    """The baked wildflowers: green stems and leaves under small rayed heads, 96x80 RGBA.
+
+    Args:
+        gain: Lake palette gain (`tint_foliage`); every part of this sprite is leafy, so the
+            whole sprite takes it. None keeps the sprite as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(96,80)
+    foliage = np.zeros(img.shape[:2], bool)
     rng = np.random.default_rng(1097)
     for i in range(14):
         x = float(rng.uniform(14,83))
         y = float(rng.uniform(14,54))
         base = 47+(x-47)*0.55
-        _stroke(img,(base,78),(x,y),0.7,(55,95,48,255))
-        _ellipse(img,(base+x)*0.5-3,(78+y)*0.5,5,2,(74,116,53,255))
-        _ellipse(img,(base+x)*0.5+4,(78+y)*0.5+8,5,2,(63,103,45,255))
+        _stroke(img,(base,78),(x,y),0.7,(55,95,48,255),foliage)
+        _ellipse(img,(base+x)*0.5-3,(78+y)*0.5,5,2,(74,116,53,255),foliage)
+        _ellipse(img,(base+x)*0.5+4,(78+y)*0.5+8,5,2,(63,103,45,255),foliage)
         petal = ((201,183,104,255),(213,204,159,255),(151,151,174,255))[i%3]
         for a in np.linspace(0,np.pi*2,6,endpoint=False):
-            _ellipse(img,x+np.cos(a)*2.5,y+np.sin(a)*2.5,2.2,2.1,petal)
-        _ellipse(img,x,y,1.6,1.6,(148,110,46,255))
-    return img
+            _ellipse(img,x+np.cos(a)*2.5,y+np.sin(a)*2.5,2.2,2.1,petal,foliage)
+        _ellipse(img,x,y,1.6,1.6,(148,110,46,255),foliage)
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
-def shrub() -> np.ndarray:
+def shrub(gain=None) -> np.ndarray:
+    """The baked shrub: wood stems under green leaf clumps, 112x96 RGBA.
+
+    Args:
+        gain: Lake palette gain for the leaf clumps (`tint_foliage`); None keeps them as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(112,96)
+    foliage = np.zeros(img.shape[:2], bool)
     rng = np.random.default_rng(1129)
+    # Stems are wood and stay untinted; the leaf clumps painted over them are foliage.
     for dx in (-22,-9,9,24):
         _stroke(img,(56,94),(56+dx,35),1.3,(89,75,48,255))
     for _ in range(105):
@@ -250,8 +379,8 @@ def shrub() -> np.ndarray:
         green = int(rng.uniform(73,113))
         shade = 0.83+(70-y)/120
         c = (int(58*shade),int(green*shade),int(41*shade),255)
-        _ellipse(img,x,y,float(rng.uniform(4,9)),float(rng.uniform(3,7)),c)
-    return img
+        _ellipse(img,x,y,float(rng.uniform(4,9)),float(rng.uniform(3,7)),c,foliage)
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
 def driftwood() -> np.ndarray:
@@ -274,6 +403,27 @@ def shore_stone() -> np.ndarray:
         _ellipse(img,x-rx*0.2,y-ry*0.35,rx*0.7,ry*0.45,(150,149,128,255))
         _stroke(img,(x-rx*0.4,y),(x+rx*0.5,y+2),0.6,(98,101,89,255))
     return img
+
+
+def palmetto(gain=None) -> np.ndarray:
+    """Dwarf palmetto: a fan of stiff fronds rising from one crown (CPU fallback sprite).
+
+    Args:
+        gain: Lake palette gain for the fronds (`tint_foliage`); None keeps them as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
+    img = _img(96, 64)
+    foliage = np.zeros(img.shape[:2], bool)
+    rng = np.random.default_rng(1171)
+    for k in range(11):
+        a = -np.pi * (0.08 + 0.84 * k / 10)
+        length = float(rng.uniform(22, 34))
+        tip = (48 + np.cos(a) * length, 60 + np.sin(a) * length)
+        _stroke(img, (48, 60), tip, 1.6, (70, 108, 52, 255), foliage)
+        _ellipse(img, tip[0], tip[1], 5, 2.8, (96, 128, 64, 255), foliage)
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
 def heron() -> np.ndarray:
@@ -382,22 +532,34 @@ def nebula_sprites() -> dict[str, np.ndarray]:
             "meteor": meteor(), "lightreed": lightreed()}
 
 
-def bake(buoy_rgb: tuple[int, int, int]) -> dict[str, np.ndarray]:
+def bake(buoy_rgb: tuple[int, int, int], *, lake: str | None = None) -> dict[str, np.ndarray]:
+    """The CPU fallback's baked sprites, keyed by kind.
+
+    Args:
+        buoy_rgb: Buoy colour as 0-1 floats (scaled to 0-255 here).
+        lake: Lake id whose palette (`LAKE_TINT`) tints the leafy parts of the pine, oak, cypress
+            and shore plants, as the GL atlas does. None keeps every sprite as it was baked.
+
+    Returns:
+        A dict of uint8 RGBA sprites, one per kind.
+    """
     r, g, b = [int(c * 255) for c in buoy_rgb]
+    gain = None if lake is None else LAKE_TINT[lake]
     return {
-        "pine": pine(),
-        "oak": oak(),
-        "cypress": cypress(),
+        "pine": pine(gain),
+        "oak": oak(gain),
+        "cypress": cypress(gain),
         "rock": rock(),
         "stump": stump(),
         "knee": knee(),
-        "reed": reed(),
-        "cattail": cattail(),
-        "grass": grass(),
-        "flowers": flowers(),
-        "shrub": shrub(),
+        "reed": reed(gain),
+        "cattail": cattail(gain),
+        "grass": grass(gain),
+        "flowers": flowers(gain),
+        "shrub": shrub(gain),
         "driftwood": driftwood(),
         "shore_stone": shore_stone(),
+        "palmetto": palmetto(gain),
         "heron": heron(),
         "duck": duck(),
         "buoy": buoy((r, g, b), False),
@@ -560,6 +722,28 @@ class Painter:
         """The recorded primitives as a (n, ROW) float32 array."""
         return np.asarray(self.rows, F4).reshape(-1, ROW)
 
+    def tint(self, gain) -> "Painter":
+        """Multiply the leafy primitives' colours by a lake's palette gain.
+
+        Wood and stone (leafy 0) keep their colour, so a palette changes foliage
+        without repainting trunks. Channels clamp to 1 after scaling.
+
+        Args:
+            gain: Per-channel (r, g, b) multipliers, from `LAKE_TINT`.
+
+        Returns:
+            self, so calls chain with `finish`.
+        """
+        if not self.rows:
+            return self
+        rows = np.asarray(self.rows, F4).reshape(-1, ROW)
+        leafy = rows[:, 7] > 0.5
+        g = np.asarray(gain, F4)
+        rows[leafy, 8:11] = np.clip(rows[leafy, 8:11] * g, 0.0, 1.0)
+        rows[leafy, 28:31] = np.clip(rows[leafy, 28:31] * g, 0.0, 1.0)
+        self.rows = [tuple(float(v) for v in row) for row in rows]
+        return self
+
 
 def soft_fields(cov: np.ndarray, z: np.ndarray, gx: float, gy: float, *, core: float,
                 cavity: float) -> np.ndarray:
@@ -717,6 +901,24 @@ def _hd_shrub(p, rng, v):
         p.blob(x, y, s, s * 0.8, rgb, z=10 + float(np.sqrt(max(0.0, 1 - r * r))) * 20, rough=0.35)
 
 
+def _hd_palmetto(p, rng, v):
+    """Dwarf palmetto: a fan of stiff, arching fronds rising from one crown on the bank."""
+    deep, lit = (36, 74, 40), (98, 130, 66)
+    base_x, base_y = 48.0, 60.0
+    count = int(rng.integers(9, 13))
+    for k in range(count):
+        a = -np.pi * (0.08 + 0.84 * (k + float(rng.uniform(0, 0.8))) / count)
+        length = float(rng.uniform(24, 34))
+        tip_x = base_x + float(np.cos(a)) * length
+        tip_y = base_y + float(np.sin(a)) * length
+        p.blade(base_x, base_y, tip_x, tip_y, float(rng.uniform(1.5, 2.1)),
+                _tone(deep, float(rng.uniform(0.9, 1.1))), bend=float(rng.uniform(-4, 4)),
+                z=float(rng.uniform(0, 4)), tip_rgb=_tone(lit, float(rng.uniform(0.9, 1.1))))
+        # Each frond ends in a pleated fan of leaf.
+        p.blob(tip_x, tip_y + 1.0, 5.6, 2.6, _tone(lit, float(rng.uniform(0.9, 1.1))),
+               z=8.0 + float(rng.uniform(0, 4)), rough=0.35, dome=0.6)
+
+
 def _hd_knee(p, rng, v):
     """A cypress knee: a rounded woody cone, dark and wet at the waterline."""
     bark = (128, 98, 68)
@@ -830,6 +1032,7 @@ HD_SPRITES = {
     "reed": (24, 48, _hd_reed, {}),
     "cattail": (64, 96, _hd_cattail, {}),
     "grass": (96, 64, _hd_grass, {}),
+    "palmetto": (96, 64, _hd_palmetto, {}),
     "flowers": (96, 80, _hd_flowers, {}),
     "shrub": (112, 96, _hd_shrub, {"contact": 0.4}),
     "knee": (18, 32, _hd_knee, {}),
@@ -845,18 +1048,21 @@ HD_SPRITES = {
 }
 
 
-def sprite_hd(kind: str, variant: int) -> Painter:
+def sprite_hd(kind: str, variant: int, *, lake: str = "briar") -> Painter:
     """The recipe for one HD shore/lagoon sprite.
 
     Args:
         kind: A key of `HD_SPRITES`.
         variant: 0-based variant (seeds shape and, for flowers and grass, colour).
+        lake: Lake id. Seeds this lake's arrangement, so no two lakes share a sprite,
+            and applies its palette to the leafy primitives (`LAKE_TINT`).
 
     Returns:
         A finished `Painter` for `florafx.PaintBaker.bake`.
     """
     base_w, base_h, paint, finish = HD_SPRITES[kind]
-    seed = 4400 + variant * 53 + sorted(HD_SPRITES).index(kind) * 389
+    seed = zlib.crc32(f"{lake}:{kind}:{variant}".encode())
     p = Painter(base_w, base_h, seed, grain="stone" if kind in ("rock", "shore_stone", "meteor") else "leaf")
     paint(p, p.rng, variant)
+    p.tint(LAKE_TINT[lake])
     return p.finish(**finish)
