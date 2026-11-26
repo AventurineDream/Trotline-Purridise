@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from .gamepad import (
     AXIS_LEFTX, AXIS_LEFTY, AXIS_TRIGGERRIGHT, BUTTON_A, BUTTON_B, BUTTON_DPAD_DOWN,
-    BUTTON_DPAD_RIGHT, BUTTON_X, BUTTON_Y, SDL_CONTROLLERAXISMOTION,
+    BUTTON_DPAD_RIGHT, BUTTON_RIGHTSTICK, BUTTON_X, BUTTON_Y, SDL_CONTROLLERAXISMOTION,
     SDL_CONTROLLERBUTTONDOWN, SDL_CONTROLLERBUTTONUP,
     SDL_CONTROLLERDEVICEADDED, SDL_CONTROLLERDEVICEREMOVED,
     default_key_bindings, remap_keyboard, session_input,
@@ -183,6 +183,13 @@ class GamepadChecks(unittest.TestCase):
         pressed, held, _activity = gamepad.sample(0.05, now_ms=3370)
         self.assertNotIn("b", pressed)
         self.assertNotIn("z", held)
+
+    def test_clicking_the_right_stick_zooms_the_corner_chart(self):
+        gamepad = self.platform.gamepad
+        gamepad.handle_event(self.direct_button_event(BUTTON_RIGHTSTICK, True, 1000))
+        gamepad.handle_event(self.direct_button_event(BUTTON_RIGHTSTICK, False, 1040))
+        pressed, _held, _activity = gamepad.sample(0.05, now_ms=1040)
+        self.assertEqual(pressed, {"x"})  # the chart-zoom action, and nothing else
 
     def test_y_action_release_and_long_press_restore_gamepad_prompt_device(self):
         start_ms = self.platform.ticks() & 0xFFFFFFFF

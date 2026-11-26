@@ -89,11 +89,12 @@ class GuideLayoutChecks(unittest.TestCase):
         """Soaking status remains readable without relying on line colour alone."""
         class PixelMap:
             @staticmethod
-            def map_pixel(x, z, width, height):
+            def map_pixel(x, z, width, height, bounds=None):
                 return int(x), int(z)
 
         ui = UI.__new__(UI)
         ui.world = PixelMap()
+        ui._chart_view = None
         solid = np.zeros((20, 60, 3), np.uint8)
         dashed = solid.copy()
         ui._seg(solid, 3, 10, 56, 10, 0, 0, 60, 20, (180, 210, 190))
@@ -658,6 +659,8 @@ class MinimapControlChecks(unittest.TestCase):
         labels = []
         ui._text = lambda _frame, label, *args, **kwargs: labels.append(label)
         ui._panel = lambda *args, **kwargs: None
+        ui._measure = lambda text, size, family="sans": 6 * len(text)  # a 6 px cell
+        ui._chart_view = None
         for method in ("_plot_trinidad_cove", "_plot_npcs", "_plot_boat", "_plot_bot"):
             setattr(ui, method, lambda *args, **kwargs: None)
         frame = np.zeros((360, 640, 3), dtype=np.uint8)

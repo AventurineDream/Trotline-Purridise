@@ -47,7 +47,7 @@ from .world import ZONE_NAME, World
 from .gamepad import (
     ACTION_ALIASES, ACTION_SYMBOLS, BUTTON_A, BUTTON_B, BUTTON_BACK,
     BUTTON_DPAD_DOWN, BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT, BUTTON_DPAD_UP,
-    BUTTON_LEFTSHOULDER, BUTTON_RIGHTSHOULDER, BUTTON_START, BUTTON_X, BUTTON_Y,
+    BUTTON_LEFTSHOULDER, BUTTON_RIGHTSHOULDER, BUTTON_RIGHTSTICK, BUTTON_START, BUTTON_X, BUTTON_Y,
     default_key_bindings, normalize_key_bindings,
 )
 from .boat import (
@@ -176,7 +176,7 @@ KEY_ACTION_LABELS = {
     "bot": "Send / recall Bot", "time_scale": "Time scale",
     "sail": "Raise / lower sail", "tow": "Call a tow", "engine": "Engine on/off",
     "new_game": "New morning", "catnap": "Catnap",
-    "bot_tool": "Bot tool", "galley": "Galley",
+    "bot_tool": "Bot tool", "galley": "Galley", "chart_zoom": "Corner chart zoom",
     "menu_up": "Menu up", "menu_down": "Menu down",
     "menu_left": "Menu left", "menu_right": "Menu right",
     "select": "Select",
@@ -519,6 +519,7 @@ class UIState:
     set_section: int = 0
     set_section_baits: tuple[int, int, int] = (0, 0, 0)
     check_line: int = 0
+    chart_zoom: int = 1  # a CHART_ZOOMS level for the corner chart
     check_i: int = 0
     haul_index: int = 0
     haul_timer: float = 0.0
@@ -854,6 +855,9 @@ class UI:
         self._dyslexia_font = False
         self._guide_layouts: OrderedDict = OrderedDict()  # the Field Guide's, newest last
         self.fish_card_renderer = None
+        # World bounds of the zoomed corner-chart window while it draws; None means
+        # the whole lake.
+        self._chart_view: tuple[float, float, float, float] | None = None
 
     def close(self) -> None:
         """Release presentation caches when this UI is retired with its world."""
@@ -1791,7 +1795,7 @@ class UI:
         self._text(frame,f"{bait}  {state.bait.get(state.preferred_bait,0)}",
                    sx+16,sy+int(95*unit),small,DIM,False,"sans")
         lines_h = self._lines_panel(frame, state, sx, sy - 8, sw, small)
-        map_h = self._minimap(frame, state, m, h - m, ui.input_device)
+        map_h = self._minimap(frame, state, m, h - m, ui.input_device, ui.chart_zoom)
         if not interactions:
             return
         npc = nearby_npc(state)
@@ -1831,38 +1835,75 @@ class UI:
         self._center(frame,hint,w/2,hint_y+6,small,INK)
         return hint_y
 
-    def _minimap(self, frame, state, margin, bottom, input_device="keyboard") -> int:
+    def _minimap(self, frame, state, margin, bottom, input_device="keyboard", zoom=1) -> int:
+        """Draw the corner chart; return its height in pixels, panel included.
+
+        `zoom` is a `CHART_ZOOMS` level. 1 shows the whole lake. Higher levels show
+        a window centred on the boat, clamped inside the lake. Every marker is drawn
+        into the chart's own pixels, so anything outside the window is clipped
+        rather than painted over the rest of the HUD.
+        """
         chart = self.world.map_small
         w = frame.shape[1]
         mw = max(96, int(w * 0.14))
         mh = max(64, int(mw * chart.shape[0] / chart.shape[1]))
         x = margin
         y = bottom - mh - 7
-        scaled = _fit(chart, mw, mh)
-        self._panel(frame, x, y-28, mw+16, mh+35, 0.80)
-        self._text(frame,"LAKE CHART",x+8,y-21,max(10,frame.shape[0]//65),GOLD,False,"sans")
+        if zoom > 1:
+            # Crop the full-size chart, so a zoomed view keeps its detail instead of
+            # enlarging the small one.
+            (r0, r1, c0, c1), view = chart_window(self.world.bounds, self.world.map_rgb.shape,
+                                                  state.x, state.z, zoom)
+            scaled = _fit(self.world.map_rgb[r0:r1, c0:c1], mw, mh)
+        else:
+            view = None
+            scaled = _fit(chart, mw, mh)
         size = max(10,frame.shape[0]//65)
-        shortcut = "BACK" if input_device == "gamepad" else "TAB"
-        self._text(frame,shortcut,x+mw-22,y-21,size,DIM,False,"sans")
+        self._panel(frame, x, y-28, mw+16, mh+35, 0.80)
+        self._text(frame,"LAKE CHART",x+8,y-21,size,GOLD,False,"sans")
+        gamepad = input_device == "gamepad"
+        if gamepad:
+            zoom_key, shortcut = "RS", "BACK"
+        else:
+            bindings = normalize_key_bindings(_saved_bindings(state))
+            zoom_key = self._key_name(bindings["chart_zoom"]).upper()
+            shortcut = self._key_name(bindings["chart"]).upper()
+        # Drop detail as the panel narrows, but always keep the chart key that the
+        # corner has always shown.
+        room = mw - self._measure("LAKE CHART", size) - 12
+        for hint in (f"{zoom_key} {zoom}x   {shortcut}", f"{zoom}x   {shortcut}", shortcut):
+            hint_w = self._measure(hint, size)
+            if hint_w <= room:
+                break
+        self._text(frame, hint, x + 8 + mw - hint_w, y-21, size, DIM, False, "sans")
         x += 8
         frame[y:y + mh, x:x + mw] = scaled
-        for line in state.lines:
-            kind = self._line_kind(line)
-            self._seg(frame, line.x0, line.z0, line.x1, line.z1, x, y, mw, mh, self._line_color(line),
-                      dashed=kind == "soak")
-            if kind == "tired":
-                u, v = self.world.map_pixel((line.x0 + line.x1) / 2, (line.z0 + line.z1) / 2, mw, mh)
-                self._marker(frame, "tired", x + u, y + v)
-            if comfort.has_buff(state, "glow_buoys"):
-                for bx, bz in line.buoys():
-                    bu, bv = self.world.map_pixel(bx, bz, mw, mh)
-                    self._dot(frame, x + bu, y + bv, 3, GOLD)
-        self._plot_invitation(frame, state, x, y, mw, mh)
-        self._plot_trinidad_cove(frame, x, y, mw, mh)
-        self._plot_npcs(frame, state, x, y, mw, mh)
-        self._plot_boat(frame, state, x, y, mw, mh, radius=3)
-        self._plot_bot(frame, state, x, y, mw, mh)
+        chart_px = frame[y:y + mh, x:x + mw]
+        self._chart_view = view
+        try:
+            for line in state.lines:
+                kind = self._line_kind(line)
+                self._seg(chart_px, line.x0, line.z0, line.x1, line.z1, 0, 0, mw, mh, self._line_color(line),
+                          dashed=kind == "soak")
+                if kind == "tired":
+                    u, v = self._chart_pixel((line.x0 + line.x1) / 2, (line.z0 + line.z1) / 2, mw, mh)
+                    self._marker(chart_px, "tired", u, v)
+                if comfort.has_buff(state, "glow_buoys"):
+                    for bx, bz in line.buoys():
+                        bu, bv = self._chart_pixel(bx, bz, mw, mh)
+                        self._dot(chart_px, bu, bv, 3, GOLD)
+            self._plot_invitation(chart_px, state, 0, 0, mw, mh)
+            self._plot_trinidad_cove(chart_px, 0, 0, mw, mh)
+            self._plot_npcs(chart_px, state, 0, 0, mw, mh)
+            self._plot_boat(chart_px, state, 0, 0, mw, mh, radius=3)
+            self._plot_bot(chart_px, state, 0, 0, mw, mh)
+        finally:
+            self._chart_view = None
         return mh + 35
+
+    def _chart_pixel(self, x: float, z: float, w: int, h: int) -> tuple[int, int]:
+        """Chart pixel of world point (x, z) metres on a w×h chart, through the active zoom view."""
+        return self.world.map_pixel(x, z, w, h, self._chart_view)
 
     def _line_kind(self, line) -> str:
         if any(h.catch is not None and h.catch.age >= 9.0 for h in line.hooks):
@@ -1946,7 +1987,7 @@ class UI:
                       dashed=self._line_kind(line) == "soak")
             if comfort.has_buff(state, "glow_buoys"):
                 for bx, bz in line.buoys():
-                    bu, bv = self.world.map_pixel(bx, bz, mw, mh)
+                    bu, bv = self._chart_pixel(bx, bz, mw, mh)
                     self._dot(frame, x + bu, y + bv, 4, GOLD)
             n = max(1, len(line.hooks))
             markers = []
@@ -1962,7 +2003,7 @@ class UI:
                     kind = "bait"
                 else:
                     kind = "empty"
-                markers.append((kind in ("fish", "tired"), kind, *self.world.map_pixel(hx, hz, mw, mh)))
+                markers.append((kind in ("fish", "tired"), kind, *self._chart_pixel(hx, hz, mw, mh)))
             # Fish and tired fish last, so a neighbouring hook never covers their shape.
             for _on_top, kind, u, v in sorted(markers, key=lambda m: m[0]):
                 self._marker(frame, kind, x + u, y + v)
@@ -1978,7 +2019,7 @@ class UI:
             anchor = self.world.anchors.get("cedar:trinidad_cove")
             if anchor is not None:
                 number = len(places) + 1
-                u, v = self.world.map_pixel(anchor.x, anchor.z, mw, mh)
+                u, v = self._chart_pixel(anchor.x, anchor.z, mw, mh)
                 self._draw_map_badge(frame, x + u, y + v, number, marker_size)
                 places.append((number, anchor.name, x + u, y + v))
                 protected_markers.append((x + u, y + v, badge_radius))
@@ -2092,7 +2133,7 @@ class UI:
 
     def _plot_sonar(self, frame, cells, x, y, mw, mh):
         for cell in cells:
-            u, v = self.world.map_pixel(cell.x, cell.z, mw, mh)
+            u, v = self._chart_pixel(cell.x, cell.z, mw, mh)
             self._dot(frame, x + u, y + v, 1, SONAR_BAND_COLORS[min(cell.band, len(SONAR_BAND_COLORS) - 1)])
     def _plot_invitation(self, frame, state, x, y, mw, mh):
         mark = getattr(state, "v2", {}).get("calendar", {}).get("invitation_mark")
@@ -2101,7 +2142,7 @@ class UI:
             return
         if any(type(mark.get(key)) not in (int, float) or not math.isfinite(mark[key]) for key in ("x", "z")):
             return
-        u, v = self.world.map_pixel(mark["x"], mark["z"], mw, mh)
+        u, v = self._chart_pixel(mark["x"], mark["z"], mw, mh)
         radius = max(11, min(16, mw // 40)) if mw >= 400 else 8
         self._draw_tip_halo(frame, x + u, y + v, radius)
         return (x + u, y + v, radius)
@@ -2118,7 +2159,7 @@ class UI:
         places = []
         for number, (zone, points) in enumerate(chains.items(), 1):
             cx, cz = points[len(points) // 2]
-            u, v = self.world.map_pixel(cx, cz, mw, mh)
+            u, v = self._chart_pixel(cx, cz, mw, mh)
             self._draw_map_badge(frame, x + u, y + v, number, marker_size)
             places.append((number, self.world.zone_name(zone), x + u, y + v))
         return places
@@ -2129,7 +2170,7 @@ class UI:
         anchor = self.world.anchors.get("cedar:trinidad_cove")
         if anchor is None:
             return
-        u, v = self.world.map_pixel(anchor.x, anchor.z, mw, mh)
+        u, v = self._chart_pixel(anchor.x, anchor.z, mw, mh)
         self._shape(frame, "diamond ring", x + u, y + v, 4, (240, 198, 112))
 
     def _plot_npcs(self, frame, state, x, y, mw, mh, large=False, protected=()):
@@ -2152,7 +2193,7 @@ class UI:
         for npc in state.npcs:
             if npc.anchor.lake_id != self.world.id:
                 continue
-            u, v = self.world.map_pixel(npc.anchor.x, npc.anchor.z, mw, mh)
+            u, v = self._chart_pixel(npc.anchor.x, npc.anchor.z, mw, mh)
             pin_x, pin_y = x + u, y + v
             collisions = [
                 clearance for cx, cy, clearance in obstacles
@@ -2185,7 +2226,7 @@ class UI:
         return residents
 
     def _plot_boat(self, frame, state, x, y, mw, mh, radius):
-        u, v = self.world.map_pixel(state.x, state.z, mw, mh)
+        u, v = self._chart_pixel(state.x, state.z, mw, mh)
         px, py = x + u, y + v
         self._dot(frame, px, py, radius, (236, 224, 180))
         fx, fz = np.sin(state.yaw), np.cos(state.yaw)
@@ -2196,12 +2237,12 @@ class UI:
     def _plot_bot(self, frame, state, x, y, mw, mh):
         if state.bot_phase == "home":
             return
-        u, v = self.world.map_pixel(state.bot_x, state.bot_z, mw, mh)
+        u, v = self._chart_pixel(state.bot_x, state.bot_z, mw, mh)
         self._marker(frame, "bot", x + u, y + v)
 
     def _seg(self, frame, x0, z0, x1, z1, ox, oy, mw, mh, rgb, dashed=False):
-        u0, v0 = self.world.map_pixel(x0, z0, mw, mh)
-        u1, v1 = self.world.map_pixel(x1, z1, mw, mh)
+        u0, v0 = self._chart_pixel(x0, z0, mw, mh)
+        u1, v1 = self._chart_pixel(x1, z1, mw, mh)
         steps = max(abs(u1 - u0), abs(v1 - v0), 1)
         samples = np.arange(steps + 1, dtype=np.float64) / steps
         if dashed:
@@ -3309,7 +3350,7 @@ _HELP = (
         "Settings: Auto anchor lets W/S pull it up too",
         "",
         "F sets a trotline     E checks a line or the landing",
-        "Tab chart    J journal    I livewell",
+        "Tab chart    X zooms the corner chart    J journal    I livewell",
         "C hails a paw-wave NPC: within 20 m, below 3 knots",
         "T changes time: 1x 3x 6x 12x, while you are still",
         "B sends Bot ahead, or out to a line.  B calls him back.",
@@ -3601,8 +3642,8 @@ _GAMEPAD_HELP_CONTROLS = {
         "Auto anchor in Settings lets the stick lift it too",
     "F sets a trotline     E checks a line or the landing":
         "X sets a trotline     A checks a line or the landing",
-    "Tab chart    J journal    I livewell":
-        "Back chart    J journal / I livewell (keyboard)",
+    "Tab chart    X zooms the corner chart    J journal    I livewell":
+        "Back chart    RS click zooms the chart    J journal / I livewell (keyboard)",
     "C hails a paw-wave NPC: within 20 m, below 3 knots":
         "RB hails a paw-wave NPC: within 20 m, below 3 knots",
     "T changes time: 1x 3x 6x 12x, while you are still":
@@ -3746,7 +3787,7 @@ _KEYBOARD_ROWS = (
         (("Pause", ("pause",)), ("New (title)", ("new_game",))),
         (("Menu up/dn", ("menu_up", "menu_down")),
          ("Menu L/R", ("menu_left", "menu_right"))),
-        (("Select", ("select",)), None),
+        (("Select", ("select",)), ("Chart zoom", ("chart_zoom",))),
     )),
 )
 
@@ -3762,6 +3803,7 @@ _PAD_BUTTON_ROWS = (
     ((BUTTON_RIGHTSHOULDER,), "RB", "Hail a cat; go on talking"),
     ((BUTTON_START,), "Start", "Pause"),
     ((BUTTON_BACK,), "Back", "Chart"),
+    ((BUTTON_RIGHTSTICK,), "RS click", "Zoom the corner chart: 1x, 2x, 4x"),
     ((BUTTON_DPAD_UP, BUTTON_DPAD_DOWN, BUTTON_DPAD_LEFT, BUTTON_DPAD_RIGHT),
      "D-pad", "Move through menus, tabs and pages"),
 )
@@ -3906,6 +3948,42 @@ def _phrase_lines(text: str, cells: int) -> list[str]:
     if line:
         lines.append(line)
     return lines
+
+
+# Corner-chart magnifications, cycled in this order by the chart-zoom key.
+CHART_ZOOMS = (1, 2, 4)
+
+
+def chart_window(bounds, shape, x: float, z: float, zoom: int):
+    """Crop of a whole-lake chart image centred on (x, z), clamped inside the lake.
+
+    Args:
+        bounds: World (x0, z0, x1, z1) in metres, spanning the image from its first
+            pixel to its last, as in `World.map_pixel`.
+        shape: The chart image's shape; rows and columns are used.
+        x, z: The centre in world metres, normally the boat.
+        zoom: Magnification; 1 returns the whole image.
+
+    Returns:
+        ((row0, row1, col0, col1), view). The slice selects the crop. `view` is the
+        world (x0, z0, x1, z1) spanning the crop's first to last pixel. Mapping
+        through `view` therefore lands on the same pixels as the cropped image, and
+        markers cannot drift against the chart. The crop is whole pixels and only
+        slides with the boat, so changing zoom never shifts the view by a fraction.
+    """
+    x0, z0, x1, z1 = bounds
+    rows, cols = shape[:2]
+    crop_h = min(rows, max(2, round(rows / zoom)))
+    crop_w = min(cols, max(2, round(cols / zoom)))
+    u = (x - x0) / (x1 - x0) * (cols - 1)
+    v = (z1 - z) / (z1 - z0) * (rows - 1)
+    c0 = min(max(0, round(u - (crop_w - 1) / 2)), cols - crop_w)
+    r0 = min(max(0, round(v - (crop_h - 1) / 2)), rows - crop_h)
+    metres_x = (x1 - x0) / (cols - 1)
+    metres_z = (z1 - z0) / (rows - 1)
+    view = (x0 + c0 * metres_x, z1 - (r0 + crop_h - 1) * metres_z,
+            x0 + (c0 + crop_w - 1) * metres_x, z1 - r0 * metres_z)
+    return (r0, r0 + crop_h, c0, c0 + crop_w), view
 
 
 def _fit(img: np.ndarray, tw: int, th: int) -> np.ndarray:
