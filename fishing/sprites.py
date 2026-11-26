@@ -25,7 +25,8 @@ def _img(w, h) -> np.ndarray:
 
 
 def _stamp(img, color, mask, foliage=None, leafy=True):
-    # The last paint decides a pixel's leafy flag, so wood painted over foliage clears it.
+    # A paint that passes `foliage` sets that pixel's leafy flag, so wood painted with
+    # leafy=False over foliage clears it. Paints without `foliage` leave the flag as it was.
     img[mask] = color
     if foliage is not None:
         foliage[mask] = leafy

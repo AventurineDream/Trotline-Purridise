@@ -14,11 +14,25 @@ lines neither thin out nor bloat.
 under Reduced Motion) and draws soft contact shading where trunks meet the
 ground. All motion is pure shading: no vertex moves, no alpha animates.
 
-Constraints: baked once per lake load, only for the kinds that lake places
-(budget 1.0 s standard, 2.5 s ultra). Bake-only GL objects and CPU arrays are
-released as soon as the atlas is uploaded. Runtime writers (buoy paint, cat
-impostors) go through `write_sprite`, which re-mips at the next draw. Painted variants give way,
-never the atlas scale, when a lake would exceed `FOLIAGE_BUDGET_MB` (see `fit_variants`).
+Constraints: baked once per lake load, only for the kinds that lake places. Bake-only GL
+objects and CPU arrays are released as soon as the atlas is uploaded. Runtime writers (buoy
+paint, cat impostors) go through `write_sprite`, which re-mips at the next draw. Painted
+variants give way, never the atlas scale, when a lake would exceed `FOLIAGE_BUDGET_MB` (see
+`fit_variants`).
+
+Bake time on the GL path (`FloraAtlas`): median of five fresh processes, with the range in
+brackets. Measured 2026-11-25 on an idle machine: Mesa Intel(R) UHD Graphics (TGL GT2),
+OpenGL 4.6 core, Mesa 26.2.5.
+
+    tier      Briar                  Crater                 budget
+    low       0.39 s (0.34-0.43)     0.28 s (0.23-0.31)     none
+    standard  0.66 s (0.63-0.70)     0.51 s (0.48-0.52)     1.0 s (unsourced)
+    high      1.19 s (1.15-1.21)     0.91 s (0.88-0.96)     none (a decision, not a measurement)
+    ultra     1.32 s (1.30-1.34)     1.04 s (1.02-1.12)     2.5 s (unsourced)
+
+The 1.0 s and 2.5 s budgets have no located source. They first appear in commit 24dca1d
+(2026-11-13) with no reference, and issue #167 sets no bake budget. Timings move with machine
+load, so measure on an idle machine before comparing against these figures.
 """
 
 from __future__ import annotations

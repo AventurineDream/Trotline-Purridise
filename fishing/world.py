@@ -745,8 +745,10 @@ class World:
             x, z = shore_xy(theta, float(rng.uniform(-7.0, -1.2)))
             add("reed", x, z, float(rng.uniform(1.6, 2.4)), 0.95, 4.0)
 
-        # The outer woodland draws from its own stream, so every placement above (solids too)
-        # stays where it is when this pass changes. Trees skip the landing sector, as above.
+        # The outer woodland draws from its own stream (seed 7201), so the placements above,
+        # solids included, stay put when this pass changes. Trees skip the dock sector, as above
+        # (DOCK_THETA, 0.28 rad either side). 190 is the target count of trees; 2000 caps the
+        # candidate draws, so a crowded shore ends the pass with fewer.
         extra_rng = np.random.default_rng(7201)
         wanted, tries, added = 190, 2000, 0
         for _ in range(tries):

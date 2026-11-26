@@ -94,9 +94,12 @@ SHORE_BIRDS = {
 
 def _coast_samples(world, rng):
     if world.id == "briar":
-        # Rays from the lake centre find the water edge the simulation uses. The 165 rays sit about
-        # 2.2 degrees apart; each angle jitters by at most 0.018 rad (about 1 degree) so the spokes
-        # are not evenly spaced. Each ray then bisects [0, 900] world units for 24 steps.
+        # Rays from the lake centre find the water edge the simulation uses. The 165 rays sit
+        # about 2.2 degrees apart; each angle jitters by at most 0.018 rad (about 1 degree), so
+        # the spokes are not evenly spaced. Each ray bisects [0, 900] world units for 24 steps.
+        # The bracket assumes the centre is water and every ray reaches land before 900 units;
+        # a ray still in water at 900 returns 900. These values are fixed: changing one moves
+        # Briar's shore plants and waders, which no test pins by position.
         angles = np.linspace(-math.pi, math.pi, 165, endpoint=False)
         angles += rng.uniform(-0.018, 0.018, len(angles))
         nx, nz = np.cos(angles), np.sin(angles)
