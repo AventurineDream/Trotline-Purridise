@@ -402,9 +402,10 @@ def _normalize_known_v2(default, saved, path: str):
         if not isinstance(saved, dict):
             return normalize_key_bindings(None)
         normalized = normalize_key_bindings(saved)
-        # Entries for actions this build does not know (from a newer save) ride along.
-        normalized.update({action: deepcopy(key) for action, key in saved.items()
-                           if action not in normalized})
+        # Entries for actions this build does not know (from a newer save) ride along, as
+        # unknown fields do everywhere else; only key names are kept, as only keys are bound.
+        normalized.update({action: key for action, key in saved.items()
+                           if action not in normalized and isinstance(key, str)})
         return normalized
     if isinstance(default, dict):
         if not isinstance(saved, dict):

@@ -160,12 +160,16 @@ class ZoomKey(unittest.TestCase):
         self.assertEqual(session.ui.mode, "play")
 
     def test_the_right_stick_zooms_even_when_x_naps_on_the_keyboard(self):
-        # RS click arrives as the canonical zoom symbol; keyboard bindings never remap it.
+        # A frame shaped as Platform builds it: the pad's canonical symbol, nothing from the
+        # keyboard. The keyboard remap runs, and must leave a pad X as the zoom.
         session = self.session(dict(DEFAULT_KEY_BINDINGS, catnap="x", chart_zoom="l"))
         pad = Keys({"x"})
         pad.device = "gamepad"
+        pad.keyboard_pressed, pad.keyboard_held = set(), set()
+        pad.gamepad_pressed, pad.gamepad_held = {"x"}, {"x"}
         session.tick(pad, 0.05)
         self.assertEqual(session.ui.chart_zoom, CHART_ZOOMS[1])
+        self.assertEqual(session.ui.mode, "play")  # no catnap, nor its "anchor first" pause
 
     def test_a_save_that_already_bound_x_keeps_it(self):
         # Settings saved before the zoom existed: a full map without it, catnap on X.
@@ -196,6 +200,17 @@ class ZoomKey(unittest.TestCase):
         self.assertNotEqual(bindings["chart_zoom"], "x")
         pressed, _held = remap_keyboard({"x"}, {"x"}, bindings)
         self.assertEqual(pressed, {"z"})  # X still naps, and only naps
+
+    def test_a_corrupt_saved_zoom_key_still_gives_way_to_x(self):
+        bindings = dict(DEFAULT_KEY_BINDINGS, catnap="x", chart_zoom="not-a-key")
+        session = self.session()
+        session.save()
+        saved = json.loads(session.save_path.read_text())
+        saved["v2"]["settings"]["key_bindings"] = bindings
+        session.save_path.write_text(json.dumps(saved))
+        _world, loaded, _has_save = load_game_save(session.save_path, State, World)
+        pressed, _held = remap_keyboard({"x"}, {"x"}, loaded.v2["settings"]["key_bindings"])
+        self.assertEqual(pressed, {"z"})
 
     def test_loading_keeps_bindings_for_actions_from_a_newer_build(self):
         session = self.session()

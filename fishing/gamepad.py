@@ -157,7 +157,10 @@ def _bindings(saved) -> dict[str, str]:
         # before filling any defaults (savepaths._normalize_known_v2).
         grouped = {action for aliases in ACTION_ALIASES for action in aliases}
         for action in bindings:
-            if action in saved or action in grouped:
+            # Only a usable saved key counts as the player's choice; a corrupt value fell
+            # back to the default above and must still give way.
+            chosen = isinstance(saved.get(action), str) and saved[action] in KEY_NAMES
+            if chosen or action in grouped:
                 continue
             others = {key for other, key in bindings.items() if other != action}
             if bindings[action] in others:
