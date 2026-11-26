@@ -287,7 +287,8 @@ class MixerVolumeChecks(unittest.TestCase):
     @staticmethod
     def silent_mixer():
         """A device-free mixer on a still briar noon: the ambience bus carries the lake
-        beds, while sfx and music carry only the shots each test plants."""
+        beds, sfx carries only the shots each test plants, and music carries the layer's
+        blocks, which a test stubs (music is not a shot)."""
         audio = Audio(device=False, tier="low")
         audio.prime(hour=12.0, lake_id="briar", motorized=False)
         return audio
@@ -308,12 +309,15 @@ class MixerVolumeChecks(unittest.TestCase):
         audio.set_volumes(ambience=0.0, sfx=1.0)
         self.assertGreater(np.max(np.abs(audio._mix(32, 0.0, 0.0))), 0)
 
+        def layer_block(frames, lake, wait):  # the music layer's block: music is not a shot (#168)
+            return np.full((2, frames), 0.5, np.float32), []
+
         audio = self.silent_mixer()
-        audio.shots = [(np.full(32, 12000, np.int16), 0, "music")]
+        audio._music.advance = layer_block
         audio.set_volumes(ambience=0.0, sfx=0.0, music=1.0)
         self.assertGreater(np.max(np.abs(audio._mix(32, 0.0, 0.0))), 0)
         audio = self.silent_mixer()
-        audio.shots = [(np.full(32, 12000, np.int16), 0, "music")]
+        audio._music.advance = layer_block
         audio.set_volumes(ambience=0.0, sfx=0.0, music=1.0, master=0.0)
         self.assertEqual(np.max(np.abs(audio._mix(32, 0.0, 0.0))), 0)
 

@@ -699,8 +699,9 @@ volume, and collar visibility.
   ambience: Flathead (wind in larch, loons, ice tick), Crater (deep hush, spring
   bubbling, ravens), Nebula (soft choral pads, chimes, a low "whale song" on
   finale nights).
-- **Music:** a gentle procedural or sequenced score, one motif per lake, played
-  sparsely: dawn, dusk, chapter moments. Silence is a valid default.
+- **Music:** a gentle procedural score: five or six pieces per lake, played one at a time in a
+  seeded rotation, with a rest of 60–120 s between pieces. Dawn, dusk and chapter moments start
+  the next piece. A lake keeps its place in its rotation across visits. Silence is a valid default.
 - Each Bot shell has a synthesized chime timbre (tin = triangle, duck = squeak,
   frog = wooden "ribbit" click, sub = bubbly tick, astral = glass bell), with a
   matching caption. Launch, recall, reports and shell swaps use the equipped

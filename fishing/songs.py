@@ -13,13 +13,16 @@ Constraints:
 - Each piece has its own key, tempo, meter, form and motifs. Its lake supplies the timbres
   (`FAMILIES`). Every attack is at least `audiosynth.MIN_ATTACK`, and high partials stay soft.
 - Form: A and B sections of eight bars (two four-bar phrases each), then a four-bar coda. A
-  repeated letter comes back with its motif turned upside down. Strong beats land on chord
-  tones, and each phrase cadences on the tonic.
+  letter's repeats alternate: its second occurrence is turned upside down and its third is
+  upright again. Strong beats land on chord tones, and each phrase cadences on the tonic.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+import math
+import time
 import zlib
 
 import numpy as np
@@ -106,7 +109,6 @@ class Family:
     wet_db: float
 
 
-# Tonics match the pre-#168 motifs' roots, so each lake keeps its pitch centre.
 FAMILIES = {
     "briar": Family("pluck", "pluck", "warm", 1.8, -13.0),
     "cedar": Family("wood", "wood", "warm", 2.2, -12.0),
@@ -166,6 +168,8 @@ class Song:
         return f"{NOTE_NAMES[self.tonic % 12]} {quality}"
 
 
+# Each lake's pieces are built around its pre-#168 root: briar D4, cedar G3, flathead E4,
+# crater A3, nebula C4. Every tonic sits within a fifth of its lake's root.
 # (lake, title, tonic MIDI, mode, bpm, meter, form, progression A, progression B, register).
 _ROWS = (
     ("briar", "Morning on the Briar", 62, "ionian", 84, 4, "ABAB", (0, 4, 5, 3), (0, 3, 4, 0), 3),
@@ -378,62 +382,147 @@ def _grain(timbre: Timbre, freq: float, seconds: float, rate: int) -> np.ndarray
     return (wave * env).astype(F32)
 
 
-def _convolve_into(dry: np.ndarray, send: np.ndarray, ir: np.ndarray, wet_db: float) -> None:
-    """Add the stereo reverb of mono `send` (through the two-channel `ir`) into `dry`.
+def _ramps(n: int, rate: int) -> tuple[np.ndarray, np.ndarray]:
+    """The fade-in and the tail of an `n`-frame piece, as gain ramps.
 
-    Overlap-add in CHUNK blocks: one FFT over the whole piece would need about 300 MB at
-    44.1 kHz. Tail beyond the piece's end is dropped; the final fade is already silent there.
-    """
-    n, length = send.shape[0], ir.shape[1]
-    size = synth.next_fast(CHUNK + length)
-    spectra = np.fft.rfft(ir, size, axis=1)
-    gain = 10.0 ** (wet_db / 20.0)
-    for start in range(0, n, CHUNK):
-        block = send[start:start + CHUNK]
-        if not block.any():
-            continue
-        spec = np.fft.rfft(block, size)
-        for ch in range(2):
-            wet = np.fft.irfft(spec * spectra[ch], size)[:len(block) + length - 1]
-            end = min(n, start + len(wet))
-            dry[ch, start:end] += (gain * wet[:end - start]).astype(F32)
-
-
-def render_float(song: Song, rate: int) -> np.ndarray:
-    """The piece as stereo float32 at `rate` Hz, before it is scaled to int16.
+    The same raised cosines as `audiosynth.fade`, so the streamed render can apply them one
+    block at a time and produce the same samples.
 
     Returns:
-        Array (2, n) with n = `frames`; silent at both ends (the fade-in and the tail).
+        (head, tail): float32 ramps for the fade-in and for the tail.
+    """
+    attack = min(n, max(2, int(max(synth.MIN_ATTACK, FADE_IN_SECONDS) * rate)))
+    release = min(n, max(2, int(TAIL_SECONDS * rate)))
+    head = (0.5 - 0.5 * np.cos(np.linspace(0, np.pi, attack))).astype(F32)
+    tail = (0.5 + 0.5 * np.cos(np.linspace(0, np.pi, release))).astype(F32)
+    return head, tail
+
+
+def _synthesize(song: Song, rate: int, sink: Callable[[int, np.ndarray], None]) -> None:
+    """Render `song` one CHUNK at a time, passing each block to `sink(start, block)`.
+
+    A block is stereo float32 (2, length) with the fades applied, and blocks come in time
+    order. Only the notes still sounding, the reverb still to come and the current block are
+    held, so no piece-length buffer exists (#168). `time.sleep(0)` after each block gives the
+    GIL to other threads: a piece renders on a thread on frozen builds, beside the frame loop.
     """
     spb = 60.0 / song.bpm
     n = int(round(song.seconds * rate))
     family = FAMILIES[song.lake]
     timbres = {"melody": TIMBRES[family.melody], "bass": TIMBRES[family.bass],
                "pad": TIMBRES[family.pad]}
-    dry = np.zeros((2, n), F32)
-    send = np.zeros(n, F32)
+    ir = synth.reverb_ir(rate, family.reverb_s, f"song:{song.id}")
+    ir_len = ir.shape[1]
+    size = synth.next_fast(CHUNK + ir_len)
+    spectra = np.fft.rfft(ir, size, axis=1)
+    wet_gain = 10.0 ** (family.wet_db / 20.0)
+    head, tail = _ramps(n, rate)
+    notes = []
     for beat, length, voice, index, amp, pan, send_level in _events(song):
         at = int(round(beat * spb * rate))
-        if at >= n:
-            continue
-        grain = _grain(timbres[voice], _scale_hz(song.tonic, song.mode, index), length * spb, rate)
-        end = min(n, at + len(grain))
-        seg = grain[:end - at] * F32(amp)
-        left, right = synth.pan_gains(pan)
-        dry[0, at:end] += seg * F32(left)
-        dry[1, at:end] += seg * F32(right)
-        if send_level:
-            send[at:end] += seg * F32(send_level)
-    ir = synth.reverb_ir(rate, family.reverb_s, f"song:{song.id}")
-    _convolve_into(dry, send, ir, family.wet_db)
-    dry *= synth.fade(n, rate, FADE_IN_SECONDS, TAIL_SECONDS)[None, :]
-    return dry
+        if at < n:  # a note past the piece's end never sounds
+            notes.append((at, length, voice, index, amp, pan, send_level))
+    notes.sort(key=lambda note: note[0])
+    carry = np.zeros((2, CHUNK + ir_len), F32)  # reverb from earlier blocks, still to come
+    sounding: list[tuple[int, int, np.ndarray, float, float, float]] = []
+    queued = 0
+    for start in range(0, n, CHUNK):
+        end = min(n, start + CHUNK)
+        while queued < len(notes) and notes[queued][0] < end:
+            at, length, voice, index, amp, pan, send_level = notes[queued]
+            queued += 1
+            freq = _scale_hz(song.tonic, song.mode, index)
+            grain = _grain(timbres[voice], freq, length * spb, rate)
+            seg_end = min(n, at + len(grain))
+            seg = grain[:seg_end - at] * F32(amp)
+            left, right = synth.pan_gains(pan)
+            sounding.append((at, seg_end, seg, left, right, send_level))
+        block = np.zeros((2, end - start), F32)
+        send = np.zeros(end - start, F32)
+        for at, seg_end, seg, left, right, send_level in sounding:
+            lo, hi = max(at, start), min(seg_end, end)
+            if lo < hi:
+                part = seg[lo - at:hi - at]
+                block[0, lo - start:hi - start] += part * F32(left)
+                block[1, lo - start:hi - start] += part * F32(right)
+                if send_level:
+                    send[lo - start:hi - start] += part * F32(send_level)
+        sounding = [note for note in sounding if note[1] > end]
+        if send.any():
+            spec = np.fft.rfft(send, size)
+            for ch in range(2):
+                wet = np.fft.irfft(spec * spectra[ch], size)[:len(send) + ir_len - 1]
+                carry[ch, :len(wet)] += (wet_gain * wet).astype(F32)
+        block += carry[:, :end - start]
+        carry[:, :-CHUNK] = carry[:, CHUNK:]
+        carry[:, -CHUNK:] = 0.0
+        if start < len(head):
+            k = min(end, len(head)) - start
+            block[:, :k] *= head[start:start + k]
+        tail_from = n - len(tail)
+        if end > tail_from:
+            first = max(start, tail_from)
+            block[:, first - start:] *= tail[first - tail_from:end - tail_from]
+        sink(start, block)
+        time.sleep(0)
+
+
+def render_float(song: Song, rate: int) -> np.ndarray:
+    """The whole piece as stereo float32 at `rate` Hz, before it is scaled to int16.
+
+    Tests and analysis use this. `render` streams instead and never holds such a copy (#168).
+
+    Returns:
+        Array (2, n) with n = `frames`; silent at both ends (the fade-in and the tail).
+    """
+    out = np.zeros((2, int(round(song.seconds * rate))), F32)
+
+    def keep(start: int, block: np.ndarray) -> None:
+        out[:, start:start + block.shape[1]] = block
+
+    _synthesize(song, rate, keep)
+    return out
 
 
 def render(song_id: str, rate: int) -> synth.Bed:
     """The piece as a unit-RMS int16 `Bed` at `rate` (what the worker writes out).
 
+    Two passes (#168). The first measures the mean, RMS and peak that `audiosynth.encode`
+    normalises by; the second writes int16 blocks. Synthesis runs twice, so a render takes about
+    twice as long (nebula-1 at 22.05 kHz: 4.2 s, against 1.9 s before). Beyond its output, a
+    render holds the notes still sounding, their FFT buffers and one block's temporaries: 34 MiB
+    at 44.1 kHz for nebula-1, against 79 MiB for the render it replaces (measured with
+    tracemalloc; `soundscape.coverage_report` budgets the 34 MiB).
+
     Raises:
         KeyError: unknown id.
     """
-    return synth.encode(render_float(get(song_id), rate))
+    song = get(song_id)
+    n = int(round(song.seconds * rate))
+    total = np.zeros(2)
+    squares = np.zeros(2)
+    high = np.full(2, -np.inf)
+    low = np.full(2, np.inf)
+
+    def measure(_start: int, block: np.ndarray) -> None:
+        values = block.astype(np.float64)
+        total[:] += values.sum(axis=1)
+        squares[:] += np.square(values).sum(axis=1)
+        high[:] = np.maximum(high, values.max(axis=1))
+        low[:] = np.minimum(low, values.min(axis=1))
+
+    _synthesize(song, rate, measure)
+    mean = total / n
+    rms = math.sqrt(float(np.mean(squares / n - mean * mean)))
+    peak = float(max(np.max(high - mean), np.max(mean - low)))
+    if peak < 1e-9:  # silent, as `audiosynth.encode` leaves it
+        return synth.Bed(np.zeros((2, n), np.int16), 0.0)
+    scale = 32000.0 / peak
+    data = np.zeros((2, n), np.int16)
+
+    def write(start: int, block: np.ndarray) -> None:
+        stop = start + block.shape[1]
+        data[:, start:stop] = ((block - mean[:, None]) * scale).astype(np.int16)
+
+    _synthesize(song, rate, write)
+    return synth.Bed(data, 1.0 / (rms * scale))

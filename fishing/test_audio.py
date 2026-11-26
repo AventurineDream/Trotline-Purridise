@@ -25,6 +25,7 @@ import math
 import os
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import wave
@@ -35,7 +36,7 @@ from unittest.mock import patch
 import numpy as np
 
 from . import audiosynth as synth
-from . import calendar, detail, encounter, soundscape
+from . import calendar, detail, encounter, songs, soundscape
 from .audio import (
     BED_CAP_BYTES,
     DUCK_GAIN,
@@ -58,10 +59,9 @@ from .test_skipper_creator import finish_creator
 from .world import World
 
 AMBIENCE_BAND = (-35.0, -24.0)  # rain scenes: their authored level, unchanged by #168
-NATURE_TRIM_DB = -12.0  # the brief: nature sits at about 25% of its authored level (-12 dB)
-TRIM_DB = NATURE_TRIM_DB
-NATURE_BAND = (AMBIENCE_BAND[0] + TRIM_DB, AMBIENCE_BAND[1] + TRIM_DB)
-PROPULSION_BAND = (-35.0 + TRIM_DB, -20.0)  # the old floor leaned on the nature beds
+NATURE_TRIM_DB = -12.0  # nature sits at about a quarter of its authored level (#168)
+NATURE_BAND = (AMBIENCE_BAND[0] + NATURE_TRIM_DB, AMBIENCE_BAND[1] + NATURE_TRIM_DB)
+PROPULSION_BAND = (-35.0 + NATURE_TRIM_DB, -20.0)  # the old floor leaned on the nature beds
 JUMP_LIMIT = 0.25          # full-scale units per 44.1 kHz sample; a click is a step this big
 CUE_KINDS = ("bite", "splash", "sell", "click", "error", "bot", "loon", "gull", "frog", "twinkle")
 
@@ -188,7 +188,6 @@ class Mixer(unittest.TestCase):
         audio = Audio(open_device=False)
         for kind in ("bite", "loon"):
             audio.shots.append((soundscape.tone(kind), 0, soundscape.bus(kind)))
-        audio.shots.append((np.zeros((64, 2), np.int16), 0, "music"))  # a piece in progress
         audio._played.append("loon")
         audio.update(0.05, 0.0, 0.0, True)
         self.assertEqual(audio.shots, [])
@@ -345,17 +344,23 @@ class Cues(unittest.TestCase):
         self.assertIn(soundscape.MUSIC_CUE, session.cues)
         self.assert_captioned(session, session.cues)
 
-    def test_a_song_start_captions_and_the_music_cue_never_blanks_a_caption(self):
+    def test_a_song_start_waits_behind_a_caption_on_screen(self):
+        """A song start is captioned like an ambient call (#168): it never replaces a caption on
+        screen, a start that finds one showing is skipped, and a start after the timer captions
+        the piece."""
         session = self.session(self.state(1440 + 300))
         song = next(iter(soundscape.MUSIC_CAPTIONS))
-        session.ui.caption, session.ui.caption_timer = soundscape.CAPTIONS["lake_day"], 1.0
+        session.ui.caption, session.ui.caption_timer = soundscape.CAPTIONS["bite"], 1.0
         session.sound = None  # tick() sets it each frame; the caption tick reads it
         session.cues = [soundscape.MUSIC_CUE]
         session._tick_caption(0.05)
-        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["lake_day"])
+        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["bite"])
         session.hear_ambient("loon")  # an ambient call waits for the caption on screen
-        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["lake_day"])
-        session.hear_ambient(song)  # a song start always captions: one caption per start
+        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["bite"])
+        session.hear_ambient(song)  # a song start waits too: "Fish on the line." stays
+        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["bite"])
+        session.ui.caption_timer = 0.0
+        session.hear_ambient(song)
         self.assertEqual(session.ui.caption, soundscape.caption(song, session.state))
         self.assertTrue(session.ui.caption.startswith("Music: "))
 
@@ -480,6 +485,48 @@ class AudioWorkerFallbacks(unittest.TestCase):
         self.assertEqual(store.prefetch_count, 0)
 
 
+class PieceLane(unittest.TestCase):
+    """Pieces render one at a time in their own lane, so a lake change's beds never queue behind a
+    piece (#168). The builds are stand-ins that hold on an event, as on the frozen-build path."""
+
+    def setUp(self):
+        self.release = threading.Event()
+        self.store = _BedStore(11025, 2048, 2048)
+        self.store._spawn_ok = False  # builds run on threads in this process
+        self.addCleanup(self.store.shutdown)
+        self.addCleanup(self.release.set)  # runs before shutdown, so a held build can finish
+
+        def build(key, rate, frames):
+            self.release.wait(10)  # every build holds until the test releases it
+            return synth.Bed(np.zeros((2, frames), np.int16), 1.0)
+
+        patcher = patch.object(synth, "build_bed", side_effect=build)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_pieces_render_one_at_a_time_and_queue_behind_the_running_one(self):
+        self.store.request("song:briar-1")
+        self.store.request("song:briar-2")
+        self.assertEqual(list(self.store._threads), ["song:briar-1"])
+        self.assertEqual(self.store._song_waiting, ["song:briar-2"])
+        self.release.set()
+        self.store.get("song:briar-1", wait=True)
+        self.store.get("song:briar-2", wait=True)
+        self.assertEqual(self.store._song_waiting, [])
+
+    def test_a_lake_changes_beds_start_while_a_piece_renders(self):
+        beds = ("lap", "wind:cedar", "frogs:cedar")
+        self.store.request("song:briar-1")
+        for key in beds:
+            self.store.request(key)
+        # Each bed is held like the piece, so each one must be in its thread, none queued.
+        self.assertTrue(all(key in self.store._threads for key in beds))
+        self.assertFalse(self.release.is_set())  # the piece is still rendering
+        self.release.set()
+        for key in ("song:briar-1", *beds):
+            self.store.get(key, wait=True)
+
+
 class AudioChecks(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -527,7 +574,8 @@ class AudioChecks(unittest.TestCase):
         with patch("fishing.audio.Audio", FakeAudio), patch.object(
                 soundscape, "tone", return_value=samples):
             report = soundscape.coverage_report()
-        expected_bytes = len(soundscape.KINDS + CHIMES) * samples.nbytes + 1024 + resident_bytes(FakeAudio.rate)
+        expected_bytes = (len(soundscape.KINDS + CHIMES) * samples.nbytes + 1024
+                          + resident_bytes(FakeAudio.rate) + soundscape.RENDER_WORKING_BYTES)
         self.assertTrue(report["complete"])
         self.assertTrue(report["within_budget"])
         self.assertEqual(FakeAudio.buffer_calls, 1)
@@ -572,7 +620,7 @@ class AudioChecks(unittest.TestCase):
             volumes = {name: float(name == bus) for name in ("ambience", "music", "sfx")}
             x = self.render(3.0, volumes=volumes, cues=[(0.05, kind)])
             # Ambience calls sit at NATURE_TRIM (-12 dB); the other buses keep their level (#168).
-            trim = TRIM_DB if bus == "ambience" else 0.0
+            trim = NATURE_TRIM_DB if bus == "ambience" else 0.0
             self.assertTrue(-16.0 + trim <= peak_db(x) <= -6.0 + trim, f"{kind}: {peak_db(x):.1f} dBFS")
             self.assertLess(float(np.max(np.abs(np.diff(x, axis=0)))), JUMP_LIMIT, kind)
             tone = self.audio._tone(kind)

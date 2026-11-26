@@ -30,6 +30,9 @@ from .music import resident_bytes
 
 SR = 22050
 AUDIO_BUDGET_BYTES = 150 * 1024 ** 2   # 06 §7: audio synthesis buffers + music
+# One render's working set above its int16 output: nebula-1, the longest piece, at 44.1 kHz,
+# measured with tracemalloc (#168). The budget counts it beside the resident pieces.
+RENDER_WORKING_BYTES = 34 * 1024 ** 2
 LAKES = ("briar", "cedar", "flathead", "crater", "nebula")
 
 SFX_CAPTIONS = {
@@ -75,8 +78,6 @@ AMBIENCE = {
     "crater": ("spring", "raven"),
     "nebula": ("twinkle", "choir", "whale_song"),
 }
-# How loud each lake's water and wind beds sit: Crater is hushed.
-BED_LEVEL = {"crater": 0.55}
 
 
 def bus(kind: str) -> str:
@@ -287,9 +288,10 @@ def coverage_report() -> dict:
     # Audio objects for each lake share one tier-keyed store; count the warmed bank once.
     total += audio.buffer_bytes()
     # Pieces render in workers and at most `RESIDENT_PIECES` are held at once, so the budget
-    # counts that bound rather than whichever pieces this check happened to build.
+    # counts that bound rather than whichever pieces this check happened to build. A render's
+    # working set (RENDER_WORKING_BYTES) is counted beside them.
     music_bytes = resident_bytes(audio.rate)
-    total += music_bytes
+    total += music_bytes + RENDER_WORKING_BYTES
     pieces = {song.id: {"seconds": round(song.seconds, 1), "captioned": bool(caption(songs.key(song)))}
               for song in songs.CATALOGUE}
     music_ok = (all(len(songs.playlist(lake)) >= 5 for lake in LAKES)

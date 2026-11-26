@@ -121,9 +121,11 @@ class FakeStore:
     def __init__(self, bed: synth.Bed | None = None):
         self.bed = bed if bed is not None else _tone_bed(PIECE_SECONDS)
         self.kept: list[frozenset] = []
+        self.requested: list[str] = []
 
     def request(self, key: str) -> None:
-        """Beds here are ready at once, so there is nothing to prefetch."""
+        """Beds here are ready at once; the requests are recorded, in order, for the tests."""
+        self.requested.append(key)
 
     def keep_songs(self, keys: set[str]) -> None:
         """Record which keys the layer asked to keep resident."""
@@ -132,6 +134,41 @@ class FakeStore:
     def get(self, key: str, wait: bool) -> synth.Bed:
         """The bed for `key`; the same stand-in for every piece."""
         return self.bed
+
+
+class SizedStore(FakeStore):
+    """A store whose pieces have their real lengths at `rate`, so held bytes can be measured.
+
+    Beds are built on the first `request` or `get` and dropped when `keep_songs` leaves them
+    out, as the bed store drops them.
+    """
+
+    def __init__(self, rate: int):
+        super().__init__()
+        self.rate = rate
+        self.built: dict[str, synth.Bed] = {}
+
+    def request(self, key: str) -> None:
+        """The bed store builds a queued piece in the background; here it is built at once, so
+        the next piece is held beside the sounding one, as it is there."""
+        self.get(key, wait=True)
+
+    def get(self, key: str, wait: bool) -> synth.Bed:
+        """The piece for `key`, built at its real length the first time it is asked for."""
+        if key not in self.built:
+            frames = songs.frames(key[len(songs.SONG_PREFIX):], self.rate)
+            self.built[key] = synth.Bed(np.zeros((2, frames), np.int16), 1.0)
+        return self.built[key]
+
+    def keep_songs(self, keys: set[str]) -> None:
+        """Record the kept keys, then drop every other piece."""
+        super().keep_songs(keys)
+        for key in [k for k in self.built if k not in keys]:
+            del self.built[key]
+
+    def held_bytes(self) -> int:
+        """Bytes of the int16 pieces the store holds now."""
+        return sum(bed.data.nbytes for bed in self.built.values())
 
 
 class Clock:
@@ -190,9 +227,20 @@ class Catalogue(unittest.TestCase):
                 self.assertLess(ord(ch), 128, f"{key}: {caption!r}")  # every fallback font has ASCII
                 self.assertIn(ord(ch), covered, f"{ch!r} is not in {FONT.name}: {caption!r}")
 
-    def test_resident_pieces_fit_the_budget_at_the_top_tier_rate(self):
-        self.assertEqual(music.resident_bytes(44100), 2 * songs.longest_frames(44100) * 4)
-        self.assertLessEqual(music.resident_bytes(44100), 64 * 2 ** 20)
+    def test_held_pieces_stay_under_the_budget_at_the_top_tier_rate(self):
+        """Held bytes are measured, not derived: over a run with lake changes at 44.1 kHz the
+        store never holds more than RESIDENT_PIECES pieces, and under 50 MiB of int16 (two of
+        the longest pieces hold 48.6 MiB)."""
+        store = SizedStore(44100)
+        layer = music.Layer(store, 44100)
+        peak_bytes = peak_pieces = 0
+        for lake, seconds in (("briar", 600.0), ("cedar", 300.0), ("briar", 300.0)):
+            for _ in range(round(seconds * 44100 / 4096)):
+                layer.advance(4096, lake, True)
+                peak_bytes = max(peak_bytes, store.held_bytes())
+                peak_pieces = max(peak_pieces, len(store.built))
+        self.assertEqual(peak_pieces, music.RESIDENT_PIECES)
+        self.assertLessEqual(peak_bytes, 50 * 2 ** 20)
 
 
 class Pieces(unittest.TestCase):
@@ -296,10 +344,10 @@ class Layer(unittest.TestCase):
         self.store = FakeStore()
         self.layer = music.Layer(self.store, LOW_RATE)
 
-    def test_one_piece_at_a_time_then_a_rest_of_20_to_45_seconds(self):
+    def test_one_piece_at_a_time_then_a_rest_of_60_to_120_seconds(self):
         clock = Clock(self.layer).run(1.0, "briar")
         self.layer.cue()  # ends the opening rest
-        clock.run(240.0, "briar")
+        clock.run(600.0, "briar")
         times = [t for t, _key in clock.starts]
         self.assertGreaterEqual(len(times), 4)
         self.assertLess(times[0], 1.0 + 2 * BLOCK_S)
@@ -308,10 +356,11 @@ class Layer(unittest.TestCase):
             self.assertTrue(music.REST_SECONDS[0] - 2 * BLOCK_S <= gap <= music.REST_SECONDS[1] + 2 * BLOCK_S,
                             f"rest {gap:.2f} s")
 
-    def test_the_opening_rest_is_20_to_45_seconds(self):
-        clock = Clock(self.layer).run(50.0, "briar")
+    def test_the_opening_rest_is_60_to_120_seconds(self):
+        clock = Clock(self.layer).run(130.0, "briar")
         first = clock.starts[0][0]
-        self.assertTrue(20.0 - 2 * BLOCK_S <= first <= 45.0 + 2 * BLOCK_S, f"{first:.2f} s")
+        low, high = music.REST_SECONDS
+        self.assertTrue(low - 2 * BLOCK_S <= first <= high + 2 * BLOCK_S, f"{first:.2f} s")
 
     def test_a_cue_during_the_rest_starts_the_queued_piece_now(self):
         clock = Clock(self.layer).run(1.0, "briar")
@@ -371,7 +420,7 @@ class Layer(unittest.TestCase):
         stopped = clock.now
         clock.run(15.0, "briar")
         self.assertTrue(all(out is None for t, out in clock.outs if t >= stopped))
-        self.assertEqual(len(clock.starts), 1)  # the rest after a stop is 20 s or more
+        self.assertEqual(len(clock.starts), 1)  # the rest after a stop is a minute or more
 
     def test_the_store_keeps_at_most_the_sounding_piece_and_the_next(self):
         clock = Clock(self.layer).run(1.0, "briar")
@@ -380,6 +429,42 @@ class Layer(unittest.TestCase):
         clock.run(1.0, "cedar")
         self.assertTrue(self.store.kept)
         self.assertLessEqual(max(len(keys) for keys in self.store.kept), music.RESIDENT_PIECES)
+
+    def test_a_return_visit_resumes_the_lakes_rotation(self):
+        """A lake keeps its rotation and queued piece while the layer is elsewhere (#168): the
+        return plays the piece queued when the layer left, not the one just heard."""
+        clock = Clock(self.layer).run(1.0, "briar")
+        self.layer.cue()
+        clock.run(5.0, "briar")
+        heard = clock.starts[0][1]
+        queued = self.store.requested[-1]  # briar's next piece, requested while its first sounds
+        clock.run(20.0, "cedar")  # the crossover fades briar out; cedar's first piece plays
+        returned = clock.now
+        clock.run(20.0, "briar")  # cedar fades out, and briar's queued piece follows
+        back = [key for when, key in clock.starts if when > returned]
+        self.assertEqual(back[0], queued)
+        self.assertNotEqual(back[0], heard)
+
+    def test_the_next_piece_is_requested_before_its_rest_ends(self):
+        """The render gets the whole rest (#168): the queued piece is requested on the first
+        block, not in the last seconds of the rest."""
+        clock = Clock(self.layer).run(1.0, "briar")
+        early = list(self.store.requested)
+        clock.run(130.0, "briar")
+        self.assertTrue(early)
+        self.assertEqual(early[-1], clock.starts[0][1])
+
+
+class Duty(unittest.TestCase):
+    """How much of the time music sounds (#168). The header of music.py states the measured figure."""
+
+    def test_music_sounds_about_half_of_each_hour_on_every_lake(self):
+        block = 4096
+        blocks = round(3600.0 * LOW_RATE / block)
+        for lake in soundscape.LAKES:
+            layer = music.Layer(SizedStore(LOW_RATE), LOW_RATE)
+            sounding = sum(layer.advance(block, lake, True)[0] is not None for _ in range(blocks))
+            self.assertTrue(0.45 <= sounding / blocks <= 0.65, f"{lake}: {sounding / blocks:.1%}")
 
 
 if __name__ == "__main__":

@@ -407,11 +407,12 @@ class Session:
 
     def hear_ambient(self, kind: str) -> None:
         """An ambient call or a song start the mixer played, captioned when nothing else is
-        (V1-38). A song's caption always takes over: it marks the music that has just begun (#168)."""
+        showing (V1-38). A song start waits like a call: a caption already on screen, such as a
+        bite's, is never replaced, and a start that finds one showing is not captioned (#168)."""
         settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
         if not settings.get("captions", True):
             return
-        if soundscape.bus(kind) == "music" or self.ui.caption_timer <= 0:
+        if self.ui.caption_timer <= 0:
             self.ui.caption = soundscape.caption(kind, self.state)
             self.ui.caption_timer = reading_seconds(self.ui.caption, CAPTION_SECONDS)
 

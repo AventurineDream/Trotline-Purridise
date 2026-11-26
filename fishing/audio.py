@@ -70,6 +70,9 @@ DUCK_GAIN = 10 ** (-7.0 / 20)  # nature and music under a bite
 PRIORITY_CUES = ("bite",)
 EVENT_BEDS = ("insects", "birds", "frogs")
 WORKERS = 3                   # beds synthesised at once
+# Pieces render in their own lane, one at a time (#168): a piece is a long render, and on
+# frozen builds it runs on a game-process thread, so two would contend with the frame loop.
+SONG_WORKERS = 1
 PACKAGE_ROOT = str(Path(__file__).resolve().parents[1])
 # Child interpreter entry: put the package on sys.path, then run one synthesis job.
 WORKER_BOOT = ("import sys; sys.path.insert(0, sys.argv.pop(1)); "
@@ -149,7 +152,8 @@ class _BedStore:
     Lifecycle and polling stay on the game thread. A store per (rate, loop lengths) is
     shared by Audio instances, and lake-specific beds retain only the current and
     fading lakes to bound memory at 5 shared + 6 lake beds. Music pieces (`song:` keys)
-    are retained only while sounding or queued (`keep_songs`).
+    are retained only while sounding or queued (`keep_songs`), and render one at a time in
+    their own lane, so a lake's beds never queue behind a piece.
     """
 
     def __init__(self, rate: int, noise_frames: int, event_frames: int):
@@ -161,11 +165,13 @@ class _BedStore:
         self._running: dict[str, tuple[subprocess.Popen, str]] = {}
         self._threads: dict[str, Future] = {}
         self._waiting: list[str] = []
+        self._song_waiting: list[str] = []  # pieces queued for their own lane (#168)
         self._lakes: list[str] = []
         self._cues: dict[tuple[str, int], np.ndarray] = {}
         self._strokes: list[np.ndarray] = []
         self._cue_job: tuple[subprocess.Popen, str] | Future | None = None
         self._pool: ThreadPoolExecutor | None = None
+        self._song_pool: ThreadPoolExecutor | None = None
         self._spawn_ok = bool(sys.executable) and not getattr(sys, "frozen", False)
         atexit.register(self.shutdown)
 
@@ -199,6 +205,25 @@ class _BedStore:
             self._pool = ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="trotline-audio")
         return self._pool
 
+    def _pool_for(self, key: str) -> ThreadPoolExecutor:
+        """The executor for a thread build of `key`. A piece has a pool of its own, so a render
+        never takes a bed worker (#168)."""
+        if key.startswith(songs.SONG_PREFIX):
+            if self._song_pool is None:
+                self._song_pool = ThreadPoolExecutor(max_workers=SONG_WORKERS,
+                                                     thread_name_prefix="trotline-song")
+            return self._song_pool
+        return self._threads_pool()
+
+    def _lane(self, key: str) -> list[str]:
+        """The queue `key` waits in: pieces have a lane of their own, beds share WORKERS."""
+        return self._song_waiting if key.startswith(songs.SONG_PREFIX) else self._waiting
+
+    def _jobs(self, song: bool) -> int:
+        """Jobs running in one lane: music pieces when `song`, beds otherwise."""
+        return sum(1 for key in (*self._running, *self._threads)
+                   if key.startswith(songs.SONG_PREFIX) == song)
+
     def _build_here(self, key: str) -> synth.Bed:
         start = _time.perf_counter()
         bed = synth.build_bed(key, self.rate, self.frames(key))
@@ -211,7 +236,7 @@ class _BedStore:
         if proc is not None:
             self._running[key] = (proc, path)
         else:
-            self._threads[key] = self._threads_pool().submit(self._build_here, key)
+            self._threads[key] = self._pool_for(key).submit(self._build_here, key)
 
     @staticmethod
     def _result(proc: subprocess.Popen) -> dict | None:
@@ -234,7 +259,7 @@ class _BedStore:
             self.build_seconds[key] = float(info["seconds"])
         except (OSError, ValueError, KeyError):
             _unlink(path)
-            self._threads[key] = self._threads_pool().submit(self._build_here, key)
+            self._threads[key] = self._pool_for(key).submit(self._build_here, key)
 
     def poll(self) -> None:
         """Collect finished workers and start queued ones (never blocks)."""
@@ -246,13 +271,16 @@ class _BedStore:
             if future.done():
                 del self._threads[key]
                 self._beds[key] = future.result()
-        while self._waiting and len(self._running) + len(self._threads) < WORKERS:
-            self._start(self._waiting.pop(0))
+        lanes = ((self._waiting, False, WORKERS), (self._song_waiting, True, SONG_WORKERS))
+        for queue, song, limit in lanes:
+            while queue and self._jobs(song) < limit:
+                self._start(queue.pop(0))
 
     def _forget(self, key: str) -> None:
         self._beds.pop(key, None)
-        if key in self._waiting:
-            self._waiting.remove(key)
+        lane = self._lane(key)
+        if key in lane:
+            lane.remove(key)
         job = self._running.pop(key, None)
         if job:
             job[0].kill()
@@ -268,7 +296,8 @@ class _BedStore:
 
     def request(self, key: str) -> None:
         """Queue `key` for building unless it is built or on its way."""
-        if key in self._beds or key in self._running or key in self._threads or key in self._waiting:
+        if (key in self._beds or key in self._running or key in self._threads
+                or key in self._lane(key)):
             return
         # Music pieces have no lake to retain by; keep_songs releases them.
         lake = "" if key.startswith(songs.SONG_PREFIX) else key.partition(":")[2]
@@ -281,26 +310,28 @@ class _BedStore:
                              if k.endswith(":" + old)]:
                     self._forget(name)
             self._lakes = self._lakes[-2:]
-        self._waiting.append(key)
+        self._lane(key).append(key)
         self.poll()
 
     def keep_songs(self, keys: set[str]) -> None:
         """Forget every music piece not in `keys`, whatever its state. A piece is held only
         while it sounds or is queued (`music.Layer._retain`), which bounds music memory."""
-        for name in [k for k in (*self._beds, *self._running, *self._threads, *self._waiting)
+        for name in [k for k in (*self._beds, *self._running, *self._threads, *self._song_waiting)
                      if k.startswith(songs.SONG_PREFIX) and k not in keys]:
             self._forget(name)
 
     def get(self, key: str, wait: bool) -> synth.Bed | None:
-        """The bed if ready, else None; with `wait`, build it first (blocking)."""
+        """The bed if ready, else None. With `wait` (offline only: the live mixer passes False),
+        build it first, blocking. A waited build starts at once, even beside a running piece."""
         bed = self._beds.get(key)
         if bed is not None:
             return bed
         self.request(key)
         self.poll()
         while wait and key not in self._beds:
-            if key in self._waiting:
-                self._waiting.remove(key)
+            lane = self._lane(key)
+            if key in lane:
+                lane.remove(key)
                 self._start(key)
             if key in self._running:
                 proc, path = self._running.pop(key)
@@ -374,7 +405,7 @@ class _BedStore:
 
     def tick(self) -> None:
         """Once per mixed block: collect finished workers and start queued ones."""
-        if self._running or self._threads or self._waiting:
+        if self._running or self._threads or self._waiting or self._song_waiting:
             self.poll()
         if self._cue_job is not None:
             self._poll_cues()
@@ -396,8 +427,9 @@ class _BedStore:
                 proc.stdout.close()
             _unlink(path)
             self._cue_job = None
-        if self._pool is not None:
-            self._pool.shutdown(wait=False, cancel_futures=True)
+        for pool in (self._pool, self._song_pool):
+            if pool is not None:
+                pool.shutdown(wait=False, cancel_futures=True)
 
 
 def _copy_worker_output(path: str, dtype, shape: tuple[int, ...] | None = None) -> np.ndarray:
@@ -605,7 +637,7 @@ class Audio:
             return
         bus = bus or bus_of(kind)
         sound = self._voice(kind)
-        self.shots.append((sound, 0, bus if bus in self._volumes else "sfx"))
+        self.shots.append((sound, 0, bus if bus in ("ambience", "sfx") else "sfx"))
         if kind in PRIORITY_CUES:
             self._duck_frames = max(self._duck_frames, len(sound))
 
@@ -1132,8 +1164,7 @@ class Audio:
                 seg = seg.astype(F32) * F32(1 / 32767) if seg.dtype == np.int16 else seg
                 if bus == "ambience":  # scheduled nature calls sit at NATURE_TRIM, as the beds do
                     seg = seg * F32(NATURE_TRIM)
-                target = buses["music"] if bus == "music" else buses["ambience"] if bus == "ambience" \
-                    else buses["sfx"]
+                target = buses["ambience"] if bus == "ambience" else buses["sfx"]
                 target[:, start:start + take] += seg.T if seg.ndim == 2 else seg[None, :]
             cursor += frames
             if cursor < len(samples):

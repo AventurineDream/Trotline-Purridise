@@ -8,8 +8,12 @@ here synthesises. `soundscape.MUSIC_CUE` (dawn, dusk and staged story moments) r
 
 Constraints:
 - At most one piece sounds at a time, and a piece never starts over another.
-- Between a lake's pieces the layer rests REST_SECONDS (20-45 s, seeded), so music is an
-  occasional visitor rather than a bed.
+- Between a lake's pieces the layer rests REST_SECONDS (60-120 s, seeded). Pieces run 60-150 s,
+  so music sounds about 57% of the time (measured over a simulated hour on each lake: 54-60%).
+- A lake keeps its rotation and its queued piece across visits, so a return resumes the bag
+  where it stopped: the order does not restart, and the piece that was playing is not repeated
+  straight away.
+- The queued piece is requested as soon as it is queued, so its render has the whole rest.
 - A lake change crosses over on the music bus: the sounding piece fades out (FADE_SECONDS,
   equal power), a SWITCH_SECONDS dip follows, and the new lake's first piece fades in. Nothing
   is cut, and the two lakes never sound together.
@@ -33,8 +37,7 @@ F32 = np.float32
 MUSIC_DB = -26.0        # a piece's RMS at full music-bus volume (the old motifs averaged -26 dBFS)
 FADE_SECONDS = 3.0      # equal-power fade-in and fade-out of a piece on the music bus
 SWITCH_SECONDS = 2.0    # silence between the old lake's fade-out and the new lake's first piece
-REST_SECONDS = (20.0, 45.0)
-PREFETCH_SECONDS = 8.0  # the queued piece starts building this long before its rest ends
+REST_SECONDS = (60.0, 120.0)  # a minute or more: 20-45 s rests sounded 78% of the time (#168)
 RESIDENT_PIECES = 2     # the sounding piece and the next one (a crossover holds the new lake's)
 SILENT = 1e-4           # linear gain under which a fading piece counts as gone
 
@@ -84,12 +87,6 @@ class _Playlist:
     queued: songs.Song
 
 
-def _playlist(lake: str) -> _Playlist:
-    """A fresh rotation for `lake`, with its first piece chosen."""
-    rotation = Rotation(lake)
-    return _Playlist(lake, rotation, rotation.next())
-
-
 class Layer:
     """The music bus's piece player: a state machine over mixed blocks (see the header).
 
@@ -109,6 +106,7 @@ class Layer:
         self._bed: synth.Bed | None = None
         self._cursor = 0
         self._gain = 0.0
+        self._lists: dict[str, _Playlist] = {}  # each lake's queue, kept across visits
 
     def cue(self) -> None:
         """Dawn, dusk or a staged story moment: the queued piece starts as soon as it may.
@@ -127,6 +125,14 @@ class Layer:
         self._switch = None
         self._retain()
 
+    def _playlist(self, lake: str) -> _Playlist:
+        """The lake's rotation and queued piece: made on its first visit and kept after, so a
+        return resumes the bag where it stopped (#168) instead of starting it again."""
+        if lake not in self._lists:
+            rotation = Rotation(lake)
+            self._lists[lake] = _Playlist(lake, rotation, rotation.next())
+        return self._lists[lake]
+
     def advance(self, frames: int, lake: str, wait: bool) -> tuple[np.ndarray | None, list[str]]:
         """Mix one block of `frames` for `lake`.
 
@@ -140,16 +146,16 @@ class Layer:
             that started in this block, for their captions.
         """
         if self._active is None:
-            self._active = _playlist(lake)
+            self._active = self._playlist(lake)
             self._rest = self._active.rotation.rest()
         elif lake == self._active.lake:
             self._switch = None  # back on the lake that was playing: its piece fades back in
         elif self._piece is None:
-            self._active = _playlist(lake)  # nothing sounds: the new lake starts after a dip
+            self._active = self._playlist(lake)  # nothing sounds: the new lake starts after a dip
             self._switch = None
             self._rest = SWITCH_SECONDS
         elif self._switch is None or self._switch.lake != lake:
-            self._switch = _playlist(lake)
+            self._switch = self._playlist(lake)
         dt = frames / self._rate
         out = None
         if self._piece is not None:
@@ -159,8 +165,9 @@ class Layer:
         started: list[str] = []
         if self._piece is None:
             started = self._try_start(wait)
-        elif self._switch is not None:
-            self._store.request(songs.key(self._switch.queued))
+        pending = self._next_up()
+        if pending is not None:
+            self._store.request(songs.key(pending))  # a render takes seconds: start it now
         self._retain()
         return out, started
 
@@ -191,8 +198,6 @@ class Layer:
             The song key that started, as a list (empty when nothing started).
         """
         key = songs.key(self._active.queued)
-        if self._rest <= PREFETCH_SECONDS:
-            self._store.request(key)
         if self._rest > 0.0:
             return []
         bed = self._store.get(key, wait)
@@ -210,13 +215,17 @@ class Layer:
         self._gain = 0.0
         self._active.queued = self._active.rotation.next()
         self._rest = self._active.rotation.rest()
-        self._store.request(songs.key(self._active.queued))
+
+    def _next_up(self) -> songs.Song | None:
+        """The piece to hold next: the new lake's during a crossover, else the playing lake's
+        queued piece. None before any lake has been visited."""
+        playlist = self._switch if self._switch is not None else self._active
+        return playlist.queued if playlist is not None else None
 
     def _retain(self) -> None:
         """Keep only the sounding piece and the next one; during a crossover that is the new
         lake's first piece, and the old lake's queue is released."""
-        next_up = self._switch if self._switch is not None else self._active
-        pending = next_up.queued if next_up is not None else None
+        pending = self._next_up()
         keep = {songs.key(s) for s in (self._piece, pending) if s is not None}
         self._store.keep_songs(keep)
 
