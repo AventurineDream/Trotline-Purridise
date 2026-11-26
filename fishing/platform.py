@@ -484,6 +484,10 @@ class Platform:
         s.SDL_GetKeyboardState.argtypes = [ctypes.POINTER(c_int)]
         s.SDL_GetKeyboardState.restype = ctypes.POINTER(c_uint8)
         s.SDL_GetTicks64.restype = ctypes.c_uint64
+        s.SDL_GetKeyFromScancode.argtypes = [c_int]
+        s.SDL_GetKeyFromScancode.restype = ctypes.c_int32
+        s.SDL_GetKeyName.argtypes = [ctypes.c_int32]
+        s.SDL_GetKeyName.restype = c_char_p
         s.SDL_Delay.argtypes = [c_uint32]
         s.SDL_GetCurrentDisplayMode.argtypes = [c_int, ctypes.POINTER(SDL_DisplayMode)]
         s.SDL_GetCurrentDisplayMode.restype = c_int
@@ -715,6 +719,23 @@ class Platform:
         steps = math.trunc(self._input.mouse_wheel_remainder)
         self._input.mouse_wheel_remainder -= steps
         return steps
+
+    def key_label(self, name: str) -> str:
+        """Return what the active keyboard layout prints on a physical key.
+
+        Args:
+            name: Physical key name from ``SCAN`` (scancode, so layout-independent).
+        Returns:
+            SDL's name for the key the layout maps there, such as "`" on US or "^" on
+            German layouts; "" for an unknown name or a key the layout leaves unnamed.
+            Asked fresh on each call, so a layout switch mid-session shows at once.
+        """
+        code = SCAN.get(name)
+        if code is None:
+            return ""
+        keycode = self.sdl.SDL_GetKeyFromScancode(code)
+        raw = self.sdl.SDL_GetKeyName(keycode) if keycode else None
+        return raw.decode("utf-8", "replace") if raw else ""
 
     def _wheel_delta(self, event: SDL_MouseWheelEvent) -> float:
         """Use preciseY only when the linked SDL version guarantees that field."""

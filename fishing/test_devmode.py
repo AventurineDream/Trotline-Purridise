@@ -92,6 +92,7 @@ class DevModeTests(unittest.TestCase):
         rendered, panels = [], []
         ui = SimpleNamespace(
             _size=lambda frame, kind: 12,
+            _measure=lambda text, size, family="sans": len(text) * size // 2,
             _panel=lambda *args: panels.append(args),
             _text=lambda frame, text, *args: rendered.append(text),
         )
@@ -100,7 +101,8 @@ class DevModeTests(unittest.TestCase):
         session.dev_mode.draw(np.zeros((675, 1200, 3), np.uint8), ui)
         _frame, x, _y, width, _height, _alpha = panels[0]
         self.assertEqual(x, (1200 - width) // 2)
-        self.assertTrue(any("DEV  60 fps  9.8 ms  312+420 MB" in text for text in rendered))
+        self.assertTrue(any(text.startswith("DEV  [`] tools  60 fps  9.8 ms  312+420 MB")
+                            for text in rendered))
         self.assertIsNone(self.session(dev=False).dev_mode)
 
     def test_open_panel_never_shares_space_with_the_perf_badge(self):
@@ -115,6 +117,7 @@ class DevModeTests(unittest.TestCase):
             panels = []
             ui = SimpleNamespace(
                 _size=lambda frame, kind: 12,
+                _measure=lambda text, size, family="sans": len(text) * size // 2,
                 cell=lambda size: (size // 2, size),
                 _panel=lambda *args, sink=panels: sink.append(args),
                 _text=lambda *args: None,
@@ -124,6 +127,76 @@ class DevModeTests(unittest.TestCase):
             if badge_shown:
                 (_f, _x, badge_y, _w, badge_h, _a), (_f2, _x2, panel_y, *_rest) = panels
                 self.assertLessEqual(badge_y + badge_h, panel_y)
+
+    def drawn(self, dev_mode, width=1200, height=675):
+        """Draw `dev_mode` on a blank frame; return its texts and panel rectangles."""
+        from types import SimpleNamespace
+
+        import numpy as np
+
+        texts, panels = [], []
+        ui = SimpleNamespace(
+            _size=lambda frame, kind: 12,
+            _measure=lambda text, size, family="sans": len(text) * size // 2,
+            cell=lambda size: (size // 2, size),
+            _panel=lambda frame, *rect: panels.append(rect),
+            _text=lambda frame, text, *args, **kw: texts.append(text),
+        )
+        dev_mode.draw(np.zeros((height, width, 3), np.uint8), ui)
+        return texts, panels
+
+    def test_badge_names_the_toggle_key_as_the_layout_prints_it(self):
+        dev_mode = self.session(dev=True).dev_mode
+        texts, _panels = self.drawn(dev_mode)
+        self.assertTrue(texts[0].startswith("DEV  [`] tools  "))  # before any layout read
+        dev_mode.key_label = "^"  # a German layout's grave key
+        dev_mode.open = True
+        texts, _panels = self.drawn(dev_mode)
+        self.assertTrue(texts[0].startswith("DEV  [^] tools  "))
+        self.assertIn("Enter run · Esc/[^] close", texts)
+        self.assertFalse(any("grave" in text or "[`]" in text for text in texts))
+
+    def test_a_narrow_window_keeps_the_key_and_drops_the_readout(self):
+        dev_mode = self.session(dev=True).dev_mode
+        dev_mode.perf = (60.0, 9.8, 312.0, 420.0)
+        # At 6 px a character the full badge needs 262 px, the key alone 100 px.
+        for width, readout in ((1200, True), (360, True), (240, False), (140, False)):
+            texts, panels = self.drawn(dev_mode, width=width, height=360)
+            self.assertTrue(texts[0].startswith("DEV  [`] tools"))
+            self.assertEqual("60 fps" in texts[0], readout)
+            x, _y, badge_w, _h, _alpha = panels[0]
+            self.assertGreaterEqual(x, 0)
+            self.assertLessEqual(x + badge_w, width)
+            self.assertGreaterEqual(badge_w, len(texts[0]) * 6 + 16)  # the text fits inside
+
+    def test_hotkey_label_formatting(self):
+        from .devmode import hotkey_label
+
+        self.assertEqual(hotkey_label("`"), "[`]")
+        self.assertEqual(hotkey_label(" ^ "), "[^]")
+        self.assertEqual(hotkey_label("§"), "[§]")
+        self.assertEqual(hotkey_label(""), "[`]")  # the layout names nothing there
+
+    def test_platform_reads_the_layout_name_for_the_physical_key(self):
+        from types import SimpleNamespace
+
+        from .platform import Platform
+
+        asked = []
+        names = {0x60: b"`", 0x5E: b"^"}
+        layout = {53: 0x5E}
+        platform = Platform.__new__(Platform)
+        platform.sdl = SimpleNamespace(
+            SDL_GetKeyFromScancode=lambda code: asked.append(code) or layout.get(code, 0),
+            SDL_GetKeyName=lambda key: names.get(key, b""),
+        )
+        self.assertEqual(platform.key_label("grave"), "^")
+        self.assertEqual(asked, [53])  # the physical key Devmode listens on
+        layout[53] = 0x60
+        self.assertEqual(platform.key_label("grave"), "`")  # a layout switch shows at once
+        layout.clear()
+        self.assertEqual(platform.key_label("grave"), "")
+        self.assertEqual(platform.key_label("no-such-key"), "")
 
     def test_reset_cancel_preserves_state_and_confirm_starts_memory_only_session(self):
         """Cancel keeps the same state; confirmation resets it without writing a save."""
