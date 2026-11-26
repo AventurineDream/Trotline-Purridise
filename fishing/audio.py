@@ -16,8 +16,11 @@ Design:
   inside each block.
 - Propulsion (outboard harmonics, electric hum, oar strokes, sail flutter) is
   synthesised live from smoothed controls.
-- Four saved buses (master, music, ambience, sfx); a bite ducks the ambience; a soft
+- Four saved buses (master, music, ambience, sfx); a bite ducks the ambience and music; a soft
   limiter with a -1 dBFS ceiling means the queue never clips.
+- Music (`music.py`) plays one lake song at a time on the music bus and crosses over when
+  the lake changes. Nature ambience sits at `NATURE_TRIM`, a quarter of its authored level,
+  so the music and the fishing cues stay clearly above it.
 - `render_offline` drives the very same `update`/`_mix` path into memory, so tests and
   WAV dumps hear exactly what plays.
 
@@ -47,6 +50,8 @@ import numpy as np
 
 from . import audiosynth as synth
 from . import detail
+from . import music
+from . import songs
 from .botchimes import CHIMES, SAMPLE_RATE as CHIME_RATE, synthesize as synthesize_chime
 from .platform import SDL_AudioSpec, SDL_INIT_AUDIO, _load
 
@@ -61,7 +66,7 @@ EVENT_LOOP_SECONDS = 30.0     # birds/frogs/insects are never shorter than this
 CEILING = 10 ** (-1.0 / 20)   # limiter ceiling, -1 dBFS
 LIMIT_KNEE = 0.6
 LIMIT_TARGET = 10 ** (-4.0 / 20)
-DUCK_GAIN = 10 ** (-7.0 / 20)  # ambience under a bite
+DUCK_GAIN = 10 ** (-7.0 / 20)  # nature and music under a bite
 PRIORITY_CUES = ("bite",)
 EVENT_BEDS = ("insects", "birds", "frogs")
 WORKERS = 3                   # beds synthesised at once
@@ -86,6 +91,11 @@ BIRD_DAY = {"briar": 0.3, "cedar": 0.6, "flathead": 0.35, "crater": 0.2, "nebula
 RAIN_LIGHT_DB, RAIN_HEAVY_DB = -32.0, -28.5
 WASH_DB = -29.0
 PAD_DB = -42.0
+# Nature ambience (beds and scheduled calls) plays at this share of its authored level, about
+# -12 dB, so music and fishing cues sit clearly above it (#168). Rain is exempt: its onset and
+# heavy rain must stay clearly audible.
+NATURE_TRIM = 0.25
+RAIN_LAYERS = ("rain_light", "rain_heavy")
 # Seconds a layer takes to go from silence to full power (or back).
 SCENE_FADE = 2.5
 MOTION_FADE = 0.35
@@ -138,7 +148,8 @@ class _BedStore:
     Frozen builds or failed spawns use `_build_here`/`_cues_here` on executor threads.
     Lifecycle and polling stay on the game thread. A store per (rate, loop lengths) is
     shared by Audio instances, and lake-specific beds retain only the current and
-    fading lakes to bound memory at 5 shared + 6 lake beds.
+    fading lakes to bound memory at 5 shared + 6 lake beds. Music pieces (`song:` keys)
+    are retained only while sounding or queued (`keep_songs`).
     """
 
     def __init__(self, rate: int, noise_frames: int, event_frames: int):
@@ -159,7 +170,9 @@ class _BedStore:
         atexit.register(self.shutdown)
 
     def frames(self, key: str) -> int:
-        """Loop length in frames of bed `key`."""
+        """Length in frames of `key`: a music piece's own length, or a bed's loop length."""
+        if key.startswith(songs.SONG_PREFIX):
+            return songs.frames(key[len(songs.SONG_PREFIX):], self.rate)
         return self.event_frames if key.partition(":")[0] in EVENT_BEDS else self.noise_frames
 
     # ------------------------------------------------------------ jobs
@@ -257,7 +270,8 @@ class _BedStore:
         """Queue `key` for building unless it is built or on its way."""
         if key in self._beds or key in self._running or key in self._threads or key in self._waiting:
             return
-        lake = key.partition(":")[2]
+        # Music pieces have no lake to retain by; keep_songs releases them.
+        lake = "" if key.startswith(songs.SONG_PREFIX) else key.partition(":")[2]
         if lake:
             if lake in self._lakes:
                 self._lakes.remove(lake)
@@ -269,6 +283,13 @@ class _BedStore:
             self._lakes = self._lakes[-2:]
         self._waiting.append(key)
         self.poll()
+
+    def keep_songs(self, keys: set[str]) -> None:
+        """Forget every music piece not in `keys`, whatever its state. A piece is held only
+        while it sounds or is queued (`music.Layer._retain`), which bounds music memory."""
+        for name in [k for k in (*self._beds, *self._running, *self._threads, *self._waiting)
+                     if k.startswith(songs.SONG_PREFIX) and k not in keys]:
+            self._forget(name)
 
     def get(self, key: str, wait: bool) -> synth.Bed | None:
         """The bed if ready, else None; with `wait`, build it first (blocking)."""
@@ -339,7 +360,7 @@ class _BedStore:
             if kind in synth.CUE_PEAK_DB:
                 sound = synth.build_cue(kind, self.rate, variant)
             else:
-                # V1-38 motifs and story/ambient calls have authored waveforms, not generic cue presets.
+                # V1-38 story and ambient calls have authored waveforms, not generic cue presets.
                 sound = _soundscape_cue(kind, self.rate)
             self._cues[(kind, variant)] = sound
         return sound
@@ -519,6 +540,7 @@ class Audio:
         self._pad_gain = 0.0
         self._limit = 1.0
         self._variant: dict[str, int] = {}
+        self._music = music.Layer(self._store, self.rate)
 
     def _open_device(self) -> None:
         try:
@@ -572,15 +594,16 @@ class Audio:
             kind: Cue identifier understood by the audio synthesizer.
             bus: Optional explicit mixer bus; otherwise use the soundscape's mapping.
 
-        Side effects: priority cues duck ambience while they play.
+        Side effects: priority cues duck ambience and music while they play; MUSIC_CUE starts
+        the music layer's next piece instead of queueing a sound.
         """
         if not (self.ok or self._virtual):
             return
-        from .soundscape import bus as bus_of
+        from .soundscape import MUSIC_CUE, bus as bus_of
+        if kind == MUSIC_CUE:
+            self._music.cue()
+            return
         bus = bus or bus_of(kind)
-        if bus == "music":
-            # One motif at a time: a new one replaces any still playing (V1-38).
-            self.shots = [shot for shot in self.shots if shot[2] != "music"]
         sound = self._voice(kind)
         self.shots.append((sound, 0, bus if bus in self._volumes else "sfx"))
         if kind in PRIORITY_CUES:
@@ -731,6 +754,7 @@ class Audio:
             # Mute drops every bus and its pending captions; nothing waits to play after.
             self.shots.clear()
             self._played.clear()
+            self._music.stop()
             self._duck_frames = 0
             self._duck = 1.0
         if not (self.ok or self._virtual):
@@ -842,7 +866,8 @@ class Audio:
 
     def _targets(self, lake: str | None = None) -> dict[str, tuple[str, float, float, str]]:
         """Layer name → (bed key, loop offset 0..1, target amplitude, bus) for `lake`
-        (default: the lake the ambience is currently on)."""
+        (default: the lake the ambience is currently on). Nature layers come out at
+        NATURE_TRIM of their authored amplitude; rain keeps its own."""
         lake = lake or self._scene_lake or self._known(self._lake_id)
         hour = self._hour % 24.0
         rain = min(1.0, self._rain)
@@ -885,7 +910,9 @@ class Audio:
             out["prop"] = ("wash", 0.5, _db(prop_db) * (0.3 + 0.7 * drive), "sfx")
         if self._sailing:
             out["flutter"] = ("wash", 0.25, _db(-39.0) * (0.6 + 0.4 * (1.0 - speed)), "sfx")
-        return out
+        return {name: (key, offset, amp if bus != "ambience" or name in RAIN_LAYERS
+                       else amp * NATURE_TRIM, bus)
+                for name, (key, offset, amp, bus) in out.items()}
 
     def _ready_lake(self, wait: bool) -> None:
         """Switch the ambience to the requested lake once its beds are built (or after
@@ -903,6 +930,10 @@ class Audio:
             self._scene_lake = lake
             self._lake_wait = 0.0
 
+    def _pad_amp(self) -> float:
+        """Full level of the Nebula pad. It is an ambience layer, so it sits at NATURE_TRIM."""
+        return _db(PAD_DB) * NATURE_TRIM
+
     def _snap(self, wait: bool) -> None:
         self._ready_lake(wait)
         self._gains = {}
@@ -918,7 +949,7 @@ class Audio:
         self._f0 = self._engine_f0(drive)
         self._engine_gain = self._engine_target(drive)
         self._hum_gain = self._hum_target(drive)
-        self._pad_gain = _db(PAD_DB) if self._scene_lake == "nebula" else 0.0
+        self._pad_gain = self._pad_amp() if self._scene_lake == "nebula" else 0.0
         self._primed = True
 
     # ------------------------------------------------------------ propulsion
@@ -1077,12 +1108,17 @@ class Audio:
             buses[bus] += chunk
         self._gains = gains
         pad0 = self._pad_gain
-        pad_target = _db(PAD_DB) if self._scene_lake == "nebula" else 0.0
-        step = _db(PAD_DB) ** 2 * dt / SCENE_FADE
+        pad_amp = self._pad_amp()
+        pad_target = pad_amp if self._scene_lake == "nebula" else 0.0
+        step = pad_amp ** 2 * dt / SCENE_FADE
         pad1 = math.sqrt(max(0.0, pad0 ** 2 + max(-step, min(step, pad_target ** 2 - pad0 ** 2))))
         self._pad_gain = pad1
         if pad0 > 0 or pad1 > 0:
             buses["ambience"] += self._pad(frames, pad0, pad1)
+        chunk, started = self._music.advance(frames, self._known(self._lake_id), wait)
+        if chunk is not None:
+            buses["music"] += chunk
+        self._played.extend(started)
         motor = self._engine(frames, dt) + self._hum(frames, dt)
         buses["sfx"] += motor[None, :]
         self._oars(frames)
@@ -1094,6 +1130,8 @@ class Audio:
             if take > 0:
                 seg = samples[src:src + take]
                 seg = seg.astype(F32) * F32(1 / 32767) if seg.dtype == np.int16 else seg
+                if bus == "ambience":  # scheduled nature calls sit at NATURE_TRIM, as the beds do
+                    seg = seg * F32(NATURE_TRIM)
                 target = buses["music"] if bus == "music" else buses["ambience"] if bus == "ambience" \
                     else buses["sfx"]
                 target[:, start:start + take] += seg.T if seg.ndim == 2 else seg[None, :]
@@ -1108,12 +1146,16 @@ class Audio:
         self._duck = duck1
         self._duck_frames = max(0, self._duck_frames - frames)
         vol = self._volumes
+        # A bite turns nature and the music down together (#168), so the cue the player must hear
+        # stays clear over a piece. One envelope serves both: they fall and recover as one.
+        ducking = np.linspace(duck0, duck1, frames, endpoint=False, dtype=F32)
         amb = buses["ambience"]
-        amb *= np.linspace(duck0 * vol["ambience"], duck1 * vol["ambience"], frames,
-                           endpoint=False, dtype=F32)
+        amb *= ducking * F32(vol["ambience"])
+        music_bus = buses["music"]
+        music_bus *= ducking * F32(vol["music"])
         mix = amb
         mix += buses["sfx"] * F32(vol["sfx"])
-        mix += buses["music"] * F32(vol["music"])
+        mix += music_bus
         mix *= F32(vol["master"])
         mix = self._limit_block(mix, dt)
         if self._start_ramp:

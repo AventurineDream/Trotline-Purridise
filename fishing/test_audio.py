@@ -11,7 +11,7 @@ synthesis time, per-block mix cost and memory per tier.
 
 Thresholds (dBFS is relative to int16 full scale, RMS over both channels):
 - peaks <= -1 dBFS everywhere; |DC| < 0.002 of full scale;
-- ambience RMS in AMBIENCE_BAND; propulsion scenes no louder than -20 dBFS RMS;
+- nature RMS in NATURE_BAND, rain scenes in AMBIENCE_BAND (#168 trims nature by 12 dB); propulsion scenes no louder than -20 dBFS RMS;
 - cues alone peak between -16 and -6 dBFS and ramp in over >= 4 ms;
 - no click: no adjacent-sample step above JUMP_LIMIT (scaled to 44.1 kHz, since the same
   sound steps twice as far per sample at 22.05 kHz), and block boundaries and loop
@@ -38,6 +38,8 @@ from . import audiosynth as synth
 from . import calendar, detail, encounter, soundscape
 from .audio import (
     BED_CAP_BYTES,
+    DUCK_GAIN,
+    NATURE_TRIM,
     SCENE_FADE,
     Audio,
     _BedStore,
@@ -50,11 +52,16 @@ from .botchimes import CHIMES
 from .content import load_content
 from .game import Keys, Session
 from .legendary import LEGENDARY_DATA
+from .music import resident_bytes
 from .sim import Catch, Hook, SetLine, State
 from .test_skipper_creator import finish_creator
 from .world import World
 
-AMBIENCE_BAND = (-35.0, -24.0)
+AMBIENCE_BAND = (-35.0, -24.0)  # rain scenes: their authored level, unchanged by #168
+NATURE_TRIM_DB = -12.0  # the brief: nature sits at about 25% of its authored level (-12 dB)
+TRIM_DB = NATURE_TRIM_DB
+NATURE_BAND = (AMBIENCE_BAND[0] + TRIM_DB, AMBIENCE_BAND[1] + TRIM_DB)
+PROPULSION_BAND = (-35.0 + TRIM_DB, -20.0)  # the old floor leaned on the nature beds
 JUMP_LIMIT = 0.25          # full-scale units per 44.1 kHz sample; a click is a step this big
 CUE_KINDS = ("bite", "splash", "sell", "click", "error", "bot", "loon", "gull", "frog", "twinkle")
 
@@ -115,7 +122,6 @@ class Captions(unittest.TestCase):
         cues = {
             "lake_day", "legendary", "sell", "splash", "whale_song",
         }
-        cues.update(soundscape.motif_for(lake) for lake in soundscape.LAKES)
         for lake in soundscape.LAKES:
             cues.update(soundscape.AMBIENCE[lake])
         cues.update(CHIMES)
@@ -126,6 +132,8 @@ class Captions(unittest.TestCase):
         self.assertTrue(all(soundscape.bus(k) == "music" for k in soundscape.MUSIC_CAPTIONS))
         self.assertTrue(all(soundscape.bus(k) == "ambience" for k in soundscape.AMBIENCE_CAPTIONS))
         self.assertEqual(soundscape.bus("horn"), "sfx")
+        self.assertEqual(soundscape.bus(soundscape.MUSIC_CUE), "music")
+        self.assertEqual(soundscape.caption(soundscape.MUSIC_CUE), "")  # the piece announces itself
 
 
     def test_a_shells_chime_reads_as_its_shell(self):
@@ -143,14 +151,6 @@ class Sounds(unittest.TestCase):
             self.assertLessEqual(len(samples) / soundscape.SR, 13.0, kind)
             self.assertIs(soundscape.tone(kind), samples)
             self.assertFalse(samples.flags.writeable)
-
-    def test_each_lake_has_its_own_motif(self):
-        motifs = [soundscape.tone(soundscape.motif_for(lake)) for lake in soundscape.LAKES]
-        for i in range(len(motifs)):
-            for j in range(i + 1, len(motifs)):
-                n = min(len(motifs[i]), len(motifs[j]))
-                self.assertFalse(np.array_equal(motifs[i][:n], motifs[j][:n]))
-        self.assertEqual(soundscape.motif_for("nowhere"), "motif_briar")
 
 
 class Ambience(unittest.TestCase):
@@ -186,8 +186,9 @@ class Ambience(unittest.TestCase):
 class Mixer(unittest.TestCase):
     def test_m_mutes_everything_and_nothing_waits_to_play(self):
         audio = Audio(open_device=False)
-        for kind in ("bite", "loon", "motif_briar"):
+        for kind in ("bite", "loon"):
             audio.shots.append((soundscape.tone(kind), 0, soundscape.bus(kind)))
+        audio.shots.append((np.zeros((64, 2), np.int16), 0, "music"))  # a piece in progress
         audio._played.append("loon")
         audio.update(0.05, 0.0, 0.0, True)
         self.assertEqual(audio.shots, [])
@@ -209,18 +210,38 @@ class Mixer(unittest.TestCase):
         heard = np.concatenate(audio._sink)
         self.assertGreater(float(np.sqrt(np.mean(heard.astype(np.float64) ** 2))), 2000.0)
 
-    def test_music_plays_on_its_bus_and_one_motif_at_a_time(self):
+    def test_music_cues_start_a_piece_and_queue_no_one_shot(self):
         audio = Audio(open_device=False)
         audio.ok = True
-        audio.blip("motif_briar")
-        audio.blip("motif_cedar")
-        self.assertEqual([bus for _s, _c, bus in audio.shots], ["music"])
-        np.testing.assert_array_equal(audio.shots[0][0], _soundscape_cue("motif_cedar", audio.rate))
-        audio.set_volumes(ambience=0.0, sfx=0.0, music=0.0)
-        audio._water = np.zeros(256, np.float32)
-        self.assertEqual(int(np.max(np.abs(audio._mix(512, 0.0, 0.0)))), 0)
-        audio.set_volumes(music=1.0)
-        self.assertGreater(int(np.max(np.abs(audio._mix(512, 0.0, 0.0)))), 0)
+        audio.blip(soundscape.MUSIC_CUE)
+        self.assertEqual(audio.shots, [])  # the music layer plays pieces; no one-shot is queued
+        audio.blip("bite")
+        self.assertEqual([bus for _s, _c, bus in audio.shots], ["sfx"])
+
+    def test_music_plays_on_its_own_bus_and_follows_its_volume(self):
+        quiet = {"ambience": 0.0, "sfx": 0.0}
+        cue = [(1.0, soundscape.MUSIC_CUE)]  # the opening rest ends once the playlist exists
+        audio = Audio(device=False, tier="low")
+        heard = unit(audio.render_offline(6.0, lake_id="cedar", hour=12.0, volumes=quiet, cues=cue))
+        self.assertGreater(dbfs(heard), -40.0)
+        muted = audio.render_offline(6.0, lake_id="cedar", hour=12.0,
+                                     volumes={**quiet, "music": 0.0}, cues=cue)
+        self.assertEqual(int(np.max(np.abs(muted))), 0)
+
+    def test_a_bite_ducks_the_music_as_it_ducks_the_ambience(self):
+        """#168: a priority cue turns the music down by DUCK_GAIN, as it does the ambience, so
+        the bite stays clear over a piece. The bite is muted here, so only its duck is heard."""
+        quiet = {"ambience": 0.0, "sfx": 0.0}
+        start = [(1.0, soundscape.MUSIC_CUE)]
+        rate = Audio(device=False, tier="low").rate
+        without = Audio(device=False, tier="low").render_offline(
+            8.0, lake_id="cedar", hour=12.0, volumes=quiet, cues=start)
+        biting = Audio(device=False, tier="low").render_offline(
+            8.0, lake_id="cedar", hour=12.0, volumes=quiet, cues=[*start, (3.0, "bite")])
+        window = slice(int(3.25 * rate), int(3.45 * rate))
+        ratio = (np.sqrt(np.mean(biting[window].astype(np.float64) ** 2))
+                 / np.sqrt(np.mean(without[window].astype(np.float64) ** 2)))
+        self.assertAlmostEqual(20.0 * math.log10(ratio), 20.0 * math.log10(DUCK_GAIN), delta=0.5)
 
 
 class Cues(unittest.TestCase):
@@ -245,9 +266,13 @@ class Cues(unittest.TestCase):
         return state
 
     def assert_captioned(self, session, kinds):
-        """Require runtime-dispatched cues to be known, captioned, and assigned a bus."""
+        """Require runtime-dispatched cues to be known, captioned, and assigned a bus. The music
+        trigger has no caption of its own: the piece it starts announces itself (#168)."""
         for kind in kinds:
-            self.assertIn(kind, soundscape.KINDS + CHIMES, kind)
+            if kind == soundscape.MUSIC_CUE:
+                self.assertEqual(soundscape.bus(kind), "music", kind)
+                continue
+            self.assertIn(kind, soundscape.KINDS + CHIMES + tuple(soundscape.MUSIC_CAPTIONS), kind)
             self.assertTrue(soundscape.caption(kind, session.state), kind)
             self.assertIn(soundscape.bus(kind), ("music", "ambience", "sfx"), kind)
 
@@ -260,14 +285,14 @@ class Cues(unittest.TestCase):
             out.extend(seen)
         return out
 
-    def test_the_lakes_motif_plays_at_dawn_and_dusk_once(self):
+    def test_the_lakes_next_piece_is_cued_at_dawn_and_dusk_once(self):
         session = self.session(self.state(1440 - 1))
         self.heard(session)
         session.state.game_minutes = 1440 + 1
-        self.assertEqual(self.heard(session).count("motif_briar"), 1)
-        self.assertNotIn("motif_briar", self.heard(session, 5))
+        self.assertEqual(self.heard(session).count(soundscape.MUSIC_CUE), 1)
+        self.assertNotIn(soundscape.MUSIC_CUE, self.heard(session, 5))
         session.state.game_minutes = 1440 + 13 * 60 + 1
-        self.assertIn("motif_briar", self.heard(session))
+        self.assertIn(soundscape.MUSIC_CUE, self.heard(session))
 
     def test_a_lake_day_rings_its_bell_once(self):
         row = next(day for day in calendar.LAKE_DAYS if day.lake == "briar")
@@ -311,14 +336,28 @@ class Cues(unittest.TestCase):
         self.assertEqual(heard.count("legendary"), 1)
         self.assertLess(heard.index("hum"), heard.index("legendary"))
 
-    def test_a_staged_story_moment_brings_the_motif(self):
+    def test_a_staged_story_moment_cues_the_next_piece(self):
         session = self.session(State.new(self.world, seed=35))
         session.ui.mode, session.ui.new_mode_i = "new_mode", 0
         session.tick(Keys(pressed={"return"}), 0.05)
         finish_creator(session)
         self.assertEqual(session.stage.stage_id, "pro_01")
-        self.assertIn("motif_briar", session.cues)
+        self.assertIn(soundscape.MUSIC_CUE, session.cues)
         self.assert_captioned(session, session.cues)
+
+    def test_a_song_start_captions_and_the_music_cue_never_blanks_a_caption(self):
+        session = self.session(self.state(1440 + 300))
+        song = next(iter(soundscape.MUSIC_CAPTIONS))
+        session.ui.caption, session.ui.caption_timer = soundscape.CAPTIONS["lake_day"], 1.0
+        session.sound = None  # tick() sets it each frame; the caption tick reads it
+        session.cues = [soundscape.MUSIC_CUE]
+        session._tick_caption(0.05)
+        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["lake_day"])
+        session.hear_ambient("loon")  # an ambient call waits for the caption on screen
+        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["lake_day"])
+        session.hear_ambient(song)  # a song start always captions: one caption per start
+        self.assertEqual(session.ui.caption, soundscape.caption(song, session.state))
+        self.assertTrue(session.ui.caption.startswith("Music: "))
 
 
     def test_set_feedback_paths_emit_captioned_error_and_splash(self):
@@ -460,6 +499,7 @@ class AudioChecks(unittest.TestCase):
         """Every lake warms one tier cache; report its resident bytes once, not per lake."""
         class FakeAudio:
             buffer_calls = 0
+            rate = 44100
 
             def __init__(self, *, open_device=True):
                 self.shots = []
@@ -487,7 +527,7 @@ class AudioChecks(unittest.TestCase):
         with patch("fishing.audio.Audio", FakeAudio), patch.object(
                 soundscape, "tone", return_value=samples):
             report = soundscape.coverage_report()
-        expected_bytes = len(soundscape.KINDS + CHIMES) * samples.nbytes + 1024
+        expected_bytes = len(soundscape.KINDS + CHIMES) * samples.nbytes + 1024 + resident_bytes(FakeAudio.rate)
         self.assertTrue(report["complete"])
         self.assertTrue(report["within_budget"])
         self.assertEqual(FakeAudio.buffer_calls, 1)
@@ -497,14 +537,18 @@ class AudioChecks(unittest.TestCase):
         for name, scene in SCENES.items():
             x = self.render(10.0, **scene)
             self.check_clean(name, x)
-            low, high = AMBIENCE_BAND
+            # Rain keeps its authored level; nature beds and calls sit 12 dB lower (#168).
+            low, high = AMBIENCE_BAND if scene.get("rain") else NATURE_BAND
             self.assertTrue(low <= dbfs(x) <= high, f"{name}: {dbfs(x):.1f} dBFS")
 
     def test_propulsion_is_smooth_and_never_dominates(self):
         for name, scene in PROPULSION.items():
             x = self.render(10.0, **scene)
             self.check_clean(name, x)
-            self.assertTrue(-35.0 <= dbfs(x) <= -20.0, f"{name}: {dbfs(x):.1f} dBFS")
+            self.assertTrue(PROPULSION_BAND[0] <= dbfs(x) <= PROPULSION_BAND[1], f"{name}: {dbfs(x):.1f} dBFS")
+            # SFX keep their authored level (#168): the propulsion alone is judged, nature muted.
+            sfx = self.render(10.0, volumes={"ambience": 0.0, "music": 0.0}, **scene)
+            self.assertTrue(-50.0 <= dbfs(sfx) <= -20.0, f"{name} sfx: {dbfs(sfx):.1f} dBFS")
         # Throttle sweeps ramp RPM and level; no zipper means no block-edge steps.
         x = self.render(8.0, lake_id="briar", hour=12.0, motorized=True,
                        script=[(t * 0.5, {"throttle": (t % 4) / 3.0, "speed": t % 3}) for t in range(16)])
@@ -527,7 +571,9 @@ class AudioChecks(unittest.TestCase):
             bus = soundscape.bus(kind)
             volumes = {name: float(name == bus) for name in ("ambience", "music", "sfx")}
             x = self.render(3.0, volumes=volumes, cues=[(0.05, kind)])
-            self.assertTrue(-16.0 <= peak_db(x) <= -6.0, f"{kind}: {peak_db(x):.1f} dBFS")
+            # Ambience calls sit at NATURE_TRIM (-12 dB); the other buses keep their level (#168).
+            trim = TRIM_DB if bus == "ambience" else 0.0
+            self.assertTrue(-16.0 + trim <= peak_db(x) <= -6.0 + trim, f"{kind}: {peak_db(x):.1f} dBFS")
             self.assertLess(float(np.max(np.abs(np.diff(x, axis=0)))), JUMP_LIMIT, kind)
             tone = self.audio._tone(kind)
             tone = tone.astype(np.float64) / (32767.0 if tone.dtype == np.int16 else 1.0)
@@ -538,7 +584,7 @@ class AudioChecks(unittest.TestCase):
             self.assertLess(float(env[:first].max()), 0.25 * settled, kind)
 
     def test_authored_soundscape_cues_keep_their_original_tones(self):
-        """V1-38 motifs and story calls must not degrade to generic synth beeps."""
+        """V1-38 story calls must not degrade to generic synth beeps."""
         for kind in (name for name in soundscape.KINDS if name not in synth.CUE_PEAK_DB):
             with self.subTest(kind=kind):
                 source = soundscape.tone(kind).astype(np.float32) / np.float32(32767.0)
@@ -552,6 +598,24 @@ class AudioChecks(unittest.TestCase):
                 self.assertEqual(actual.shape, (count, 2), kind)
                 np.testing.assert_allclose(actual[:, 0], expected, atol=1e-7)
                 np.testing.assert_array_equal(actual[:, 0], actual[:, 1])
+
+    def test_nature_is_trimmed_to_a_quarter_and_rain_and_sfx_are_not(self):
+        """#168: nature beds and scheduled calls play at NATURE_TRIM of their authored amplitude;
+        rain and SFX keep theirs. The same scene with the trim patched to 1 gives the authored levels."""
+        self.assertAlmostEqual(20.0 * math.log10(NATURE_TRIM), NATURE_TRIM_DB, delta=0.25)
+        audio = Audio(device=False, tier="low")
+        audio._hour, audio._rain = 23.0, 0.6  # night, with both rain layers on
+        trimmed = audio._targets("briar")
+        with patch("fishing.audio.NATURE_TRIM", 1.0):
+            authored = audio._targets("briar")
+        self.assertTrue({"lap", "wind:briar", "rain_light", "rain_heavy", "frogs:briar"} <= set(trimmed))
+        for name, (_key, _offset, amp, bus) in trimmed.items():
+            base = authored[name][2]
+            if name.startswith("rain") or bus != "ambience":
+                self.assertEqual(amp, base, name)
+            elif base > 0.0:
+                self.assertAlmostEqual(20.0 * math.log10(amp / base), NATURE_TRIM_DB,
+                                       delta=0.25, msg=name)
 
     def test_bite_rises_above_a_frog_chorus(self):
         scene = dict(lake_id="briar", hour=23.0)
@@ -655,7 +719,8 @@ class AudioChecks(unittest.TestCase):
         x = unit(audio.render_offline(6.0, lake_id="briar", hour=23.0, cues=[(1.0, "bite")]))
         self.assertEqual(len(x), 6 * 22050)
         self.check_clean("low", x, rate=22050)
-        self.assertTrue(AMBIENCE_BAND[0] - 2 <= dbfs(x) <= AMBIENCE_BAND[1])
+        quiet = unit(audio.render_offline(6.0, lake_id="briar", hour=23.0, volumes={"sfx": 0.0}))
+        self.assertTrue(NATURE_BAND[0] - 2 <= dbfs(quiet) <= NATURE_BAND[1])
 
     def test_renders_are_deterministic_and_memory_is_bounded(self):
         a = self.audio.render_offline(4.0, lake_id="cedar", hour=6.3, rain=0.5, cues=[(1.0, "sell")])
@@ -664,7 +729,8 @@ class AudioChecks(unittest.TestCase):
         ultra = _store_for(detail.TIERS["ultra"])
         # Shared: lap, wash, both rains (noise length) and insects (event length);
         # per lake, for two lakes: wind (noise), birds and frogs (event).
-        worst = (6 * ultra.noise_frames + 5 * ultra.event_frames) * 2 * 2
+        # Music: the layer's resident pieces, sized at this tier's rate (music.resident_bytes).
+        worst = (6 * ultra.noise_frames + 5 * ultra.event_frames) * 2 * 2 + resident_bytes(ultra.rate)
         # Cues are the same size on every 44.1 kHz tier: measure the finished bank.
         store = self.audio._store
         store.prefetch_cues()

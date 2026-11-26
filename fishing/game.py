@@ -371,8 +371,8 @@ class Session:
             self.stage = None
         elif self.stage is None or self.stage.stage_id != stage_id:
             self.stage = staging.Clock(stage_id, repeat=scene in self._replays)
-            # A staged story moment brings the lake's motif; the Star-Whale, its song (V1-38).
-            self.cue("whale_song" if stage_id == "story_c5_whale" else soundscape.motif_for(self.state.lake_id))
+            # A staged story moment starts the lake's next piece; the Star-Whale brings its song.
+            self.cue("whale_song" if stage_id == "story_c5_whale" else soundscape.MUSIC_CUE)
         elif self.focused:
             self.stage.t += dt
         reduced = bool(self.state.v2.get("settings", {}).get("reduced_motion", False))
@@ -387,7 +387,7 @@ class Session:
         self.state.encounter_still = encounter.water_still(self.ui, reduced=reduced)
 
     def _tick_soundscape(self) -> None:
-        """The lake's music and calendar cues (V1-38): its motif at dawn and dusk, a Lake Day's
+        """The lake's music and calendar cues (V1-38): its next piece at dawn and dusk, a Lake Day's
         bell and the cookout's triangle, each once a day."""
         state = self.state
         hour = hour_of_day(state.game_minutes)
@@ -396,7 +396,7 @@ class Session:
             return
         for mark in (6.0, 19.0):  # dawn, dusk
             if previous < mark <= hour or (previous > hour and (mark > previous or mark <= hour)):
-                self.cue(soundscape.motif_for(state.lake_id))
+                self.cue(soundscape.MUSIC_CUE)
         day = calendar.day_number(state.game_minutes)
         if calendar.lake_day(state.lake_id, state.game_minutes) is not None and self._heard_days.get("lake_day") != (state.lake_id, day):
             self._heard_days["lake_day"] = (state.lake_id, day)
@@ -406,9 +406,12 @@ class Session:
             self.cue("cookout")
 
     def hear_ambient(self, kind: str) -> None:
-        """An ambient call the mixer played: captioned when nothing else is (V1-38)."""
+        """An ambient call or a song start the mixer played, captioned when nothing else is
+        (V1-38). A song's caption always takes over: it marks the music that has just begun (#168)."""
         settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
-        if settings.get("captions", True) and self.ui.caption_timer <= 0:
+        if not settings.get("captions", True):
+            return
+        if soundscape.bus(kind) == "music" or self.ui.caption_timer <= 0:
             self.ui.caption = soundscape.caption(kind, self.state)
             self.ui.caption_timer = reading_seconds(self.ui.caption, CAPTION_SECONDS)
 
@@ -596,7 +599,9 @@ class Session:
             self.ui.caption = ""
             self.ui.caption_timer = 0.0
             return
-        heard = [kind for kind in (self.sound, *getattr(self, "cues", ())) if kind]
+        # The music trigger has no caption; the piece it starts announces itself.
+        heard = [kind for kind in (self.sound, *getattr(self, "cues", ()))
+                 if kind and kind != soundscape.MUSIC_CUE]
         if heard:
             # The SFX sound wins a shared tick; a cue's caption otherwise (V1-38).
             self.ui.caption = soundscape.caption(heard[0], self.state)
