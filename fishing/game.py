@@ -2819,6 +2819,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                         None if gpu_bytes is None else gpu_bytes / 1024**2,
                     )
                     perf_sample_at = time.perf_counter()
+                    # Once a second is prompt enough to follow a keyboard-layout switch.
+                    session.dev_mode.refresh_key_label(platform)
                 session.dev_mode.draw(big, ui)
             platform.present(big)
             motion_reduced = bool(session.state.v2.get("settings", {}).get("reduced_motion", False))

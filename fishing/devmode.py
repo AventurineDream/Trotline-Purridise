@@ -3,6 +3,7 @@
 The game loop routes physical grave-key input here before gameplay and draws this
 panel after the normal UI. Cheats use simulation mutators where possible; the
 legendary fixture builds valid authored conditions and invokes the real hook API.
+The DEV badge names the toggle key by the character the player's layout types on it.
 """
 
 from __future__ import annotations
@@ -19,6 +20,24 @@ COMMANDS = (
     "Catch standard fish", "Fill first line", "Change lake",
     "Set up Old Lantern encounter", "Reset in-memory session",
 )
+
+# The key's layout-independent name (as the controls list spells it), shown when the
+# layout types no character there, such as German's dead "^".
+DEFAULT_KEY_LABEL = "Grave"
+
+
+def hotkey_label(layout_name: str) -> str:
+    """Return the badge's name for the Devmode toggle key.
+
+    Args:
+        layout_name: The layout's character for the physical grave key, as from
+            ``Platform.key_label("grave")``; may be "" or padded.
+    Returns:
+        That name in brackets, such as "[`]", so a one-glyph key still reads as a key;
+        "[Grave]" when the layout types no character there.
+    """
+    name = layout_name.strip() or DEFAULT_KEY_LABEL
+    return f"[{name}]"
 
 
 class DevMode:
@@ -47,6 +66,18 @@ class DevMode:
         self.reset_choice = 1  # Cancel is the safe default.
         self.message = ""
         self.perf = (0.0, 0.0, 0.0, None)
+        # The layout's character for the toggle key; refresh_key_label keeps it current.
+        self.key_label = DEFAULT_KEY_LABEL
+
+    def refresh_key_label(self, platform) -> None:
+        """Read the toggle key's current character from the window's keyboard layout.
+
+        Args:
+            platform: The live `Platform`; its `key_label("grave")` asks SDL's keymap.
+        Side effects:
+            Sets `key_label`, so a layout switched mid-session shows on the next draw.
+        """
+        self.key_label = platform.key_label("grave")
 
     def handle(self, physical_pressed, action_pressed) -> bool:
         """Route grave and panel actions; return whether this frame's game input is consumed.
@@ -410,8 +441,14 @@ class DevMode:
         small = ui._size(frame, "small")
         fps, frame_ms, rss_mb, gpu_mb = self.perf
         gpu = "?" if gpu_mb is None else f"{gpu_mb:.0f}"
-        marker = f"DEV  {fps:.0f} fps  {frame_ms:.1f} ms  {rss_mb:.0f}+{gpu} MB"
-        badge_w = min(w - 16, max(250, small * 20))
+        key = hotkey_label(self.key_label)
+        perf = f"{fps:.0f} fps  {frame_ms:.1f} ms  {rss_mb:.0f}+{gpu} MB"
+        # The toggle key outranks the readout: narrower windows shed the readout, then the
+        # word, then the key. Only a window too narrow for a bare "DEV" clips the badge.
+        for marker in (f"DEV  {key} tools  {perf}", f"DEV  {key} tools", f"DEV {key}", "DEV"):
+            if ui._measure(marker, small, "mono") <= w - 32:
+                break
+        badge_w = min(w - 16, max(250, ui._measure(marker, small, "mono") + 16))
         badge_h = max(28, small + 12)
         panel_w = min(w - 32, 520)
         panel_h = min(h - 32, 390)
@@ -429,7 +466,7 @@ class DevMode:
         title_size = max(small + 2, min(ui._size(frame, "title"), 22 if compact else 32))
         header_h = 34 if compact else title_size + 24
         footer_size = small if compact else max(10, small - 4)
-        footer_lines = ("Up/Down choose · Left/Right option", "Enter run · Esc/grave close")
+        footer_lines = ("Up/Down choose · Left/Right option", f"Enter run · Esc/{key} close")
         footer_line_h = ui.cell(footer_size)[1] + 2
         footer_h = footer_line_h * len(footer_lines) + 4
         message_h = small + 6 if self.message else 0

@@ -178,8 +178,10 @@ and Mesa software OpenGL. `TROTLINE_DETAIL=<tier>` can pin a tier for a
 repeatable capture or benchmark.
 
 For an opt-in playtest overlay, launch interactive play with `./play.sh --dev`.
-It adds a persistent **DEV** marker; press **grave** from any screen to open or
-close the panel. **Up/Down** (or W/S) selects a command, **Left/Right** (or A/D)
+It adds a persistent **DEV** marker naming its key by the character your keyboard layout
+types there (``[`] tools`` on a US layout; ``[Grave] tools`` where that key is a dead key,
+as on German); press that key (**grave**, left of 1) from any screen to
+open or close the panel. **Up/Down** (or W/S) selects a command, **Left/Right** (or A/D)
 chooses a fish or any authored lake, **Enter/Space** runs it, and **Esc/grave**
 closes it. While open, panel input is intercepted instead of reaching game
 screens or controls. A `--dev` run never writes the loaded save; cheats and

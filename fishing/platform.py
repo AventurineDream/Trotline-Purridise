@@ -59,6 +59,8 @@ SCAN = {
     "shift": 225, "rshift": 229,
 }
 _SCAN_NAMES = {code: name for name, code in SCAN.items()}
+# SDL keycodes with this bit are a bare scancode: the layout gave the key no character.
+SDLK_SCANCODE_MASK = 1 << 30
 
 # Monospace faces first: the HUD and help pages are measured and laid out for a
 # monospace "mono" family. The proportional DejaVuSans entries come last, as a
@@ -488,6 +490,10 @@ class Platform:
         s.SDL_GetKeyboardState.argtypes = [ctypes.POINTER(c_int)]
         s.SDL_GetKeyboardState.restype = ctypes.POINTER(c_uint8)
         s.SDL_GetTicks64.restype = ctypes.c_uint64
+        s.SDL_GetKeyFromScancode.argtypes = [c_int]
+        s.SDL_GetKeyFromScancode.restype = ctypes.c_int32
+        s.SDL_GetKeyName.argtypes = [ctypes.c_int32]
+        s.SDL_GetKeyName.restype = c_char_p
         s.SDL_Delay.argtypes = [c_uint32]
         s.SDL_GetCurrentDisplayMode.argtypes = [c_int, ctypes.POINTER(SDL_DisplayMode)]
         s.SDL_GetCurrentDisplayMode.restype = c_int
@@ -719,6 +725,28 @@ class Platform:
         steps = math.trunc(self._input.mouse_wheel_remainder)
         self._input.mouse_wheel_remainder -= steps
         return steps
+
+    def key_label(self, name: str) -> str:
+        """Return the character the active keyboard layout types on a physical key.
+
+        Args:
+            name: Physical key name from ``SCAN`` (scancode, so layout-independent).
+        Returns:
+            SDL's name for the printable character the layout maps there, such as "`" on
+            US; "" when the key types no character (a dead key, as on German's "^") or
+            the name is unknown, so the caller can show a layout-independent name.
+            Asked fresh on each call, so a layout switch mid-session shows at once.
+        """
+        code = SCAN.get(name)
+        if code is None:
+            return ""
+        keycode = self.sdl.SDL_GetKeyFromScancode(code)
+        # A key with no character comes back as its scancode with SDLK_SCANCODE_MASK set,
+        # and SDL would name it by the US keycap, which is the wrong glyph on that layout.
+        if not keycode or keycode & SDLK_SCANCODE_MASK:
+            return ""
+        raw = self.sdl.SDL_GetKeyName(keycode)
+        return raw.decode("utf-8", "replace") if raw else ""
 
     def _wheel_delta(self, event: SDL_MouseWheelEvent) -> float:
         """Use preciseY only when the linked SDL version guarantees that field."""
