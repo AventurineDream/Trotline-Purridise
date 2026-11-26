@@ -75,6 +75,10 @@ class Detail:
     render_scale: float = 1.0
 
 
+# Foliage atlas per tier: scale (texels per base texel) and tree variants. Painted MiB on the
+# largest lake, Briar, measured from the GL textures: low 19.17, standard 83.33, high 217.50,
+# ultra 247.50. High and ultra share scale 3, so ultra's extra variety costs no resolution;
+# scale 4 with 8 variants would be 66 layers at 6.67 MiB, about 440 MiB, over the budget.
 TIERS: dict[str, Detail] = {
     tier.name: tier for tier in (
         Detail("low", 600 * MIB, False, 1, 3, 1024, 128, 16, 1024, 512, 64,
@@ -83,7 +87,7 @@ TIERS: dict[str, Detail] = {
                44100, 30, 96 * MIB, 16 * MIB, render_scale=0.60),
         Detail("high", 1900 * MIB, True, 3, 6, 4096, 384, 48, 4096, 2048, 512,
                44100, 60, 192 * MIB, 32 * MIB, render_scale=0.90),
-        Detail("ultra", 2600 * MIB, True, 4, 8, 8192, 512, 64, 8192, 4096, 768,
+        Detail("ultra", 2600 * MIB, True, 3, 8, 8192, 512, 64, 8192, 4096, 768,
                44100, 80, 256 * MIB, 64 * MIB, render_scale=1.0),
     )
 }
