@@ -223,7 +223,9 @@ class DeferredTravel(unittest.TestCase):
         self.session.arrive(World("crater"))
         self.assertTrue(game._lake_swap_due(self.renderer, self.session))  # the renderer lags
 
-    def test_every_run_loop_renderer_build_pumps_window_events(self):
+    def test_renderer_builds_pump_window_events_through_the_helper(self):
+        # run() builds at startup and on resize only through _build_renderer; this drives
+        # that helper directly and _enter_lake through a queued trip.
         platform = FakePlatform(self.session)
         pumped = []
 

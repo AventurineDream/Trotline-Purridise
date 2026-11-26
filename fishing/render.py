@@ -20,8 +20,8 @@ class Renderer:
         output_size: Optional final frame size in pixels; GPU rendering upscales
             on-GPU, while software backends retain their existing cap.
         progress: Optional callable run between OpenGL build stages (see
-            `LakeRenderer`). The CPU renderer never calls it: its whole build took about
-            0.07-0.12 s per lake at 1440x810 when measured, too short to need a pump.
+            `LakeRenderer`). The CPU renderer never calls it: its build is capped at 480x270
+            (below), and even uncapped at 1440x810 it built every lake in under 0.13 s.
     Returns:
         A renderer-compatible backend with `render` and `close`.
     Side effects:
