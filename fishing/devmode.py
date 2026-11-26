@@ -248,7 +248,14 @@ class DevMode:
         if route not in unlocks:
             unlocks.append(route)
         error = self.session.change_lake(lake_id)
-        self.message = error or f"Travelled to {LAKES[lake_id]['name']}."
+        name = LAKES[lake_id]["name"]
+        if error:
+            self.message = error
+        elif self.session.pending_lake == lake_id:
+            # Windowed trips only queue here; the run loop builds and commits the lake.
+            self.message = f"Towing to {name}..."
+        else:
+            self.message = f"Travelled to {name}."
 
     def _setup_legendary(self):
         """Prepare Old Lantern at its authored site and use the real legendary hook evaluator."""
@@ -372,6 +379,7 @@ class DevMode:
         from .world import World
         settings = deepcopy(session.state.v2.get("settings", {}))
         session.world = World("briar")
+        session.pending_lake = None  # a queued trip belongs to the session being reset
         session.state = State.new(session.world, seed=1)
         session.state.v2["settings"] = settings
         begin_prologue(session.state)
