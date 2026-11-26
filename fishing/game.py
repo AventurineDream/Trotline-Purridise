@@ -2659,10 +2659,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
     _loading_quip(ui, loading, quips.pick(world.id), int(height*0.58))
     platform.present(loading)
     audio = Audio(tier=detail_tiers.current().name)
-    render_width, render_height = detail_tiers.render_dimensions(
-        width, height, software=software_tier)
-    renderer = Renderer(world,render_width,render_height,software=software_backend,
-                        context=platform.context, output_size=(width, height))
+    renderer = _build_renderer(platform, session, world, (width, height),
+                               software_backend, software_tier)
     ui.fish_card_renderer = getattr(renderer, "fish_card", None)
     last = platform.ticks()
     save_acc = 0.0
@@ -2703,12 +2701,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                 platform.make_current()
                 render_world = renderer.world
                 renderer.close()
-                render_width, render_height = detail_tiers.render_dimensions(
-                    width, height, software=software_tier)
-                renderer = Renderer(render_world, render_width, render_height,
-                                    software=software_backend, context=platform.context,
-                                    output_size=viewport,
-                                    progress=lambda: _pump_events(platform, session))
+                renderer = _build_renderer(platform, session, render_world, viewport,
+                                           software_backend, software_tier)
                 ui.fish_card_renderer = getattr(renderer, "fish_card", None)
                 loading = np.empty((height, width, 3), np.uint8)
                 low = None
@@ -2794,6 +2788,20 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
         renderer.close()
         text.close()
         platform.close()
+
+
+def _build_renderer(platform, session, world, size, software_backend, software_tier):
+    """Build `world`'s renderer for a `size` (width, height) pixel window, pumping events.
+
+    Every renderer build in the run loop goes through here, so none is silent: the GL
+    build calls `_pump_events` between its stages. `software_backend` and `software_tier`
+    select the backend and detail tier as in `run`.
+    """
+    render_width, render_height = detail_tiers.render_dimensions(
+        size[0], size[1], software=software_tier)
+    return Renderer(world, render_width, render_height,
+                    software=software_backend, context=platform.context,
+                    output_size=size, progress=lambda: _pump_events(platform, session))
 
 
 def _lake_swap_due(renderer, session) -> bool:
@@ -2923,12 +2931,8 @@ def _enter_lake(platform, session, renderer, ui, text, loading, software_backend
     renderer.close()
     ui = UI(text,session.world)
     ui._text_scale, ui._dyslexia_font = text_style
-    render_width, render_height = detail_tiers.render_dimensions(
-        width, height, software=software_tier)
-    renderer = Renderer(session.world,render_width,render_height,
-                        software=software_backend, context=platform.context,
-                        output_size=(width, height),
-                        progress=lambda: _pump_events(platform, session))
+    renderer = _build_renderer(platform, session, session.world, (width, height),
+                               software_backend, software_tier)
     ui.fish_card_renderer = getattr(renderer, "fish_card", None)
     if starlit and not session.quit:
         platform.make_current()

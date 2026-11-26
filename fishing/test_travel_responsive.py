@@ -223,6 +223,32 @@ class DeferredTravel(unittest.TestCase):
         self.session.arrive(World("crater"))
         self.assertTrue(game._lake_swap_due(self.renderer, self.session))  # the renderer lags
 
+    def test_every_run_loop_renderer_build_pumps_window_events(self):
+        platform = FakePlatform(self.session)
+        pumped = []
+
+        class SpyRenderer:
+            """Stands in for a GL build: runs the progress hook it was given, once."""
+
+            def __init__(self, world, *_size, progress=None, **_options):
+                self.world = world
+                before = platform.polls
+                progress()
+                pumped.append(platform.polls - before)
+
+            def close(self):
+                pass
+
+        with patch("fishing.game.Renderer", SpyRenderer):
+            # The resize and startup path.
+            game._build_renderer(platform, self.session, self.session.world, (160, 90), False, False)
+            # The lake-entry path, after a queued trip has built.
+            self.session.change_lake("crater")
+            _renderer, ui = self.enter(platform)
+        self.addCleanup(ui.close)
+        self.assertEqual(pumped, [1, 1])
+        self.assertEqual(self.session.world.id, "crater")
+
 
 class WorkerWorld(unittest.TestCase):
     def test_a_lake_built_on_the_worker_matches_a_synchronous_build(self):
