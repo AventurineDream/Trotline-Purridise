@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 import numpy as np
 
-# Above the densest bank's count (Flathead, about 500 details), so the cap never trims a lake.
+# Above the densest bank's count (Crater, about 516 details), so the cap never trims a lake.
 # Each detail is one prop row and one instanced quad, so the cap still bounds draw calls and memory.
 MAX_SHORE_DETAILS = 560
 
@@ -56,7 +56,7 @@ SHORE_CYCLES = {
     "flathead": (
         (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),),
         (("grass", (-1.7, 1.6, 2.4), (1.0, 3.0), (0.6, 1.0)),),
-        (("flowers", (-1.2, 1.3), (2.0, 5.0), (0.7, 1.1)),),
+        (("flowers", (-1.2, 1.3, 2.0), (2.0, 5.0), (0.7, 1.1)),),
         (("cattail", (-1.5, 0.9, 2.6), (-1.8, -0.4), (1.5, 2.4)),),
         (("shore_stone", (-1.1,), (0.3, 1.4), (0.4, 0.7)),
          ("grass", (1.5,), (2.0, 4.0), (0.7, 1.05))),
@@ -67,15 +67,18 @@ SHORE_CYCLES = {
         (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),
          ("cattail", (2.6,), (-1.8, -0.4), (1.5, 2.4))),
     ),
-    # Pumice shelf by the warm springs: stones and drift logs, sparse grass and spring flowers.
+    # Pumice shelf by the warm springs: stones and drift logs, grass and spring flowers, and
+    # hardy shrubs set back on the dry benches. No cattail: the shelf has no standing reed beds.
     "crater": (
         (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),),
-        (("grass", (-1.7, 1.6), (1.0, 3.0), (0.6, 1.0)),),
-        (("flowers", (-1.2, 1.3), (2.0, 5.0), (0.7, 1.1)),),
+        (("grass", (-1.7, 1.6), (1.0, 3.0), (0.6, 1.0)),
+         ("shrub", (0.0, 1.8), (4.0, 8.0), (1.5, 2.5))),
+        (("flowers", (-1.2, 1.3, 2.0), (2.0, 5.0), (0.7, 1.1)),),
         (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),
          ("grass", (0.0,), (2.0, 4.0), (0.7, 1.0))),
         (("driftwood", (0.0,), (0.8, 2.2), (0.55, 0.85)),),
-        (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),),
+        (("shrub", (-1.5, 1.8), (4.0, 8.0), (1.5, 2.5)),
+         ("flowers", (0.0,), (2.0, 5.0), (0.65, 1.0))),
         (("grass", (-1.7, 1.6), (1.0, 3.0), (0.6, 1.0)),
          ("flowers", (0.0,), (2.0, 5.0), (0.65, 1.0))),
         (("shore_stone", (-1.1,), (0.3, 1.4), (0.4, 0.7)),
