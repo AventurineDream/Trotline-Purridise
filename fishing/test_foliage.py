@@ -5,8 +5,8 @@ Per lake, on the built world, these tests check that:
 - the weights in `forest.pick_tree` and the low-discrepancy `index_draw` hold their shares;
 - placement is deterministic per lake, and the collision set matches the pre-change build;
 - tree, plant and nebula counts sit in an authored band (1.2x to 1.4x the pre-change counts);
-- no tree or nebula spire sits in its landing envelope, and no shore plant sits on a route,
-  in a marina clearing or in the Cedar cove;
+- no prop sits in a tree lake's landing envelope, no nebula spire does, and no shore plant sits
+  on a route, in a marina clearing or in the Cedar cove;
 - the leafy palette follows `sprites.LAKE_TINT` on the GL atlas and on the CPU canopies and
   shore plants, while wood, bark and stone stay untinted, and HD sprites and tree silhouettes
   differ per lake;
@@ -43,7 +43,7 @@ from .particlefx import LEAF_KINDS
 from .shoreline import _clear_route
 from .sprites import LAKE_TINT, Painter, bake, sprite_hd
 from .verify import foliage_bytes
-from .world import Prop, World
+from .world import LANDING_ENVELOPE, Prop, World
 
 TREE_LAKES = ("briar", "cedar", "flathead", "crater")
 ALL_LAKES = (*TREE_LAKES, "nebula")
@@ -70,15 +70,6 @@ BASE_NEBULA = {"spire": 110, "lightreed": 70, "starlily": 29}
 SOLIDS_FIXTURE = Path(__file__).with_name("fixtures") / "foliage_solids.json"
 SOLID_POSITION_TOLERANCE_M = 1e-3
 SOLID_RADIUS_TOLERANCE_M = 1e-9
-
-# Slip-local (a, s) in metres: trees and spires are kept out of lo < a < hi with |s| < half.
-LANDING_ENVELOPE = {
-    "briar": (-4.0, 30.0, 20.0),
-    "cedar": (-8.0, 35.0, 22.0),
-    "flathead": (-60.0, 75.0, 85.0),
-    "crater": (-65.0, 80.0, 85.0),
-    "nebula": (-60.0, 75.0, 85.0),
-}
 
 
 @lru_cache(maxsize=None)
@@ -220,14 +211,15 @@ class DensityTests(unittest.TestCase):
 class ClearanceTests(unittest.TestCase):
     """Landings, routes, the marina and the Cedar cove stay open."""
 
-    def test_trees_and_spires_stay_out_of_landing_envelopes(self):
+    def test_landing_envelopes_stay_clear(self):
+        """Tree lakes keep every prop out of the envelope; the nebula keeps its spires out."""
         for lake, (lo, hi, half) in LANDING_ENVELOPE.items():
             with self.subTest(lake=lake):
                 world = _world(lake)
-                kinds = NEBULA_SCENERY[:1] if lake == "nebula" else TREE_KINDS
+                kinds = NEBULA_SCENERY[:1] if lake == "nebula" else None
                 inside = []
                 for p in world.props:
-                    if p.kind not in kinds:
+                    if kinds is not None and p.kind not in kinds:
                         continue
                     a, s = (float(v) for v in world.slip.local(p.x, p.z))
                     if lo < a < hi and abs(s) < half:

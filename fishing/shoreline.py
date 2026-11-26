@@ -1,4 +1,4 @@
-"""Small deterministic shore details; decorative and outside the boating routes.
+"""Small deterministic shore details; decorative, clear of boating routes and landing envelopes.
 
 Each lake keeps its own arrangement: a seed, a cycle of plant clusters that sets which
 kinds stand where along its bank, and its own waders. The details share the existing
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import numpy as np
+from .world import LANDING_ENVELOPE
 
 # Above the densest bank's count (Crater, about 516 details), so the cap never trims a lake.
 # Each detail is one prop row and one instanced quad, so the cap still bounds draw calls and memory.
@@ -136,6 +137,22 @@ def _clear_route(world, x, z):
     return not bool(world.slip.contains(x,z))
 
 
+def _in_landing_envelope(world, x, z):
+    """Whether a shore detail at (x, z) lies in the lake's landing envelope.
+
+    Args:
+        world: The lake's `World`; its id selects the box in `LANDING_ENVELOPE`.
+        x: World x of the candidate detail, in metres.
+        z: World z of the candidate detail, in metres.
+
+    Returns:
+        True when lo < a < hi and |s| < half in the landing's slip-local axes, in metres.
+    """
+    lo, hi, half = LANDING_ENVELOPE[world.id]
+    a, s = world.slip.local(x, z)
+    return lo < float(a) < hi and abs(float(s)) < half
+
+
 def shoreline_props(world, prop_type):
     """Return a bounded list of non-colliding Prop records for this lake.
 
@@ -144,8 +161,9 @@ def shoreline_props(world, prop_type):
         prop_type: The `Prop` record class to build the details with.
 
     Returns:
-        At most MAX_SHORE_DETAILS `prop_type` records, each clear of the boating routes
-        and landings and placed on the shallow margin (waders) or the dry shore (plants).
+        At most MAX_SHORE_DETAILS `prop_type` records, each clear of the boating routes, the
+        landings and their envelopes, and placed on the shallow margin (waders) or the dry
+        shore (plants).
     """
     rng = np.random.default_rng(SHORE_SEED[world.id])
     cycle = SHORE_CYCLES[world.id]
@@ -171,7 +189,12 @@ def shoreline_props(world, prop_type):
         if key in positions:
             return
         positions.add(key)
-        result.append(prop_type(kind,x,z,float(height),float(rng.uniform(0.88,1.06))))
+        size = float(rng.uniform(0.88,1.06))
+        # A dropped detail still draws its size and holds its cell, so every other detail
+        # keeps the place and size it had.
+        if _in_landing_envelope(world, x, z):
+            return
+        result.append(prop_type(kind,x,z,float(height),size))
 
     for i,(x,z,nx,nz) in enumerate(samples):
         jitter = float(rng.uniform(-2.0,2.0))

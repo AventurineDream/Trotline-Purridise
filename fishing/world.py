@@ -152,6 +152,19 @@ def make_slip() -> Slip:
     return Slip(x, z, inland, side, half_w=3.5, land_ext=12.0, water_ext=18.0)
 
 
+# Slip-local (a, s) rectangle per lake, in metres: props keep out of lo < a < hi with |s| < half,
+# so each landing and its approach stay open. The placement rules in caldera.py, lakegen.py,
+# nebula.py and world.py repeat these numbers inline. test_foliage checks the placed props
+# against this table, so a rule narrower than it fails there.
+LANDING_ENVELOPE = {
+    "briar": (-4.0, 30.0, 20.0),
+    "cedar": (-8.0, 35.0, 22.0),
+    "flathead": (-60.0, 75.0, 85.0),
+    "crater": (-65.0, 80.0, 85.0),
+    "nebula": (-60.0, 75.0, 85.0),
+}
+
+
 @dataclass
 class Prop:
     kind: str
