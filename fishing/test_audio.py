@@ -529,10 +529,13 @@ class PieceLane(unittest.TestCase):
             self.store.get(key, wait=True)
 
 
-class AbandonedRender(unittest.TestCase):
-    """A piece the bed store abandons mid-render stops before its next block, and its lane slot
-    stays taken until it ends, so the next piece never overlaps it (#168). The render is the real
-    `songs.render` of a short piece; the `time.sleep(0)` after each block holds it mid-way."""
+class HeldRender(unittest.TestCase):
+    """Piece renders held mid-way, so a test can act on one still in progress (#168).
+
+    Every piece is shortened to form A (12 bars). The first render stops at its fifth block until
+    `self.release` is set. Subclasses register `release.set` after their store's shutdown, so
+    cleanup sets it first and a held render can finish.
+    """
 
     def setUp(self):
         def short(song_id):
@@ -552,6 +555,15 @@ class AbandonedRender(unittest.TestCase):
                         patch.object(songs, "time", SimpleNamespace(sleep=block_done))):
             patcher.start()
             self.addCleanup(patcher.stop)
+
+
+class AbandonedRender(HeldRender):
+    """A piece the bed store abandons mid-render stops before its next block, and its lane slot
+    stays taken until it ends, so the next piece never overlaps it (#168). The render is the real
+    `songs.render` of a short piece; the `time.sleep(0)` after each block holds it mid-way."""
+
+    def setUp(self):
+        super().setUp()
         self.store = _BedStore(11025, 2048, 2048)
         self.store._spawn_ok = False  # renders run on threads in this process
         self.addCleanup(self.store.shutdown)
@@ -569,6 +581,7 @@ class AbandonedRender(unittest.TestCase):
         self.assertFalse(running.done())
         self.release.set()
         wait_futures([running], timeout=10)
+        self.assertTrue(running.done(), "the abandoned render ignored its stop flag")
         self.assertIsInstance(running.exception(), songs.RenderCancelled)
         self.assertLessEqual(self.blocks - blocks_at_abandon, 1)  # it stopped within one block
         self.store.poll()
@@ -576,6 +589,52 @@ class AbandonedRender(unittest.TestCase):
         later, _stop = self.store._threads[second]
         self.store._forget(second)  # the test leaves no render running
         wait_futures([later], timeout=10)
+
+
+class QuitMidRender(HeldRender):
+    """The quit path, `Audio.close` (called by `game.run` in its `finally`), ends a piece render
+    before the interpreter joins its thread (#168)."""
+
+    def setUp(self):
+        super().setUp()
+        registry = patch("fishing.audio._STORES", {})  # this test's own store, not the shared one
+        registry.start()
+        self.addCleanup(registry.stop)
+        threads = patch.object(_BedStore, "_spawn", return_value=None)  # every build on a thread
+        threads.start()
+        self.addCleanup(threads.stop)
+        self.audio = Audio(device=False, tier="low")
+        self.store = self.audio._store
+        self.addCleanup(self.store.shutdown)
+        self.addCleanup(self.release.set)  # runs before shutdown, so a held render can finish
+
+    def test_quitting_mid_piece_ends_the_render_at_its_next_block(self):
+        self.store.request("song:briar-1")
+        self.assertTrue(self.entered.wait(10))  # the render is held mid-way
+        future, _stop = self.store._threads["song:briar-1"]
+        self.audio.close()  # the quit path
+        self.release.set()  # the held render reaches its next block boundary
+        wait_futures([future], timeout=5)
+        self.assertTrue(future.done(), "the render ran on past quit")
+        self.assertIsInstance(future.exception(), songs.RenderCancelled)
+        self.assertTrue(self.store._cue_stop.is_set())  # the same call stops the cue build
+
+
+class CueBuildStop(unittest.TestCase):
+    def test_a_cue_build_ends_at_its_next_cue_once_stopped(self):
+        store = _BedStore(11025, 2048, 2048)  # no prefetch, so only this build runs
+        self.addCleanup(store.shutdown)
+        stop = threading.Event()
+        built = []
+
+        def build_cue(kind, rate, variant):
+            built.append(kind)
+            stop.set()  # quit arrives while the first cue is built
+            return np.zeros((2, 4), np.float32)
+
+        with patch.object(synth, "build_cue", side_effect=build_cue):
+            store._cues_here(stop)
+        self.assertEqual(len(built), 1)
 
 
 class AudioChecks(unittest.TestCase):
@@ -628,9 +687,6 @@ class AudioChecks(unittest.TestCase):
         self.assertTrue(report["complete"])
         self.assertTrue(report["within_budget"])
         self.assertEqual(FakeAudio.buffer_calls, 1)
-        # The music layer's resident pieces at 44.1 kHz (`music.resident_bytes`, 48.6 MiB) and
-        # one render's 34 MiB working set; the fake's sounds and bank add about 1 KiB (#168).
-        self.assertEqual(round(report["bytes"] / 2 ** 20, 1), 82.6)
 
     def test_every_lake_hour_and_weather_is_calm_and_clean(self):
         for name, scene in SCENES.items():

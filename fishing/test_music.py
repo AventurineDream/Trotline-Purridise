@@ -313,6 +313,12 @@ class Clicks(unittest.TestCase):
         self.assertTrue(music.MUSIC_DB - 4.0 <= level <= music.MUSIC_DB + 4.0, f"{level:.1f} dBFS")
 
 
+class ResidentMusic(unittest.TestCase):
+    def test_resident_music_at_44100_hz_is_pinned(self):
+        # RESIDENT_PIECES (2) x the longest piece (nebula-1, 6,366,048 frames) x 4 bytes a frame.
+        self.assertEqual(music.resident_bytes(44100), 50_928_384)
+
+
 class StreamedRender(unittest.TestCase):
     """`songs.render` streams two passes; its int16 must agree with one float pass to within one
     LSB (#168), so a drift in the streaming code fails here and not only in the spectra."""

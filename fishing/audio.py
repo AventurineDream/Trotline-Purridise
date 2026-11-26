@@ -165,13 +165,14 @@ class _BedStore:
         self._beds: dict[str, synth.Bed] = {}
         self._running: dict[str, tuple[subprocess.Popen, str]] = {}
         self._threads: dict[str, tuple[Future, threading.Event]] = {}  # build and its stop flag
-        self._abandoned: list[tuple[str, Future]] = []  # forgotten builds still running (#168)
+        self._abandoned: list[tuple[str, Future]] = []  # forgotten builds, until poll drops them once they finish
         self._waiting: list[str] = []
         self._song_waiting: list[str] = []  # pieces queued for their own lane (#168)
         self._lakes: list[str] = []
         self._cues: dict[tuple[str, int], np.ndarray] = {}
         self._strokes: list[np.ndarray] = []
         self._cue_job: tuple[subprocess.Popen, str] | Future | None = None
+        self._cue_stop = threading.Event()  # set by shutdown; a cue build ends at its next cue
         self._pool: ThreadPoolExecutor | None = None
         self._song_pool: ThreadPoolExecutor | None = None
         self._spawn_ok = bool(sys.executable) and not getattr(sys, "frozen", False)
@@ -363,14 +364,27 @@ class _BedStore:
             return
         path = self._scratch("cues")
         proc = self._spawn(["cues", str(self.rate)], path)
-        self._cue_job = (proc, path) if proc else self._threads_pool().submit(self._cues_here)
+        if proc:
+            self._cue_job = (proc, path)
+        else:
+            self._cue_job = self._threads_pool().submit(self._cues_here, self._cue_stop)
 
-    def _cues_here(self) -> None:
+    def _cues_here(self, stop: threading.Event) -> None:
+        """Build the cue bank and oar strokes on a pool thread. Once `stop` is set (by `shutdown`
+        on quit), the build ends at its next cue or stroke instead of running the whole bank
+        (#168)."""
         start = _time.perf_counter()
         for kind in synth.CUE_PEAK_DB:
             for variant in range(synth.CUE_VARIANTS.get(kind, 1)):
+                if stop.is_set():
+                    return
                 self._cues.setdefault((kind, variant), synth.build_cue(kind, self.rate, variant))
-        self._strokes = [synth.stroke(self.rate, v) for v in range(synth.STROKE_VARIANTS)]
+        strokes = []
+        for variant in range(synth.STROKE_VARIANTS):
+            if stop.is_set():
+                return
+            strokes.append(synth.stroke(self.rate, variant))
+        self._strokes = strokes
         self.build_seconds["cues"] = _time.perf_counter() - start
 
     def _poll_cues(self) -> None:
@@ -395,7 +409,7 @@ class _BedStore:
             self.build_seconds["cues"] = float(info["seconds"])
         except (OSError, ValueError, KeyError):
             _unlink(path)
-            self._cue_job = self._threads_pool().submit(self._cues_here)
+            self._cue_job = self._threads_pool().submit(self._cues_here, self._cue_stop)
 
     def cue(self, kind: str, variant: int) -> np.ndarray:
         """Finished (n, 2) float32 cue; synthesised on the spot if the bank is not ready."""
@@ -430,8 +444,18 @@ class _BedStore:
                 + sum(c.nbytes for c in self._cues.values()) + sum(s.nbytes for s in self._strokes))
 
     def shutdown(self) -> None:
-        """Stop workers and delete their scratch files (registered with atexit). Piece renders in
-        progress stop before their next block, so exit does not wait out a whole render (#168)."""
+        """Stop every build, delete their scratch files, and drop this store from `_STORES`.
+
+        `Audio.close` calls this on quit, before the interpreter joins pool threads.
+        concurrent.futures joins them before atexit callbacks run, so an atexit-only stop let a
+        piece render finish first (#168). A piece render ends at its next block and a cue build
+        at its next cue; a bed build has no block to stop at, so the join waits for it to finish.
+        The atexit registration in `__init__` calls this again as a backstop; a second call finds
+        nothing left to stop.
+        """
+        self._cue_stop.set()
+        self._waiting.clear()  # nothing queued starts after quit
+        self._song_waiting.clear()
         for key in (*self._running, *self._threads):
             self._forget(key)
         if isinstance(self._cue_job, tuple):
@@ -441,10 +465,16 @@ class _BedStore:
             if proc.stdout:
                 proc.stdout.close()
             _unlink(path)
-            self._cue_job = None
+        elif self._cue_job is not None:
+            self._cue_job.cancel()  # a queued build never starts; a running one ends by its flag
+        self._cue_job = None
         for pool in (self._pool, self._song_pool):
             if pool is not None:
                 pool.shutdown(wait=False, cancel_futures=True)
+        with _STORES_LOCK:
+            for key, store in list(_STORES.items()):
+                if store is self:
+                    del _STORES[key]
 
 
 def _copy_worker_output(path: str, dtype, shape: tuple[int, ...] | None = None) -> np.ndarray:
@@ -900,6 +930,10 @@ class Audio:
         return out
 
     def close(self):
+        """Quit path: `game.run` calls this in its `finally`, so it runs on every exit. The store
+        stops its builds first, so a piece render ends before the interpreter joins its thread
+        (#168); then the SDL device closes."""
+        self._store.shutdown()
         if self.ok and self.dev:
             self.sdl.SDL_CloseAudioDevice(self.dev)
             self.dev = 0
