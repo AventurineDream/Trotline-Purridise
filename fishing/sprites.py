@@ -4,14 +4,13 @@ Shapes are big on purpose. A tree on the far bank is only a few dozen
 pixels tall, so the silhouette has to read before the texture does.
 
 Two families live here. The small RGBA sprites (`bake`, `nebula_sprites`)
-feed the CPU renderer and tests; `bake()` with no lake and `nebula_sprites()` must keep
-their exact pixels. The
-`Painter` below records the GL foliage atlas sprites as resolution-free
-primitive lists that `florafx.PaintBaker` rasterises on the GPU: every
-primitive also carries a height, normal, translucency and leaf/wood mask so
-`foliage.frag` can light the sprite instead of trusting baked shading.
-Only the small soft fields (canopy AO, openness) are NumPy, on a grid of
-about one texel per design unit.
+feed the CPU renderer and tests; `bake()` with no lake and `nebula_sprites()`
+must keep their exact pixels. The `Painter` below records the GL foliage atlas
+sprites as resolution-free primitive lists that `florafx.PaintBaker` rasterises
+on the GPU: every primitive also carries a height, normal, translucency and
+leaf/wood mask so `foliage.frag` can light the sprite instead of trusting baked
+shading. Only the small soft fields (canopy AO, openness) are NumPy, on a
+grid of about one texel per design unit.
 """
 
 from __future__ import annotations
