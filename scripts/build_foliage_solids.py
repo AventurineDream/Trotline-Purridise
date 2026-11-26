@@ -1,14 +1,15 @@
-"""Rebuild the foliage solids fixture from any git ref's own build.
+"""Rebuild the foliage solids fixture from a git ref whose fishing package builds each lake
+with World(lake).solid_props.
 
 fishing/fixtures/foliage_solids.json pins every lake's solid props (rocks, stumps, knees,
 deadpine snags, nebula kelp and meteors), so density work cannot move a wall that the boat or a
-fish collides with. This script regenerates those rows from a git ref without touching the
-worktree: `git archive` unpacks the ref's fishing/ package into a scratch directory, a child
-Python process imports it from there and builds each lake, and the rows are written as JSON.
+fish collides with. This script regenerates those rows from a git ref: `git archive` unpacks
+the ref's fishing/ package into a scratch directory, a child Python process imports it from
+there and builds each lake, and the rows are written as JSON to the output path given.
 The `about` line records the exact command, the NumPy version and the platform, so a
 regeneration can be checked against the committed file.
 
-Usage, from the repository root:
+Usage, from the repository root; both arguments are required:
     python3 scripts/build_foliage_solids.py 36c17d2 fishing/fixtures/foliage_solids.json
 
 This is a development script, not a test: unittest discovery only collects test*.py files.
@@ -122,9 +123,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Rebuild the foliage solids fixture from a git ref.")
     parser.add_argument("ref", help="git revision to build, such as 36c17d2")
-    parser.add_argument("out", type=Path, nargs="?",
-                        default=ROOT / "fishing/fixtures/foliage_solids.json",
-                        help="fixture file to write")
+    parser.add_argument("out", type=Path,
+                        help="fixture file to write, such as fishing/fixtures/foliage_solids.json")
     args = parser.parse_args()
     command = " ".join([Path(sys.executable).name, *sys.argv])
     with tempfile.TemporaryDirectory() as scratch:
