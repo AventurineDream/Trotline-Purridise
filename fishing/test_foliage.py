@@ -5,7 +5,7 @@ Per lake, on the built world, these tests check that:
 - the weights in `forest.pick_tree` and the low-discrepancy `index_draw` hold their shares;
 - placement is deterministic per lake, and the collision set matches the pre-change build;
 - tree, plant and nebula counts sit in an authored band (1.2x to 1.4x the pre-change counts);
-- no prop sits in a tree lake's landing envelope, no nebula spire does, and no shore plant sits
+- no placed prop of any kind sits in a lake's landing envelope, and no shore plant sits
   on a route, in a marina clearing or in the Cedar cove;
 - the leafy palette follows `sprites.LAKE_TINT` on the GL atlas and on the CPU canopies and
   shore plants, while wood, bark and stone stay untinted, and HD sprites and tree silhouettes
@@ -52,7 +52,6 @@ ALL_LAKES = (*TREE_LAKES, "nebula")
 PLANT_KINDS = frozenset(("cattail", "grass", "flowers", "shrub", "reed", "palmetto"))
 SHORE_KINDS = frozenset(("cattail", "grass", "flowers", "shrub", "driftwood", "shore_stone",
                          "palmetto", "heron", "duck"))
-NEBULA_SCENERY = ("spire", "lightreed", "starlily")
 
 # Counts at origin/main 36c17d2, the build before #167. Crater's tree count includes its 12
 # deadpine snags, which are tree kinds too. The authored band for each count is 1.2x to 1.4x.

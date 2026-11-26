@@ -154,8 +154,10 @@ def make_slip() -> Slip:
 
 # Slip-local (a, s) rectangle per lake, in metres: props keep out of lo < a < hi with |s| < half,
 # so each landing and its approach stay open. in_landing_envelope() is the single rule over this
-# table. Tree, spire and shore-detail placements call it. Rocks, kelp, meteors and the other
-# scenery don't, so test_foliage, which checks every placed prop on every lake, is their guard.
+# table. Procedural trees, nebula spires, shore details and every Briar prop placed through add()
+# call it. Deadpines, stumps, rocks, kelp, meteors, light-reeds, starlilies, Cedar's coastal reeds
+# and rocks, and the hard-coded Trinidad props don't, so test_foliage, which checks every placed
+# prop on every lake, is their guard.
 LANDING_ENVELOPE = {
     "briar": (-4.0, 30.0, 20.0),
     "cedar": (-8.0, 35.0, 22.0),
