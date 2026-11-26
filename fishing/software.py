@@ -14,7 +14,7 @@ import numpy as np
 from .camera import Camera
 from .data import ZONE_ORDER, paint_rgb
 from .raster import blit_sprite, clip_near, raster_tri
-from .sprites import bake
+from .sprites import LAKE_TINT, bake
 from .world import Face, World, hash21, noise2
 from .boat import HULL_BOW, HULL_STERN, HULL_HALF_BEAM, HULL_INNER_BEAM, wake_along
 from .weather import lighting_at
@@ -108,7 +108,9 @@ class SoftwareRenderer:
         self.z = np.full((self.h, self.w), 1e6, dtype=np.float32)
         tile = np.tile(_BAYER, (self.h // 4 + 1, self.w // 4 + 1))[: self.h, : self.w]
         self.bayer = tile
-        self.sprites = bake(paint_rgb("buoy", "orange"))
+        # Only the trees take the lake palette on the CPU; shore plants keep one palette here
+        # (sprites.sprite_hd tints them per lake on the GL path).
+        self.sprites = bake(paint_rgb("buoy", "orange"), tree_gain=LAKE_TINT[world.id])
         self._buoy_id = "orange"
         if world.nebula:
             from .nebula import lane_circles
@@ -116,13 +118,13 @@ class SoftwareRenderer:
             self.sprites.update(nebula_sprites())
             self._lanes = lane_circles(world)
         else:
-            # Sprites the baked set lacks: generated lakes' conifers and the new broadleaves.
+            # Trees the baked set lacks take this lake's palette, as the GL atlas does (forest.tree_hd).
             from .forest import TREE_KINDS, tree
             placed = {prop.kind for prop in world.props} & set(TREE_KINDS)
             kinds = sorted(kind for kind in placed if kind not in self.sprites)
             if "larch" in placed:
                 kinds.append("larchgold")
-            self.sprites.update({kind: tree(kind, 0) for kind in kinds})
+            self.sprites.update({kind: tree(kind, 0, lake=world.id) for kind in kinds})
         self.last_ms = 0.0
         self.splashes: list[tuple[float, float, float]] = []
         px = np.array([p.x for p in world.props],np.float32)

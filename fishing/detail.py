@@ -19,6 +19,10 @@ from dataclasses import dataclass
 MIB = 1024 * 1024
 GIB = 1024 * MIB
 
+# GPU bytes the painted foliage layers may use, in MiB. Reserve layers are charged to the
+# actor budget (glrender.actor_memory), so they are not counted here.
+FOLIAGE_BUDGET_MB = 250
+
 # Free memory a tier needs beyond its own budget before Auto will pick it, so
 # the desktop and its page cache keep room and the game never drives swapping.
 AUTO_HEADROOM = 1.3
@@ -37,7 +41,8 @@ class Detail:
             cousin, Mesa software GL, tight memory) clamps highlights at 1.0;
             every tier otherwise runs the same shaders at its own texture sizes.
         atlas_scale: Foliage/prop atlas texels per base texel (base 160x256).
-        foliage_variants: Distinct sprites per tree species.
+        foliage_variants: Distinct sprites per tree species. The atlas paints fewer where
+            FOLIAGE_BUDGET_MB binds (florafx.fit_variants).
         terrain_texels: Edge of the baked ground colour and normal maps.
         wave_texels: Edge of one frame of the looping water normal volume.
         wave_frames: Frames in that loop.

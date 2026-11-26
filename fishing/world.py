@@ -745,8 +745,8 @@ class World:
             x, z = shore_xy(theta, float(rng.uniform(-7.0, -1.2)))
             add("reed", x, z, float(rng.uniform(1.6, 2.4)), 0.95, 4.0)
 
-        # A denser outer woodland from its own stream: every placement above, the solids
-        # included, keeps its exact position. Like the first pass, trees skip the landing sector.
+        # The outer woodland draws from its own stream, so every placement above (solids too)
+        # stays where it is when this pass changes. Trees skip the landing sector, as above.
         extra_rng = np.random.default_rng(7201)
         wanted, tries, added = 190, 2000, 0
         for _ in range(tries):
@@ -813,8 +813,9 @@ class World:
             Prop("rock", 180.2, -861.8, 1.2, 0.88),
             Prop("rock", 178.7, -856.1, 1.0, 0.82),
         ])
-        # Extra groves from their own stream: the base trees, reeds, rocks and Trinidad's props
-        # keep their places. The flooded cove gets the most, for its cypress shade.
+        # Extra groves draw from their own stream, so the base trees, reeds, rocks and Trinidad's
+        # props keep their places. The flooded cove's quota is larger (180 against 75): it is the
+        # cypress-shade role in TREE_MIX.
         extra = np.random.default_rng(2152)
         for tx,tz,role in targets:
             nearby = np.flatnonzero(np.hypot(self.coast[:,0]-tx,self.coast[:,1]-tz)<280)

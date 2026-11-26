@@ -24,11 +24,13 @@ def _img(w, h) -> np.ndarray:
     return np.zeros((h, w, 4), dtype=np.uint8)
 
 
-def _stamp(img, color, mask):
+def _stamp(img, color, mask, foliage=None):
     img[mask] = color
+    if foliage is not None:
+        foliage |= mask
 
 
-def _tri(img, ax, ay, bx, by, cx, cy, color):
+def _tri(img, ax, ay, bx, by, cx, cy, color, foliage=None):
     h, w, _ = img.shape
     minx = max(int(min(ax, bx, cx)), 0)
     maxx = min(int(max(ax, bx, cx)) + 1, w - 1)
@@ -49,17 +51,28 @@ def _tri(img, ax, ay, bx, by, cx, cy, color):
         mask = (w0 >= 0) & (w1 >= 0) & (w2 >= 0)
     region = img[miny:maxy + 1, minx:maxx + 1]
     region[mask] = color
+    if foliage is not None:
+        foliage[miny:maxy + 1, minx:maxx + 1] |= mask
 
 
-def _ellipse(img, cx, cy, rx, ry, color):
+def _ellipse(img, cx, cy, rx, ry, color, foliage=None):
     h, w, _ = img.shape
     yy, xx = np.mgrid[0:h, 0:w]
     mask = (xx - cx) ** 2 / (rx * rx) + (yy - cy) ** 2 / (ry * ry) <= 1
-    _stamp(img, color, mask)
+    _stamp(img, color, mask, foliage)
 
 
-def pine() -> np.ndarray:
+def pine(gain=None) -> np.ndarray:
+    """The baked pine: five stacked tiers on a stem, 56x112 RGBA.
+
+    Args:
+        gain: Lake palette gain for the foliage (`tint_foliage`); None keeps it as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(56, 112)
+    foliage = np.zeros(img.shape[:2], bool)
     img[78:108, 25:32] = (96, 68, 42, 255)
     img[100:110, 22:35] = (78, 54, 34, 255)
     tiers = (
@@ -72,28 +85,50 @@ def pine() -> np.ndarray:
     for apex_y, left, right, g0, g1, g2 in tiers:
         mid = 28
         base = apex_y + 28
-        _tri(img, mid, apex_y, left, base, right, base, (g0, g1, g2, 255))
-        _tri(img, mid, apex_y + 10, left + 2, base, right - 2, base, (g0 - 6, g1 - 18, g2 - 8, 255))
-    return img
+        _tri(img, mid, apex_y, left, base, right, base, (g0, g1, g2, 255), foliage)
+        _tri(img, mid, apex_y + 10, left + 2, base, right - 2, base, (g0 - 6, g1 - 18, g2 - 8, 255), foliage)
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
-def oak() -> np.ndarray:
+def oak(gain=None) -> np.ndarray:
+    """The baked oak: a round canopy over a short stem, 72x88 RGBA.
+
+    Args:
+        gain: Lake palette gain for the canopy (`tint_foliage`); None keeps it as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(72, 88)
+    foliage = np.zeros(img.shape[:2], bool)
     # Canopy first, trunk stamped over it so the stem stays visible.
-    _ellipse(img, 36, 36, 28, 24, (28, 78, 36, 255))
-    _ellipse(img, 28, 30, 16, 14, (46, 108, 48, 255))
-    _ellipse(img, 46, 42, 14, 12, (18, 58, 26, 255))
-    _ellipse(img, 34, 26, 10, 8, (62, 124, 58, 255))
+    _ellipse(img, 36, 36, 28, 24, (28, 78, 36, 255), foliage)
+    _ellipse(img, 28, 30, 16, 14, (46, 108, 48, 255), foliage)
+    _ellipse(img, 46, 42, 14, 12, (18, 58, 26, 255), foliage)
+    _ellipse(img, 34, 26, 10, 8, (62, 124, 58, 255), foliage)
+    # The stem is painted over the crown, so those pixels are wood, not foliage.
     img[52:84, 32:41] = (102, 72, 46, 255)
+    foliage[52:84, 32:41] = False
     img[76:86, 28:46] = (86, 60, 38, 255)
+    foliage[76:86, 28:46] = False
     img[54:80, 33:36] = (128, 96, 64, 255)
-    return img
+    foliage[54:80, 33:36] = False
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
-def cypress() -> np.ndarray:
+def cypress(gain=None) -> np.ndarray:
+    """The baked cypress: a narrow crown on a flared trunk, 48x128 RGBA.
+
+    Args:
+        gain: Lake palette gain for the crown and moss (`tint_foliage`); None keeps it as painted.
+
+    Returns:
+        A uint8 RGBA sprite.
+    """
     img = _img(48, 128)
     h, w = img.shape[:2]
     yy, xx = np.mgrid[0:h, 0:w]
+    foliage = np.zeros((h, w), bool)
     # Flared buttress. Wide at the water, narrow through the middle.
     t = np.clip((yy - 28) / 96.0, 0.0, 1.0)
     half = 3.0 + t * t * 14.0
@@ -101,12 +136,12 @@ def cypress() -> np.ndarray:
     _stamp(img, (86, 64, 44, 255), trunk)
     _stamp(img, (118, 90, 62, 255), trunk & (xx < 22) & (yy > 40))
     _stamp(img, (62, 46, 32, 255), trunk & (xx > 28) & (yy > 70))
-    _ellipse(img, 24, 24, 12, 20, (16, 58, 36, 255))
-    _ellipse(img, 22, 18, 7, 10, (28, 78, 44, 255))
+    _ellipse(img, 24, 24, 12, 20, (16, 58, 36, 255), foliage)
+    _ellipse(img, 22, 18, 7, 10, (28, 78, 44, 255), foliage)
     # Moss hangs off the crown in a few strands.
     drape = (yy > 20) & (yy < 78) & (np.abs(xx - 24) < 11) & (((xx * 3 + yy) % 5) == 0)
-    _stamp(img, (14, 42, 28, 255), drape)
-    return img
+    _stamp(img, (14, 42, 28, 255), drape, foliage)
+    return img if gain is None else tint_foliage(img, foliage, gain)
 
 
 def rock() -> np.ndarray:
@@ -181,9 +216,28 @@ LAKE_TINT = {
     "briar": (1.00, 1.04, 0.90),
     "cedar": (1.12, 1.02, 0.78),
     "flathead": (0.84, 1.00, 1.16),
-    "crater": (0.90, 0.98, 1.14),
+    "crater": (0.92, 0.96, 1.02),
     "nebula": (1.00, 1.00, 1.00),
 }
+
+
+def tint_foliage(img: np.ndarray, foliage: np.ndarray, gain) -> np.ndarray:
+    """A copy of a baked sprite with the RGB of its foliage scaled by a lake palette gain.
+
+    Args:
+        img: uint8 RGBA sprite, shape (h, w, 4).
+        foliage: Bool mask, shape (h, w), True where a pixel is canopy or hanging green.
+            Wood, stone and empty pixels stay as painted, so trunks never take a palette.
+        gain: Three channel multipliers (`LAKE_TINT[lake]`); 1.0 leaves a channel as it is.
+
+    Returns:
+        A new uint8 array of the same shape; `img` is not modified. Scaled channels clip
+        to 255. Rounds rather than truncates, so a gain of exactly 1.0 is an identity.
+    """
+    out = img.copy()
+    scaled = out[foliage, :3].astype(np.float32) * np.asarray(gain, np.float32)
+    out[foliage, :3] = np.clip(np.rint(scaled), 0, 255).astype(np.uint8)
+    return out
 
 
 def _stroke(img, a, b, width, color):
@@ -409,12 +463,22 @@ def nebula_sprites() -> dict[str, np.ndarray]:
             "meteor": meteor(), "lightreed": lightreed()}
 
 
-def bake(buoy_rgb: tuple[int, int, int]) -> dict[str, np.ndarray]:
+def bake(buoy_rgb: tuple[int, int, int], *, tree_gain=None) -> dict[str, np.ndarray]:
+    """The CPU fallback's baked sprites, keyed by kind.
+
+    Args:
+        buoy_rgb: Buoy colour as 0-1 floats (scaled to 0-255 here).
+        tree_gain: Lake palette gain (`LAKE_TINT[lake]`) for the pine, oak and cypress
+            foliage; None keeps those sprites as they were baked.
+
+    Returns:
+        A dict of uint8 RGBA sprites, one per kind.
+    """
     r, g, b = [int(c * 255) for c in buoy_rgb]
     return {
-        "pine": pine(),
-        "oak": oak(),
-        "cypress": cypress(),
+        "pine": pine(tree_gain),
+        "oak": oak(tree_gain),
+        "cypress": cypress(tree_gain),
         "rock": rock(),
         "stump": stump(),
         "knee": knee(),

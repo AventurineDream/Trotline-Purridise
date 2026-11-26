@@ -7,14 +7,16 @@ Per lake, on the built world, these tests check that:
 - tree, shore and nebula counts sit in an authored band (1.2x to 1.4x the pre-change counts);
 - no tree or nebula spire sits in its landing envelope, and no shore plant sits on a route,
   in a marina clearing or in the Cedar cove;
-- the leafy palette follows `sprites.LAKE_TINT`, wood stays untinted, and HD sprites differ
-  per lake;
+- the leafy palette follows `sprites.LAKE_TINT` on the GL atlas and on the CPU canopy, while wood
+  and trunks stay untinted, and HD sprites and tree silhouettes differ per lake;
+- leaves fall from the trees Briar and Cedar place, and from Flathead's birches;
 - the CPU renderer has a sprite for every placed kind.
 
-GL checks compare the low and standard tiers: every placed kind has atlas layers, the atlas
-fits the foliage budget, low has fewer variants, and the verify estimate covers the real
-atlas. They skip where no standalone EGL context exists. A built world takes seconds, so
-worlds and renderers are cached per test class.
+GL checks cover every tier and lake: every placed kind has atlas layers, the painted atlas fits
+the foliage budget, its layer count and bytes match the GPU textures, low has fewer variants than
+standard, and the verify estimate equals the real painted bytes. They skip where no standalone
+EGL context exists. A built world takes seconds, so worlds are cached per module; each atlas is
+freed after its check, since the ultra tier's atlas alone is hundreds of MiB.
 """
 
 from __future__ import annotations
@@ -24,16 +26,20 @@ import math
 import unittest
 from collections import Counter
 from functools import lru_cache
+from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
 
-from . import detail
-from .forest import TREE_KINDS, index_draw, pick_tree, tree_hd
+from . import detail, florafx
+from .actors import MAX_ACTORS
+from .data import paint_rgb
+from .forest import TREE_KINDS, index_draw, pick_tree, tree, tree_hd
 from .nebula import nebula_props
+from .particlefx import LEAF_KINDS
 from .shoreline import _clear_route
-from .sprites import Painter, sprite_hd
-from .verify import MEMORY_BUDGET_MB, foliage_bytes
+from .sprites import LAKE_TINT, Painter, bake, sprite_hd
+from .verify import foliage_bytes
 from .world import Prop, World
 
 TREE_LAKES = ("briar", "cedar", "flathead", "crater")
@@ -141,10 +147,13 @@ class MixWeightTests(unittest.TestCase):
         self.assertAlmostEqual(sum(d < 0.6 for d in draws) / 720, 0.6, delta=0.01)
 
     def test_realised_flathead_and_crater_mixes_follow_weights(self):
-        flathead = _mix(_world("flathead"), ("larch", "spruce"))
-        self.assertAlmostEqual(flathead["larch"] / sum(flathead.values()), 0.6, delta=0.05)
-        crater = _mix(_world("crater"), ("hemlock", "whitebark"))
-        self.assertAlmostEqual(crater["hemlock"] / sum(crater.values()), 0.66, delta=0.05)
+        for lake, weights in (("flathead", {"larch": 0.45, "spruce": 0.30, "birch": 0.25}),
+                              ("crater", {"hemlock": 0.50, "whitebark": 0.25, "pine": 0.25})):
+            with self.subTest(lake=lake):
+                counts = _mix(_world(lake), tuple(weights))
+                total = sum(counts.values())
+                for kind, weight in weights.items():
+                    self.assertAlmostEqual(counts[kind] / total, weight, delta=0.05)
 
 
 class DeterminismTests(unittest.TestCase):
@@ -247,6 +256,14 @@ class ClearanceTests(unittest.TestCase):
                     self.assertEqual(cove, [])
 
 
+def _geometry(rows: np.ndarray) -> np.ndarray:
+    """Primitive rows without their colour columns (body RGB 8-10, tip RGB 28-30).
+
+    Shape and placement only, so a comparison is not decided by the lake's palette.
+    """
+    return np.delete(rows, (8, 9, 10, 28, 29, 30), axis=1)
+
+
 class PaletteTests(unittest.TestCase):
     """Lake palettes tint leaves only, and each lake's sprites are its own."""
 
@@ -259,15 +276,17 @@ class PaletteTests(unittest.TestCase):
         after = p.array()
         leafy = before[:, 7] > 0.5
         self.assertTrue(leafy.any() and (~leafy).any())
-        np.testing.assert_allclose(after[~leafy, 8:11], before[~leafy, 8:11])
-        np.testing.assert_allclose(after[leafy, 8:11],
-                                   np.clip(before[leafy, 8:11] * (1.5, 1.0, 0.5), 0.0, 1.0), rtol=1e-6)
+        # The body colour (8-10) and the tip colour (28-30) both take the gain, on leafy rows only.
+        for cols in (slice(8, 11), slice(28, 31)):
+            np.testing.assert_allclose(after[~leafy, cols], before[~leafy, cols])
+            np.testing.assert_allclose(after[leafy, cols],
+                                       np.clip(before[leafy, cols] * (1.5, 1.0, 0.5), 0.0, 1.0), rtol=1e-6)
 
     def test_leafy_palette_orders_by_lake_gain(self):
-        # Cedar's gain is warm (R/B 1.44), Briar's mild (1.11) and Flathead's cool (0.72).
-        # Averaging four variants keeps seed-to-seed shading from deciding the order.
+        # Mean R/B of the pine canopy over four variants, so seed shading does not decide the
+        # order. The gains' own R/B are 1.44 (Cedar), 1.11 (Briar), 0.90 (Crater), 0.72 (Flathead).
         ratio = {}
-        for lake in ("cedar", "briar", "flathead"):
+        for lake in ("cedar", "briar", "crater", "flathead"):
             red_blue = []
             for variant in range(4):
                 arr = tree_hd("pine", variant, lake=lake).array()
@@ -275,24 +294,28 @@ class PaletteTests(unittest.TestCase):
                 red, _, blue = arr[leafy, 8:11].mean(axis=0)
                 red_blue.append(red / blue)
             ratio[lake] = sum(red_blue) / len(red_blue)
-        self.assertGreater(ratio["cedar"] / ratio["briar"], 1.1)
-        self.assertGreater(ratio["briar"] / ratio["flathead"], 1.2)
+        for warmer, cooler in (("cedar", "briar"), ("briar", "crater"), ("crater", "flathead")):
+            with self.subTest(warmer=warmer, cooler=cooler):
+                self.assertGreater(ratio[warmer] / ratio[cooler], 1.15)
 
     def test_hd_sprites_are_specific_to_each_lake(self):
         for kind in ("grass", "cattail"):
             with self.subTest(kind=kind):
                 briar = sprite_hd(kind, 0, lake="briar").array()
                 cedar = sprite_hd(kind, 0, lake="cedar").array()
-                self.assertFalse(np.array_equal(briar, cedar))
+                self.assertFalse(np.array_equal(_geometry(briar), _geometry(cedar)))
 
     def test_tree_silhouettes_are_specific_to_each_lake(self):
-        briar = tree_hd("oak", 0, lake="briar").array()
-        cedar = tree_hd("oak", 0, lake="cedar").array()
-        self.assertFalse(np.array_equal(briar, cedar))
+        for i, a in enumerate(TREE_LAKES):
+            for b in TREE_LAKES[i + 1:]:
+                with self.subTest(a=a, b=b):
+                    first = tree_hd("oak", 0, lake=a).array()
+                    second = tree_hd("oak", 0, lake=b).array()
+                    self.assertFalse(np.array_equal(_geometry(first), _geometry(second)))
 
 
 class CpuSpriteTests(unittest.TestCase):
-    """The CPU fallback can draw every placed tree and shore kind."""
+    """The CPU fallback draws every placed tree and shore kind, and tints each tree's canopy."""
 
     def test_every_placed_kind_has_a_cpu_sprite(self):
         from .software import SoftwareRenderer
@@ -303,9 +326,129 @@ class CpuSpriteTests(unittest.TestCase):
                 placed = {p.kind for p in world.props} & (set(TREE_KINDS) | SHORE_KINDS)
                 self.assertEqual(sorted(placed - set(renderer.sprites)), [])
 
+    def test_cpu_canopy_carries_each_lake_palette(self):
+        from .software import SoftwareRenderer
+        plain = bake(paint_rgb("buoy", "orange"))
+        for lake in TREE_LAKES:
+            world = _world(lake)
+            renderer = SoftwareRenderer(world, 320, 180)
+            kinds = {p.kind for p in world.props} & (set(TREE_KINDS) - {"deadpine"})
+            for kind in sorted(kinds):
+                with self.subTest(lake=lake, kind=kind):
+                    reference = plain[kind] if kind in plain else tree(kind, 0)
+                    canopy = renderer.sprites[kind]
+                    changed = (canopy[..., :3] != reference[..., :3]).any(axis=-1)
+                    self.assertTrue(changed.any())
+                    for channel in (0, 2):
+                        ratio = (canopy[changed, channel].astype(float).sum()
+                                 / reference[changed, channel].astype(float).sum())
+                        self.assertAlmostEqual(ratio, LAKE_TINT[lake][channel], delta=0.02)
+
+    def test_cpu_trunks_and_wood_stay_untinted(self):
+        plain = bake(paint_rgb("buoy", "orange"))
+        wood = {"pine": np.s_[100:110, 22:35], "oak": np.s_[76:86, 28:46],
+                "cypress": np.s_[110:125, 22:26]}
+        for lake in TREE_LAKES:
+            tinted = bake(paint_rgb("buoy", "orange"), tree_gain=LAKE_TINT[lake])
+            for kind, region in wood.items():
+                with self.subTest(lake=lake, kind=kind):
+                    np.testing.assert_array_equal(tinted[kind][region], plain[kind][region])
+            with self.subTest(lake=lake, kind="deadpine"):
+                np.testing.assert_array_equal(tree("deadpine", 0, lake=lake), tree("deadpine", 0))
+            for kind in TREE_KINDS:
+                with self.subTest(lake=lake, kind=kind):
+                    band = np.s_[230:250, 74:86]  # below every crown, so only trunk pixels
+                    np.testing.assert_array_equal(tree(kind, 0, lake=lake)[band], tree(kind, 0)[band])
+
+
+def _gpu_layer_bytes(tex) -> int:
+    """Bytes one layer of a GL texture holds, mip chain included, from GL's own attributes.
+
+    Args:
+        tex: A moderngl texture with `width`, `height`, `components` and a `dtype` of 'f1'
+            (one byte per channel) or 'f4'.
+
+    Returns:
+        The sum over the full chain of floor(log2(longest side)) + 1 levels, each at least
+        1x1, times the bytes per texel.
+    """
+    width, height = tex.width, tex.height
+    levels = int(math.floor(math.log2(max(width, height)))) + 1
+    texels = sum(max(1, width >> level) * max(1, height >> level) for level in range(levels))
+    return texels * tex.components * {"f1": 1, "f4": 4}[tex.dtype]
+
+
+class _StubRenderer:
+    """The four attributes `FloraAtlas` reads from a renderer, with no scene behind them."""
+
+    def __init__(self, ctx, tier, world):
+        self.ctx = ctx
+        self.detail = tier
+        self.world = world
+
+    def own(self, obj):
+        """Ownership is not tracked here: each check frees its own atlas."""
+        return obj
+
+
+class FoliageFitTests(unittest.TestCase):
+    """The variant trade-off under the foliage budget, computed without GL."""
+
+    def test_full_targets_are_kept_when_the_budget_allows(self):
+        self.assertEqual(florafx.fit_variants(4, 10, 4, tree_target=6, shore_target=3,
+                                              budget_layers=66), (6, 3))
+
+    def test_ultra_briar_trades_tree_variants_to_fit(self):
+        # At ultra one layer is 6.67 MiB, so 250 MiB holds 37. Briar's 4 trees, 10 shore kinds
+        # and 4 fixed layers then fit only as (3, 2): 4*3 + 10*2 + 4 = 36.
+        self.assertEqual(florafx.fit_variants(4, 10, 4, tree_target=8, shore_target=3,
+                                              budget_layers=37), (3, 2))
+
+    def test_chosen_pair_always_fits_when_one_each_fits(self):
+        for budget in range(18, 80):
+            trees, shores = florafx.fit_variants(4, 10, 4, tree_target=8, shore_target=3,
+                                                 budget_layers=budget)
+            with self.subTest(budget=budget):
+                self.assertLessEqual(4 * trees + 10 * shores + 4, budget)
+
+    def test_chosen_pair_keeps_the_best_smaller_share_at_every_budget(self):
+        # Exhaustive over the pairs that fit: no other fitting pair keeps a larger smaller share.
+        for budget in range(14, 80):
+            with self.subTest(budget=budget):
+                trees, shores = florafx.fit_variants(4, 6, 4, tree_target=8, shore_target=3,
+                                                     budget_layers=budget)
+                self.assertLessEqual(4 * trees + 6 * shores + 4, budget)
+                best = max(min(t / 8, s / 3) for t in range(1, 9) for s in range(1, 4)
+                           if 4 * t + 6 * s + 4 <= budget)
+                self.assertAlmostEqual(min(trees / 8, shores / 3), best, places=12)
+
+    def test_falls_back_to_one_each_when_nothing_fits(self):
+        self.assertEqual(florafx.fit_variants(4, 10, 4, tree_target=8, shore_target=3,
+                                              budget_layers=17), (1, 1))
+
+    def test_layer_slots_split_by_what_they_scale_with(self):
+        # The gold larch twin scales with the trees; buoys and plain props never vary.
+        self.assertEqual(florafx.layer_slots({"oak", "larch", "spruce", "grass", "heron"}), (4, 1, 3))
+        self.assertEqual(florafx.layer_slots(set()), (0, 0, 2))
+
+
+class LeafDropTests(unittest.TestCase):
+    """Leaves fall from the species each lake places, so the drops match the trees in view."""
+
+    def test_briar_and_cedar_shed_from_every_tree_they_place(self):
+        for lake in ("briar", "cedar"):
+            with self.subTest(lake=lake):
+                placed = {p.kind for p in _world(lake).props} & set(TREE_KINDS)
+                self.assertEqual(set(LEAF_KINDS[lake]), placed)
+
+    def test_flathead_sheds_from_its_birches_and_crater_sheds_none(self):
+        self.assertEqual(LEAF_KINDS["flathead"], ("birch",))
+        self.assertGreater(_count(_world("flathead"), ("birch",)), 0)
+        self.assertNotIn("crater", LEAF_KINDS)
+
 
 class AtlasTests(unittest.TestCase):
-    """The painted GL flora atlas per tier; skipped where standalone EGL is unavailable."""
+    """The painted GL flora atlas for every lake and tier; skipped where standalone EGL is unavailable."""
 
     @classmethod
     def setUpClass(cls):
@@ -314,47 +457,74 @@ class AtlasTests(unittest.TestCase):
             cls.ctx = moderngl.create_standalone_context(require=330, backend="egl")
         except Exception as error:  # no EGL device or driver on this machine
             raise unittest.SkipTest(f"Standalone EGL unavailable: {error}")
-        cls.renderers = {}
 
-    @classmethod
-    def tearDownClass(cls):
-        for renderer in cls.renderers.values():
-            renderer.close()
-        cls.renderers.clear()
+    def _flora(self, lake: str, tier: str):
+        """A freshly painted atlas for `lake` at `tier`; the caller frees it with `_free`.
 
-    def _bake(self, lake: str, tier: str):
-        """The lake's GL renderer at `tier`, baked once per class and reused."""
-        key = (lake, tier)
-        if key not in self.renderers:
-            from .glrender import LakeRenderer
-            with mock.patch.object(detail, "_current", detail.TIERS[tier]):
-                self.renderers[key] = LakeRenderer(_world(lake), 320, 180, context=self.ctx)
-        return self.renderers[key]
+        Built on `_StubRenderer` rather than a full `LakeRenderer`: the atlas is the only GL
+        object these checks read, and a full scene per tier would hold several ultra atlases.
+        """
+        stub = _StubRenderer(self.ctx, detail.TIERS[tier], _world(lake))
+        return florafx.FloraAtlas(stub, paint_rgb("buoy", "orange"), MAX_ACTORS)
+
+    @staticmethod
+    def _free(flora):
+        for tex in (flora.colour, flora.light, flora.cover):
+            tex.release()
 
     def test_placed_kinds_have_layers_and_the_atlas_fits_the_budget(self):
-        budget = MEMORY_BUDGET_MB["foliage"] * 1024 * 1024
+        budget = detail.FOLIAGE_BUDGET_MB * 1024 * 1024
         for lake in ALL_LAKES:
-            for tier in ("low", "standard"):
+            for tier in detail.ORDER:
                 with self.subTest(lake=lake, tier=tier):
-                    renderer = self._bake(lake, tier)
-                    kinds = {p.kind for p in _world(lake).props}
-                    self.assertEqual(sorted(k for k in kinds if f"{k}0" not in renderer.layers), [])
-                    self.assertLessEqual(renderer.flora_atlas.memory_bytes(include_reserve=False), budget)
+                    flora = self._flora(lake, tier)
+                    try:
+                        placed = {p.kind for p in _world(lake).props}
+                        self.assertEqual(sorted(k for k in placed if f"{k}0" not in flora.layers), [])
+                        trees, shores, fixed = florafx.layer_slots(placed)
+                        self.assertEqual(flora.reserve0,
+                                         trees * flora.tree_variants + shores * flora.shore_variants + fixed)
+                        self.assertLessEqual(flora.memory_bytes(include_reserve=False), budget)
+                    finally:
+                        self._free(flora)
+
+    def test_atlas_bytes_match_the_gpu_textures(self):
+        flora = self._flora("briar", "standard")
+        try:
+            for tex in (flora.colour, flora.light):
+                self.assertEqual((tex.width, tex.height, tex.layers, tex.components, tex.dtype),
+                                 (flora.w, flora.h, flora.count, 4, "f1"))
+            self.assertEqual(flora.levels, int(math.floor(math.log2(max(flora.w, flora.h)))) + 1)
+            self.assertEqual(flora.layer_bytes, 2 * _gpu_layer_bytes(flora.colour))
+            self.assertEqual((flora.cover.width, flora.cover.height), (flora.levels, flora.count))
+            self.assertEqual(flora.cover.width * flora.cover.height * 4, flora.cover_rows.nbytes)
+            self.assertEqual(flora.memory_bytes(include_reserve=False),
+                             flora.reserve0 * flora.layer_bytes + flora.cover_rows.nbytes)
+        finally:
+            self._free(flora)
 
     def test_low_tier_has_fewer_variants_than_standard(self):
         for lake in TREE_LAKES:
             with self.subTest(lake=lake):
-                self.assertLess(len(self._bake(lake, "low").layers),
-                                len(self._bake(lake, "standard").layers))
+                low = self._flora(lake, "low")
+                standard = self._flora(lake, "standard")
+                try:
+                    self.assertLess(low.tree_variants, standard.tree_variants)
+                finally:
+                    self._free(low)
+                    self._free(standard)
 
-    def test_verify_estimate_covers_the_real_atlas(self):
+    def test_verify_estimate_matches_the_painted_gpu_bytes(self):
         for lake in TREE_LAKES:
-            with self.subTest(lake=lake):
-                low, standard = self._bake(lake, "low"), self._bake(lake, "standard")
-                for renderer in (low, standard):
-                    self.assertGreaterEqual(foliage_bytes(renderer),
-                                            renderer.flora_atlas.memory_bytes(include_reserve=False))
-                self.assertGreater(foliage_bytes(standard), foliage_bytes(low))
+            for tier in ("low", "standard"):
+                with self.subTest(lake=lake, tier=tier):
+                    flora = self._flora(lake, tier)
+                    try:
+                        painted = flora.reserve0 * 2 * _gpu_layer_bytes(flora.colour)
+                        cover = flora.cover.width * flora.cover.height * 4
+                        self.assertEqual(foliage_bytes(SimpleNamespace(flora_atlas=flora)), painted + cover)
+                    finally:
+                        self._free(flora)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,8 @@ ground. All motion is pure shading: no vertex moves, no alpha animates.
 Constraints: baked once per lake load, only for the kinds that lake places
 (budget 1.0 s standard, 2.5 s ultra). Bake-only GL objects and CPU arrays are
 released as soon as the atlas is uploaded. Runtime writers (buoy paint, cat
-impostors) go through `write_sprite`, which re-mips at the next draw.
+impostors) go through `write_sprite`, which re-mips at the next draw. Painted variants give way,
+never the atlas scale, when a lake would exceed `FOLIAGE_BUDGET_MB` (see `fit_variants`).
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ import moderngl
 import numpy as np
 
 from . import forest, sprites
+from .detail import FOLIAGE_BUDGET_MB, MIB
 from .fx import FLORA_UNITS, Fx, reduced_motion
 from .weather import wind_at
 
@@ -52,6 +54,62 @@ def _hash01(x: float, z: float) -> float:
 
 def _levels(w: int, h: int) -> int:
     return int(math.floor(math.log2(max(w, h)))) + 1
+
+
+def _layer_bytes(w: int, h: int, levels: int) -> int:
+    """GPU bytes of one layer in both arrays: RGBA8 over every mip level.
+
+    Args:
+        w, h: Level-0 layer size in texels.
+        levels: Mip levels the arrays hold (`_levels`).
+
+    Returns:
+        Bytes for the colour and light arrays together, 4 bytes per texel in each.
+    """
+    texels = sum(max(1, w >> level) * max(1, h >> level) for level in range(levels))
+    return 2 * 4 * texels
+
+
+def layer_slots(placed: set[str]) -> tuple[int, int, int]:
+    """Painted layers per variant step for one lake, split by what they scale with.
+
+    Args:
+        placed: Kinds the lake places (the set of `prop.kind` in its world).
+
+    Returns:
+        (tree, shore, fixed): layers per tree variant (every placed tree kind, plus the gold
+        larch twin); layers per shore variant (every placed HD sprite kind); and layers that
+        never vary (plain props and the two buoys).
+    """
+    tree = sum(kind in placed for kind in forest.TREE_KINDS) + ("larch" in placed)
+    shore = sum(kind in sprites.HD_SPRITES for kind in placed)
+    fixed = sum(kind in PLAIN for kind in placed) + 2
+    return tree, shore, fixed
+
+
+def fit_variants(tree_slots: int, shore_slots: int, fixed: int, *, tree_target: int,
+                 shore_target: int, budget_layers: int) -> tuple[int, int]:
+    """The variant counts that fit the foliage budget while keeping the most of each target.
+
+    Args:
+        tree_slots, shore_slots, fixed: From `layer_slots`.
+        tree_target, shore_target: Variants the detail tier asks for, each at least 1.
+        budget_layers: Painted layers the budget allows at this tier's layer size.
+
+    Returns:
+        (tree_variants, shore_variants), each within its target. The pair maximises the smaller
+        share of its target that it keeps; ties go to more tree variants, since trees are the
+        taller sprites. If no pair fits, (1, 1), and the atlas then exceeds the budget.
+    """
+    best = None
+    for trees in range(1, tree_target + 1):
+        for shores in range(1, shore_target + 1):
+            if tree_slots * trees + shore_slots * shores + fixed > budget_layers:
+                continue
+            key = (min(trees / tree_target, shores / shore_target), trees, shores)
+            if best is None or key > best[0]:
+                best = (key, trees, shores)
+    return (1, 1) if best is None else (best[1], best[2])
 
 
 def coverage_scales(alpha: np.ndarray, levels: int, cutoff: float = CUTOFF) -> np.ndarray:
@@ -268,6 +326,8 @@ class FloraAtlas:
     Attributes:
         layers: Layer index by name: "<kind><variant>" for every painted
             variant, and the bare kind for its variant 0.
+        tree_variants, shore_variants: Painted variants per tree and per shore kind, as
+            `fit_variants` held them to the foliage budget.
         colour, light: The two `TextureArray`s; `cover` the coverage table.
         reserve0: First reserved layer.
         bake_seconds: Wall time the bake took (for the load-time report).
@@ -279,12 +339,15 @@ class FloraAtlas:
         detail = renderer.detail
         world = renderer.world
         self.scale = max(1, int(detail.atlas_scale))
-        self.tree_variants = max(1, int(detail.foliage_variants))
-        self.shore_variants = min(SHORE_VARIANTS, self.tree_variants)
         self.w, self.h = ATLAS_W * self.scale, ATLAS_H * self.scale
         self.levels = _levels(self.w, self.h)
         self.lake = world.id
         placed = {prop.kind for prop in world.props}
+        tree_target = max(1, int(detail.foliage_variants))
+        self.tree_variants, self.shore_variants = fit_variants(
+            *layer_slots(placed), tree_target=tree_target,
+            shore_target=min(SHORE_VARIANTS, tree_target),
+            budget_layers=FOLIAGE_BUDGET_MB * MIB // self.layer_bytes)
         plan = []  # (name, kind, variant)
         self.counts = {}
         for kind in forest.TREE_KINDS:
@@ -356,8 +419,8 @@ class FloraAtlas:
 
     @property
     def layer_bytes(self) -> int:
-        """GPU bytes of one layer in both arrays, mipmaps included (4/3)."""
-        return self.w * self.h * 4 * 2 * 4 // 3
+        """GPU bytes of one layer in both arrays, every mip level included."""
+        return _layer_bytes(self.w, self.h, self.levels)
 
     def memory_bytes(self, *, include_reserve: bool) -> int:
         """GPU bytes of the painted layers (and the reserve if asked) plus the coverage table."""

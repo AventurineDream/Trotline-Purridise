@@ -94,7 +94,9 @@ SHORE_BIRDS = {
 
 def _coast_samples(world, rng):
     if world.id == "briar":
-        # Locate the same procedural water boundary used by the simulation.
+        # Rays from the lake centre find the water edge the simulation uses. The 165 rays sit about
+        # 2.2 degrees apart; each angle jitters by at most 0.018 rad (about 1 degree) so the spokes
+        # are not evenly spaced. Each ray then bisects [0, 900] world units for 24 steps.
         angles = np.linspace(-math.pi, math.pi, 165, endpoint=False)
         angles += rng.uniform(-0.018, 0.018, len(angles))
         nx, nz = np.cos(angles), np.sin(angles)
@@ -107,8 +109,9 @@ def _coast_samples(world, rng):
         return np.stack([nx*radius,nz*radius,nx,nz],axis=1)
 
     coast = world.coast
-    # Survey coastline plus extra detail in the named fishing coves. Sampling
-    # with fixed seeds keeps repeated lake changes and save loads identical.
+    # 140 survey draws along the coastline, then 12 draws from the coast points within 230
+    # world units of each named zone, so the fishing coves get denser shore detail. Fixed
+    # seeds keep repeated lake loads and saves identical.
     indices = list(rng.integers(0,len(coast),140))
     for _,x,z,_ in world.zones:
         near = np.flatnonzero(np.hypot(coast[:,0]-x,coast[:,1]-z)<230)

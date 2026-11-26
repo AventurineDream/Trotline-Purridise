@@ -235,7 +235,7 @@ WEATHER_SPAN_HOURS = 168 * 12  # twelve forecast weeks; each lake reaches its we
 # 06 §7 budgets in MB, one per table row the benchmark estimates.
 MEMORY_BUDGET_MB = {
     "terrain_zones_depth": 350,
-    "foliage": 250,
+    "foliage": detail_tiers.FOLIAGE_BUDGET_MB,
     "render_targets": 300,
     "cat_actors": 150,
     "fish_meshes_and_cards": 120,

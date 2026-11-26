@@ -17,18 +17,18 @@ import zlib
 
 import numpy as np
 
-from .sprites import LAKE_TINT, Painter, bake
+from .sprites import LAKE_TINT, Painter, bake, tint_foliage
 
 W, H = 160, 256
 KINDS = ("pine", "oak", "cypress", "larch", "larchgold", "spruce", "hemlock", "whitebark", "deadpine")
 
-# Kinds that only the GL atlas and the CPU fallback's extra sprites use. They follow
-# KINDS so the pinned CPU seeds, which index KINDS, do not move.
+# Appended, never reordered: the CPU seeds index _CPU_ORDER, so each existing kind keeps its
+# pinned sprite.
 _NEW_TREES = ("birch", "cottonwood", "willow")
 _CPU_ORDER = KINDS + _NEW_TREES
 
 
-def _leaf(img, cx, cy, rx, ry, rgb, rng):
+def _leaf(img, cx, cy, rx, ry, rgb, rng, canopy):
     x0, x1 = max(0, int(cx-rx-2)), min(W, int(cx+rx+3))
     y0, y1 = max(0, int(cy-ry-2)), min(H, int(cy+ry+3))
     if x0 >= x1 or y0 >= y1:
@@ -44,11 +44,24 @@ def _leaf(img, cx, cy, rx, ry, rgb, rng):
     color = np.clip(np.array(rgb)[None,None,:]*light[...,None]*speckle[...,None],0,255).astype(np.uint8)
     patch[mask,:3] = color[mask]
     patch[mask,3] = 255
+    canopy[y0:y1,x0:x1] |= mask
 
 
-def tree(kind, variant):
+def tree(kind, variant, *, lake=None):
+    """One 160x256 CPU sprite of a tree kind, as RGBA.
+
+    Args:
+        kind: A kind in `KINDS`, `_NEW_TREES`, or "larchgold".
+        variant: 0-based variant; silhouettes differ per variant.
+        lake: When given, the canopy takes that lake's palette (`LAKE_TINT`) as `tree_hd`
+            does; None returns the pinned, untinted sprite.
+
+    Returns:
+        A uint8 array of shape (256, 160, 4).
+    """
     rng = np.random.default_rng(180+variant*17+_CPU_ORDER.index("larch" if kind == "larchgold" else kind)*83)
     img = np.zeros((H,W,4),np.uint8)
+    canopy = np.zeros((H,W),bool)
     yy, xx = np.mgrid[0:H,0:W]
     trunk_w = 3.5+(yy/H)**6*(9 if kind=="cypress" else 4)
     trunk = (abs(xx-W/2)<trunk_w)&(yy>65)&(yy<252)
@@ -71,11 +84,12 @@ def tree(kind, variant):
             cy = 89+np.sin(a)*r*49
             radius = rng.uniform(10,23)
             rgb = np.array([65,91,45])+rng.uniform(-12,14,3)
-            _leaf(img,cx,cy,radius,radius*0.83,rgb,rng)
+            _leaf(img,cx,cy,radius,radius*0.83,rgb,rng,canopy)
         # Fine branches under the crown.
         for sign in (-1,1):
             branch = (yy>108)&(yy<174)&(abs(xx-(80+sign*(174-yy)*0.35))<2)
             img[branch] = (92,77,54,255)
+            canopy[branch] = False
     elif kind in ("pine", "larch", "larchgold", "spruce", "hemlock", "whitebark"):
         for tier in range(11,0,-1):
             cy = 18+tier*14
@@ -86,8 +100,8 @@ def tree(kind, variant):
                         "larchgold": [195,151,49], "spruce": [48,85,81],
                         "hemlock": [38,67,56], "whitebark": [107,125,105]}[kind]
                 rgb = np.array(base)+rng.uniform(-8,10,3)
-                _leaf(img,cx,cy+rng.uniform(-6,7),rng.uniform(8,16),rng.uniform(7,12),rgb,rng)
-        _leaf(img,80,17,5,11,base if kind != "pine" else [76,99,61],rng)
+                _leaf(img,cx,cy+rng.uniform(-6,7),rng.uniform(8,16),rng.uniform(7,12),rgb,rng,canopy)
+        _leaf(img,80,17,5,11,base if kind != "pine" else [76,99,61],rng,canopy)
     elif kind == "birch":
         # Paper bark over the shared trunk, then slender, airy leaf clumps.
         img[trunk,:3] = np.clip(np.array([218,212,198])*bark[trunk,None],0,255).astype(np.uint8)
@@ -97,7 +111,7 @@ def tree(kind, variant):
             for j in range(9):
                 cx = 80+rng.uniform(-spread,spread)
                 rgb = np.array([124,156,70])+rng.uniform(-10,10,3)
-                _leaf(img,cx,cy+rng.uniform(-6,6),rng.uniform(6,11),rng.uniform(7,11),rgb,rng)
+                _leaf(img,cx,cy+rng.uniform(-6,6),rng.uniform(6,11),rng.uniform(7,11),rgb,rng,canopy)
     elif kind == "cottonwood":
         # Pale furrowed bark under a broad crown of large, clumped leaves.
         img[trunk,:3] = np.clip(np.array([156,146,124])*bark[trunk,None],0,255).astype(np.uint8)
@@ -107,7 +121,7 @@ def tree(kind, variant):
             for j in range(8):
                 cx = 80+rng.uniform(-spread,spread)
                 rgb = np.array([104,138,58])+rng.uniform(-10,10,3)
-                _leaf(img,cx,cy+rng.uniform(-8,8),rng.uniform(10,17),rng.uniform(9,14),rgb,rng)
+                _leaf(img,cx,cy+rng.uniform(-8,8),rng.uniform(10,17),rng.uniform(9,14),rgb,rng,canopy)
     elif kind == "willow":
         # A rounded crown with long curtains of hanging strands.
         for tier in range(7,0,-1):
@@ -116,12 +130,13 @@ def tree(kind, variant):
             for j in range(7):
                 cx = 80+rng.uniform(-spread,spread)
                 rgb = np.array([112,146,70])+rng.uniform(-9,9,3)
-                _leaf(img,cx,cy+rng.uniform(-6,6),rng.uniform(10,15),rng.uniform(7,11),rgb,rng)
+                _leaf(img,cx,cy+rng.uniform(-6,6),rng.uniform(10,15),rng.uniform(7,11),rgb,rng,canopy)
         for _ in range(26):
             x = int(rng.uniform(40,120))
             y = int(rng.uniform(100,140))
             length = int(rng.uniform(30,80))
             img[y:y+length,x:x+1] = (104,130,66,235)
+            canopy[y:y+length,x:x+1] = True
     else:
         for tier in range(10,0,-1):
             cy = 20+tier*15
@@ -129,13 +144,16 @@ def tree(kind, variant):
             for j in range(7):
                 cx = 80+rng.uniform(-spread,spread)
                 rgb = np.array([64,91,52])+rng.uniform(-10,10,3)
-                _leaf(img,cx,cy+rng.uniform(-9,9),rng.uniform(9,18),rng.uniform(9,16),rgb,rng)
+                _leaf(img,cx,cy+rng.uniform(-9,9),rng.uniform(9,18),rng.uniform(9,16),rgb,rng,canopy)
         # Fine hanging moss remains a detail, rather than a giant bare trunk.
         for _ in range(22):
             x = int(rng.uniform(52,108))
             y = int(rng.uniform(110,165))
             length = int(rng.uniform(9,29))
             img[y:y+length,x:x+1] = (82,94,69,235)
+            canopy[y:y+length,x:x+1] = True
+    if lake is not None:
+        img = tint_foliage(img, canopy, LAKE_TINT[lake])
     return img
 
 
@@ -189,7 +207,7 @@ def atlas(buoy_rgb, *, alpine=False, caldera=False, nebula=False):
 # Design space is the old 160x256 sprite grid, y down, trunk base on the bottom
 # row and the trunk centred at x = 80 (the quad's anchor).
 
-# GL seeds index this tuple, so kinds are appended and never reordered.
+# Atlas layers follow this order; silhouettes are seeded by name (tree_hd), so reordering only moves layers.
 TREE_KINDS = ("pine", "oak", "cypress", "larch", "spruce", "hemlock", "whitebark", "deadpine") + _NEW_TREES
 CONIFERS = frozenset(("pine", "cypress", "larch", "larchgold", "spruce", "hemlock", "whitebark"))
 
@@ -208,8 +226,8 @@ TREE_MIX = {
         "grove": (("cottonwood", 0.5), ("pine", 0.25), ("willow", 0.25)),
         "flooded": (("cypress", 0.5), ("cottonwood", 0.25), ("willow", 0.25)),
     },
-    "flathead": {"main": (("larch", 0.6), ("spruce", 0.4))},
-    "crater": {"main": (("hemlock", 0.66), ("whitebark", 0.34))},
+    "flathead": {"main": (("larch", 0.45), ("spruce", 0.30), ("birch", 0.25))},
+    "crater": {"main": (("hemlock", 0.50), ("whitebark", 0.25), ("pine", 0.25))},
 }
 
 
