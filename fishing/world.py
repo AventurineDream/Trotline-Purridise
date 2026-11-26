@@ -153,9 +153,8 @@ def make_slip() -> Slip:
 
 
 # Slip-local (a, s) rectangle per lake, in metres: props keep out of lo < a < hi with |s| < half,
-# so each landing and its approach stay open. The placement rules in caldera.py, lakegen.py,
-# nebula.py and world.py repeat these numbers inline. test_foliage checks the placed props
-# against this table, so a rule narrower than it fails there.
+# so each landing and its approach stay open. in_landing_envelope() is the single rule over this
+# table, and every prop placement calls it. test_foliage checks the placed props with that helper.
 LANDING_ENVELOPE = {
     "briar": (-4.0, 30.0, 20.0),
     "cedar": (-8.0, 35.0, 22.0),
@@ -163,6 +162,23 @@ LANDING_ENVELOPE = {
     "crater": (-65.0, 80.0, 85.0),
     "nebula": (-60.0, 75.0, 85.0),
 }
+
+
+def in_landing_envelope(lake_id, a, s) -> bool:
+    """Whether a point lies inside a lake's landing envelope, where props are kept out.
+
+    Args:
+        lake_id: Key into `LANDING_ENVELOPE`, such as "crater".
+        a: Metres inland of the landing's shore point along the slip's inland axis, as
+            `Slip.local` returns it; negative is over the water.
+        s: Metres across the slip along its side axis, as `Slip.local` returns it.
+
+    Returns:
+        True when lo < a < hi and |s| < half for the lake's (lo, hi, half). Both edges are
+        open: a point exactly on an edge is outside the envelope.
+    """
+    lo, hi, half = LANDING_ENVELOPE[lake_id]
+    return lo < float(a) < hi and abs(float(s)) < half
 
 
 @dataclass
@@ -682,7 +698,7 @@ class World:
 
         def on_pad(x, z) -> bool:
             a, s = self.slip.local(x, z)
-            return bool((-4.0 < float(a) < 30.0) and (abs(float(s)) < 20.0))
+            return in_landing_envelope(self.id, a, s)
 
         def add(kind, x, z, h, shade, limit):
             if on_pad(x, z) or too_close(x, z, limit):
@@ -792,7 +808,7 @@ class World:
             distance = float(rng.uniform(5,32) if i<2100 else rng.uniform(36,155))
             x,z = float(x+nx*distance),float(z+nz*distance)
             a,s = self.slip.local(x,z)
-            if -8<float(a)<35 and abs(float(s))<22:
+            if in_landing_envelope(self.id,a,s):
                 continue
             if float(self.shore_sd(x,z))<2:
                 continue
@@ -811,7 +827,7 @@ class World:
                 distance = float(rng.uniform(8,95))
                 x,z = float(x+nx*distance),float(z+nz*distance)
                 a,s = self.slip.local(x,z)
-                if (-8<float(a)<35 and abs(float(s))<22) or float(self.shore_sd(x,z))<2:
+                if in_landing_envelope(self.id,a,s) or float(self.shore_sd(x,z))<2:
                     continue
                 props.append(Prop(pick_tree("cedar",role,float(rng.random())),x,z,
                                   float(rng.uniform(11,21)),float(rng.uniform(0.78,1.02))))
@@ -848,7 +864,7 @@ class World:
                 distance = float(extra.uniform(8,95))
                 x,z = float(x+nx*distance),float(z+nz*distance)
                 a,s = self.slip.local(x,z)
-                if (-8<float(a)<35 and abs(float(s))<22) or float(self.shore_sd(x,z))<2:
+                if in_landing_envelope(self.id,a,s) or float(self.shore_sd(x,z))<2:
                     continue
                 props.append(Prop(pick_tree("cedar",role,float(extra.random())),x,z,
                                   float(extra.uniform(11,21)),float(extra.uniform(0.78,1.02))))

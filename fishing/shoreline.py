@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 import numpy as np
-from .world import LANDING_ENVELOPE
+from .world import in_landing_envelope
 
 # Above the densest bank's count (Crater, about 507 details), so the cap never trims a lake.
 # Each detail is one prop row and one instanced quad, so the cap still bounds draw calls and memory.
@@ -137,22 +137,6 @@ def _clear_route(world, x, z):
     return not bool(world.slip.contains(x,z))
 
 
-def _in_landing_envelope(world, x, z):
-    """Whether a shore detail at (x, z) lies in the lake's landing envelope.
-
-    Args:
-        world: The lake's `World`; its id selects the box in `LANDING_ENVELOPE`.
-        x: World x of the candidate detail, in metres.
-        z: World z of the candidate detail, in metres.
-
-    Returns:
-        True when lo < a < hi and |s| < half in the landing's slip-local axes, in metres.
-    """
-    lo, hi, half = LANDING_ENVELOPE[world.id]
-    a, s = world.slip.local(x, z)
-    return lo < float(a) < hi and abs(float(s)) < half
-
-
 def shoreline_props(world, prop_type):
     """Return a bounded list of non-colliding Prop records for this lake.
 
@@ -192,7 +176,8 @@ def shoreline_props(world, prop_type):
         size = float(rng.uniform(0.88,1.06))
         # A dropped detail still draws its size and holds its cell, so every other detail
         # keeps the place and size it had.
-        if _in_landing_envelope(world, x, z):
+        a, s = world.slip.local(x, z)
+        if in_landing_envelope(world.id, a, s):
             return
         result.append(prop_type(kind,x,z,float(height),size))
 

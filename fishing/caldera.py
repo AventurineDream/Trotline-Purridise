@@ -24,6 +24,7 @@ def reflection_strength(state, light):
 
 def caldera_props(world, prop_type):
     from .forest import index_draw, pick_tree
+    from .world import in_landing_envelope
     parameters=world.environment
     rng=np.random.default_rng(parameters['seed'])
     result=[]
@@ -32,7 +33,7 @@ def caldera_props(world, prop_type):
         radius=float(world.fields.radius(angle))+float(rng.uniform(7,135))
         x,z=math.cos(angle)*radius,math.sin(angle)*radius
         a,s=world.slip.local(x,z)
-        if -65<float(a)<80 and abs(float(s))<85:
+        if in_landing_envelope(world.id,a,s):
             continue
         kind=pick_tree(world.id,"main",index_draw(index))
         result.append(prop_type(kind,x,z,float(rng.uniform(13,23)),float(rng.uniform(.82,1.03))))

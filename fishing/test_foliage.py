@@ -43,7 +43,7 @@ from .particlefx import LEAF_KINDS
 from .shoreline import _clear_route
 from .sprites import LAKE_TINT, Painter, bake, sprite_hd
 from .verify import foliage_bytes
-from .world import LANDING_ENVELOPE, Prop, World
+from .world import LANDING_ENVELOPE, Prop, World, in_landing_envelope
 
 TREE_LAKES = ("briar", "cedar", "flathead", "crater")
 ALL_LAKES = (*TREE_LAKES, "nebula")
@@ -211,9 +211,24 @@ class DensityTests(unittest.TestCase):
 class ClearanceTests(unittest.TestCase):
     """Landings, routes, the marina and the Cedar cove stay open."""
 
+    def test_envelope_edges_are_open(self):
+        """A point on any edge of a lake's envelope is outside it; a point just inside is in."""
+        for lake, (lo, hi, half) in LANDING_ENVELOPE.items():
+            with self.subTest(lake=lake):
+                mid = (lo + hi) / 2
+                self.assertTrue(in_landing_envelope(lake, mid, 0.0))
+                self.assertFalse(in_landing_envelope(lake, lo, 0.0))
+                self.assertFalse(in_landing_envelope(lake, hi, 0.0))
+                self.assertTrue(in_landing_envelope(lake, lo + 0.01, 0.0))
+                self.assertTrue(in_landing_envelope(lake, hi - 0.01, 0.0))
+                self.assertFalse(in_landing_envelope(lake, mid, half))
+                self.assertFalse(in_landing_envelope(lake, mid, -half))
+                self.assertTrue(in_landing_envelope(lake, mid, half - 0.01))
+                self.assertTrue(in_landing_envelope(lake, mid, -(half - 0.01)))
+
     def test_landing_envelopes_stay_clear(self):
         """Tree lakes keep every prop out of the envelope; the nebula keeps its spires out."""
-        for lake, (lo, hi, half) in LANDING_ENVELOPE.items():
+        for lake in LANDING_ENVELOPE:
             with self.subTest(lake=lake):
                 world = _world(lake)
                 kinds = NEBULA_SCENERY[:1] if lake == "nebula" else None
@@ -222,14 +237,13 @@ class ClearanceTests(unittest.TestCase):
                     if kinds is not None and p.kind not in kinds:
                         continue
                     a, s = (float(v) for v in world.slip.local(p.x, p.z))
-                    if lo < a < hi and abs(s) < half:
+                    if in_landing_envelope(lake, a, s):
                         inside.append((p.kind, round(p.x, 1), round(p.z, 1)))
                 self.assertEqual(inside, [])
 
     def test_extra_spires_clear_the_landing_for_many_seeds(self):
         """The nebula's denser spires keep the landing clear for every seed, not just one."""
         world = _world("nebula")
-        lo, hi, half = LANDING_ENVELOPE["nebula"]
         seed = int(world.environment["seed"])
         for offset in range(32):
             with self.subTest(seed=seed + offset):
@@ -238,7 +252,7 @@ class ClearanceTests(unittest.TestCase):
                 inside = []
                 for p in spires:
                     a, s = (float(v) for v in world.slip.local(p.x, p.z))
-                    if lo < a < hi and abs(s) < half:
+                    if in_landing_envelope("nebula", a, s):
                         inside.append((round(p.x, 1), round(p.z, 1)))
                 self.assertEqual(inside, [])
 

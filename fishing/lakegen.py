@@ -118,6 +118,7 @@ def larch_gold(state):
 
 def alpine_props(world, prop_type):
     from .forest import index_draw, pick_tree
+    from .world import in_landing_envelope
     parameters = world.environment
     rng = np.random.default_rng(parameters['seed'])
     result = []
@@ -126,7 +127,7 @@ def alpine_props(world, prop_type):
         radius = float(world.fields.radius(angle)) + float(rng.uniform(8, 185))
         x, z = math.cos(angle)*radius, math.sin(angle)*radius
         a, s = world.slip.local(x, z)
-        if -60 < a < 75 and abs(s) < 85:
+        if in_landing_envelope(world.id, a, s):
             continue
         if float(world.sample_height(x, z)) > parameters["snow_line"]-15:
             continue
