@@ -444,7 +444,7 @@ class DevMode:
         key = hotkey_label(self.key_label)
         perf = f"{fps:.0f} fps  {frame_ms:.1f} ms  {rss_mb:.0f}+{gpu} MB"
         # The toggle key outranks the readout: narrower windows shed the readout, then the
-        # word, then the key, so the text fits its badge down to a bare "DEV" (~90 px).
+        # word, then the key. Only a window too narrow for a bare "DEV" clips the badge.
         for marker in (f"DEV  {key} tools  {perf}", f"DEV  {key} tools", f"DEV {key}", "DEV"):
             if ui._measure(marker, small, "mono") <= w - 32:
                 break
