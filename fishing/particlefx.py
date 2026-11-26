@@ -62,7 +62,8 @@ STILL_TIME = 0.0
 # drift is velocity x anim, so a live wind would jump particles when it changed.
 DRIFT = {"briar": (0.18, 0.07), "cedar": (0.45, 0.20), "flathead": (0.30, -0.18),
          "crater": (0.08, 0.05), "nebula": (0.05, 0.10)}
-TREE_KINDS = ("oak", "pine", "cypress")
+# Each lake sheds leaves from the species that stand on it, so drops match the trees in view.
+LEAF_KINDS = {"briar": ("oak", "birch", "pine"), "cedar": ("cottonwood", "willow", "cypress")}
 REED_KINDS = ("reed", "cattail")
 
 
@@ -159,7 +160,7 @@ class ParticleFx(Fx):
             out[NEEDLE] = self._tree_drops(rng, count[NEEDLE], ("larch",), 0.35, 0.95)
         if lake in ("briar", "cedar"):
             out[FIREFLY] = self._bank(rng, count[FIREFLY])
-            out[LEAF] = self._tree_drops(rng, count[LEAF], TREE_KINDS, 0.55, 0.9)
+            out[LEAF] = self._tree_drops(rng, count[LEAF], LEAF_KINDS[lake], 0.55, 0.9)
         if lake != "nebula":
             out[WISP] = box(WISP)
             out[INSECT] = self._reeds(rng, count[INSECT])

@@ -55,6 +55,7 @@ TREE_KINDS = {
     "pine": (0.20, 0.30, 0.80), "oak": (0.30, 0.32, 0.90), "cypress": (0.17, 0.22, 0.85),
     "larch": (0.17, 0.25, 0.65), "spruce": (0.18, 0.18, 0.90), "hemlock": (0.20, 0.20, 0.90),
     "whitebark": (0.22, 0.30, 0.70), "deadpine": (0.10, 0.35, 0.30),
+    "birch": (0.14, 0.28, 0.55), "cottonwood": (0.28, 0.30, 0.85), "willow": (0.30, 0.22, 0.60),
 }
 SOLID_KINDS = {
     # kind: (radius / height, top / height, density); base is the ground

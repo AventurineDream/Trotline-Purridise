@@ -115,9 +115,13 @@ class SoftwareRenderer:
             from .sprites import nebula_sprites
             self.sprites.update(nebula_sprites())
             self._lanes = lane_circles(world)
-        elif world.generated:
-            from .forest import tree
-            kinds = ("hemlock", "whitebark", "deadpine") if world.caldera else ("larch", "larchgold", "spruce")
+        else:
+            # Sprites the baked set lacks: generated lakes' conifers and the new broadleaves.
+            from .forest import TREE_KINDS, tree
+            placed = {prop.kind for prop in world.props} & set(TREE_KINDS)
+            kinds = sorted(kind for kind in placed if kind not in self.sprites)
+            if "larch" in placed:
+                kinds.append("larchgold")
             self.sprites.update({kind: tree(kind, 0) for kind in kinds})
         self.last_ms = 0.0
         self.splashes: list[tuple[float, float, float]] = []
@@ -882,6 +886,7 @@ class SoftwareRenderer:
         ambient = 0.22 + 0.70 * (1.0 - light["night"]) + light["moon_i"] * 0.4
         fog_c = light["horizon"]
         items = []
+        from .forest import TREE_KINDS
         from .lakegen import larch_gold
         gold = self.world.generated and larch_gold(state)
         pts = cam.world_to_cam(self.prop_positions)
@@ -891,7 +896,7 @@ class SoftwareRenderer:
             prop = self.world.props[i]
             if zz > 750 or sx < -80 or sx > self.w + 80:
                 continue
-            tree = prop.kind in ("pine", "oak", "cypress", "larch", "spruce", "hemlock", "whitebark", "deadpine")
+            tree = prop.kind in TREE_KINDS
             kind = prop.kind
             if kind == "larch":
                 kind = "larchgold" if gold else kind

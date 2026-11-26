@@ -7,18 +7,25 @@ with real structure (trunk, branching, depth-ordered leaf clumps, species
 silhouettes); `florafx.PaintBaker` rasterises them on the GPU with the
 normal/translucency/AO fields `foliage.frag` lights them with.
 Variants differ in silhouette, not only colour, so tree lines stop repeating.
+Each lake's species mix (`TREE_MIX`) and palette (`sprites.LAKE_TINT`) keep lakes apart.
 """
 
 from __future__ import annotations
 
 import math
+import zlib
 
 import numpy as np
 
-from .sprites import Painter, bake
+from .sprites import LAKE_TINT, Painter, bake
 
 W, H = 160, 256
 KINDS = ("pine", "oak", "cypress", "larch", "larchgold", "spruce", "hemlock", "whitebark", "deadpine")
+
+# Kinds that only the GL atlas and the CPU fallback's extra sprites use. They follow
+# KINDS so the pinned CPU seeds, which index KINDS, do not move.
+_NEW_TREES = ("birch", "cottonwood", "willow")
+_CPU_ORDER = KINDS + _NEW_TREES
 
 
 def _leaf(img, cx, cy, rx, ry, rgb, rng):
@@ -40,7 +47,7 @@ def _leaf(img, cx, cy, rx, ry, rgb, rng):
 
 
 def tree(kind, variant):
-    rng = np.random.default_rng(180+variant*17+KINDS.index("larch" if kind == "larchgold" else kind)*83)
+    rng = np.random.default_rng(180+variant*17+_CPU_ORDER.index("larch" if kind == "larchgold" else kind)*83)
     img = np.zeros((H,W,4),np.uint8)
     yy, xx = np.mgrid[0:H,0:W]
     trunk_w = 3.5+(yy/H)**6*(9 if kind=="cypress" else 4)
@@ -81,6 +88,40 @@ def tree(kind, variant):
                 rgb = np.array(base)+rng.uniform(-8,10,3)
                 _leaf(img,cx,cy+rng.uniform(-6,7),rng.uniform(8,16),rng.uniform(7,12),rgb,rng)
         _leaf(img,80,17,5,11,base if kind != "pine" else [76,99,61],rng)
+    elif kind == "birch":
+        # Paper bark over the shared trunk, then slender, airy leaf clumps.
+        img[trunk,:3] = np.clip(np.array([218,212,198])*bark[trunk,None],0,255).astype(np.uint8)
+        for tier in range(9,0,-1):
+            cy = 22+tier*14
+            spread = 8+tier*2.6
+            for j in range(9):
+                cx = 80+rng.uniform(-spread,spread)
+                rgb = np.array([124,156,70])+rng.uniform(-10,10,3)
+                _leaf(img,cx,cy+rng.uniform(-6,6),rng.uniform(6,11),rng.uniform(7,11),rgb,rng)
+    elif kind == "cottonwood":
+        # Pale furrowed bark under a broad crown of large, clumped leaves.
+        img[trunk,:3] = np.clip(np.array([156,146,124])*bark[trunk,None],0,255).astype(np.uint8)
+        for tier in range(9,0,-1):
+            cy = 24+tier*15
+            spread = 12+min(tier,6)*4
+            for j in range(8):
+                cx = 80+rng.uniform(-spread,spread)
+                rgb = np.array([104,138,58])+rng.uniform(-10,10,3)
+                _leaf(img,cx,cy+rng.uniform(-8,8),rng.uniform(10,17),rng.uniform(9,14),rgb,rng)
+    elif kind == "willow":
+        # A rounded crown with long curtains of hanging strands.
+        for tier in range(7,0,-1):
+            cy = 40+tier*12
+            spread = 14+tier*4
+            for j in range(7):
+                cx = 80+rng.uniform(-spread,spread)
+                rgb = np.array([112,146,70])+rng.uniform(-9,9,3)
+                _leaf(img,cx,cy+rng.uniform(-6,6),rng.uniform(10,15),rng.uniform(7,11),rgb,rng)
+        for _ in range(26):
+            x = int(rng.uniform(40,120))
+            y = int(rng.uniform(100,140))
+            length = int(rng.uniform(30,80))
+            img[y:y+length,x:x+1] = (104,130,66,235)
     else:
         for tier in range(10,0,-1):
             cy = 20+tier*15
@@ -148,8 +189,64 @@ def atlas(buoy_rgb, *, alpine=False, caldera=False, nebula=False):
 # Design space is the old 160x256 sprite grid, y down, trunk base on the bottom
 # row and the trunk centred at x = 80 (the quad's anchor).
 
-TREE_KINDS = ("pine", "oak", "cypress", "larch", "spruce", "hemlock", "whitebark", "deadpine")
+# GL seeds index this tuple, so kinds are appended and never reordered.
+TREE_KINDS = ("pine", "oak", "cypress", "larch", "spruce", "hemlock", "whitebark", "deadpine") + _NEW_TREES
 CONIFERS = frozenset(("pine", "cypress", "larch", "larchgold", "spruce", "hemlock", "whitebark"))
+
+# Each lake's tree identity: kind weights per role, where a role names a place the lake
+# plants (Briar's cypress shore, Cedar's flooded cove). Placement maps exactly one uniform
+# draw per tree through `pick_tree`, so positions and the random stream stay as they were.
+TREE_MIX = {
+    "briar": {
+        "cypress_shore": (("cypress", 0.6), ("birch", 0.2), ("oak", 0.2)),
+        "north": (("pine", 0.5), ("oak", 0.25), ("birch", 0.25)),
+        "main": (("oak", 0.4), ("birch", 0.3), ("pine", 0.3)),
+        "outer": (("oak", 0.3), ("birch", 0.3), ("pine", 0.4)),
+    },
+    "cedar": {
+        "main": (("cottonwood", 0.4), ("pine", 0.3), ("willow", 0.2), ("cypress", 0.1)),
+        "grove": (("cottonwood", 0.5), ("pine", 0.25), ("willow", 0.25)),
+        "flooded": (("cypress", 0.5), ("cottonwood", 0.25), ("willow", 0.25)),
+    },
+    "flathead": {"main": (("larch", 0.6), ("spruce", 0.4))},
+    "crater": {"main": (("hemlock", 0.66), ("whitebark", 0.34))},
+}
+
+
+def pick_tree(lake: str, role: str, u: float) -> str:
+    """The tree kind that a uniform draw lands on for one lake's placement role.
+
+    Args:
+        lake: A key of `TREE_MIX`.
+        role: A role of that lake, such as "main".
+        u: Uniform draw in [0, 1), from the caller's random stream or `index_draw`.
+
+    Returns:
+        A kind from `TREE_KINDS`. Weights are normalised, so rows need not sum to 1.
+    """
+    row = TREE_MIX[lake][role]
+    total = sum(weight for _, weight in row)
+    edge = 0.0
+    for kind, weight in row:
+        edge += weight / total
+        if u < edge:
+            return kind
+    return row[-1][0]
+
+
+def index_draw(index: int) -> float:
+    """A low-discrepancy draw in [0, 1) for candidate `index` (golden-ratio sequence).
+
+    Index-based placement uses this instead of the random stream, so a lake's mix keeps
+    its weights over any run of candidates and changing a weight never moves a tree.
+
+    Args:
+        index: Candidate index, 0-based.
+
+    Returns:
+        A value in [0, 1).
+    """
+    return (index * 0.6180339887498949) % 1.0
 
 
 def _mix(a, b, t):
@@ -314,6 +411,26 @@ def _paint_willow(p, rng, v):
         p.drape(x0, x0 + float(rng.uniform(16, 24)), cy + float(rng.uniform(-6, 18)),
                 float(rng.uniform(55, 95)), _jit(rng, _mix(dark, light, 0.6), 0.05),
                 z=30.0 + float(rng.uniform(0, 6)), density=0.62, period=1.9, sway=float(rng.uniform(-2, 2)))
+
+
+def _paint_birch(p, rng, v):
+    """Briar birch: two or three pale, black-marked stems under a slender, airy crown."""
+    bark = _jit(rng, (222, 216, 204), 0.03)
+    _flare(p, 80, 256, 12, 9, bark)
+    stems = int(rng.integers(2, 4))
+    for i in range(stems):
+        base_x = 80 + (i - (stems - 1) / 2) * 7.0
+        top = (base_x + float(rng.uniform(-8, 8)), float(rng.uniform(80, 104)))
+        _trunk(p, base_x, 256, *top, 5.4 - i * 0.8, 2.8, bark, rng=rng, wobble=1.5)
+        # Black lenticel marks spaced up each stem: the birch's signature.
+        for _ in range(int(rng.integers(6, 10))):
+            t = float(rng.uniform(0.2, 0.9))
+            p.blob(base_x + (top[0] - base_x) * t, 256 + (top[1] - 256) * t, 1.5, 0.55,
+                   (44, 40, 38), z=14.0, rough=0.3, leafy=0.0, dome=0.3, speck=0.2, grain="bark")
+    light = _jit(rng, (150, 178, 84), 0.05)
+    dark = _jit(rng, (70, 102, 46), 0.05)
+    _crown(p, rng, 80, 74, 46, 62, 34, 9.5, light, dark, z0=18.0, lobes=2, rough=0.36,
+           gaps=0.2, top_bias=0.2)
 
 
 def _paint_pine(p, rng, v):
@@ -556,14 +673,8 @@ _PAINTERS = {
     "oak": _paint_oak, "pine": _paint_pine, "cypress": _paint_cypress, "larch": _paint_larch,
     "spruce": _paint_spruce, "hemlock": _paint_hemlock, "whitebark": _paint_whitebark,
     "deadpine": _paint_deadpine, "cottonwood": _paint_cottonwood, "willow": _paint_willow,
+    "birch": _paint_birch,
 }
-
-
-def species(kind: str, variant: int, lake: str) -> str:
-    """The painted species behind a placed kind on a lake (Cedar's oaks are cottonwood and willow)."""
-    if kind == "oak" and lake == "cedar":
-        return "willow" if variant % 4 == 3 else "cottonwood"
-    return kind
 
 
 def tree_hd(kind: str, variant: int, *, lake: str = "briar") -> Painter:
@@ -573,16 +684,17 @@ def tree_hd(kind: str, variant: int, *, lake: str = "briar") -> Painter:
         kind: A placed kind (`TREE_KINDS`); "larchgold" is the larch baked
             with gold needles, so it is not accepted here.
         variant: 0-based variant; silhouettes differ per variant.
-        lake: Lake id; picks regional species for shared kinds.
+        lake: Lake id. Seeds this lake's silhouettes, so no two lakes share a tree,
+            and applies its palette to the foliage (`sprites.LAKE_TINT`).
 
     Returns:
         A finished `Painter` on the 160x256 design grid.
     """
-    name = species(kind, variant, lake)
-    seed = 9100 + variant * 131 + TREE_KINDS.index(kind) * 977 + (len(lake) * 17 if kind == "oak" else 0)
+    seed = zlib.crc32(f"{lake}:{kind}:{variant}".encode())
     grain = "needle" if kind in ("larch", "spruce", "whitebark") else "leaf"
     p = Painter(W, H, seed, grain=grain)
-    _PAINTERS[name](p, p.rng, variant)
+    _PAINTERS[kind](p, p.rng, variant)
+    p.tint(LAKE_TINT[lake])
     deadwood = kind == "deadpine"
     return p.finish(core=0.25 if deadwood else 0.5, cavity=0.45, contact=0.5,
                     thin_floor=0.25 if kind in CONIFERS else 0.3)

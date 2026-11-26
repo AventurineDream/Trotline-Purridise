@@ -1130,7 +1130,7 @@
         ],
         "slip_angle": 2.95,
         "snow_line": 95,
-        "tree_count": 560,
+        "tree_count": 720,
         "sky_zenith": [
           0.22,
           0.48,
@@ -1441,7 +1441,7 @@
         ],
         "slip_angle": 3.02,
         "snow_line": 500,
-        "tree_count": 420,
+        "tree_count": 540,
         "sky_zenith": [
           0.19,
           0.29,

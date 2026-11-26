@@ -329,7 +329,7 @@ class FloraAtlas:
                 if kind in forest.TREE_KINDS:
                     recipe = forest.tree_hd(kind, variant, lake=self.lake)
                 elif kind in sprites.HD_SPRITES:
-                    recipe = sprites.sprite_hd(kind, variant)
+                    recipe = sprites.sprite_hd(kind, variant, lake=self.lake)
                 else:
                     self._store_plain(index, small[kind])
                     continue

@@ -15,6 +15,8 @@ about one texel per design unit.
 
 from __future__ import annotations
 
+import zlib
+
 import numpy as np
 
 
@@ -166,10 +168,22 @@ def buoy(rgb: tuple[int, int, int], flagged: bool) -> np.ndarray:
 # World-space aspect ratios match the small CPU sprites and the shared GL atlas.
 PROP_ASPECTS = {
     "cattail": 2/3, "grass": 1.5, "flowers": 1.2, "shrub": 7/6,
+    "palmetto": 1.5,
     "driftwood": 7/3, "shore_stone": 2.4, "heron": 3/7, "duck": 5/3,
     "spire": 40/112, "starlily": 4/3, "kelp": 28/96, "meteor": 1.3, "lightreed": 1/2,
 }
 WATERLINE_KINDS = frozenset(("reed", "knee", "cattail", "heron", "duck", "kelp", "meteor", "lightreed"))
+
+# Per-lake palettes: channel gains that `Painter.tint` applies to each lake's leafy
+# primitives, so one species reads warmer, cooler or greyer from lake to lake.
+# Nebula's flora glows and stays neutral.
+LAKE_TINT = {
+    "briar": (1.00, 1.04, 0.90),
+    "cedar": (1.12, 1.02, 0.78),
+    "flathead": (0.84, 1.00, 1.16),
+    "crater": (0.90, 0.98, 1.14),
+    "nebula": (1.00, 1.00, 1.00),
+}
 
 
 def _stroke(img, a, b, width, color):
@@ -273,6 +287,19 @@ def shore_stone() -> np.ndarray:
         _ellipse(img,x,y,rx,ry,c)
         _ellipse(img,x-rx*0.2,y-ry*0.35,rx*0.7,ry*0.45,(150,149,128,255))
         _stroke(img,(x-rx*0.4,y),(x+rx*0.5,y+2),0.6,(98,101,89,255))
+    return img
+
+
+def palmetto() -> np.ndarray:
+    """Dwarf palmetto: a fan of stiff fronds rising from one crown (CPU fallback sprite)."""
+    img = _img(96, 64)
+    rng = np.random.default_rng(1171)
+    for k in range(11):
+        a = -np.pi * (0.08 + 0.84 * k / 10)
+        length = float(rng.uniform(22, 34))
+        tip = (48 + np.cos(a) * length, 60 + np.sin(a) * length)
+        _stroke(img, (48, 60), tip, 1.6, (70, 108, 52, 255))
+        _ellipse(img, tip[0], tip[1], 5, 2.8, (96, 128, 64, 255))
     return img
 
 
@@ -398,6 +425,7 @@ def bake(buoy_rgb: tuple[int, int, int]) -> dict[str, np.ndarray]:
         "shrub": shrub(),
         "driftwood": driftwood(),
         "shore_stone": shore_stone(),
+        "palmetto": palmetto(),
         "heron": heron(),
         "duck": duck(),
         "buoy": buoy((r, g, b), False),
@@ -560,6 +588,28 @@ class Painter:
         """The recorded primitives as a (n, ROW) float32 array."""
         return np.asarray(self.rows, F4).reshape(-1, ROW)
 
+    def tint(self, gain) -> "Painter":
+        """Multiply the leafy primitives' colours by a lake's palette gain.
+
+        Wood and stone (leafy 0) keep their colour, so a palette changes foliage
+        without repainting trunks. Channels clamp to 1 after scaling.
+
+        Args:
+            gain: Per-channel (r, g, b) multipliers, from `LAKE_TINT`.
+
+        Returns:
+            self, so calls chain with `finish`.
+        """
+        if not self.rows:
+            return self
+        rows = np.asarray(self.rows, F4).reshape(-1, ROW)
+        leafy = rows[:, 7] > 0.5
+        g = np.asarray(gain, F4)
+        rows[leafy, 8:11] = np.clip(rows[leafy, 8:11] * g, 0.0, 1.0)
+        rows[leafy, 28:31] = np.clip(rows[leafy, 28:31] * g, 0.0, 1.0)
+        self.rows = [tuple(float(v) for v in row) for row in rows]
+        return self
+
 
 def soft_fields(cov: np.ndarray, z: np.ndarray, gx: float, gy: float, *, core: float,
                 cavity: float) -> np.ndarray:
@@ -717,6 +767,24 @@ def _hd_shrub(p, rng, v):
         p.blob(x, y, s, s * 0.8, rgb, z=10 + float(np.sqrt(max(0.0, 1 - r * r))) * 20, rough=0.35)
 
 
+def _hd_palmetto(p, rng, v):
+    """Dwarf palmetto: a fan of stiff, arching fronds rising from one crown on the bank."""
+    deep, lit = (36, 74, 40), (98, 130, 66)
+    base_x, base_y = 48.0, 60.0
+    count = int(rng.integers(9, 13))
+    for k in range(count):
+        a = -np.pi * (0.08 + 0.84 * (k + float(rng.uniform(0, 0.8))) / count)
+        length = float(rng.uniform(24, 34))
+        tip_x = base_x + float(np.cos(a)) * length
+        tip_y = base_y + float(np.sin(a)) * length
+        p.blade(base_x, base_y, tip_x, tip_y, float(rng.uniform(1.5, 2.1)),
+                _tone(deep, float(rng.uniform(0.9, 1.1))), bend=float(rng.uniform(-4, 4)),
+                z=float(rng.uniform(0, 4)), tip_rgb=_tone(lit, float(rng.uniform(0.9, 1.1))))
+        # Each frond ends in a pleated fan of leaf.
+        p.blob(tip_x, tip_y + 1.0, 5.6, 2.6, _tone(lit, float(rng.uniform(0.9, 1.1))),
+               z=8.0 + float(rng.uniform(0, 4)), rough=0.35, dome=0.6)
+
+
 def _hd_knee(p, rng, v):
     """A cypress knee: a rounded woody cone, dark and wet at the waterline."""
     bark = (128, 98, 68)
@@ -830,6 +898,7 @@ HD_SPRITES = {
     "reed": (24, 48, _hd_reed, {}),
     "cattail": (64, 96, _hd_cattail, {}),
     "grass": (96, 64, _hd_grass, {}),
+    "palmetto": (96, 64, _hd_palmetto, {}),
     "flowers": (96, 80, _hd_flowers, {}),
     "shrub": (112, 96, _hd_shrub, {"contact": 0.4}),
     "knee": (18, 32, _hd_knee, {}),
@@ -845,18 +914,21 @@ HD_SPRITES = {
 }
 
 
-def sprite_hd(kind: str, variant: int) -> Painter:
+def sprite_hd(kind: str, variant: int, *, lake: str = "briar") -> Painter:
     """The recipe for one HD shore/lagoon sprite.
 
     Args:
         kind: A key of `HD_SPRITES`.
         variant: 0-based variant (seeds shape and, for flowers and grass, colour).
+        lake: Lake id. Seeds this lake's arrangement, so no two lakes share a sprite,
+            and applies its palette to the leafy primitives (`LAKE_TINT`).
 
     Returns:
         A finished `Painter` for `florafx.PaintBaker.bake`.
     """
     base_w, base_h, paint, finish = HD_SPRITES[kind]
-    seed = 4400 + variant * 53 + sorted(HD_SPRITES).index(kind) * 389
+    seed = zlib.crc32(f"{lake}:{kind}:{variant}".encode())
     p = Painter(base_w, base_h, seed, grain="stone" if kind in ("rock", "shore_stone", "meteor") else "leaf")
     paint(p, p.rng, variant)
+    p.tint(LAKE_TINT[lake])
     return p.finish(**finish)
