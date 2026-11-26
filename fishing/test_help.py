@@ -237,7 +237,7 @@ class HelpTextChecks(unittest.TestCase):
 
     def test_each_keyboard_row_shows_the_bound_key(self):
         bindings = normalize_key_bindings(set_key_binding(None, "catnap", "x"))
-        lines = [line for title, page in help_pages({"catnap": "x"})
+        lines = [line for title, page in help_pages(bindings)
                  if title.startswith("KEYBOARD") for line in page]
         for _title, rows in _KEYBOARD_ROWS:
             for left, right in rows:
