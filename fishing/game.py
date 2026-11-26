@@ -2746,7 +2746,7 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                     )
                     perf_sample_at = time.perf_counter()
                     # Once a second is prompt enough to follow a keyboard-layout switch.
-                    session.dev_mode.key_label = platform.key_label("grave")
+                    session.dev_mode.refresh_key_label(platform)
                 session.dev_mode.draw(big, ui)
             platform.present(big)
             motion_reduced = bool(session.state.v2.get("settings", {}).get("reduced_motion", False))
