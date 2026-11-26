@@ -12,7 +12,7 @@ import math
 import numpy as np
 from .world import in_landing_envelope
 
-# Above the densest bank's count (Crater, about 507 details), so the cap never trims a lake.
+# Above the densest bank's count (Flathead, 512 details), so the cap never trims a lake.
 # Each detail is one prop row and one instanced quad, so the cap still bounds draw calls and memory.
 MAX_SHORE_DETAILS = 560
 
