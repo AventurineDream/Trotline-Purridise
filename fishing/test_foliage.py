@@ -7,8 +7,9 @@ Per lake, on the built world, these tests check that:
 - tree, shore and nebula counts sit in an authored band (1.2x to 1.4x the pre-change counts);
 - no tree or nebula spire sits in its landing envelope, and no shore plant sits on a route,
   in a marina clearing or in the Cedar cove;
-- the leafy palette follows `sprites.LAKE_TINT` on the GL atlas and on the CPU canopy, while wood
-  and trunks stay untinted, and HD sprites and tree silhouettes differ per lake;
+- the leafy palette follows `sprites.LAKE_TINT` on the GL atlas and on the CPU canopies and
+  shore plants, while wood, bark and stone stay untinted, and HD sprites and tree silhouettes
+  differ per lake;
 - leaves fall from the trees Briar and Cedar place, and from Flathead's birches;
 - the CPU renderer has a sprite for every placed kind.
 
@@ -316,7 +317,7 @@ class PaletteTests(unittest.TestCase):
 
 
 class CpuSpriteTests(unittest.TestCase):
-    """The CPU fallback draws every placed tree and shore kind, and tints each tree's canopy."""
+    """The CPU fallback draws every placed tree and shore kind, tinting their leafy parts per lake."""
 
     def test_every_placed_kind_has_a_cpu_sprite(self):
         from .software import SoftwareRenderer
@@ -350,7 +351,7 @@ class CpuSpriteTests(unittest.TestCase):
         wood = {"pine": np.s_[100:110, 22:35], "oak": np.s_[76:86, 28:46],
                 "cypress": np.s_[110:125, 22:26]}
         for lake in TREE_LAKES:
-            tinted = bake(paint_rgb("buoy", "orange"), tree_gain=LAKE_TINT[lake])
+            tinted = bake(paint_rgb("buoy", "orange"), lake=lake)
             for kind, region in wood.items():
                 with self.subTest(lake=lake, kind=kind):
                     np.testing.assert_array_equal(tinted[kind][region], plain[kind][region])
@@ -360,6 +361,37 @@ class CpuSpriteTests(unittest.TestCase):
                 with self.subTest(lake=lake, kind=kind):
                     band = np.s_[230:250, 74:86]  # below every crown, so only trunk pixels
                     np.testing.assert_array_equal(tree(kind, 0, lake=lake)[band], tree(kind, 0)[band])
+
+    def test_cpu_shore_plants_take_the_palette_on_leafy_parts_only(self):
+        from .software import SoftwareRenderer
+        plain = bake(paint_rgb("buoy", "orange"))
+        plants = ("reed", "cattail", "grass", "flowers", "shrub", "palmetto")
+        # Dry wood that the leafy builders paint over their green parts: reed sheaths,
+        # cattail seed heads and shrub stems must keep their colours.
+        wood = {"reed": [(92, 64, 36)],
+                "cattail": [(89, 60, 35), (135, 97, 55), (125, 116, 72)],
+                "shrub": [(89, 75, 48)]}
+        for lake in TREE_LAKES:
+            world = _world(lake)
+            renderer = SoftwareRenderer(world, 320, 180)
+            placed = {p.kind for p in world.props} & set(plants)
+            self.assertTrue(placed, lake)
+            for kind in ("rock", "stump", "knee", "driftwood", "shore_stone"):
+                with self.subTest(lake=lake, kind=kind):
+                    np.testing.assert_array_equal(renderer.sprites[kind], plain[kind])
+            for kind in sorted(placed):
+                with self.subTest(lake=lake, kind=kind):
+                    reference, sprite = plain[kind], renderer.sprites[kind]
+                    changed = (sprite[..., :3] != reference[..., :3]).any(axis=-1)
+                    self.assertTrue(changed.any())
+                    for channel in range(3):
+                        ratio = (sprite[changed, channel].astype(float).sum()
+                                 / reference[changed, channel].astype(float).sum())
+                        self.assertAlmostEqual(ratio, LAKE_TINT[lake][channel], delta=0.02)
+                    for colour in wood.get(kind, ()):
+                        dry = (reference[..., :3] == colour).all(axis=-1) & (reference[..., 3] > 0)
+                        self.assertTrue(dry.any())
+                        np.testing.assert_array_equal(sprite[dry], reference[dry])
 
 
 def _gpu_layer_bytes(tex) -> int:

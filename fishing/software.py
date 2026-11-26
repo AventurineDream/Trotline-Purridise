@@ -14,7 +14,7 @@ import numpy as np
 from .camera import Camera
 from .data import ZONE_ORDER, paint_rgb
 from .raster import blit_sprite, clip_near, raster_tri
-from .sprites import LAKE_TINT, bake
+from .sprites import bake
 from .world import Face, World, hash21, noise2
 from .boat import HULL_BOW, HULL_STERN, HULL_HALF_BEAM, HULL_INNER_BEAM, wake_along
 from .weather import lighting_at
@@ -108,9 +108,8 @@ class SoftwareRenderer:
         self.z = np.full((self.h, self.w), 1e6, dtype=np.float32)
         tile = np.tile(_BAYER, (self.h // 4 + 1, self.w // 4 + 1))[: self.h, : self.w]
         self.bayer = tile
-        # Only the trees take the lake palette on the CPU; shore plants keep one palette here
-        # (sprites.sprite_hd tints them per lake on the GL path).
-        self.sprites = bake(paint_rgb("buoy", "orange"), tree_gain=LAKE_TINT[world.id])
+        # Leafy parts take this lake's palette, as the GL atlas does (sprites.sprite_hd, forest.tree_hd).
+        self.sprites = bake(paint_rgb("buoy", "orange"), lake=world.id)
         self._buoy_id = "orange"
         if world.nebula:
             from .nebula import lane_circles
