@@ -14,10 +14,12 @@ under 800 Hz.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import struct
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -311,6 +313,20 @@ class Clicks(unittest.TestCase):
         self.assertTrue(music.MUSIC_DB - 4.0 <= level <= music.MUSIC_DB + 4.0, f"{level:.1f} dBFS")
 
 
+class StreamedRender(unittest.TestCase):
+    """`songs.render` streams two passes; its int16 must agree with one float pass to within one
+    LSB (#168), so a drift in the streaming code fails here and not only in the spectra."""
+
+    def test_the_streamed_render_matches_the_float_path_within_one_lsb(self):
+        short = dataclasses.replace(songs.get("briar-1"), form="A")  # 12 bars: both ramps fit
+        with patch.object(songs, "get", return_value=short):
+            streamed = songs.render("briar-1", LOW_RATE).data
+        reference = synth.encode(songs.render_float(short, LOW_RATE)).data
+        self.assertEqual(streamed.shape, reference.shape)
+        gap = np.abs(streamed.astype(np.int32) - reference.astype(np.int32))
+        self.assertLessEqual(int(gap.max()), 1)
+
+
 class Rotation(unittest.TestCase):
     def test_a_seed_gives_the_same_order_and_rests(self):
         a, b = music.Rotation("cedar"), music.Rotation("cedar")
@@ -329,7 +345,7 @@ class Rotation(unittest.TestCase):
     def test_rests_are_drawn_from_the_rest_range(self):
         rotation = music.Rotation("flathead")
         rests = [rotation.rest() for _ in range(200)]
-        self.assertTrue(all(music.REST_SECONDS[0] <= r <= music.REST_SECONDS[1] for r in rests))
+        self.assertTrue(all(60.0 <= r <= 120.0 for r in rests))
         self.assertGreater(max(rests) - min(rests), 10.0)
 
     def test_each_lake_plays_only_its_own_pieces(self):
@@ -344,6 +360,9 @@ class Layer(unittest.TestCase):
         self.store = FakeStore()
         self.layer = music.Layer(self.store, LOW_RATE)
 
+    def test_the_rest_is_pinned_to_the_spec_60_to_120_seconds(self):
+        self.assertEqual(music.REST_SECONDS, (60.0, 120.0))
+
     def test_one_piece_at_a_time_then_a_rest_of_60_to_120_seconds(self):
         clock = Clock(self.layer).run(1.0, "briar")
         self.layer.cue()  # ends the opening rest
@@ -353,14 +372,13 @@ class Layer(unittest.TestCase):
         self.assertLess(times[0], 1.0 + 2 * BLOCK_S)
         for before, after in zip(times, times[1:]):
             gap = after - before - PIECE_SECONDS
-            self.assertTrue(music.REST_SECONDS[0] - 2 * BLOCK_S <= gap <= music.REST_SECONDS[1] + 2 * BLOCK_S,
+            self.assertTrue(60.0 - 2 * BLOCK_S <= gap <= 120.0 + 2 * BLOCK_S,
                             f"rest {gap:.2f} s")
 
     def test_the_opening_rest_is_60_to_120_seconds(self):
         clock = Clock(self.layer).run(130.0, "briar")
         first = clock.starts[0][0]
-        low, high = music.REST_SECONDS
-        self.assertTrue(low - 2 * BLOCK_S <= first <= high + 2 * BLOCK_S, f"{first:.2f} s")
+        self.assertTrue(60.0 - 2 * BLOCK_S <= first <= 120.0 + 2 * BLOCK_S, f"{first:.2f} s")
 
     def test_a_cue_during_the_rest_starts_the_queued_piece_now(self):
         clock = Clock(self.layer).run(1.0, "briar")

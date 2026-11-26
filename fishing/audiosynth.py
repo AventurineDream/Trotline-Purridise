@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
 import zlib
 from dataclasses import dataclass
@@ -770,10 +771,12 @@ def bed_birds(rate: int, n: int, lake: str) -> Bed:
     return encode(out)
 
 
-def build_bed(key: str, rate: int, n: int) -> Bed:
+def build_bed(key: str, rate: int, n: int, stop: threading.Event | None = None) -> Bed:
     """Build the bed named `key` ("lap", "wash", "rain_light", "rain_heavy", "insects",
     "wind:<lake>", "birds:<lake>", "frogs:<lake>") as an n-frame loop at `rate` Hz, or the
     music piece "song:<id>" (`songs.render`), whose length n the piece fixes.
+    `stop` goes to `songs.render`, which ends an abandoned piece within one block (#168); beds
+    are short and ignore it.
 
     Raises:
         KeyError: unknown bed, lake or song.
@@ -782,7 +785,7 @@ def build_bed(key: str, rate: int, n: int) -> Bed:
     kind, _, lake = key.partition(":")
     if kind == "song":
         from . import songs  # songs imports this module, so it is imported only when needed
-        bed = songs.render(lake, rate)
+        bed = songs.render(lake, rate, stop=stop)
         if bed.data.shape[1] != n:
             raise ValueError(f"{key}: {n} frames asked for, the piece has {bed.data.shape[1]}")
         return bed

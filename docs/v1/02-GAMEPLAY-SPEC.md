@@ -701,7 +701,8 @@ volume, and collar visibility.
   finale nights).
 - **Music:** a gentle procedural score: five or six pieces per lake, played one at a time in a
   seeded rotation, with a rest of 60–120 s between pieces. Dawn, dusk and chapter moments start
-  the next piece. A lake keeps its place in its rotation across visits. Silence is a valid default.
+  the next piece. A lake keeps its place in its rotation across visits. Silence fills the rests
+  between pieces, about 43% of the time.
 - Each Bot shell has a synthesized chime timbre (tin = triangle, duck = squeak,
   frog = wooden "ribbit" click, sub = bubbly tick, astral = glass bell), with a
   matching caption. Launch, recall, reports and shell swaps use the equipped

@@ -153,7 +153,8 @@ class _BedStore:
     shared by Audio instances, and lake-specific beds retain only the current and
     fading lakes to bound memory at 5 shared + 6 lake beds. Music pieces (`song:` keys)
     are retained only while sounding or queued (`keep_songs`), and render one at a time in
-    their own lane, so a lake's beds never queue behind a piece.
+    their own lane, so a lake's beds never queue behind a piece. A piece the store forgets stops
+    before its next block and keeps its lane's slot until it ends (#168).
     """
 
     def __init__(self, rate: int, noise_frames: int, event_frames: int):
@@ -163,7 +164,8 @@ class _BedStore:
         self.build_seconds: dict[str, float] = {}
         self._beds: dict[str, synth.Bed] = {}
         self._running: dict[str, tuple[subprocess.Popen, str]] = {}
-        self._threads: dict[str, Future] = {}
+        self._threads: dict[str, tuple[Future, threading.Event]] = {}  # build and its stop flag
+        self._abandoned: list[tuple[str, Future]] = []  # forgotten builds still running (#168)
         self._waiting: list[str] = []
         self._song_waiting: list[str] = []  # pieces queued for their own lane (#168)
         self._lakes: list[str] = []
@@ -220,15 +222,22 @@ class _BedStore:
         return self._song_waiting if key.startswith(songs.SONG_PREFIX) else self._waiting
 
     def _jobs(self, song: bool) -> int:
-        """Jobs running in one lane: music pieces when `song`, beds otherwise."""
-        return sum(1 for key in (*self._running, *self._threads)
-                   if key.startswith(songs.SONG_PREFIX) == song)
+        """Jobs holding one lane's slots: running workers, live thread builds, and abandoned
+        builds still running. An abandoned build keeps its slot until it ends, so the next
+        piece never overlaps it (#168)."""
+        keys = (*self._running, *self._threads, *(key for key, _future in self._abandoned))
+        return sum(1 for key in keys if key.startswith(songs.SONG_PREFIX) == song)
 
-    def _build_here(self, key: str) -> synth.Bed:
+    def _build_here(self, key: str, stop: threading.Event) -> synth.Bed:
         start = _time.perf_counter()
-        bed = synth.build_bed(key, self.rate, self.frames(key))
+        bed = synth.build_bed(key, self.rate, self.frames(key), stop=stop)
         self.build_seconds[key] = _time.perf_counter() - start
         return bed
+
+    def _submit(self, key: str) -> None:
+        """Build `key` on its lane's pool, with the stop flag that `_forget` sets (#168)."""
+        stop = threading.Event()
+        self._threads[key] = (self._pool_for(key).submit(self._build_here, key, stop), stop)
 
     def _start(self, key: str) -> None:
         path = self._scratch(key)
@@ -236,7 +245,7 @@ class _BedStore:
         if proc is not None:
             self._running[key] = (proc, path)
         else:
-            self._threads[key] = self._pool_for(key).submit(self._build_here, key)
+            self._submit(key)
 
     @staticmethod
     def _result(proc: subprocess.Popen) -> dict | None:
@@ -259,7 +268,7 @@ class _BedStore:
             self.build_seconds[key] = float(info["seconds"])
         except (OSError, ValueError, KeyError):
             _unlink(path)
-            self._threads[key] = self._pool_for(key).submit(self._build_here, key)
+            self._submit(key)
 
     def poll(self) -> None:
         """Collect finished workers and start queued ones (never blocks)."""
@@ -267,10 +276,11 @@ class _BedStore:
             if proc.poll() is not None:
                 del self._running[key]
                 self._finish(key, proc, path)
-        for key, future in list(self._threads.items()):
+        for key, (future, _stop) in list(self._threads.items()):
             if future.done():
                 del self._threads[key]
                 self._beds[key] = future.result()
+        self._abandoned = [(key, future) for key, future in self._abandoned if not future.done()]
         lanes = ((self._waiting, False, WORKERS), (self._song_waiting, True, SONG_WORKERS))
         for queue, song, limit in lanes:
             while queue and self._jobs(song) < limit:
@@ -288,9 +298,12 @@ class _BedStore:
             if job[0].stdout:
                 job[0].stdout.close()
             _unlink(job[1])
-        future = self._threads.pop(key, None)
-        if future:
-            future.cancel()
+        thread = self._threads.pop(key, None)
+        if thread is not None:
+            future, stop = thread
+            stop.set()  # a piece render ends before its next block (songs._synthesize)
+            if not future.cancel():  # started: it runs on and keeps its lane slot until it ends
+                self._abandoned.append((key, future))
 
     # ------------------------------------------------------------ beds
 
@@ -338,7 +351,8 @@ class _BedStore:
                 proc.wait()
                 self._finish(key, proc, path)
             if key in self._threads:
-                self._beds[key] = self._threads.pop(key).result()
+                future, _stop = self._threads.pop(key)
+                self._beds[key] = future.result()
         return self._beds.get(key)
 
     # ------------------------------------------------------------ cues
@@ -405,7 +419,7 @@ class _BedStore:
 
     def tick(self) -> None:
         """Once per mixed block: collect finished workers and start queued ones."""
-        if self._running or self._threads or self._waiting or self._song_waiting:
+        if self._running or self._threads or self._waiting or self._song_waiting or self._abandoned:
             self.poll()
         if self._cue_job is not None:
             self._poll_cues()
@@ -416,8 +430,9 @@ class _BedStore:
                 + sum(c.nbytes for c in self._cues.values()) + sum(s.nbytes for s in self._strokes))
 
     def shutdown(self) -> None:
-        """Stop workers and delete their scratch files (registered with atexit)."""
-        for key in list(self._running):
+        """Stop workers and delete their scratch files (registered with atexit). Piece renders in
+        progress stop before their next block, so exit does not wait out a whole render (#168)."""
+        for key in (*self._running, *self._threads):
             self._forget(key)
         if isinstance(self._cue_job, tuple):
             proc, path = self._cue_job

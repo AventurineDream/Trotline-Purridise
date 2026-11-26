@@ -2090,7 +2090,7 @@ V1-38 (#66) gives each lake its own voice and every sound a caption (02 §18).
 - **Buses.** Each sound plays on one of V1-06's mixer buses: music, ambience or SFX, all under master. Music plays one piece at a time; a lake change fades the piece out, dips, and the new lake's rotation takes over.
 - **Lake ambience** (`Audio._schedule`):
   - **Flathead:** wind gusts through the larches every 30–50 s, loons at the day's edges and by day, and ice ticking at the shore before 09:00 and after 20:00.
-  - **Crater:** a deep hush. Its water and wind beds play at 55% with no crickets; springs bubble every 6–11 s, and ravens call between 07:00 and 19:00.
+  - **Crater:** a deep hush. Its calls are bubbling springs every 6–11 s and ravens between 07:00 and 19:00 (not in heavy rain). Its beds are water and wind all day, birds at dawn, by day and at dusk, and crickets and frogs at night; the frog chorus sits at a 0.55 distance gain. Every nature bed plays at NATURE_TRIM, a quarter of its authored amplitude.
   - **The Lagoon:** star twinkles, a soft choir every 30–45 s, and on nights after the finale a low whale song every 70–100 s.
   - **Briar and Cedar** are unchanged.
 - **Music** (`music.Layer`, `Session._tick_soundscape`). Between pieces the layer rests 60–120 s, so music sounds about 57% of the time (measured over a simulated hour on each lake). Dawn (06:00), dusk (19:00) and a staged story scene start the next piece. The Star-Whale's scenes play its song instead.

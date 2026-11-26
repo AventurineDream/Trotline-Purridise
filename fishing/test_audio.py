@@ -21,6 +21,7 @@ Thresholds (dBFS is relative to int16 full scale, RMS over both channels):
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import os
 import sys
@@ -29,6 +30,7 @@ import threading
 import time
 import unittest
 import wave
+from concurrent.futures import wait as wait_futures
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -496,7 +498,7 @@ class PieceLane(unittest.TestCase):
         self.addCleanup(self.store.shutdown)
         self.addCleanup(self.release.set)  # runs before shutdown, so a held build can finish
 
-        def build(key, rate, frames):
+        def build(key, rate, frames, stop=None):
             self.release.wait(10)  # every build holds until the test releases it
             return synth.Bed(np.zeros((2, frames), np.int16), 1.0)
 
@@ -525,6 +527,55 @@ class PieceLane(unittest.TestCase):
         self.release.set()
         for key in ("song:briar-1", *beds):
             self.store.get(key, wait=True)
+
+
+class AbandonedRender(unittest.TestCase):
+    """A piece the bed store abandons mid-render stops before its next block, and its lane slot
+    stays taken until it ends, so the next piece never overlaps it (#168). The render is the real
+    `songs.render` of a short piece; the `time.sleep(0)` after each block holds it mid-way."""
+
+    def setUp(self):
+        def short(song_id):
+            return dataclasses.replace(songs.BY_ID[song_id], form="A")
+
+        self.blocks = 0  # blocks the renders have finished
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+        def block_done(_seconds):  # songs calls this once per finished block
+            self.blocks += 1
+            if self.blocks == 5:  # the first render, a few blocks in
+                self.entered.set()
+                self.release.wait(10)
+
+        for patcher in (patch.object(songs, "get", side_effect=short),
+                        patch.object(songs, "time", SimpleNamespace(sleep=block_done))):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.store = _BedStore(11025, 2048, 2048)
+        self.store._spawn_ok = False  # renders run on threads in this process
+        self.addCleanup(self.store.shutdown)
+        self.addCleanup(self.release.set)  # runs before shutdown, so a held render can finish
+
+    def test_an_abandoned_render_stops_within_one_block_and_holds_its_slot_until_it_ends(self):
+        first, second = "song:briar-1", "song:briar-2"
+        self.store.request(first)
+        self.assertTrue(self.entered.wait(10))  # the first render is mid-way
+        self.store._forget(first)  # abandoned while it renders
+        [(_key, running)] = self.store._abandoned
+        blocks_at_abandon = self.blocks
+        self.store.request(second)
+        self.assertNotIn(second, self.store._threads)  # the abandoned render still holds the slot
+        self.assertFalse(running.done())
+        self.release.set()
+        wait_futures([running], timeout=10)
+        self.assertIsInstance(running.exception(), songs.RenderCancelled)
+        self.assertLessEqual(self.blocks - blocks_at_abandon, 1)  # it stopped within one block
+        self.store.poll()
+        self.assertIn(second, self.store._threads)  # the next piece starts once the slot frees
+        later, _stop = self.store._threads[second]
+        self.store._forget(second)  # the test leaves no render running
+        wait_futures([later], timeout=10)
 
 
 class AudioChecks(unittest.TestCase):
@@ -574,12 +625,12 @@ class AudioChecks(unittest.TestCase):
         with patch("fishing.audio.Audio", FakeAudio), patch.object(
                 soundscape, "tone", return_value=samples):
             report = soundscape.coverage_report()
-        expected_bytes = (len(soundscape.KINDS + CHIMES) * samples.nbytes + 1024
-                          + resident_bytes(FakeAudio.rate) + soundscape.RENDER_WORKING_BYTES)
         self.assertTrue(report["complete"])
         self.assertTrue(report["within_budget"])
         self.assertEqual(FakeAudio.buffer_calls, 1)
-        self.assertEqual(report["bytes"], expected_bytes)
+        # The music layer's resident pieces at 44.1 kHz (`music.resident_bytes`, 48.6 MiB) and
+        # one render's 34 MiB working set; the fake's sounds and bank add about 1 KiB (#168).
+        self.assertEqual(round(report["bytes"] / 2 ** 20, 1), 82.6)
 
     def test_every_lake_hour_and_weather_is_calm_and_clean(self):
         for name, scene in SCENES.items():

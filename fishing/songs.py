@@ -2,7 +2,8 @@
 
 How it fits: `music.Layer` plays each lake's pieces in a seeded rotation on the music bus.
 `audiosynth.build_bed` sends `song:<id>` keys here, so the bed store renders each piece in a
-worker process at the mixer's sample rate, as it renders the ambience beds. `soundscape`
+worker process at the mixer's sample rate, or on a thread on frozen builds. A stop flag ends
+a render the store abandons, within one block (#168). `soundscape`
 takes its captions from `CATALOGUE`.
 
 Constraints:
@@ -22,6 +23,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 import math
+import threading
 import time
 import zlib
 
@@ -398,13 +400,23 @@ def _ramps(n: int, rate: int) -> tuple[np.ndarray, np.ndarray]:
     return head, tail
 
 
-def _synthesize(song: Song, rate: int, sink: Callable[[int, np.ndarray], None]) -> None:
+class RenderCancelled(Exception):
+    """A piece render stopped because its stop flag was set: the bed store abandoned it (#168).
+
+    Raised between blocks, so an abandoned piece ends within one block of the abandonment.
+    """
+
+
+def _synthesize(song: Song, rate: int, sink: Callable[[int, np.ndarray], None],
+                stop: threading.Event | None = None) -> None:
     """Render `song` one CHUNK at a time, passing each block to `sink(start, block)`.
 
     A block is stereo float32 (2, length) with the fades applied, and blocks come in time
     order. Only the notes still sounding, the reverb still to come and the current block are
     held, so no piece-length buffer exists (#168). `time.sleep(0)` after each block gives the
     GIL to other threads: a piece renders on a thread on frozen builds, beside the frame loop.
+    Once `stop` is set, no further block is synthesised: `RenderCancelled` is raised before the
+    next one, so an abandoned render ends within one block (#168).
     """
     spb = 60.0 / song.bpm
     n = int(round(song.seconds * rate))
@@ -427,6 +439,8 @@ def _synthesize(song: Song, rate: int, sink: Callable[[int, np.ndarray], None]) 
     sounding: list[tuple[int, int, np.ndarray, float, float, float]] = []
     queued = 0
     for start in range(0, n, CHUNK):
+        if stop is not None and stop.is_set():
+            raise RenderCancelled(song.id)
         end = min(n, start + CHUNK)
         while queued < len(notes) and notes[queued][0] < end:
             at, length, voice, index, amp, pan, send_level = notes[queued]
@@ -484,7 +498,7 @@ def render_float(song: Song, rate: int) -> np.ndarray:
     return out
 
 
-def render(song_id: str, rate: int) -> synth.Bed:
+def render(song_id: str, rate: int, stop: threading.Event | None = None) -> synth.Bed:
     """The piece as a unit-RMS int16 `Bed` at `rate` (what the worker writes out).
 
     Two passes (#168). The first measures the mean, RMS and peak that `audiosynth.encode`
@@ -494,8 +508,13 @@ def render(song_id: str, rate: int) -> synth.Bed:
     at 44.1 kHz for nebula-1, against 79 MiB for the render it replaces (measured with
     tracemalloc; `soundscape.coverage_report` budgets the 34 MiB).
 
+    Args:
+        stop: Optional flag the bed store sets when it abandons the piece. Once it is set, the
+            render raises `RenderCancelled` before its next block.
+
     Raises:
         KeyError: unknown id.
+        RenderCancelled: `stop` was set during the render.
     """
     song = get(song_id)
     n = int(round(song.seconds * rate))
@@ -511,7 +530,7 @@ def render(song_id: str, rate: int) -> synth.Bed:
         high[:] = np.maximum(high, values.max(axis=1))
         low[:] = np.minimum(low, values.min(axis=1))
 
-    _synthesize(song, rate, measure)
+    _synthesize(song, rate, measure, stop)
     mean = total / n
     rms = math.sqrt(float(np.mean(squares / n - mean * mean)))
     peak = float(max(np.max(high - mean), np.max(mean - low)))
@@ -521,8 +540,8 @@ def render(song_id: str, rate: int) -> synth.Bed:
     data = np.zeros((2, n), np.int16)
 
     def write(start: int, block: np.ndarray) -> None:
-        stop = start + block.shape[1]
-        data[:, start:stop] = ((block - mean[:, None]) * scale).astype(np.int16)
+        end = start + block.shape[1]
+        data[:, start:end] = ((block - mean[:, None]) * scale).astype(np.int16)
 
-    _synthesize(song, rate, write)
+    _synthesize(song, rate, write, stop)
     return synth.Bed(data, 1.0 / (rms * scale))

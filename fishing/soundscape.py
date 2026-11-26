@@ -9,8 +9,8 @@ so the tests and the benchmark can hear it too. `audio.Audio` only schedules, mi
   all under master. M mutes them all.
 - **Lake ambience** (`AMBIENCE`). Briar and Cedar keep their loons, gulls and frogs.
   - Flathead: wind in the larches, loons, and ice ticking at the shore on cold hours.
-  - Crater: a deep hush (its water and wind are quieter, with no crickets), bubbling springs,
-    and ravens by day.
+  - Crater: a deep hush, with bubbling springs and ravens by day; crickets and frogs
+    sound at night.
   - The Lagoon: star twinkles, a soft choir, and a low whale song on nights after the finale.
 - **Music.** Each lake's pieces (`songs.py`, one caption per start) play one at a time on the
   music bus in a seeded rotation, with silence between them (`music.py`). Dawn, dusk and the
