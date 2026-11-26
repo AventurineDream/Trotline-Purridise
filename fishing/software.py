@@ -230,6 +230,11 @@ class SoftwareRenderer:
         pos, nrm, rgb, tris = paw_mesh(state, bool(state.v2.get("settings", {}).get("reduced_motion", False)))
         if not len(tris):
             return
+        # A mouse-turned view places the paws in its level eye frame, as it does the hull,
+        # so they follow yaw and not pitch.
+        frame = cam.boat_frame()
+        if frame is not cam:
+            pos = cam.reframe_points(frame, pos)
         with np.errstate(divide="ignore", invalid="ignore"):
             sx, sy, zz = cam.cam_to_screen(pos)
         pixels, owner, bary, depth = cover(sx, sy, zz, tris, self.w, self.h, near=0.22)
@@ -265,6 +270,29 @@ class SoftwareRenderer:
         if bid != self._buoy_id:
             self.sprites.update(bake(paint_rgb("buoy", bid)))
             self._buoy_id = bid
+
+    def _hull_faces(self, cam, state) -> list[Face]:
+        """The boat's faces in the space `cam` draws them, so the hull and the paws agree.
+
+        Args:
+            cam: The view being drawn. A staged or chase view sets ``boat``, which places the
+                boat where it floats. A mouse-turned view sets ``hull``, its unturned eye.
+            state: The save; its boat and paint choose the faces.
+
+        Returns:
+            World-space faces for a staged or chase view (V1-35). Otherwise faces in the view's
+            own level eye frame, drawn through the camera-space path the unturned hull takes, so
+            a turn of zero changes nothing and a pitch-only turn leaves the boat where it is.
+        """
+        boat = self._boat_faces(state)
+        frame = cam.boat_frame()
+        if cam.boat is not None:  # a staged or chase view sees the boat where it floats (V1-35)
+            return [Face(frame.eye_to_world(f.pts), frame.eye_to_world(f.normal) - frame.eye,
+                         f.color, "world", f.emissive) for f in boat]
+        if frame is not cam:  # a mouse-turned view: the hull in its level eye frame, like the paws
+            return [Face(cam.reframe_points(frame, f.pts), cam.reframe_dirs(frame, f.normal),
+                         f.color, "cam", f.emissive) for f in boat]
+        return boat
 
     def render(self, state, cam: Camera | None = None) -> np.ndarray:
         import time as _time
@@ -311,11 +339,7 @@ class SoftwareRenderer:
         self._sprites(cam, state, light)
         self._faces(cam, world.faces, light, boat=False)
         self._actors(cam, state, light)
-        boat = self._boat_faces(state)
-        if cam.boat is not None:  # a staged view sees the boat where it floats (V1-35)
-            boat = [Face(cam.boat.eye_to_world(f.pts), cam.boat.eye_to_world(f.normal) - cam.boat.eye, f.color,
-                         "world", f.emissive) for f in boat]
-        self._faces(cam, boat, light, boat=True)
+        self._faces(cam, self._hull_faces(cam, state), light, boat=True)
         if cam.boat is None:
             self._paws(cam, state, light)
         else:  # a staged view sees the Skipper standing at the helm, not floating paws

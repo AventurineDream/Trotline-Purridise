@@ -38,6 +38,7 @@ from .book import BOOK_SPECIES_IDS, BOOK_TITLE_STATES, legendary_page, remember_
 from .book import take_dream_clue
 from . import comfort, saveslots, skipperlook
 from . import pointer
+from . import mouselook
 from . import encounter
 from . import soundscape
 from . import detail as detail_tiers
@@ -88,14 +89,16 @@ class Keys:
 
     def __init__(self, pressed=(), held=(), quit=False, focused=True, *,
                  mouse_click=None, mouse_wheel=0, viewport=(1280, 720),
-                 mouse_pos=None, mouse_moved=False, resized=False):
-        """Create frame input; positions/viewport are UI pixels, wheel is whole steps."""
+                 mouse_pos=None, mouse_moved=False, resized=False,
+                 mouse_delta=(0.0, 0.0)):
+        """Create frame input: UI-pixel positions, whole wheel steps, window-width mouse_delta."""
         self.pressed = set(pressed)
         self.held = set(held) | set(pressed)
         self.quit = quit
         self.focused = bool(focused)
         self.mouse_click, self.mouse_wheel, self.viewport = mouse_click, mouse_wheel, viewport
         self.mouse_pos, self.mouse_moved, self.resized = mouse_pos, mouse_moved, resized
+        self.mouse_delta = (float(mouse_delta[0]), float(mouse_delta[1]))
 
     def tap(self, name: str, dt: float) -> bool:
         """Return whether the named key has a press edge; headless input never repeats."""
@@ -188,6 +191,11 @@ class Session:
         self._whale_recorded = False
         self._replays = self._saved_pending()
         self._skipper_hint_shown = False  # the Continue toast nudging an uncreated Skipper: once a session
+        # Mouse look (mouselook.py): the view's turn from the heading and the level pitch, in
+        # radians. Runtime only and never saved, so every session starts with the view centred.
+        self.look_yaw = 0.0
+        self.look_pitch = 0.0
+        self._look_rest = mouselook.REST_S  # seconds since the pointer last turned the view
         # Windowed play sets this so a trip only records pending_lake. The run loop then builds
         # the World on a worker thread and the renderer on the GL thread, behind the travel card
         # (_enter_lake). Headless callers (tests, expansion checks) keep travel synchronous.
@@ -246,6 +254,7 @@ class Session:
                 keys.mouse_click = None
                 keys.mouse_wheel = 0
                 keys.mouse_moved = False
+                keys.mouse_delta = (0.0, 0.0)
                 # The fractional wheel remainder belongs to SDL's input, not its action wrapper.
                 wheel_remainder = getattr(input_source, "mouse_wheel_remainder", None)
                 if wheel_remainder is not None:
@@ -264,6 +273,7 @@ class Session:
         pointer_used = (getattr(keys, "mouse_click", None) is not None
                         or bool(getattr(keys, "mouse_wheel", 0)))
         self._keys(keys, dt)
+        self._tick_look(keys, dt)
         self.state.hauling = self.ui.mode == "haul"
         current_page = (self.ui.mode, self.ui.journal_page, self.ui.book_entry_i)
         if (current_page != previous_page or keys.pressed
@@ -280,6 +290,66 @@ class Session:
         self._tick_stage(dt)
         self._tick_soundscape()
         self._tick_caption(dt)
+
+    def _tick_look(self, keys, dt: float) -> None:
+        """Turn the view by this frame's pointer travel, or ease it back to centre (mouse look).
+
+        Args:
+            keys: This frame's input. ``mouse_delta`` is the pointer travel as fractions of
+                the window width; focus, minimize and devmode edges have already zeroed it.
+            dt: Elapsed real seconds for this frame.
+
+        Returns:
+            None.
+
+        Side effects:
+            Updates ``look_yaw``, ``look_pitch`` and the rest timer, and keeps the turn within the
+            keyboard look's limits. Motion turns the view only in play, with the window focused,
+            no staging or cutscene owning the camera, the setting on, and the pointer off every
+            displayed target. Any other frame, such as a menu, lost focus, or a story, eases the
+            turn back at once. Motion over a displayed target holds the turn until the pointer rests.
+        """
+        settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
+        gain = mouselook.gain(mouselook.level(settings))
+        # Reduced motion recentres in one snap rather than an ease; the pan itself stays 1:1.
+        snap = bool(settings.get("reduced_motion", False))
+        clock = self.stage if self.stage is not None else self.whale_clock
+        story_owns_camera = clock is not None and not clock.over
+        dx, dy = getattr(keys, "mouse_delta", (0.0, 0.0))
+        if gain <= 0.0 or self.ui.mode != "play" or not self.focused or story_owns_camera:
+            self._look_rest = mouselook.REST_S
+            self.look_yaw, self.look_pitch = mouselook.settle(
+                self.look_yaw, self.look_pitch, dt, snap=snap)
+        elif (dx or dy) and not self._pointer_over_target(keys):
+            self._look_rest = 0.0
+            self.look_yaw, self.look_pitch = mouselook.turn(
+                self.look_yaw, self.look_pitch, dx, dy, gain, self.state.look)
+        else:
+            self._look_rest += dt
+            if self._look_rest >= mouselook.REST_S:
+                self.look_yaw, self.look_pitch = mouselook.settle(
+                    self.look_yaw, self.look_pitch, dt, snap=snap)
+        # Excess past the keyboard look's limit is dropped, not kept, so Down works at once.
+        self.look_yaw, self.look_pitch = mouselook.clamp(
+            self.look_yaw, self.look_pitch, self.state.look)
+
+    def _pointer_over_target(self, keys) -> bool:
+        """Whether the live pointer is over a target the current screen has displayed.
+
+        Args:
+            keys: This frame's input; ``mouse_pos`` and ``viewport`` are in UI pixels.
+
+        Returns:
+            True only when the pointer lies on a target of the registry as drawn for this
+            screen and viewport. Targets left from an earlier screen never block the look.
+        """
+        registry = self.ui.pointer
+        position = getattr(keys, "mouse_pos", None)
+        if position is None or registry.hit(position) is None:
+            return False
+        return (registry.identity == pointer.context(self.state, self.ui)
+                and registry.viewport == getattr(keys, "viewport", registry.viewport)
+                and not getattr(keys, "resized", False))
 
     def _tick_stage(self, dt: float) -> None:
         """Run the staging of the story scene, or the credits, on screen (V1-35)."""
@@ -639,7 +709,8 @@ class Session:
                 look += 1.0
             if "down" in driving_keys.held:
                 look -= 1.0
-            state.look = max(-0.45, min(0.62, state.look + look * 0.55 * dt))
+            state.look = max(mouselook.KEY_LOOK_MIN,
+                             min(mouselook.KEY_LOOK_MAX, state.look + look * 0.55 * dt))
             hooked_before = state.hooked_total
             game_minute_before = state.game_minutes
             state.advance(dt, frozen=False)
@@ -2304,6 +2375,9 @@ class Session:
             collar["visible"] = visible
         elif row == 12:
             settings["auto_anchor"] = not bool(settings.get("auto_anchor", False))
+        elif row == 13:
+            step = 1 if direction >= 0 else -1
+            settings["mouse_look"] = mouselook.cycle(mouselook.level(settings), step)
         self.save()
 
     def _keybindings_keys(self, keys, dt: float) -> None:
@@ -2745,6 +2819,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                         None if gpu_bytes is None else gpu_bytes / 1024**2,
                     )
                     perf_sample_at = time.perf_counter()
+                    # Once a second is prompt enough to follow a keyboard-layout switch.
+                    session.dev_mode.refresh_key_label(platform)
                 session.dev_mode.draw(big, ui)
             platform.present(big)
             motion_reduced = bool(session.state.v2.get("settings", {}).get("reduced_motion", False))
@@ -3026,10 +3102,13 @@ def _camera(renderer: Renderer, session: Session):
         reduced = bool(settings.get("reduced_motion", False))
         clock = session.stage if session.stage is not None else session.whale_clock  # V1-35, V1-37
         cam = staging.staged_camera(renderer, state, clock, reduced=reduced)
-        if cam.boat is not None or settings.get("third_person") is not True:
+        if cam.boat is not None:  # a story view owns the camera (V1-35): mouse look waits for it
             return cam
-        yaw = state.yaw
-        pitch = -math.atan2(THIRD_PERSON_ELEVATION, THIRD_PERSON_DISTANCE) + state.look
+        turn_yaw, turn_pitch = mouselook.clamp(session.look_yaw, session.look_pitch, state.look)
+        if settings.get("third_person") is not True:
+            return cam.turned(turn_yaw, turn_pitch) if turn_yaw or turn_pitch else cam
+        yaw = state.yaw + turn_yaw
+        pitch = -math.atan2(THIRD_PERSON_ELEVATION, THIRD_PERSON_DISTANCE) + state.look + turn_pitch
         x = state.x - math.sin(yaw) * THIRD_PERSON_DISTANCE
         z = state.z - math.cos(yaw) * THIRD_PERSON_DISTANCE
         chase = renderer.camera_for(state, yaw=yaw, pitch=pitch, x=x, z=z)

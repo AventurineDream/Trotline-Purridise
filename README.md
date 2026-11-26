@@ -178,8 +178,10 @@ and Mesa software OpenGL. `TROTLINE_DETAIL=<tier>` can pin a tier for a
 repeatable capture or benchmark.
 
 For an opt-in playtest overlay, launch interactive play with `./play.sh --dev`.
-It adds a persistent **DEV** marker; press **grave** from any screen to open or
-close the panel. **Up/Down** (or W/S) selects a command, **Left/Right** (or A/D)
+It adds a persistent **DEV** marker naming its key by the character your keyboard layout
+types there (``[`] tools`` on a US layout; ``[Grave] tools`` where that key is a dead key,
+as on German); press that key (**grave**, left of 1) from any screen to
+open or close the panel. **Up/Down** (or W/S) selects a command, **Left/Right** (or A/D)
 chooses a fish or any authored lake, **Enter/Space** runs it, and **Esc/grave**
 closes it. While open, panel input is intercepted instead of reaching game
 screens or controls. A `--dev` run never writes the loaded save; cheats and
@@ -323,6 +325,17 @@ Release a direction used in a menu before using it to drive the boat again.
 default) and **Third person**. The preference is saved. Third person keeps a
 fixed position behind and above the boat, without bob or smoothing. Authored
 story shots take priority; the selected view returns when staging ends.
+
+**Pause → Settings → Mouse look** lets the pointer turn the view on the water. Moving it
+sideways turns the view, and moving it up looks up. Off, Gentle, Normal (the default) and
+Quick set how far one sweep across the window turns it: about 46°, 75° and 115° for
+Gentle, Normal and Quick. The pointer is hidden during play and shows again in menus, so
+clicks and menus work as before. Turning stops about 70° either side. Pitch uses the arrow
+keys' limits; a turn past them is dropped when the arrow keys reach their limit, so Down
+works at once. Without pointer motion the view eases back to centre after about 1.2 seconds;
+with Reduced motion on it snaps. Menus, dialogue, story shots and a lost window focus start
+the recentre at once. Third person swings its orbit by the same turn. The setting is saved;
+the turn is not.
 
 Short taps are retained even when pressed and released between rendered frames.
 Losing window focus clears pending input and menu repeat, while held steering

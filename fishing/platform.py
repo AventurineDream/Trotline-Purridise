@@ -59,6 +59,8 @@ SCAN = {
     "shift": 225, "rshift": 229,
 }
 _SCAN_NAMES = {code: name for name, code in SCAN.items()}
+# SDL keycodes with this bit are a bare scancode: the layout gave the key no character.
+SDLK_SCANCODE_MASK = 1 << 30
 
 # Monospace faces first: the HUD and help pages are measured and laid out for a
 # monospace "mono" family. The proportional DejaVuSans entries come last, as a
@@ -384,6 +386,9 @@ class Input:
     current presentation size in pixels, with ``(0, 0)`` while minimized.
     ``resized`` invalidates geometry drawn before this poll. Click, wheel,
     movement, and resize edges expire at the next poll; held/repeat state stays.
+    ``mouse_delta`` is the pointer's travel this poll as ``(dx, dy)`` fractions of
+    the window width, +y down, for mouse look. It is zero while unfocused, minimized,
+    left the window, or with an empty viewport.
     """
 
     def __init__(self):
@@ -400,6 +405,7 @@ class Input:
         self.focused = True
         self.mouse_pos = None
         self.mouse_moved = False
+        self.mouse_delta = (0.0, 0.0)
         self.mouse_click = None
         self.mouse_wheel = 0
         self.mouse_wheel_remainder = 0.0
@@ -484,6 +490,10 @@ class Platform:
         s.SDL_GetKeyboardState.argtypes = [ctypes.POINTER(c_int)]
         s.SDL_GetKeyboardState.restype = ctypes.POINTER(c_uint8)
         s.SDL_GetTicks64.restype = ctypes.c_uint64
+        s.SDL_GetKeyFromScancode.argtypes = [c_int]
+        s.SDL_GetKeyFromScancode.restype = ctypes.c_int32
+        s.SDL_GetKeyName.argtypes = [ctypes.c_int32]
+        s.SDL_GetKeyName.restype = c_char_p
         s.SDL_Delay.argtypes = [c_uint32]
         s.SDL_GetCurrentDisplayMode.argtypes = [c_int, ctypes.POINTER(SDL_DisplayMode)]
         s.SDL_GetCurrentDisplayMode.restype = c_int
@@ -716,6 +726,28 @@ class Platform:
         self._input.mouse_wheel_remainder -= steps
         return steps
 
+    def key_label(self, name: str) -> str:
+        """Return the character the active keyboard layout types on a physical key.
+
+        Args:
+            name: Physical key name from ``SCAN`` (scancode, so layout-independent).
+        Returns:
+            SDL's name for the printable character the layout maps there, such as "`" on
+            US; "" when the key types no character (a dead key, as on German's "^") or
+            the name is unknown, so the caller can show a layout-independent name.
+            Asked fresh on each call, so a layout switch mid-session shows at once.
+        """
+        code = SCAN.get(name)
+        if code is None:
+            return ""
+        keycode = self.sdl.SDL_GetKeyFromScancode(code)
+        # A key with no character comes back as its scancode with SDLK_SCANCODE_MASK set,
+        # and SDL would name it by the US keycap, which is the wrong glyph on that layout.
+        if not keycode or keycode & SDLK_SCANCODE_MASK:
+            return ""
+        raw = self.sdl.SDL_GetKeyName(keycode)
+        return raw.decode("utf-8", "replace") if raw else ""
+
     def _wheel_delta(self, event: SDL_MouseWheelEvent) -> float:
         """Use preciseY only when the linked SDL version guarantees that field."""
         wheel_y = float(event.y)
@@ -725,6 +757,22 @@ class Platform:
                 return precise_y
         return wheel_y
 
+    def _look_delta(self, rel_x: int, rel_y: int) -> tuple[float, float]:
+        """Pointer travel this poll as fractions of the window width, for mouse look.
+
+        Args:
+            rel_x: Summed SDL ``xrel`` this poll, in window pixels; positive is rightward.
+            rel_y: Summed SDL ``yrel`` this poll, in window pixels; positive is downward.
+        Returns:
+            ``(dx, dy)``, each divided by the window width in the same window pixels, so a
+            sweep across the window turns the view by the same amount at any window size.
+            ``(0.0, 0.0)`` when the width is unknown.
+        """
+        width = self._window_size[0]
+        if width <= 0:
+            return 0.0, 0.0
+        return rel_x / width, rel_y / width
+
     def poll(self, dt: float = 0.0) -> Input:
         """Sample one frame of physical input, refreshing the presentation mapping.
 
@@ -732,6 +780,7 @@ class Platform:
             dt: Elapsed seconds for controller hold/repeat sampling.
         Returns:
             The reused :class:`Input`; pointer coordinates match ``viewport``.
+            ``mouse_delta`` is this poll's pointer travel; see :class:`Input`.
             ``resized`` is a one-poll edge, including resize discovered by the
             previous ``present``. Unavailable/minimized windows clear action edges
             and report an unfocused, zero-sized viewport until rendering can resume.
@@ -743,8 +792,10 @@ class Platform:
         inp.quit = False
         inp.mouse_click = None
         inp.mouse_moved = False
+        inp.mouse_delta = (0.0, 0.0)
         inp.mouse_wheel = 0
         mouse_click = None
+        rel_x = rel_y = 0
         keyboard_pressed: set[str] = set()
         keyboard_press_order: list[str] = []
         event = SDL_Event()
@@ -761,6 +812,7 @@ class Platform:
                     self.gamepad.clear_input()
                     mouse_click = None
                     inp.mouse_moved = False
+                    rel_x = rel_y = 0
                     inp.mouse_wheel = 0
                     inp.mouse_wheel_remainder = 0.0
                 elif event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED:
@@ -774,6 +826,7 @@ class Platform:
                     self._mouse_window_pos = None
                     mouse_click = None
                     inp.mouse_moved = False
+                    rel_x = rel_y = 0
                     inp.mouse_wheel = 0
                     inp.mouse_wheel_remainder = 0.0
                 elif event.window.event in (
@@ -783,11 +836,14 @@ class Platform:
                 elif event.window.event == SDL_WINDOWEVENT_LEAVE:
                     self._mouse_window_pos = None
                     inp.mouse_moved = False
+                    rel_x = rel_y = 0
             elif event.type == SDL_MOUSEMOTION and self._focused and not self.minimized:
                 point = event.motion.x, event.motion.y
                 moved = (point != self._mouse_window_pos
                          or event.motion.xrel != 0 or event.motion.yrel != 0)
                 self._mouse_window_pos = point
+                rel_x += event.motion.xrel
+                rel_y += event.motion.yrel
                 if moved:
                     inp.mouse_moved = True
                     self._last_device = "mouse"
@@ -827,8 +883,10 @@ class Platform:
             self.gamepad.clear_input()
             mouse_click = None
             inp.mouse_moved = False
+            rel_x = rel_y = 0
             inp.mouse_wheel = 0
             inp.mouse_wheel_remainder = 0.0
+        inp.mouse_delta = self._look_delta(rel_x, rel_y)
         inp.viewport = self.viewport
         inp.resized = self._resize_pending
         self._resize_pending = False

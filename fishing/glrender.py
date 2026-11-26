@@ -585,7 +585,7 @@ class LakeRenderer(SoftwareRenderer):
             self._boat_local = self._pack_faces(self._detailed_boat(state))
             self._boat_key = key
         boat = self._boat_local.copy()
-        cam = cam.boat or cam  # a staged view sees the boat where it floats (V1-35)
+        cam = cam.boat_frame()  # a staged or mouse-turned view sees the hull where it floats (V1-35)
         basis = np.stack([cam.right,cam.up,cam.forward],axis=1)
         boat[:,:3] = self._boat_local[:,:3]@basis.T+cam.eye
         boat[:,3:6] = self._boat_local[:,3:6]@basis.T
@@ -741,8 +741,9 @@ class LakeRenderer(SoftwareRenderer):
         pos,nrm,rgb,tris = paw_mesh(state,reduced)
         flat = tris.reshape(-1)
         out = np.empty((len(flat),10),np.float32)
-        basis = np.stack([cam.right,cam.up,cam.forward],axis=1)
-        out[:,:3] = pos[flat]@basis.T+cam.eye
+        frame = cam.boat_frame()  # the paws belong to the hull, so a turned view looks around them
+        basis = np.stack([frame.right,frame.up,frame.forward],axis=1)
+        out[:,:3] = pos[flat]@basis.T+frame.eye
         out[:,3:6] = nrm[flat]@basis.T
         out[:,6:9] = rgb[flat]
         out[:,9] = 6.0  # cockpit space, plain finish

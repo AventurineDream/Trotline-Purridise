@@ -845,7 +845,7 @@ class LandFx(Fx):
 
     def uniforms(self, state, light, cam) -> dict:
         """Sampler units, the baked domain, the boat frame and hull, and the glint phase."""
-        boat_cam = cam.boat or cam
+        boat_cam = cam.boat_frame()
         values = dict(land_groundmap=GROUND_UNIT, land_shadow=SHADOW_UNIT, land_detail=DETAIL_UNIT,
                       land_domain=tuple(map(float, self.domain)),
                       land_boat_o=tuple(map(float, boat_cam.eye)),
