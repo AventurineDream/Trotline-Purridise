@@ -16,6 +16,7 @@ from unittest.mock import patch
 import numpy as np
 
 from . import mouselook, pointer
+from .camera import Camera
 from .game import Keys, Session, THIRD_PERSON_DISTANCE, _camera
 from .render import Renderer
 from .savepaths import merge_v2_defaults
@@ -28,6 +29,21 @@ from .world import World
 
 DT = 1 / 60
 TURN = mouselook.gain(mouselook.DEFAULT_LEVEL)
+
+
+def changed_pixels(a, b, level=24):
+    """Count the pixels that differ between two frames by more than `level` in any channel.
+
+    Args:
+        a: First (H, W, 3) uint8 frame.
+        b: Second frame of the same shape.
+        level: Largest per-channel difference, in 0-255 levels, that still counts as unchanged.
+
+    Returns:
+        The number of pixels that changed.
+    """
+    diff = np.abs(a.astype(np.int16) - b.astype(np.int16)).max(axis=2)
+    return int(np.count_nonzero(diff > level))
 
 
 class MouseLookMath(unittest.TestCase):
@@ -333,15 +349,40 @@ class MouseLookCamera(PlaySession):
         sx, sy, _ = cam.cam_to_screen(cam.world_to_eye(world))
         return np.array([sx[0], sy[0]])
 
+    def covered_centre(self, draw):
+        """Screen centroid of the pixels one software draw covers, from a clean buffer.
+
+        The depth buffer marks painted pixels (below the 1e6 sentinel), which also counts dark
+        pixels that a colour test would miss.
+
+        Args:
+            draw: Callable that paints one part (the boat or the paws) into ``self.renderer``.
+
+        Returns:
+            (2,) float array: the mean pixel column and row.
+        """
+        self.renderer.col[:] = 0.0
+        self.renderer.z[:] = 1e6
+        draw()
+        ys, xs = np.nonzero(self.renderer.z < 1e6)
+        self.assertGreater(len(xs), 20,
+                           "the drawn part must be on screen for this check to mean anything")
+        return np.array([xs.mean(), ys.mean()])
+
     def paw_centre(self, cam, state):
         """Screen centroid of the pixels the Skipper's paws cover when drawn for this camera."""
         light = lighting_at(state.game_minutes + state.minute_acc, state)
-        self.renderer.col[:] = 0.0
-        self.renderer.z[:] = 1e6
-        self.renderer._paws(cam, state, light)
-        ys, xs = np.nonzero(self.renderer.col.any(axis=2))
-        self.assertGreater(len(xs), 20, "the paws must be on screen for this check to mean anything")
-        return np.array([xs.mean(), ys.mean()])
+        return self.covered_centre(lambda: self.renderer._paws(cam, state, light))
+
+    def hull_centre(self, cam, state):
+        """Screen centroid of the boat's pixels when drawn for this camera, as render draws them."""
+        light = lighting_at(state.game_minutes + state.minute_acc, state)
+        faces = self.renderer._hull_faces(cam, state)
+        return self.covered_centre(lambda: self.renderer._faces(cam, faces, light, boat=True))
+
+    def view_pitch(self, session):
+        """The pitch the view is drawn at, measured above the level base pitch, in radians."""
+        return _camera(self.renderer, session).pitch - BASE_PITCH
 
     def test_the_paws_stay_on_the_hull_when_the_view_turns(self):
         """A turned view moves the paws across the screen as the boat would, not with the view.
@@ -361,3 +402,104 @@ class MouseLookCamera(PlaySession):
             expected = self.screen_of(turned, world) - self.screen_of(own, world)
             self.assertGreater(abs(shift[0]), 5)
             np.testing.assert_allclose(shift, expected, atol=2.5)
+
+    def test_the_hull_and_paws_move_together_when_the_view_turns(self):
+        """The boat and the paws share one frame: pitch moves neither, and a yaw moves both alike.
+
+        A pitched view that kept the hull's world frame dragged the boat down the screen while
+        the paws stayed put; a yaw moved the two by different amounts.
+        """
+        session = self.make_session()
+        state = session.state
+        own = self.renderer.camera_for(state)
+        hull_still = self.hull_centre(own, state)
+        paws_still = self.paw_centre(own, state)
+        for yaw, pitch in ((0.0, 0.12), (0.0, -0.12), (0.06, 0.0), (-0.06, 0.0), (0.06, 0.12)):
+            turned = own.turned(yaw, pitch)
+            hull_shift = self.hull_centre(turned, state) - hull_still
+            paws_shift = self.paw_centre(turned, state) - paws_still
+            np.testing.assert_allclose(hull_shift, paws_shift, atol=1.5)
+            if yaw == 0.0:
+                np.testing.assert_allclose(hull_shift, [0.0, 0.0], atol=0.01)
+            else:
+                self.assertGreater(abs(hull_shift[0]), 5)
+
+    def test_a_tiny_turn_changes_the_image_no_more_than_a_tiny_keyboard_pitch(self):
+        """A sub-pixel turn repaints about as few pixels as the same keyboard pitch.
+
+        A turn that starts must not flash the boat: a thousandth of a radian of turn and a
+        thousandth of keyboard pitch should each move the same few edge pixels.
+        """
+        state = self.make_session().state
+        own = self.renderer.camera_for(state)
+        base = self.renderer.render(state, own)
+        turned = self.renderer.render(state, own.turned(0.001, 0.0))
+        state.look = 0.001
+        pitched = self.renderer.render(state, self.renderer.camera_for(state))
+        # 25 px allows for rounding at the edges of a sub-pixel shift.
+        self.assertLessEqual(changed_pixels(base, turned), changed_pixels(base, pitched) + 25)
+
+    def test_a_zero_turn_renders_the_unturned_image_exactly(self):
+        """A zero turn is no turn: its image must match the unturned view bit for bit."""
+        state = self.make_session().state
+        own = self.renderer.camera_for(state)
+        base = self.renderer.render(state, own)
+        np.testing.assert_array_equal(self.renderer.render(state, own.turned(0.0, 0.0)), base)
+
+    def test_a_turned_view_builds_no_ray_grid_of_its_own(self):
+        """A turn carries the unturned ray grid to the new pose, so a turned frame builds none.
+
+        Building a grid per turn cost about as much as the whole camera on every frame of a sweep.
+        """
+        own = self.renderer.camera_for(self.make_session().state)
+        built = []
+        build = Camera._build
+
+        def record(cam):
+            built.append(cam.build_rays)
+            build(cam)
+
+        with patch.object(Camera, "_build", record):
+            own.turned(0.2, 0.05)
+        self.assertEqual(built, [False])
+
+    def test_turned_rays_match_a_camera_built_at_the_same_pose(self):
+        """The rotated ray grid agrees with the grid a camera builds itself at the same pose."""
+        own = self.renderer.camera_for(self.make_session().state)
+        for yaw, pitch in ((0.2, 0.05), (-0.3, -0.2)):
+            built = Camera(own.x, own.y, own.z, own.yaw + yaw, own.pitch + pitch, own.roll,
+                           own.fov_x, own.w, own.h)
+            np.testing.assert_allclose(own.turned(yaw, pitch).dirs, built.dirs, atol=1e-5)
+
+    def test_the_keyboard_look_lowers_the_view_on_its_first_frame_after_a_mouse_overshoot(self):
+        """A sweep past the keyboard limit must not leave Down ignored while the excess unwinds.
+
+        Excess past the limit is dropped, so holding Up and then pressing Down moves the view on
+        the first frame, not after a stored turn has been worked back.
+        """
+        session = self.make_session()
+        for _ in range(24):  # 24 frames of 0.02 window widths: the turn reaches the 0.62 rad limit
+            session.tick(self.motion(0.0, -0.02), DT)
+        for _ in range(90):  # 1.5 s of Up drives the keyboard look to its top
+            session.tick(Keys(held={"up"}, focused=True), DT)
+        self.assertAlmostEqual(session.state.look, mouselook.KEY_LOOK_MAX)
+        before = self.view_pitch(session)
+        session.tick(Keys(held={"down"}, focused=True), DT)
+        self.assertLess(self.view_pitch(session), before)
+
+    def test_a_third_person_view_places_the_hull_where_the_boat_floats(self):
+        """The chase view draws the hull in world space at the boat, not at the chase eye.
+
+        A camera-frame hull would sit at the eye, behind the boat, and swing with the orbit.
+        """
+        session = self.make_session()
+        session.state.v2["settings"]["third_person"] = True
+        session.look_yaw = 0.3
+        state = session.state
+        own = self.renderer.camera_for(state)
+        chase = _camera(self.renderer, session)
+        faces = self.renderer._hull_faces(chase, state)
+        self.assertEqual({f.space for f in faces}, {"world"})
+        local = np.concatenate([f.pts for f in self.renderer._boat_faces(state)]).mean(axis=0)
+        placed = np.concatenate([f.pts for f in faces]).mean(axis=0)
+        np.testing.assert_allclose(placed, own.eye_to_world(local[None])[0], atol=1e-3)

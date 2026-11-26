@@ -6,6 +6,7 @@ checks that a world point along a pixel's ray projects back onto that pixel.
 
 from __future__ import annotations
 
+import copy
 import numpy as np
 
 
@@ -104,14 +105,73 @@ class Camera:
             pitch: Radians added to the pitch. Positive looks up.
 
         Returns:
-            A new camera at the same eye, roll, field and size. Its ``hull`` is this camera,
-            so the boat stays where it floats while only the view moves. Call it on an
+            A new camera at the same eye, roll, field and size. Its ``hull`` is this camera, so
+            the boat stays where it floats while only the view moves. Its rays are this camera's
+            grid carried to the new pose by one 3x3 rotation, so no ray grid is built per turn.
+            A zero turn returns a copy that renders exactly as this camera does. Call it on an
             unturned camera only.
         """
-        view = Camera(self.x, self.y, self.z, self.yaw + yaw, self.pitch + pitch, self.roll,
-                      self.fov_x, self.w, self.h, build_rays=self.build_rays)
+        if yaw == 0.0 and pitch == 0.0:
+            view = copy.copy(self)
+        else:
+            view = Camera(self.x, self.y, self.z, self.yaw + yaw, self.pitch + pitch, self.roll,
+                          self.fov_x, self.w, self.h, build_rays=False)
+            view.build_rays = self.build_rays
+            view.tanx, view.tany = self.tanx, self.tany
+            if self.dirs is not None:
+                rotation = (view._pose() @ self._pose().T).astype(np.float32)
+                h, w = self.dirs.shape[:2]
+                view.dirs = (self.dirs.reshape(-1, 3) @ rotation.T).reshape(h, w, 3)
         view.hull = self
         return view
+
+    def _pose(self) -> np.ndarray:
+        """The 3x3 map from this camera's roll-corrected pixel ray to world space.
+
+        The yaw axes times the pitch rotation, so ``pose @ ray`` is the world direction of that
+        ray. Both factors are orthonormal, so the inverse is the transpose.
+
+        Returns:
+            (3, 3) float64 matrix.
+        """
+        axes = np.stack([self.right, self.up, self.forward], axis=1).astype(np.float64)
+        pitch = np.array([[1.0, 0.0, 0.0], [0.0, self._cp, self._sp], [0.0, -self._sp, self._cp]])
+        return axes @ pitch
+
+    def reframe_points(self, frame: Camera, pts: np.ndarray) -> np.ndarray:
+        """Re-express points from ``frame``'s level eye frame in this camera's level eye frame.
+
+        The software renderer places the hull and the Skipper's paws in the level frame of the
+        unturned eye, so a view turned only in pitch keeps them where they are on screen.
+
+        Args:
+            frame: The camera the points are relative to, e.g. the unturned hull eye.
+            pts: (..., 3) points in ``frame``'s level eye coordinates, in metres.
+
+        Returns:
+            (..., 3) float32 points in this camera's level eye coordinates. ``pts`` itself when
+            the two share an eye and a yaw, so a pitch-only turn leaves them unchanged.
+        """
+        if frame.yaw == self.yaw and np.array_equal(frame.eye, self.eye):
+            return pts
+        return self.world_to_eye(frame.eye_to_world(pts))
+
+    def reframe_dirs(self, frame: Camera, dirs: np.ndarray) -> np.ndarray:
+        """Re-express directions from ``frame``'s level eye axes in this camera's axes.
+
+        Args:
+            frame: The camera whose axes the directions use, e.g. the unturned hull eye.
+            dirs: (..., 3) direction vectors in ``frame``'s axes. No translation applies.
+
+        Returns:
+            (..., 3) float32 directions in this camera's axes. ``dirs`` itself when the two share
+            a yaw, so a pitch-only turn shades the hull exactly as the unturned view does.
+        """
+        if frame.yaw == self.yaw:
+            return dirs
+        world = np.asarray(dirs, dtype=np.float32) @ np.stack(
+            [frame.right, frame.up, frame.forward])
+        return (world @ np.stack([self.right, self.up, self.forward]).T).astype(np.float32)
 
     def boat_frame(self) -> Camera:
         """The camera whose eye and axes place the hull and the Skipper's paws in this view.

@@ -6,8 +6,9 @@ turn as a yaw and pitch offset in radians. That offset is runtime state and is n
 These helpers hold the arithmetic, away from SDL and the renderers, so the tests can pin
 gain, clamps and recentring exactly.
 
-Constraints: the cursor stays visible and free (no relative mouse mode), so HUD and menu
-clicks are unaffected. A turn never passes the keyboard look's pitch bounds or YAW_LIMIT.
+Constraints: the pointer is hidden during play but not captured (no relative mouse mode), so a
+sweep stops where the pointer reaches the window edge. Menus and the whale return show it again.
+A turn never passes the keyboard look's pitch bounds or YAW_LIMIT.
 """
 import math
 

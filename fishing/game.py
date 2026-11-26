@@ -292,10 +292,11 @@ class Session:
             None.
 
         Side effects:
-            Updates ``look_yaw``, ``look_pitch`` and the rest timer. Motion turns the view only
-            in play, with the window focused, no staging or cutscene owning the camera, the
-            setting on, and the pointer off every displayed target. Any other frame eases the
-            turn back at once, so a menu or lost focus never leaves the view turned.
+            Updates ``look_yaw``, ``look_pitch`` and the rest timer, and keeps the turn within the
+            keyboard look's limits. Motion turns the view only in play, with the window focused,
+            no staging or cutscene owning the camera, the setting on, and the pointer off every
+            displayed target. Any other frame, such as a menu, lost focus, or a story, eases the
+            turn back at once. Motion over a displayed target holds the turn until the pointer rests.
         """
         settings = self.state.v2.get("settings", {}) if isinstance(self.state.v2, dict) else {}
         gain = mouselook.gain(mouselook.level(settings))
@@ -303,21 +304,23 @@ class Session:
         snap = bool(settings.get("reduced_motion", False))
         clock = self.stage if self.stage is not None else self.whale_clock
         story_owns_camera = clock is not None and not clock.over
+        dx, dy = getattr(keys, "mouse_delta", (0.0, 0.0))
         if gain <= 0.0 or self.ui.mode != "play" or not self.focused or story_owns_camera:
             self._look_rest = mouselook.REST_S
             self.look_yaw, self.look_pitch = mouselook.settle(
                 self.look_yaw, self.look_pitch, dt, snap=snap)
-            return
-        dx, dy = getattr(keys, "mouse_delta", (0.0, 0.0))
-        if (dx or dy) and not self._pointer_over_target(keys):
+        elif (dx or dy) and not self._pointer_over_target(keys):
             self._look_rest = 0.0
             self.look_yaw, self.look_pitch = mouselook.turn(
                 self.look_yaw, self.look_pitch, dx, dy, gain, self.state.look)
-            return
-        self._look_rest += dt
-        if self._look_rest >= mouselook.REST_S:
-            self.look_yaw, self.look_pitch = mouselook.settle(
-                self.look_yaw, self.look_pitch, dt, snap=snap)
+        else:
+            self._look_rest += dt
+            if self._look_rest >= mouselook.REST_S:
+                self.look_yaw, self.look_pitch = mouselook.settle(
+                    self.look_yaw, self.look_pitch, dt, snap=snap)
+        # Excess past the keyboard look's limit is dropped, not kept, so Down works at once.
+        self.look_yaw, self.look_pitch = mouselook.clamp(
+            self.look_yaw, self.look_pitch, self.state.look)
 
     def _pointer_over_target(self, keys) -> bool:
         """Whether the live pointer is over a target the current screen has displayed.
