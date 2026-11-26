@@ -424,6 +424,25 @@ class _StubRenderer:
         return obj
 
 
+def _briar_slots() -> tuple[int, int, int]:
+    """Briar's real (tree, shore, fixed) layer slots, read from its built world."""
+    return florafx.layer_slots({prop.kind for prop in _world("briar").props})
+
+
+def _budget_layers(scale: int) -> int:
+    """Painted layers the foliage budget holds at atlas `scale`.
+
+    Args:
+        scale: Atlas scale (texels per base texel), as `Detail.atlas_scale` gives it.
+
+    Returns:
+        Whole layers that fit `FOLIAGE_BUDGET_MB`, counted the way `FloraAtlas` counts them.
+    """
+    width, height = florafx.ATLAS_W * scale, florafx.ATLAS_H * scale
+    layer_bytes = florafx._layer_bytes(width, height, florafx._levels(width, height))
+    return detail.FOLIAGE_BUDGET_MB * detail.MIB // layer_bytes
+
+
 class FoliageFitTests(unittest.TestCase):
     """The variant trade-off under the foliage budget, computed without GL."""
 
@@ -432,16 +451,22 @@ class FoliageFitTests(unittest.TestCase):
                                               budget_layers=66), (6, 3))
 
     def test_briar_ultra_keeps_full_targets_at_scale_three(self):
-        # Ultra paints at scale 3, a 3.75 MiB layer, so 250 MiB holds 66. Briar's 4 trees, 10 shore
-        # kinds and 4 fixed layers fit the full (8, 3): 4*8 + 10*3 + 4 = 66.
-        self.assertEqual(florafx.fit_variants(4, 10, 4, tree_target=8, shore_target=3,
-                                              budget_layers=66), (8, 3))
+        # Read from the real world, so a species added to Briar changes the answer here.
+        ultra = detail.TIERS["ultra"]
+        shore_target = min(florafx.SHORE_VARIANTS, ultra.foliage_variants)
+        fit = florafx.fit_variants(*_briar_slots(), tree_target=ultra.foliage_variants,
+                                   shore_target=shore_target,
+                                   budget_layers=_budget_layers(ultra.atlas_scale))
+        self.assertEqual(fit, (ultra.foliage_variants, shore_target))
 
     def test_scale_four_would_cut_briar_below_high(self):
-        # At scale 4 a layer is 6.67 MiB, so 250 MiB holds 37 and Briar fits only (3, 2), below
-        # high's (6, 3). This is why ultra does not paint at scale 4.
-        self.assertEqual(florafx.fit_variants(4, 10, 4, tree_target=8, shore_target=3,
-                                              budget_layers=37), (3, 2))
+        # Why ultra paints at scale 3: at scale 4 Briar's real layers keep fewer tree variants
+        # than high's target.
+        ultra = detail.TIERS["ultra"]
+        shore_target = min(florafx.SHORE_VARIANTS, ultra.foliage_variants)
+        trees, _ = florafx.fit_variants(*_briar_slots(), tree_target=ultra.foliage_variants,
+                                        shore_target=shore_target, budget_layers=_budget_layers(4))
+        self.assertLess(trees, detail.TIERS["high"].foliage_variants)
 
     def test_chosen_pair_always_fits_when_one_each_fits(self):
         for budget in range(18, 80):
@@ -512,6 +537,10 @@ class AtlasTests(unittest.TestCase):
             tex.release()
 
     def test_placed_kinds_have_layers_and_the_atlas_fits_the_budget(self):
+        """Each lake and tier paints its target variants inside the budget.
+
+        Variants never fall as the tier rises, for trees or shore plants.
+        """
         budget = detail.FOLIAGE_BUDGET_MB * 1024 * 1024
         counts = {}  # lake -> tier -> (tree_variants, shore_variants), for the ordering check
         for lake in ALL_LAKES:
@@ -521,6 +550,11 @@ class AtlasTests(unittest.TestCase):
                     flora = self._flora(lake, tier)
                     try:
                         counts[lake][tier] = (flora.tree_variants, flora.shore_variants)
+                        # A species that takes layers from the budget lowers these counts, so
+                        # this fails until the budget is decided again.
+                        tree_target = detail.TIERS[tier].foliage_variants
+                        self.assertEqual(counts[lake][tier],
+                                         (tree_target, min(florafx.SHORE_VARIANTS, tree_target)))
                         placed = {p.kind for p in _world(lake).props}
                         self.assertEqual(sorted(k for k in placed if f"{k}0" not in flora.layers), [])
                         trees, shores, fixed = florafx.layer_slots(placed)
@@ -537,19 +571,24 @@ class AtlasTests(unittest.TestCase):
                     self.assertEqual(per_tier, sorted(per_tier))
 
     def test_atlas_bytes_match_the_gpu_textures(self):
-        flora = self._flora("briar", "standard")
-        try:
-            for tex in (flora.colour, flora.light):
-                self.assertEqual((tex.width, tex.height, tex.layers, tex.components, tex.dtype),
-                                 (flora.w, flora.h, flora.count, 4, "f1"))
-            self.assertEqual(flora.levels, int(math.floor(math.log2(max(flora.w, flora.h)))) + 1)
-            self.assertEqual(flora.layer_bytes, 2 * _gpu_layer_bytes(flora.colour))
-            self.assertEqual((flora.cover.width, flora.cover.height), (flora.levels, flora.count))
-            self.assertEqual(flora.cover.width * flora.cover.height * 4, flora.cover_rows.nbytes)
-            self.assertEqual(flora.memory_bytes(include_reserve=False),
-                             flora.reserve0 * flora.layer_bytes + flora.cover_rows.nbytes)
-        finally:
-            self._free(flora)
+        for lake, tier in (("briar", "standard"), ("briar", "ultra")):
+            with self.subTest(lake=lake, tier=tier):
+                flora = self._flora(lake, tier)
+                try:
+                    for tex in (flora.colour, flora.light):
+                        self.assertEqual((tex.width, tex.height, tex.layers, tex.components,
+                                          tex.dtype), (flora.w, flora.h, flora.count, 4, "f1"))
+                    self.assertEqual(flora.levels,
+                                     int(math.floor(math.log2(max(flora.w, flora.h)))) + 1)
+                    self.assertEqual(flora.layer_bytes, 2 * _gpu_layer_bytes(flora.colour))
+                    self.assertEqual((flora.cover.width, flora.cover.height),
+                                     (flora.levels, flora.count))
+                    self.assertEqual(flora.cover.width * flora.cover.height * 4,
+                                     flora.cover_rows.nbytes)
+                    self.assertEqual(flora.memory_bytes(include_reserve=False),
+                                     flora.reserve0 * flora.layer_bytes + flora.cover_rows.nbytes)
+                finally:
+                    self._free(flora)
 
     def test_low_tier_has_fewer_variants_than_standard(self):
         for lake in TREE_LAKES:
@@ -564,13 +603,14 @@ class AtlasTests(unittest.TestCase):
 
     def test_verify_estimate_matches_the_painted_gpu_bytes(self):
         for lake in TREE_LAKES:
-            for tier in ("low", "standard"):
+            for tier in ("low", "standard", "ultra"):
                 with self.subTest(lake=lake, tier=tier):
                     flora = self._flora(lake, tier)
                     try:
                         painted = flora.reserve0 * 2 * _gpu_layer_bytes(flora.colour)
                         cover = flora.cover.width * flora.cover.height * 4
-                        self.assertEqual(foliage_bytes(SimpleNamespace(flora_atlas=flora)), painted + cover)
+                        self.assertEqual(foliage_bytes(SimpleNamespace(flora_atlas=flora)),
+                                         painted + cover)
                     finally:
                         self._free(flora)
 
