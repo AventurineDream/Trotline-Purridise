@@ -27,6 +27,7 @@ import math
 import numpy as np
 
 from . import catmesh, skipperlook
+from .boatmesh import tiller_grip
 from .catmesh import _ellipsoid, _rot, _tube
 
 PAD = np.array((0.78, 0.52, 0.52), np.float32)
@@ -147,10 +148,13 @@ def _stick(m, a, b, radius, rgb, samples=6):
 
 
 def _tiller_pivot(state):
-    """The boat's own tiller end in its eye frame, when the cockpit mesh has one."""
+    """The grip a paw holds, in the eye frame: the boat's own control where it sits in view.
+
+    The jon's is the far end of its tiller extension (boatmesh.tiller_grip). The arm swings with
+    the outboard, and the grip follows the arm's tip, so the paw stays on it at every steer.
+    """
     if state.boat_id == "jon":
-        ang = -state.steer * 0.65
-        return np.array((0.30 + math.cos(ang) * 0.27, -0.62 + 0.035, 1.58 + math.sin(ang) * 0.16), np.float32)
+        return tiller_grip(state.steer)
     if state.boat_id == "sail":
         return np.array((0.12 + state.steer * 0.14, -0.54, 0.68), np.float32)
     if state.boat_id == "rowboat":

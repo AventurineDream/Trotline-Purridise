@@ -1,4 +1,4 @@
-"""Small, detailed first-person daysailer and pontoon meshes, and the jon's outboard."""
+"""Small, detailed first-person daysailer and pontoon meshes, and the jon's outboard and tiller."""
 
 import math
 from dataclasses import replace
@@ -119,6 +119,107 @@ def outboard_boxes(steer):
             half = (abs(a * c) + abs(d * s), b, abs(a * s) + abs(d * c))
             boxes.append((np.asarray(place(*centre), np.float32), np.asarray(half, np.float32)))
     return boxes
+
+
+# The jon's tiller (issue #192): an arm from the outboard's swivel, a universal-joint knuckle
+# at its tip, and a straight extension to the grip the Skipper's paw holds. The arm is built
+# in `_outboard_frame`, so it yaws with the motor. The extension is carried with the knuckle
+# rather than pivoting on it, so the grip moves with the arm's tip and the rod stays straight.
+# The swivel sits on the cowl's front face, above the transom rail (-0.465 m), so the arm clears
+# the transom. At 16:9 the frustum's lower edge falls 0.42 m per metre ahead, so the grip sits
+# on screen 1.2 m ahead at gunwale height.
+TILLER_SWIVEL_Y = -0.30  # eye-frame height of the swivel, metres
+TILLER_ARM_LENGTH = 0.60  # swivel to knuckle at steer 0, metres; a real tiller arm is 0.55-0.65 m
+TILLER_EXTENSION = (0.30, -0.12, 1.44)  # knuckle to grip at steer 0, eye frame metres
+TILLER_ARM_HALF = 0.02  # half the side of the arm's square section
+TILLER_KNUCKLE_HALF = 0.03
+TILLER_ROD_HALF = 0.012  # slim enough to read as a rod in first person
+TILLER_GRIP_HALF, TILLER_GRIP_LENGTH = 0.018, 0.12
+_STEEL = np.array((0.55, 0.58, 0.60), np.float32)  # the outboard's hub
+_ROD = np.array((0.16, 0.17, 0.18), np.float32)
+_GRIP = np.array((0.05, 0.05, 0.06), np.float32)
+
+
+def tiller_joints(steer):
+    """The tiller's joints in the eye frame at `steer`.
+
+    Args:
+        steer: The boat's steer, -1..1, as for `outboard_faces`.
+
+    Returns:
+        (swivel, knuckle, grip) as float32 (3,) arrays, metres. The swivel is the arm's root on
+        the outboard's steering axis, the knuckle is its tip, and the grip is the far end of the
+        extension, which the Skipper's paw holds.
+    """
+    place, _turn, _cs = _outboard_frame(steer)
+    swivel = np.asarray(place(0.0, TILLER_SWIVEL_Y, 0.0), np.float32)
+    knuckle = np.asarray(place(0.0, TILLER_SWIVEL_Y, TILLER_ARM_LENGTH), np.float32)
+    return swivel, knuckle, knuckle + np.asarray(TILLER_EXTENSION, np.float32)
+
+
+def tiller_grip(steer):
+    """The grip the Skipper's paw holds at `steer`, eye frame metres: the extension's far end."""
+    return tiller_joints(steer)[2]
+
+
+def _quad(faces, points, normal, colour):
+    """Append one planar camera-space quad with its outward `normal`."""
+    faces.append(Face(np.array(points, np.float32), np.array(normal, np.float32),
+                      np.asarray(colour, np.float32), "cam"))
+
+
+def _bar(faces, a, b, half, colour, caps=False):
+    """A square-section bar from `a` to `b` in the eye frame, `half` metres to a side.
+
+    Its four long sides face outward. With `caps`, its ends are closed too, so a bar whose
+    ends are `2 * half` apart is a cube.
+    """
+    a, b = np.asarray(a, np.float64), np.asarray(b, np.float64)
+    axis = (b - a) / np.linalg.norm(b - a)
+    u = np.cross(axis, (0.0, 1.0, 0.0))
+    u /= np.linalg.norm(u)
+    v = np.cross(axis, u)
+    ring = [(u + v) * half, (u - v) * half, (-u - v) * half, (-u + v) * half]
+    for p, q in zip(ring, ring[1:] + ring[:1]):
+        _quad(faces, [a + p, a + q, b + q, b + p], (p + q) / np.linalg.norm(p + q), colour)
+    if caps:
+        _quad(faces, [a + p for p in ring], -axis, colour)
+        _quad(faces, [b + p for p in ring[::-1]], axis, colour)
+
+
+def tiller_parts(steer, cowl_rgb):
+    """The jon's tiller as camera-space faces at `steer`, grouped by part.
+
+    Both renderers take their tiller from `tiller_faces`, which reads this, so software and GL
+    draw the same arm, as they do the outboard.
+
+    Args:
+        steer: The boat's steer, -1..1, as for `outboard_faces`.
+        cowl_rgb: The `motor` paint, 0-1 RGB; the arm wears it.
+
+    Returns:
+        A dict of face lists. "arm" runs from the swivel to the knuckle in the motor paint.
+        "knuckle" is a steel cube at the arm's tip. "extension" is the dark rod from the knuckle
+        to a black grip sleeve, which ends at the grip.
+    """
+    swivel, knuckle, grip = tiller_joints(steer)
+    axis = (grip - knuckle) / np.linalg.norm(grip - knuckle)
+    sleeve = grip - axis * TILLER_GRIP_LENGTH
+    arm, joint, extension = [], [], []
+    _bar(arm, swivel, knuckle, TILLER_ARM_HALF, np.asarray(cowl_rgb, np.float32), caps=True)
+    offset = np.array((0.0, 0.0, TILLER_KNUCKLE_HALF), np.float64)
+    _bar(joint, knuckle - offset, knuckle + offset, TILLER_KNUCKLE_HALF, _STEEL, caps=True)
+    _bar(extension, knuckle, sleeve, TILLER_ROD_HALF, _ROD)
+    _bar(extension, sleeve, grip, TILLER_GRIP_HALF, _GRIP, caps=True)
+    return {"arm": arm, "knuckle": joint, "extension": extension}
+
+
+def tiller_faces(steer, cowl_rgb):
+    """Every face of the jon's tiller at `steer`, for `SoftwareRenderer._boat_faces`.
+
+    See `tiller_parts` for the arguments and the parts.
+    """
+    return [face for part in tiller_parts(steer, cowl_rgb).values() for face in part]
 
 
 def boat_faces(state):

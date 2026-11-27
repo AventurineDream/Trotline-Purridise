@@ -616,17 +616,16 @@ def _hull(state):
 
 
 def _jon_boxes(state):
-    """The jon's bench, livewell, steering mount and bow deck, which are open shells in its
-    mesh; the transom, which shades the cockpit when the sun is astern; and the outboard's
-    cowl and midsection, yawed by steer through boatmesh.outboard_boxes like its mesh.
-    Seven boxes, so the Bot's perch still fits MAX_BOXES."""
+    """The jon's bench, livewell, bow deck and transom: open shells in its mesh, and the transom
+    shades the cockpit when the sun is astern. Then the outboard's cowl and midsection, yawed by
+    steer through boatmesh.outboard_boxes like its mesh. The tiller has no box: its rod is too thin
+    to shade anything. Six boxes, so the Bot's perch still fits MAX_BOXES."""
     from .boatmesh import outboard_boxes
     cy1 = -0.96 + 0.36 * (1.0 + state.well_tier * 0.12)
     beam = HULL_INNER_BEAM
     boxes = [
         ((0.0, -0.768, 1.77), (beam - 0.035, 0.032, 0.07)),
         ((-0.31, (-0.96 + cy1) * 0.5, 2.06), (0.17, (cy1 + 0.96) * 0.5, 0.14)),
-        ((0.31, -0.81, 1.62), (0.11, 0.15, 0.10)),
         ((0.0, -0.54, 2.63), (beam, 0.04, 0.23)),
         ((0.0, -0.73, HULL_STERN - 0.01), (beam, 0.23, 0.01)),
     ]
