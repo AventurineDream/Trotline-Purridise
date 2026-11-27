@@ -226,6 +226,7 @@ def sky_add(dx, dy, dz, light, t):
 
 def nebula_props(world, prop_type):
     """Crystal spires, star-lilies, crystal kelp, meteor reefs and light-reeds."""
+    from .world import in_landing_envelope
     parameters = world.environment
     rng = np.random.default_rng(parameters["seed"])
     result = []
@@ -235,7 +236,7 @@ def nebula_props(world, prop_type):
         radius = float(world.fields.radius(angle)) + float(rng.uniform(10, 170))
         x, z = math.cos(angle) * radius, math.sin(angle) * radius
         a, s = world.slip.local(x, z)
-        if -60 < float(a) < 75 and abs(float(s)) < 85:
+        if in_landing_envelope(world.id, a, s):
             continue
         result.append(prop_type("spire", x, z, float(rng.uniform(6, 16)),
                                 GLOW_SHADE + float(rng.uniform(.30, .60))))
@@ -288,7 +289,7 @@ def nebula_props(world, prop_type):
         radius = float(world.fields.radius(angle)) + float(extra.uniform(10, 170))
         x, z = math.cos(angle) * radius, math.sin(angle) * radius
         a, s = world.slip.local(x, z)
-        if -60 < float(a) < 75 and abs(float(s)) < 85:
+        if in_landing_envelope(world.id, a, s):
             continue
         result.append(prop_type("spire", x, z, float(extra.uniform(6, 16)),
                                 GLOW_SHADE + float(extra.uniform(.30, .60))))

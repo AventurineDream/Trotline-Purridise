@@ -1,4 +1,4 @@
-"""Small deterministic shore details; decorative and outside the boating routes.
+"""Small deterministic shore details; decorative, clear of boating routes and landing envelopes.
 
 Each lake keeps its own arrangement: a seed, a cycle of plant clusters that sets which
 kinds stand where along its bank, and its own waders. The details share the existing
@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import math
 import numpy as np
+from .world import in_landing_envelope
 
-# Above the densest bank's count (Flathead, about 500 details), so the cap never trims a lake.
+# Above the densest bank's count (Flathead, 512 details), so the cap never trims a lake.
 # Each detail is one prop row and one instanced quad, so the cap still bounds draw calls and memory.
 MAX_SHORE_DETAILS = 560
 
@@ -56,7 +57,7 @@ SHORE_CYCLES = {
     "flathead": (
         (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),),
         (("grass", (-1.7, 1.6, 2.4), (1.0, 3.0), (0.6, 1.0)),),
-        (("flowers", (-1.2, 1.3), (2.0, 5.0), (0.7, 1.1)),),
+        (("flowers", (-1.2, 1.3, 2.0), (2.0, 5.0), (0.7, 1.1)),),
         (("cattail", (-1.5, 0.9, 2.6), (-1.8, -0.4), (1.5, 2.4)),),
         (("shore_stone", (-1.1,), (0.3, 1.4), (0.4, 0.7)),
          ("grass", (1.5,), (2.0, 4.0), (0.7, 1.05))),
@@ -67,15 +68,18 @@ SHORE_CYCLES = {
         (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),
          ("cattail", (2.6,), (-1.8, -0.4), (1.5, 2.4))),
     ),
-    # Pumice shelf by the warm springs: stones and drift logs, sparse grass and spring flowers.
+    # Pumice shelf by the warm springs: stones and drift logs, grass and spring flowers, and
+    # hardy shrubs set back on the dry benches. No cattail: the shelf has no standing reed beds.
     "crater": (
         (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),),
-        (("grass", (-1.7, 1.6), (1.0, 3.0), (0.6, 1.0)),),
-        (("flowers", (-1.2, 1.3), (2.0, 5.0), (0.7, 1.1)),),
+        (("grass", (-1.7, 1.6), (1.0, 3.0), (0.6, 1.0)),
+         ("shrub", (0.0, 1.8), (4.0, 8.0), (1.5, 2.5))),
+        (("flowers", (-1.2, 1.3, 2.0), (2.0, 5.0), (0.7, 1.1)),),
         (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),
          ("grass", (0.0,), (2.0, 4.0), (0.7, 1.0))),
         (("driftwood", (0.0,), (0.8, 2.2), (0.55, 0.85)),),
-        (("shore_stone", (-1.1, 1.5), (0.3, 1.4), (0.4, 0.7)),),
+        (("shrub", (-1.5, 1.8), (4.0, 8.0), (1.5, 2.5)),
+         ("flowers", (0.0,), (2.0, 5.0), (0.65, 1.0))),
         (("grass", (-1.7, 1.6), (1.0, 3.0), (0.6, 1.0)),
          ("flowers", (0.0,), (2.0, 5.0), (0.65, 1.0))),
         (("shore_stone", (-1.1,), (0.3, 1.4), (0.4, 0.7)),
@@ -141,8 +145,9 @@ def shoreline_props(world, prop_type):
         prop_type: The `Prop` record class to build the details with.
 
     Returns:
-        At most MAX_SHORE_DETAILS `prop_type` records, each clear of the boating routes
-        and landings and placed on the shallow margin (waders) or the dry shore (plants).
+        At most MAX_SHORE_DETAILS `prop_type` records, each clear of the boating routes, the
+        landings and their envelopes, and placed on the shallow margin (waders) or the dry
+        shore (plants).
     """
     rng = np.random.default_rng(SHORE_SEED[world.id])
     cycle = SHORE_CYCLES[world.id]
@@ -168,7 +173,13 @@ def shoreline_props(world, prop_type):
         if key in positions:
             return
         positions.add(key)
-        result.append(prop_type(kind,x,z,float(height),float(rng.uniform(0.88,1.06))))
+        size = float(rng.uniform(0.88,1.06))
+        # A dropped detail still draws its size and holds its cell, so every other detail
+        # keeps the place and size it had.
+        a, s = world.slip.local(x, z)
+        if in_landing_envelope(world.id, a, s):
+            return
+        result.append(prop_type(kind,x,z,float(height),size))
 
     for i,(x,z,nx,nz) in enumerate(samples):
         jitter = float(rng.uniform(-2.0,2.0))

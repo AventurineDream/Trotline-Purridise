@@ -4,9 +4,9 @@ Per lake, on the built world, these tests check that:
 - tree and shore-plant mixes differ between lakes (total-variation distance);
 - the weights in `forest.pick_tree` and the low-discrepancy `index_draw` hold their shares;
 - placement is deterministic per lake, and the collision set matches the pre-change build;
-- tree, shore and nebula counts sit in an authored band (1.2x to 1.4x the pre-change counts);
-- no tree or nebula spire sits in its landing envelope, and no shore plant sits on a route,
-  in a marina clearing or in the Cedar cove;
+- tree, plant and nebula counts sit in an authored band (1.2x to 1.4x the pre-change counts);
+- no placed prop of any kind sits in a lake's landing envelope, and no shore plant sits
+  on a route, in a marina clearing or in the Cedar cove;
 - the leafy palette follows `sprites.LAKE_TINT` on the GL atlas and on the CPU canopies and
   shore plants, while wood, bark and stone stay untinted, and HD sprites and tree silhouettes
   differ per lake;
@@ -43,36 +43,32 @@ from .particlefx import LEAF_KINDS
 from .shoreline import _clear_route
 from .sprites import LAKE_TINT, Painter, bake, sprite_hd
 from .verify import foliage_bytes
-from .world import Prop, World
+from .world import LANDING_ENVELOPE, Prop, World, in_landing_envelope
 
 TREE_LAKES = ("briar", "cedar", "flathead", "crater")
 ALL_LAKES = (*TREE_LAKES, "nebula")
+# Plant kinds are the foliage the density band counts. Stones, driftwood and birds are in
+# SHORE_KINDS for the mix checks only: they are not foliage, so they carry no count band.
+PLANT_KINDS = frozenset(("cattail", "grass", "flowers", "shrub", "reed", "palmetto"))
 SHORE_KINDS = frozenset(("cattail", "grass", "flowers", "shrub", "driftwood", "shore_stone",
                          "palmetto", "heron", "duck"))
-NEBULA_SCENERY = ("spire", "lightreed", "starlily")
 
-# Pre-change counts at origin/main 413bbcf. Crater's tree count includes its 12 deadpine snags,
-# which are tree kinds too. The authored band for each count is 1.2x to 1.4x.
+# Counts at origin/main 36c17d2, the build before #167. Crater's tree count includes its 12
+# deadpine snags, which are tree kinds too. The authored band for each count is 1.2x to 1.4x.
 BASE_TREES = {"briar": 752, "cedar": 2423, "flathead": 560, "crater": 432}
-BASE_SHORE = {"briar": 304, "cedar": 327, "flathead": 386, "crater": 332}
+BASE_PLANTS = {"briar": 296, "cedar": 309, "flathead": 313, "crater": 269}
 BASE_NEBULA = {"spire": 110, "lightreed": 70, "starlily": 29}
 
 # The collision set is pinned: density work must not move a single solid (rocks, stumps, knees,
 # deadpine snags, kelp and meteors), because solids are walls the boat and fish collide with.
-# The fixture holds the pre-change (x, z, radius) rows in metres. They are compared within a
-# tolerance, not by hashing their bytes, because NumPy's trig can differ in the last bits between
-# CPUs (it dispatches SIMD kernels per machine), which flips a hash of rounded floats on CI.
+# The fixture holds the pre-change (x, z, radius) rows in metres, written by
+# scripts/build_foliage_solids.py. Briar's shore-placed solids come from shore_radius,
+# a 28-step bisection on the sign of a float32 shore_sd (world.py). Evaluated in float64
+# it moves Briar's rows by at most 5.7e-5 m, so positions get a 1 mm tolerance, more than
+# 17 times that. The radius column does not come from the bisection: radii match to 1e-9 m.
 SOLIDS_FIXTURE = Path(__file__).with_name("fixtures") / "foliage_solids.json"
-SOLID_TOLERANCE_M = 1e-3
-
-# Slip-local (a, s) in metres: trees and spires are kept out of lo < a < hi with |s| < half.
-LANDING_ENVELOPE = {
-    "briar": (-4.0, 30.0, 20.0),
-    "cedar": (-8.0, 35.0, 22.0),
-    "flathead": (-60.0, 75.0, 85.0),
-    "crater": (-65.0, 80.0, 85.0),
-    "nebula": (-60.0, 75.0, 85.0),
-}
+SOLID_POSITION_TOLERANCE_M = 1e-3
+SOLID_RADIUS_TOLERANCE_M = 1e-9
 
 
 @lru_cache(maxsize=None)
@@ -168,7 +164,10 @@ class DeterminismTests(unittest.TestCase):
 
 
 class CollisionTests(unittest.TestCase):
-    """Density work leaves every solid where the pre-change build put it, to the millimetre."""
+    """Density work leaves every solid where the pre-change build put it.
+
+    Positions must match to a millimetre and radii to a nanometre.
+    """
 
     def test_solids_match_the_pre_change_build(self):
         expected = json.loads(SOLIDS_FIXTURE.read_text(encoding="utf-8"))["solids"]
@@ -177,7 +176,10 @@ class CollisionTests(unittest.TestCase):
                 solids = np.asarray(_world(lake).solid_props, np.float64)
                 pinned = np.asarray(expected[lake], np.float64)
                 self.assertEqual(solids.shape, pinned.shape)
-                np.testing.assert_allclose(solids, pinned, rtol=0.0, atol=SOLID_TOLERANCE_M)
+                np.testing.assert_allclose(solids[:, :2], pinned[:, :2], rtol=0.0,
+                                           atol=SOLID_POSITION_TOLERANCE_M)
+                np.testing.assert_allclose(solids[:, 2], pinned[:, 2], rtol=0.0,
+                                           atol=SOLID_RADIUS_TOLERANCE_M)
 
 
 class DensityTests(unittest.TestCase):
@@ -190,12 +192,12 @@ class DensityTests(unittest.TestCase):
                 self.assertGreaterEqual(count, 1.2 * BASE_TREES[lake])
                 self.assertLessEqual(count, 1.4 * BASE_TREES[lake])
 
-    def test_shore_details_within_authored_band(self):
+    def test_plant_kinds_within_authored_band(self):
         for lake in TREE_LAKES:
             with self.subTest(lake=lake):
-                count = _count(_world(lake), SHORE_KINDS)
-                self.assertGreaterEqual(count, 1.2 * BASE_SHORE[lake])
-                self.assertLessEqual(count, 1.4 * BASE_SHORE[lake])
+                count = _count(_world(lake), PLANT_KINDS)
+                self.assertGreaterEqual(count, 1.2 * BASE_PLANTS[lake])
+                self.assertLessEqual(count, 1.4 * BASE_PLANTS[lake])
 
     def test_nebula_scenery_within_authored_band(self):
         counts = Counter(p.kind for p in _world("nebula").props)
@@ -208,24 +210,36 @@ class DensityTests(unittest.TestCase):
 class ClearanceTests(unittest.TestCase):
     """Landings, routes, the marina and the Cedar cove stay open."""
 
-    def test_trees_and_spires_stay_out_of_landing_envelopes(self):
+    def test_envelope_edges_are_open(self):
+        """A point on any edge of a lake's envelope is outside it; a point just inside is in."""
         for lake, (lo, hi, half) in LANDING_ENVELOPE.items():
             with self.subTest(lake=lake):
+                mid = (lo + hi) / 2
+                self.assertTrue(in_landing_envelope(lake, mid, 0.0))
+                self.assertFalse(in_landing_envelope(lake, lo, 0.0))
+                self.assertFalse(in_landing_envelope(lake, hi, 0.0))
+                self.assertTrue(in_landing_envelope(lake, lo + 0.01, 0.0))
+                self.assertTrue(in_landing_envelope(lake, hi - 0.01, 0.0))
+                self.assertFalse(in_landing_envelope(lake, mid, half))
+                self.assertFalse(in_landing_envelope(lake, mid, -half))
+                self.assertTrue(in_landing_envelope(lake, mid, half - 0.01))
+                self.assertTrue(in_landing_envelope(lake, mid, -(half - 0.01)))
+
+    def test_landing_envelopes_stay_clear(self):
+        """Every lake keeps every placed prop, of any kind, out of its landing envelope."""
+        for lake in LANDING_ENVELOPE:
+            with self.subTest(lake=lake):
                 world = _world(lake)
-                kinds = NEBULA_SCENERY[:1] if lake == "nebula" else TREE_KINDS
                 inside = []
                 for p in world.props:
-                    if p.kind not in kinds:
-                        continue
                     a, s = (float(v) for v in world.slip.local(p.x, p.z))
-                    if lo < a < hi and abs(s) < half:
+                    if in_landing_envelope(lake, a, s):
                         inside.append((p.kind, round(p.x, 1), round(p.z, 1)))
                 self.assertEqual(inside, [])
 
     def test_extra_spires_clear_the_landing_for_many_seeds(self):
         """The nebula's denser spires keep the landing clear for every seed, not just one."""
         world = _world("nebula")
-        lo, hi, half = LANDING_ENVELOPE["nebula"]
         seed = int(world.environment["seed"])
         for offset in range(32):
             with self.subTest(seed=seed + offset):
@@ -234,7 +248,7 @@ class ClearanceTests(unittest.TestCase):
                 inside = []
                 for p in spires:
                     a, s = (float(v) for v in world.slip.local(p.x, p.z))
-                    if lo < a < hi and abs(s) < half:
+                    if in_landing_envelope("nebula", a, s):
                         inside.append((round(p.x, 1), round(p.z, 1)))
                 self.assertEqual(inside, [])
 
