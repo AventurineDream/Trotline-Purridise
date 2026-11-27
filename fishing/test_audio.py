@@ -50,6 +50,7 @@ from .audio import (
     _soundscape_cue,
     _store_for,
     _unlink,
+    shutdown_stores,
 )
 from .botchimes import CHIMES
 from .content import load_content
@@ -533,8 +534,9 @@ class HeldRender(unittest.TestCase):
     """Piece renders held mid-way, so a test can act on one still in progress (#168).
 
     Every piece is shortened to form A (12 bars). The first render stops at its fifth block until
-    `self.release` is set. Subclasses register `release.set` after their store's shutdown, so
-    cleanup sets it first and a held render can finish.
+    `self.release` is set, or for 10 s at most, so a forgotten release fails the test instead of
+    hanging the run. Subclasses register `release.set` after their store's shutdown, so cleanup
+    sets it first and a held render can finish.
     """
 
     def setUp(self):
@@ -560,7 +562,8 @@ class HeldRender(unittest.TestCase):
 class AbandonedRender(HeldRender):
     """A piece the bed store abandons mid-render stops before its next block, and its lane slot
     stays taken until it ends, so the next piece never overlaps it (#168). The render is the real
-    `songs.render` of a short piece; the `time.sleep(0)` after each block holds it mid-way."""
+    `songs.render` of a short piece; HeldRender patches `songs.time.sleep` to hold it after each
+    block until the test sets `self.release`."""
 
     def setUp(self):
         super().setUp()
@@ -592,8 +595,8 @@ class AbandonedRender(HeldRender):
 
 
 class QuitMidRender(HeldRender):
-    """The quit path, `Audio.close` (called by `game.run` in its `finally`), ends a piece render
-    before the interpreter joins its thread (#168)."""
+    """The game's quit path, `shutdown_stores` (called by `game.run` in its `finally`), ends a
+    piece render before the interpreter joins its thread (#168)."""
 
     def setUp(self):
         super().setUp()
@@ -612,12 +615,13 @@ class QuitMidRender(HeldRender):
         self.store.request("song:briar-1")
         self.assertTrue(self.entered.wait(10))  # the render is held mid-way
         future, _stop = self.store._threads["song:briar-1"]
-        self.audio.close()  # the quit path
+        shutdown_stores()  # the quit path
         self.release.set()  # the held render reaches its next block boundary
         wait_futures([future], timeout=5)
         self.assertTrue(future.done(), "the render ran on past quit")
         self.assertIsInstance(future.exception(), songs.RenderCancelled)
         self.assertTrue(self.store._cue_stop.is_set())  # the same call stops the cue build
+        self.assertTrue(self.store._closed)
 
 
 class CueBuildStop(unittest.TestCase):
@@ -635,6 +639,88 @@ class CueBuildStop(unittest.TestCase):
         with patch.object(synth, "build_cue", side_effect=build_cue):
             store._cues_here(stop)
         self.assertEqual(len(built), 1)
+
+
+class SharedStore(unittest.TestCase):
+    """Audio instances of one tier share a bed store. Closing one leaves the store running for the
+    rest; quit closes every shared store, and a later Audio builds fresh ones (#168)."""
+
+    def setUp(self):
+        self.registry: dict = {}
+        registry = patch("fishing.audio._STORES", self.registry)  # private: no other test's store
+        registry.start()
+        self.addCleanup(registry.stop)
+        threads = patch.object(_BedStore, "_spawn", return_value=None)  # builds run on threads
+        threads.start()
+        self.addCleanup(threads.stop)
+
+    def test_closing_one_audio_leaves_the_store_it_shares_running(self):
+        first = Audio(device=False, tier="low")
+        second = Audio(device=False, tier="low")
+        store = second._store
+        self.assertIs(first._store, store)
+        self.addCleanup(store.shutdown)
+        first.close()
+        self.assertFalse(store._closed)
+        self.assertFalse(store._cue_stop.is_set())
+        wait_futures([store._cue_job], timeout=30)  # the cue bank that second shares
+        self.assertIn("cues", store.build_seconds)
+        self.assertIsNotNone(store.get("wind:cedar", wait=True))  # a bed still builds
+
+    def test_quit_closes_every_shared_store_and_a_later_audio_builds_fresh_ones(self):
+        old = Audio(device=False, tier="low")._store
+        shutdown_stores()
+        self.assertTrue(old._closed)
+        self.assertEqual(self.registry, {})
+        new = Audio(device=False, tier="low")._store
+        self.addCleanup(new.shutdown)
+        self.assertIsNot(new, old)
+        self.assertFalse(new._closed)
+
+
+class ClosedStore(unittest.TestCase):
+    """Once shut down, a store starts no build and creates no pool or worker, but reads of built
+    beds keep working (#168)."""
+
+    def setUp(self):
+        self.store = _BedStore(11025, 2048, 2048)
+        self.addCleanup(self.store.shutdown)
+
+    def test_a_closed_store_refuses_new_builds_and_creates_no_pool_or_worker(self):
+        self.store.shutdown()
+        self.store.shutdown()  # a second shutdown does nothing
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.store.request("lap")
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.store.prefetch_cues()
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.store._threads_pool()
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.store._pool_for(songs.SONG_PREFIX + "briar-1")
+        self.assertEqual((self.store._pool, self.store._song_pool, self.store._cue_job),
+                         (None, None, None))
+        self.assertEqual((self.store._running, self.store._threads, self.store._waiting),
+                         ({}, {}, []))
+
+    def test_a_closed_store_reads_built_beds_and_never_waits_for_a_build(self):
+        bed = self.store.get("lap", wait=True)  # built while the store was open
+        self.store.shutdown()
+        self.assertIs(self.store.get("lap", wait=False), bed)
+        self.assertIsNone(self.store.get("wind:cedar", wait=False))  # unbuilt, and nothing starts
+        raised = []
+
+        def wait_for_unbuilt():
+            try:
+                self.store.get("wind:cedar", wait=True)
+            except RuntimeError as error:
+                raised.append(error)
+
+        reader = threading.Thread(target=wait_for_unbuilt, daemon=True)
+        reader.start()
+        reader.join(10)  # a regression spins in get's wait loop; this fails instead of hanging
+        self.assertFalse(reader.is_alive(), "get(wait=True) hung on a closed store")
+        self.assertEqual(len(raised), 1, "get(wait=True) returned without raising")
+        self.assertIn("closed", str(raised[0]))
 
 
 class AudioChecks(unittest.TestCase):

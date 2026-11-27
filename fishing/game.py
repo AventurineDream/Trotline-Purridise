@@ -21,7 +21,7 @@ from .story import (begin_prologue, due_scene, scene_conversation, settle_near, 
                     settle_step_active, settle_tick)
 from . import staging
 from .npcs import active_npcs, schedule_key
-from .audio import Audio
+from .audio import Audio, shutdown_stores
 from .data import BAITS, BAIT_BY_ID, LAKES, SPECIES, hour_of_day
 from .weather import weather_visuals
 from . import calendar
@@ -2868,6 +2868,8 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
             else:
                 frame_deadline += math.ceil(-remaining / period) * period
     finally:
+        # Frozen builds run on threads the interpreter joins at exit: stop them first (#168).
+        shutdown_stores()
         if session.ui.mode != "title":
             try:
                 session.save()

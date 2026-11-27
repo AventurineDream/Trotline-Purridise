@@ -4,6 +4,8 @@ How it fits: `game.run` builds one `Audio()`, calls `blip(kind)` for sound cues 
 `update(...)` once per frame with the scene (hour, lake, rain, propulsion, volumes). This
 module picks levels, crossfades and cue timing; `fishing.audiosynth` synthesises the
 beds and cues. Captions are produced elsewhere from the same cue kind names.
+On quit, `game.run` calls `shutdown_stores()` so shared builds stop before the interpreter joins
+threads (#168).
 
 Design:
 - Long, seamless stereo beds (water lapping on the hull, wash, lake wind, rain, insects,
@@ -155,6 +157,8 @@ class _BedStore:
     are retained only while sounding or queued (`keep_songs`), and render one at a time in
     their own lane, so a lake's beds never queue behind a piece. A piece the store forgets stops
     before its next block and keeps its lane's slot until it ends (#168).
+    `shutdown_stores` closes every store at quit. A closed store serves built beds and starts no
+    build; a new request or a waited read raises RuntimeError (#168).
     """
 
     def __init__(self, rate: int, noise_frames: int, event_frames: int):
@@ -173,6 +177,7 @@ class _BedStore:
         self._strokes: list[np.ndarray] = []
         self._cue_job: tuple[subprocess.Popen, str] | Future | None = None
         self._cue_stop = threading.Event()  # set by shutdown; a cue build ends at its next cue
+        self._closed = False  # set by shutdown: built beds stay readable, no build starts
         self._pool: ThreadPoolExecutor | None = None
         self._song_pool: ThreadPoolExecutor | None = None
         self._spawn_ok = bool(sys.executable) and not getattr(sys, "frozen", False)
@@ -203,7 +208,15 @@ class _BedStore:
             self._spawn_ok = False
             return None
 
+    def _require_open(self, action: str) -> None:
+        """Raise RuntimeError before `action` on a closed store (#168). A build started after
+        shutdown would create a pool or worker that nothing tracks or joins, or wait on one that
+        never runs."""
+        if self._closed:
+            raise RuntimeError(f"audio store is closed; cannot {action}")
+
     def _threads_pool(self) -> ThreadPoolExecutor:
+        self._require_open("start a thread build")
         if self._pool is None:
             self._pool = ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="trotline-audio")
         return self._pool
@@ -211,6 +224,7 @@ class _BedStore:
     def _pool_for(self, key: str) -> ThreadPoolExecutor:
         """The executor for a thread build of `key`. A piece has a pool of its own, so a render
         never takes a bed worker (#168)."""
+        self._require_open(f"build {key}")
         if key.startswith(songs.SONG_PREFIX):
             if self._song_pool is None:
                 self._song_pool = ThreadPoolExecutor(max_workers=SONG_WORKERS,
@@ -309,7 +323,9 @@ class _BedStore:
     # ------------------------------------------------------------ beds
 
     def request(self, key: str) -> None:
-        """Queue `key` for building unless it is built or on its way."""
+        """Queue `key` for building unless it is built or on its way. A closed store raises
+        RuntimeError and starts nothing (#168)."""
+        self._require_open(f"request {key}")
         if (key in self._beds or key in self._running or key in self._threads
                 or key in self._lane(key)):
             return
@@ -336,10 +352,15 @@ class _BedStore:
 
     def get(self, key: str, wait: bool) -> synth.Bed | None:
         """The bed if ready, else None. With `wait` (offline only: the live mixer passes False),
-        build it first, blocking. A waited build starts at once, even beside a running piece."""
+        build it first, blocking. A waited build starts at once, even beside a running piece.
+        A closed store (#168) reads built beds only: a waited read raises RuntimeError."""
         bed = self._beds.get(key)
         if bed is not None:
             return bed
+        if self._closed:
+            if wait:
+                self._require_open(f"wait for {key}")
+            return None
         self.request(key)
         self.poll()
         while wait and key not in self._beds:
@@ -359,7 +380,9 @@ class _BedStore:
     # ------------------------------------------------------------ cues
 
     def prefetch_cues(self) -> None:
-        """Start building every cue and oar stroke so blip() never has to synthesise."""
+        """Start building every cue and oar stroke so blip() never has to synthesise. Raises
+        RuntimeError on a closed store (#168)."""
+        self._require_open("prefetch cues")
         if self._cue_job is not None or self._cues:
             return
         path = self._scratch("cues")
@@ -444,15 +467,15 @@ class _BedStore:
                 + sum(c.nbytes for c in self._cues.values()) + sum(s.nbytes for s in self._strokes))
 
     def shutdown(self) -> None:
-        """Stop every build, delete their scratch files, and drop this store from `_STORES`.
+        """Close the store: stop builds, delete their scratch files, and drop it from the registry.
 
-        `Audio.close` calls this on quit, before the interpreter joins pool threads.
-        concurrent.futures joins them before atexit callbacks run, so an atexit-only stop let a
-        piece render finish first (#168). A piece render ends at its next block and a cue build
-        at its next cue; a bed build has no block to stop at, so the join waits for it to finish.
-        The atexit registration in `__init__` calls this again as a backstop; a second call finds
-        nothing left to stop.
+        Queued builds are cancelled. A piece render ends at its next block and a cue build at its
+        next cue or stroke; a bed build has no stop point, so an in-flight bed finishes first. A
+        closed store (`_closed`) reads built beds, and every call that would start a build raises
+        RuntimeError before it creates a pool or worker. A second call does nothing; the atexit
+        registration in `__init__` is a backstop (#168).
         """
+        self._closed = True
         self._cue_stop.set()
         self._waiting.clear()  # nothing queued starts after quit
         self._song_waiting.clear()
@@ -518,6 +541,23 @@ def _store_for(tier: detail.Detail) -> _BedStore:
         if store is None:
             store = _STORES[key] = _BedStore(*key)
         return store
+
+
+def shutdown_stores() -> None:
+    """Stop every shared bed store at quit (#168).
+
+    `game.run` calls this first in the `finally` that ends its loop. Frozen builds run on
+    threads, and concurrent.futures joins those before atexit callbacks run, so an atexit-only
+    stop let a piece render finish first. Each store's `shutdown` stops its builds and removes
+    itself from the registry; the atexit registrations stay as a backstop. A failure earlier in
+    startup, after `Audio()` is built, exits through atexit: by then `Audio()` has requested only
+    the lap and wash beds and the cue bank, and only thread builds make exit wait for them.
+    Only quit calls this; an `Audio` that still holds a store keeps it, closed.
+    """
+    with _STORES_LOCK:
+        stores = list(_STORES.values())  # each shutdown removes its own entry, so copy first
+    for store in stores:
+        store.shutdown()
 
 
 def _soundscape_cue(kind: str, rate: int) -> np.ndarray:
@@ -930,10 +970,8 @@ class Audio:
         return out
 
     def close(self):
-        """Quit path: `game.run` calls this in its `finally`, so it runs on every exit. The store
-        stops its builds first, so a piece render ends before the interpreter joins its thread
-        (#168); then the SDL device closes."""
-        self._store.shutdown()
+        """Close the SDL device. The bed store this mixer shares with other Audio instances keeps
+        running; `shutdown_stores` stops it at quit (#168)."""
         if self.ok and self.dev:
             self.sdl.SDL_CloseAudioDevice(self.dev)
             self.dev = 0
