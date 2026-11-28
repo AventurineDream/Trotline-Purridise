@@ -1020,7 +1020,7 @@ class SoftwareRenderer:
 
     def _boat_faces(self, state) -> list[Face]:
         """Square-bow jon boat, camera space. Sides stay parallel. The bow is a flat plate."""
-        from .boatmesh import boat_faces, glow_hull, outboard_faces
+        from .boatmesh import boat_faces, glow_hull, outboard_faces, tiller_faces
         if state.boat_id!="jon":
             return glow_hull(state, boat_faces(state))
         hull = np.array(paint_rgb("hull", state.look_paint["hull"]), np.float32)
@@ -1112,20 +1112,9 @@ class SoftwareRenderer:
                         (rail_o, gy + 0.035, z_near + 0.06), (-rail_o, gy + 0.035, z_near + 0.06)],
                        (0, 1, 0), rail))
         faces.extend(outboard_faces(state.steer, till))
-        # The forward box is the steering mount the Skipper's paw holds, kept in first-person
-        # view; the engine is the outboard on the transom, which steer yaws with it.
-        motor = np.array([0.14, 0.15, 0.16], np.float32)
-        faces.append(q([(0.20, -0.66, 1.52), (0.42, -0.66, 1.52), (0.42, -0.66, 1.72), (0.20, -0.66, 1.72)], (0, 1, 0), motor))
-        faces.append(q([(0.20, -0.80, 1.52), (0.42, -0.80, 1.52), (0.42, -0.66, 1.52), (0.20, -0.66, 1.52)], (0, 0, -1), motor))
-        ang = -state.steer * 0.65
-        ca, sa = math.cos(ang), math.sin(ang)
-        px, py, pz = 0.30, -0.62, 1.58
-        ex = px + ca * 0.27
-        ez = pz + sa * 0.16
-        faces.append(q(
-            [(px, py, pz), (ex, py, ez), (ex, py + 0.045, ez), (px, py + 0.045, pz)],
-            (0, 1, 0), till,
-        ))
+        # The tiller runs forward from the outboard's swivel and swings with it; its extension
+        # ends at the grip the Skipper's paw holds (boatmesh.tiller_faces, issue #192).
+        faces.extend(tiller_faces(state.steer, till))
         return glow_hull(state, faces)
 
     def _snow(self, anim: float, amount: float):

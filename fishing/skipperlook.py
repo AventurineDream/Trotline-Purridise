@@ -227,16 +227,17 @@ def name(state) -> str:
 
 
 def appearance(look: dict, pose: str = "helm") -> dict:
-    """A full npcs.json-style appearance for the cat rig from a Skipper look.
+    """An npcs.json-shaped appearance for the cat rig; Skipper-only "tiller" is not cat_look-valid (see Returns).
 
     Args:
         look: A normalized Skipper look (`normalize` / `saved`).
-        pose: An authored catmesh pose; the Skipper holds no prop, so "helm",
-            "wave" or "nap_curl" (a pose whose prop may be "none").
+        pose: An authored catmesh pose. The Skipper holds no prop; `helm`, `wave`, `nap_curl` and the
+            Skipper-only `tiller` pose use "none". `tiller` is not in content's `_CAT_POSE_PROPS` table.
 
     Returns:
-        A new dict the content validator accepts (`cat_look`), with fixed
-        size, build, legs and whiskers.
+        A new dict with fixed size, build, legs and whiskers. With prop "none", `cat_look` accepts only
+        poses whose `_CAT_POSE_PROPS` entry includes "none" (`helm`, `wave`, `nap_curl`); `tiller` has no
+        entry, while `sit_fish` and `craft` require another prop.
     """
     return {"breed": "Skipper", "size": 1.0, "build": 1.0, "legs": 1.0, "coat": look["coat"],
             "ears": look["ears"], "tail": look["tail"], "pattern": look["pattern"],

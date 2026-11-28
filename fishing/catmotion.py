@@ -84,7 +84,7 @@ def ear(t: float, seed: int, side: int) -> float:
 
 # Where each pose's attention rests between glances: (yaw, pitch nose-down, roll).
 INTEREST = {"sit_fish": (0.0, 0.10, 0.0), "craft": (0.0, 0.28, 0.0), "wave": (0.0, -0.04, 0.0),
-            "helm": (0.0, -0.02, 0.0), "nap_curl": (0.0, 0.0, 0.0)}
+            "helm": (0.0, -0.02, 0.0), "tiller": (0.0, -0.02, 0.0), "nap_curl": (0.0, 0.0, 0.0)}
 
 
 def _glance_target(seed: int, k: int, pose: str) -> tuple[float, float, float]:
@@ -124,7 +124,7 @@ def tail(t: float, seed: int, pose: str) -> tuple[float, float, float]:
     A slow travelling sway, a second slower sway layered in, and every 6-10 s a
     flick of the tip.
     """
-    amp = {"nap_curl": 0.022, "helm": 0.045, "wave": 0.07}.get(pose, 0.055)
+    amp = {"nap_curl": 0.022, "helm": 0.045, "tiller": 0.045, "wave": 0.07}.get(pose, 0.055)
     rate = 0.26 + 0.16 * hash01(seed, 0, 51)
     phase = TAU * rate * t + TAU * hash01(seed, 0, 52)
     amp *= 0.8 + 0.2 * math.sin(TAU * 0.07 * t + TAU * hash01(seed, 0, 53))
@@ -135,8 +135,11 @@ def tail(t: float, seed: int, pose: str) -> tuple[float, float, float]:
 
 
 def weight(t: float, seed: int, pose: str) -> tuple[float, float]:
-    """Whole-body (roll, pitch): a slow settling from haunch to haunch; still when asleep."""
-    if pose == "nap_curl":
+    """Whole-body (roll, pitch): a slow settling from haunch to haunch; still when asleep.
+
+    The tiller pose holds still too: its paw rests on the grip, and a sway would move the paw off it.
+    """
+    if pose in ("nap_curl", "tiller"):
         return 0.0, 0.0
     roll = 0.020 * math.sin(TAU * t / (9.0 + 5.0 * hash01(seed, 0, 61)) + TAU * hash01(seed, 0, 62))
     pitch = 0.012 * math.sin(TAU * t / (12.0 + 5.0 * hash01(seed, 0, 63)) + TAU * hash01(seed, 0, 64))
@@ -201,7 +204,7 @@ def _helm(t: float, seed: int) -> tuple[float, float, float]:
 def work(t: float, seed: int, pose: str, prop: str) -> tuple[float, float, float]:
     """The pose's own work loop: (arm angle, right forearm angle, head pitch).
 
-    sit_fish casts and reels, craft works its prop, helm steers, wave and
+    sit_fish casts and reels, craft works its prop, helm steers; wave, tiller and
     nap_curl have none (the wave pose waves through `wave_bursts`).
     """
     if pose == "sit_fish":

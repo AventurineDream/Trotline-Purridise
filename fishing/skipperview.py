@@ -3,10 +3,13 @@
 In first person the Skipper is a pair of paws and a reflection (skipper.py). When
 the camera leaves the eye (the third-person chase camera, or a staged view such as
 a whale or the prologue) the boat would be empty, so `SkipperFigure` stands the
-Skipper's own rig at the helm instead: the saved look (skipperlook) in the "helm"
-pose, steering with the player's input, turning its head to the cats nearby and
-waving back when the boat idles within hailing range of one. Both renderers draw it
-through the same actors.pose_state / cat.vert path as the 52 cats.
+Skipper's own rig in the boat instead: the saved look (skipperlook) at the helm on
+every boat but the jon. The jon's figure takes the tiller pose and rides its moving grip.
+Helm figures steer with the player's input (the wheel swings and the body leans); the
+jon's tiller pose has no steer term, its left paw holds the grip and its right paw waves.
+Every figure turns its head to the cats nearby and waves back when the boat idles within
+hailing range of one. Both renderers draw it through the same actors.pose_state / cat.vert
+path as the 52 cats.
 
 `preview` renders the creator's turning card on the CPU raster the portraits use
 (catart), animated by the same pose_state, so what the player picks is what the
@@ -20,7 +23,7 @@ import math
 
 import numpy as np
 
-from . import actors, catart, catmesh, catmotion, skipperlook
+from . import actors, boatmesh, catart, catmesh, catmotion, skipperlook
 from .dialogue import HAIL_RANGE_M, HAIL_SPEED_MPS
 
 # Measured eye-local cockpit floors for the four hand-built meshes; generated hulls
@@ -46,6 +49,15 @@ def _floor_offset(state) -> float:
 SEED = 0.4242          # the Skipper's idle rhythm (actors seed range 0-1)
 WAVE_BACK_M = HAIL_RANGE_M  # close enough to talk is close enough to wave
 SHARE_M = 3.0          # cats within a few metres of the nearest share the Skipper's attention
+# The jon's figure at steer 0: its feet this far to port (-x) and forward (+z) of the eye, metres. The
+# tiller's grip is 0.30 m starboard (+x) and 1.20 m ahead at steer 0, so the left paw reaches it from here; the
+# figure then moves with the grip as the tiller steers (SkipperFigure.place). No static spot keeps the paw on
+# the grip across the sweep: the arm reaches about 0.24 m and the grip moves 0.26 m sideways from steer 0 to
+# either end. test_jon_outboard checks the contact at the five steers it samples (-1 to 1 in 0.5 steps) and at
+# its sampled blends, for the default look only (other looks change the silhouette and are not swept). The other
+# hulls keep the centreline.
+JON_TILLER_X = -0.038
+JON_TILLER_Z = 0.921
 
 
 class SkipperFigure:
@@ -62,6 +74,10 @@ class SkipperFigure:
     def place(self, state, boat_cam) -> actors.Actor:
         """The Skipper's actor at the helm of `state`'s boat as `boat_cam` (the eye camera) sees it.
 
+        The jon's figure takes the tiller pose and rides the grip: its feet stand at JON_TILLER_X/Z at steer 0
+        and move with the grip as the tiller steers (clamped to -1..1 in `place`). Other boats' figures keep
+        the helm pose on the centreline.
+
         Args:
             state: The live sim state (look, boat, steer).
             boat_cam: The ordinary boat camera (`cam.boat` of a chase or staged camera).
@@ -70,14 +86,21 @@ class SkipperFigure:
             The figure's Actor, its x, y, z and yaw set for this frame.
         """
         look = skipperlook.saved(state)
-        appearance = skipperlook.appearance(look, "helm")
+        jon = getattr(state, "boat_id", "") == "jon"
+        appearance = skipperlook.appearance(look, "tiller" if jon else "helm")
         key = json.dumps(appearance, sort_keys=True)
         if key != self._key:
             self.actor = actors.Actor("skipper", look["name"], 0.0, 0.0, 0.0, 0.0, None, {}, [], SEED,
                                       appearance=appearance)
             self._key = key
         floor = _floor_offset(state)
-        foot = boat_cam.eye_to_world(np.array([0.0, floor, 0.0], np.float32))
+        x, z = 0.0, 0.0
+        if jon:
+            # The tiller's grip moves with steer; the figure moves with it so the paw keeps its contact.
+            steer = min(max(float(getattr(state, "steer", 0.0)), -1.0), 1.0)
+            ride = boatmesh.tiller_grip(steer) - boatmesh.tiller_grip(0.0)
+            x, z = JON_TILLER_X + float(ride[0]), JON_TILLER_Z + float(ride[2])
+        foot = boat_cam.eye_to_world(np.array([x, floor, z], np.float32))
         forward = np.asarray(boat_cam.forward, np.float32)
         actor = self.actor
         actor.x, actor.y, actor.z = (float(v) for v in foot)
@@ -85,7 +108,11 @@ class SkipperFigure:
         return actor
 
     def params(self, state, reduced_motion: bool) -> dict:
-        """This frame's pose_state for the placed figure: steering, a look at the cats, a wave back.
+        """This frame's pose_state for the placed figure: helm steering, a look at cats, and a wave back.
+
+        `params` passes steer to pose_state for every boat; pose_state applies it only to the helm pose (where
+        the wheel swings and body leans). The jon's tiller pose ignores it, so the figure rides the grip in
+        `place`; the left paw holds the grip while the right can wave.
 
         The look target is a softmin over the cats' directions rather than the nearest cat,
         so the head turns smoothly when two cats trade places instead of snapping between them.
@@ -129,8 +156,11 @@ class SkipperFigure:
         slow = 1.0 - catmotion.smoother((abs(float(getattr(state, "speed", 0.0))) - 0.5 * HAIL_SPEED_MPS)
                                         / (0.5 * HAIL_SPEED_MPS))
         wave = (1.0 - catmotion.smoother((distance - (WAVE_BACK_M - 6.0)) / 6.0)) * slow if target else 0.0
+        # The jon's tiller pose rides the grip in place(); contact is checked at STEERS and the cat distances
+        # in MID_BLEND_M[::4] (15, 17, 19 m) in test_jon_outboard. Other boats keep their helm swing and lean.
+        steer = float(getattr(state, "steer", 0.0))
         return actors.pose_state(actor, *(target or (None, None)), float(getattr(state, "anim", 0.0)), reduced_motion,
-                                 gesture=wave, steer=float(getattr(state, "steer", 0.0)), attention=attention)
+                                 gesture=wave, steer=steer, attention=attention)
 
 
 # --- The creator's preview card -------------------------------------------------
