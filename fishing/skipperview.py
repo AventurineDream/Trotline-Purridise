@@ -20,7 +20,7 @@ import math
 
 import numpy as np
 
-from . import actors, catart, catmesh, catmotion, skipperlook
+from . import actors, boatmesh, catart, catmesh, catmotion, skipperlook
 from .dialogue import HAIL_RANGE_M, HAIL_SPEED_MPS
 
 # Measured eye-local cockpit floors for the four hand-built meshes; generated hulls
@@ -46,12 +46,14 @@ def _floor_offset(state) -> float:
 SEED = 0.4242          # the Skipper's idle rhythm (actors seed range 0-1)
 WAVE_BACK_M = HAIL_RANGE_M  # close enough to talk is close enough to wave
 SHARE_M = 3.0          # cats within a few metres of the nearest share the Skipper's attention
-# The jon's helm figure stands this far to port of the centreline, metres in the eye frame. The tiller's
-# rod sweeps across the centreline as the motor yaws: on the centreline the figure fails the tiller bound
-# at steer +1 (test_jon_outboard pins this). test_jon_outboard asserts WALL_MARGIN to the hull's walls and
-# TILLER_CLEARANCE from the tiller for the helm, waving and mid-blend poses at every steer, for the default
-# look only (other looks change the silhouette and are not swept). The other hulls keep the centreline.
-JON_HELM_X = -0.35
+# The jon's figure at steer 0: its feet this far starboard (+x) and forward (+z) of the eye, metres. The
+# tiller's grip is 0.30 m starboard and 1.20 m ahead at steer 0, so the left paw reaches it from here; the
+# figure then moves with the grip as the tiller steers (SkipperFigure.place). No static spot keeps the paw on
+# the grip across the sweep: the arm reaches about 0.24 m and the grip moves 0.26 m sideways. The contact is
+# pinned at every steer and blend by test_jon_outboard, for the default look only (other looks change the
+# silhouette and are not swept). The other hulls keep the centreline.
+JON_TILLER_X = -0.038
+JON_TILLER_Z = 0.921
 
 
 class SkipperFigure:
@@ -68,7 +70,9 @@ class SkipperFigure:
     def place(self, state, boat_cam) -> actors.Actor:
         """The Skipper's actor at the helm of `state`'s boat as `boat_cam` (the eye camera) sees it.
 
-        The jon's figure stands JON_HELM_X to port of the centreline; other boats' figures stay on it.
+        The jon's figure takes the tiller pose and rides the grip: its feet stand at JON_TILLER_X/Z at steer 0
+        and move with the grip as the tiller steers (clamped to -1..1, as pose_state clamps it). Other boats'
+        figures keep the helm pose on the centreline.
 
         Args:
             state: The live sim state (look, boat, steer).
@@ -78,16 +82,21 @@ class SkipperFigure:
             The figure's Actor, its x, y, z and yaw set for this frame.
         """
         look = skipperlook.saved(state)
-        appearance = skipperlook.appearance(look, "helm")
+        jon = getattr(state, "boat_id", "") == "jon"
+        appearance = skipperlook.appearance(look, "tiller" if jon else "helm")
         key = json.dumps(appearance, sort_keys=True)
         if key != self._key:
             self.actor = actors.Actor("skipper", look["name"], 0.0, 0.0, 0.0, 0.0, None, {}, [], SEED,
                                       appearance=appearance)
             self._key = key
         floor = _floor_offset(state)
-        # Only the jon's figure moves off the centreline, to clear its tiller (JON_HELM_X).
-        x = JON_HELM_X if getattr(state, "boat_id", "") == "jon" else 0.0
-        foot = boat_cam.eye_to_world(np.array([x, floor, 0.0], np.float32))
+        x, z = 0.0, 0.0
+        if jon:
+            # The tiller's grip moves with steer; the figure moves with it so the paw keeps its contact.
+            steer = min(max(float(getattr(state, "steer", 0.0)), -1.0), 1.0)
+            ride = boatmesh.tiller_grip(steer) - boatmesh.tiller_grip(0.0)
+            x, z = JON_TILLER_X + float(ride[0]), JON_TILLER_Z + float(ride[2])
+        foot = boat_cam.eye_to_world(np.array([x, floor, z], np.float32))
         forward = np.asarray(boat_cam.forward, np.float32)
         actor = self.actor
         actor.x, actor.y, actor.z = (float(v) for v in foot)
@@ -139,20 +148,10 @@ class SkipperFigure:
         slow = 1.0 - catmotion.smoother((abs(float(getattr(state, "speed", 0.0))) - 0.5 * HAIL_SPEED_MPS)
                                         / (0.5 * HAIL_SPEED_MPS))
         wave = (1.0 - catmotion.smoother((distance - (WAVE_BACK_M - 6.0)) / 6.0)) * slow if target else 0.0
-        # The rig's arm channel also carries both upper arms, so the full steer swing would move the waving
-        # shoulder toward the port wall. The swing therefore fades with the wave, squared: at blend b it is
-        # steer * (1 - b)**2, pinned by test_jon_outboard with no cat, a cat 5 m ahead, and each cat distance in
-        # MID_BLEND_M. At full wave the arm channel is steer-independent (idle motion still moves it), so the steer
-        # swing never reaches the non-waving forearm and paw at full wave. That is intended: the wave runs only
-        # while the boat is slow. The same fade damps the body roll's wheel term (0.12 * wheel), so the jon's lean
-        # damps with the wave too. The rig has no wheel mesh, so the wheel itself does not freeze; at partial blend
-        # the left arm and paw's steer swing is damped, not held. The first-person grip (skipper._tiller_pivot)
-        # follows the raw steer and is unaffected. Third person, the left paw does not reach the grip at any steer
-        # or blend, so only the first-person paw holds it. The tests cover the default look only.
-        # Other boats keep the full swing.
+        # The jon's tiller pose takes no steer swing (pose_state gives it none): the figure rides the grip
+        # instead (SkipperFigure.place), so the paw keeps its contact at every steer and blend. Other boats
+        # keep the full wheel swing and its body lean.
         steer = float(getattr(state, "steer", 0.0))
-        if getattr(state, "boat_id", "") == "jon":
-            steer *= (1.0 - wave) ** 2
         return actors.pose_state(actor, *(target or (None, None)), float(getattr(state, "anim", 0.0)), reduced_motion,
                                  gesture=wave, steer=steer, attention=attention)
 

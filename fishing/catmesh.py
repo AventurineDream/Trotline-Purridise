@@ -40,9 +40,10 @@ HEAD_SCALE = 1.15  # a big, friendly head
 # near: sitters and crafters wave, the helmsman waves from the wheel, a napper rouses and
 # looks up. A waving cat is already mid-gesture.
 POSES = ("sit_fish", "nap_curl", "wave", "craft", "helm")
-GESTURES = {"sit_fish": "wave", "craft": "wave", "helm": "helm_wave", "nap_curl": "nap_rouse", "wave": None}
+GESTURES = {"sit_fish": "wave", "craft": "wave", "helm": "helm_wave", "tiller": "tiller_wave",
+            "nap_curl": "nap_rouse", "wave": None}
 LYING = ("nap_curl", "nap_rouse")
-STANDING = ("helm", "helm_wave")
+STANDING = ("helm", "helm_wave", "tiller", "tiller_wave")
 PATTERNS = ("solid", "tabby", "mackerel", "calico", "tortoiseshell", "tuxedo", "point", "spotted", "bicolor")
 # Fur types, indexed for the cat.frag coat_kind uniform (keep the two in step).
 COAT_KINDS = ("short", "long", "rex", "hairless")
@@ -165,6 +166,21 @@ POSE_JOINTS = {
                        elbow_r=(-0.16, 0.645, 0.05), wrist_r=(-0.15, 0.765, 0.08),
                        tail=((0.0, 0.31, -0.10), (0.02, 0.30, -0.22), (0.06, 0.42, -0.28), (0.04, 0.55, -0.22)),
                        prop=((0.0, 0.50, 0.24), (0.0, 0.3, 0.95))),
+    # Standing at the tiller (the jon's figure only, never an npc). The left paw reaches the grip
+    # from the figure's steer-0 spot (skipperview.JON_TILLER_X/Z); the figure rides the grip with
+    # steer, so the paw keeps its contact. The right paw is the helm's and waves in the gesture.
+    "tiller": _pose(torso=((0.0, 0.47, 0.0), 0.05), head=((0.0, 0.72, 0.035), 0.05, 0.0),
+                    hip=(0.07, 0.34, -0.01), knee=(0.08, 0.19, 0.04), ankle=(0.08, 0.045, -0.02),
+                    shoulder=(0.095, 0.585, 0.03), elbow_l=(0.18, 0.622, 0.107), wrist_l=(0.254, 0.591, 0.192),
+                    elbow_r=(-0.12, 0.49, 0.10), wrist_r=(-0.08, 0.50, 0.21),
+                    tail=((0.0, 0.31, -0.10), (0.02, 0.16, -0.20), (0.05, 0.02, -0.26), (0.10, 0.16, -0.34)),
+                    prop=((0.0, 0.50, 0.24), (0.0, 0.3, 0.95))),
+    "tiller_wave": _pose(torso=((0.0, 0.47, 0.0), 0.05), head=((0.0, 0.725, 0.03), -0.05, 0.0),
+                         hip=(0.07, 0.34, -0.01), knee=(0.08, 0.19, 0.04), ankle=(0.08, 0.045, -0.02),
+                         shoulder=(0.095, 0.585, 0.03), elbow_l=(0.18, 0.622, 0.107), wrist_l=(0.254, 0.591, 0.192),
+                         elbow_r=(-0.16, 0.645, 0.05), wrist_r=(-0.15, 0.765, 0.08),
+                         tail=((0.0, 0.31, -0.10), (0.02, 0.30, -0.22), (0.06, 0.42, -0.28), (0.04, 0.55, -0.22)),
+                         prop=((0.0, 0.50, 0.24), (0.0, 0.3, 0.95))),
     # A napper roused: still curled, the head lifted off the paws, eyes half open.
     "nap_rouse": _pose(torso=((0.0, 0.11, -0.02), 1.42), head=((0.0, 0.20, 0.17), -0.10, 0.10),
                        hip=(0.07, 0.07, -0.14), knee=(0.10, 0.05, -0.02), ankle=(0.08, 0.03, 0.06),

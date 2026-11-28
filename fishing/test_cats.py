@@ -44,15 +44,15 @@ def _lake(lake_id, seed=3):
     return world, state
 
 
-def _skipper_actor(ears: str = "pointed"):
-    """Return a custom helm Actor with validated `ears`, using the creator's appearance builder."""
+def _skipper_actor(ears: str = "pointed", pose: str = "helm"):
+    """Return a custom Skipper Actor with validated `ears` at `pose` (the jon's figure is "tiller"), from the creator's builder."""
     from . import skipperview
     look = skipperlook.cycle(skipperlook.normalize({}), "pattern",
                              PATTERNS.index("tuxedo") - PATTERNS.index(skipperlook.DEFAULT["pattern"]))
     for key in ("head", "neck", "body"):
         look = skipperlook.cycle(look, key, 1)
     look["ears"] = ears
-    appearance = skipperlook.appearance(look, "helm")
+    appearance = skipperlook.appearance(look, pose)
     return actors.Actor("skipper", "Skipper", 3.0, 0.0, -2.0, 0.9, None, {}, [], skipperview.SEED, appearance=appearance)
 
 
@@ -274,7 +274,7 @@ class Rig(unittest.TestCase):
         look.pop("twin", None)
         look.update(size=0.5, build=0.7, legs=0.5, coat="hairless", attire=[], prop="none")
         frames = ((0.0, 0.0, -1.0), (2.9, 0.5, 1.0), (7.3, 1.0, -1.0), (11.2, 0.5, 1.0))
-        for pose in POSES:
+        for pose in (*POSES, "tiller"):  # the Skipper's tiller pose is not an npc pose, so POSES omits it
             for tail in ("long", "bob", "none", "plume"):
                 appearance = dict(look, pose=pose, tail=tail)
                 actor = actors.Actor("tail-test", "Tail", 3.0, 0.0, -2.0, 0.9, None, {}, [],
@@ -296,7 +296,7 @@ class Rig(unittest.TestCase):
         look.update(size=1.0, legs=1.0, attire=[], prop="none")
         frames = ((0.0, 0.0), (2.9, 0.5), (7.3, 1.0), (11.2, 1.0))
         for build, coat in ((0.7, "hairless"), (1.0, "short"), (1.4, "long"), (0.7, "rex")):
-            for pose in POSES:
+            for pose in (*POSES, "tiller"):  # the Skipper's tiller pose is not an npc pose, so POSES omits it
                 for tail in ("none", "bob"):
                     appearance = dict(look, build=build, coat=coat, pose=pose, tail=tail)
                     actor = actors.Actor("tail-fold", "Tail", 0.0, 0.0, 0.0, 0.9, None, {}, [],
@@ -516,6 +516,10 @@ void main() {
                                             (12.0, 5.1, {"gesture": 0.6, "steer": -0.4}),
                                             (8.0, 0.0, {"gesture": 1.0})))
                      for ears in ("pointed", "folded", "folded_left", "folded_right")]
+            # The Skipper at the tiller: the left paw holds the grip while the right waves, with steer and gesture.
+            cast += [(_skipper_actor("pointed", "tiller"), ((60.0, 2.9, {"steer": 0.7}),
+                                                            (12.0, 5.1, {"gesture": 0.6, "steer": -0.4}),
+                                                            (8.0, 0.0, {"gesture": 1.0})))]
             for actor, frames in cast:
                 for distance, t, extra in frames:
                     mesh = actor.mesh(LOD0)

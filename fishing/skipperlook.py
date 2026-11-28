@@ -231,8 +231,8 @@ def appearance(look: dict, pose: str = "helm") -> dict:
 
     Args:
         look: A normalized Skipper look (`normalize` / `saved`).
-        pose: An authored catmesh pose; the Skipper holds no prop, so "helm",
-            "wave" or "nap_curl" (a pose whose prop may be "none").
+        pose: An authored catmesh pose; the Skipper holds no prop, so "helm", "tiller", "wave" or
+            "nap_curl" (a pose whose prop may be "none").
 
     Returns:
         A new dict the content validator accepts (`cat_look`), with fixed

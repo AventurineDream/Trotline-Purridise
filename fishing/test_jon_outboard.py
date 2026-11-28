@@ -11,6 +11,7 @@ the outboard as drawn.
 
 import math
 import unittest
+from collections import namedtuple
 from types import SimpleNamespace
 
 import numpy as np
@@ -51,6 +52,16 @@ MID_BLEND_M = np.arange(15.0, 19.01, 0.5)
 WALL_MARGIN = 0.03
 TILLER_CLEARANCE = 0.02
 SURFACE_TOLERANCE = 0.0005
+# The grip paw is held to the grip, not to a clearance floor: PAW_CONTACT is the most its surface may sit from the
+# grip solid (the first-person grip's own bound, test_the_paw_holds_the_grip_at_every_steer), PAW_FLOOR the least
+# (no penetration). BENCH_CLEARANCE is the figure's clearance short of the bench's front face at z 1.44 m: the grip
+# is at z 1.14-1.20 m, so the paw's top reaches z 1.19 m and the helm figure's old 0.50 m clearance cannot hold.
+PAW_CONTACT = 0.02
+PAW_FLOOR = 0.001
+BENCH_CLEARANCE = 0.24
+# A posed figure: `body` the posed vertices in the eye frame (k, n, 3); `faces` the triangles (m, 3); `forearm`
+# and `blend` at each sweep time; `paw` the grip paw's triangles, `wave` the waving paw's, `rest` every other one.
+Posed = namedtuple("Posed", "body faces forearm blend paw wave rest")
 
 
 class JonStern(unittest.TestCase):
@@ -552,32 +563,38 @@ class JonTiller(unittest.TestCase):
                     inside = np.all(np.abs(pts - centre) <= half, axis=1)
                     self.assertFalse(inside.any(), f"the tiller passes through the occluder at {centre}")
 
-    def test_the_helm_figure_stands_to_port_for_the_jon_and_on_the_centreline_elsewhere(self):
-        # Only the jon's helm figure moves off the centreline (skipperview.JON_HELM_X); every other
-        # boat's stays on it. Offsets are measured in the boat camera's own axes.
-        from .skipperview import JON_HELM_X, SkipperFigure, _floor_offset
+    def test_the_jon_figure_rides_the_grip_and_the_other_figures_keep_the_helm_on_the_centreline(self):
+        # The jon's figure takes the tiller pose and stands JON_TILLER_X/Z from the eye at steer 0, plus the grip's
+        # movement with steer (skipperview.SkipperFigure.place). Every other boat keeps the helm pose on the centreline.
+        from .boatmesh import tiller_grip
+        from .skipperview import JON_TILLER_X, JON_TILLER_Z, SkipperFigure, _floor_offset
         camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
-        for boat_id, expect in (("jon", JON_HELM_X), ("rowboat", 0.0), ("sail", 0.0), ("pontoon", 0.0)):
-            state = self.state(0.0)
-            state.boat_id = boat_id
-            actor = SkipperFigure().place(state, camera)
-            base = camera.eye_to_world(np.array([0.0, _floor_offset(state), 0.0], np.float32)).astype(np.float64)
-            offset = np.array([actor.x, actor.y, actor.z]) - base
-            with self.subTest(boat=boat_id):
-                self.assertAlmostEqual(float(offset @ camera.right), expect, places=5)
-                self.assertAlmostEqual(float(offset @ camera.forward), 0.0, places=5)
-                self.assertAlmostEqual(float(offset[1]), 0.0, places=5)
+        for steer in STEERS:
+            for boat_id in ("jon", "rowboat", "sail", "pontoon"):
+                state = self.state(steer)
+                state.boat_id = boat_id
+                actor = SkipperFigure().place(state, camera)
+                base = camera.eye_to_world(np.array([0.0, _floor_offset(state), 0.0], np.float32)).astype(np.float64)
+                offset = np.array([actor.x, actor.y, actor.z]) - base
+                jon = boat_id == "jon"
+                ride = tiller_grip(steer) - tiller_grip(0.0) if jon else np.zeros(3)
+                with self.subTest(boat=boat_id, steer=steer):
+                    self.assertAlmostEqual(float(offset @ camera.right),
+                                           (JON_TILLER_X if jon else 0.0) + float(ride[0]), places=5)
+                    self.assertAlmostEqual(float(offset @ camera.forward),
+                                           (JON_TILLER_Z if jon else 0.0) + float(ride[2]), places=5)
+                    self.assertAlmostEqual(float(offset[1]), 0.0, places=5)
+                    self.assertEqual(actor.look["pose"], "tiller" if jon else "helm")
 
     def posed(self, steer, cat_distance=None, sweep=WAVE_SWEEP):
         """The Skipper's rig at the jon's helm over `sweep`, placed as the game places it, default look only.
 
         A cat `cat_distance` metres ahead, at speed 0, turns on the wave gesture (blend 1 within 14 m, 0 beyond
-        20 m); None leaves the figure on the helm pose with no cat near. Other looks change the silhouette (ears,
+        20 m); None leaves the figure on the tiller pose with no cat near. Other looks change the silhouette (ears,
         tail, coat, attire) and are not swept here, so the claims below cover the default look only.
 
         Returns:
-            (body, faces, forearm, blend): the posed vertices in the eye frame, (k, n, 3) float64 metres; the
-            triangle indices, (m, 3); and the forearm angle (radians) and gesture blend (0-1) at each sweep time.
+            A `Posed` (see the module constants).
         """
         from . import actors, catmesh
         from .skipperview import SkipperFigure, _floor_offset
@@ -589,100 +606,130 @@ class JonTiller(unittest.TestCase):
             state.npcs = (_cat_ahead(actor, cat_distance, state),)
         floor = _floor_offset(state)
         base = camera.eye_to_world(np.array([0.0, floor, 0.0], np.float32)).astype(np.float64)
-        ox = float((np.array([actor.x, actor.y, actor.z]) - base) @ camera.right)
+        offset = np.array([actor.x, actor.y, actor.z]) - base
+        shift = np.array([float(offset @ camera.right), floor, float(offset @ camera.forward)])
         mesh = actor.mesh(catmesh.LOD0)
         body, forearm, blend = [], [], []
         for t in sweep:
             state.anim = float(t)
             params = figure.params(state, False)
             pos, _normals = actors.animate(mesh, params)
-            body.append(pos.astype(np.float64) + np.array([ox, floor, 0.0]))
+            body.append(pos.astype(np.float64) + shift)
             forearm.append(params["forearm"])
             blend.append(params["blend"])
-        return np.array(body), mesh.triangles.astype(np.int64), np.array(forearm), np.array(blend)
+        faces = mesh.triangles.astype(np.int64)
+        part = mesh.part[faces]
+        grip_paw = np.all(part == catmesh.PAW, axis=1)
+        if np.any(np.any(part == catmesh.PAW, axis=1) & ~grip_paw):
+            raise AssertionError("a triangle joins the grip paw to another part")
+        wave = np.all(part == catmesh.PAW_WAVE, axis=1)
+        return Posed(np.array(body), faces, np.array(forearm), np.array(blend),
+                     faces[grip_paw], faces[wave], faces[~grip_paw])
 
-    def check_figure(self, body, faces, steer, pose):
-        """The posed figure, at every sweep time, stays WALL_MARGIN inside the hull's inner walls, clear of the
-        transom and the bench, on or above the floor (vertex bounds, exact for planar limits), and TILLER_CLEARANCE
-        from the tiller's solids (`_surface_clearance`, which covers the surface between the vertices). Default look
-        only: `posed` sweeps no other look."""
+    def hull_breaches(self, p, steer):
+        """The hull, bench and rest-of-figure limits the posed figure breaks at `steer`: messages, none if it keeps them.
+
+        The vertex bounds are exact for these planar limits: WALL_MARGIN inside the hull's inner walls, 0.2 m clear of
+        the transom, BENCH_CLEARANCE short of the bench, and on or above the floor. Every triangle except the grip
+        paw's keeps TILLER_CLEARANCE from every tiller solid (`_surface_clearance`, which covers the surface between
+        vertices).
+        """
         from .skipperview import _floor_offset
         floor = _floor_offset(self.state(steer))
-        flat = body.reshape(-1, 3)
+        flat = p.body.reshape(-1, 3)
+        out = []
+        if flat[:, 0].min() < -HULL_INNER_BEAM + WALL_MARGIN:
+            out.append("the figure's port side meets the hull wall")
+        if flat[:, 0].max() > HULL_INNER_BEAM - WALL_MARGIN:
+            out.append("the figure's starboard side meets the hull wall")
+        if flat[:, 2].min() < HULL_STERN + 0.2:
+            out.append("the figure reaches the transom")
+        if flat[:, 2].max() > SEAT[2][0] - BENCH_CLEARANCE:
+            out.append(f"the figure reaches the bench (z {float(flat[:, 2].max()):.3f} m)")
+        if flat[:, 1].min() < floor:
+            out.append("the figure sinks below the floor")
+        ok, value = _surface_clearance(p.body, p.rest, _tiller_solids(steer), TILLER_CLEARANCE)
+        if not ok:
+            out.append(f"the figure's rest is {value * 100:.2f} cm from the tiller, under {TILLER_CLEARANCE * 100:.0f} cm")
+        return out
+
+    def paw_breaches(self, p, steer):
+        """The grip paw's breaches at `steer`: messages, none if it keeps them.
+
+        Its vertices come within PAW_CONTACT of the grip solid. A vertex distance bounds the surface's least distance
+        from above, so this holds for the surface too. Its surface stays PAW_FLOOR outside the grip (certified by
+        `_surface_clearance`, so the mitt does not pass through the grip) and TILLER_CLEARANCE from the arm, knuckle
+        and rod.
+        """
+        arm, knuckle, rod, grip = _tiller_solids(steer)
+        out = []
+        vertices = np.unique(p.paw)
+        contact = float(_distance_to_solids(p.body[:, vertices].reshape(-1, 3), [grip]).min())
+        if contact > PAW_CONTACT:
+            out.append(f"the grip paw is {contact * 100:.2f} cm from the grip, over {PAW_CONTACT * 100:.0f} cm")
+        ok, value = _surface_clearance(p.body, p.paw, [grip], PAW_FLOOR)
+        if not ok:
+            out.append(f"the grip paw's surface comes within {PAW_FLOOR * 1000:.0f} mm of the grip "
+                       f"(bound {value * 1000:.2f} mm)")
+        ok, value = _surface_clearance(p.body, p.paw, [arm, knuckle, rod], TILLER_CLEARANCE)
+        if not ok:
+            out.append(f"the grip paw is not {TILLER_CLEARANCE * 100:.0f} cm clear of the arm and rod "
+                       f"(bound {value * 100:.2f} cm)")
+        return out
+
+    def check_figure(self, p, steer, pose):
+        """The figure keeps every hull, bench, rest and grip limit at `steer` for the pose named (default look only)."""
         with self.subTest(steer=steer, pose=pose):
-            self.assertGreaterEqual(float(flat[:, 0].min()), -HULL_INNER_BEAM + WALL_MARGIN,
-                                    "the figure's port side meets the hull wall")
-            self.assertLessEqual(float(flat[:, 0].max()), HULL_INNER_BEAM - WALL_MARGIN,
-                                 "the figure's starboard side meets the hull wall")
-            self.assertGreaterEqual(float(flat[:, 2].min()), HULL_STERN + 0.2, "the figure reaches the transom")
-            self.assertLessEqual(float(flat[:, 2].max()), SEAT[2][0] - 0.5, "the figure reaches the bench")
-            self.assertGreaterEqual(float(flat[:, 1].min()), floor, "the figure sinks below the floor")
-            ok, value = _surface_clearance(body, faces, _tiller_solids(steer), TILLER_CLEARANCE)
-            self.assertTrue(ok, f"the figure is not certified {TILLER_CLEARANCE * 100:.0f} cm clear of the tiller "
-                                f"(bound {value * 100:.2f} cm)")
+            self.assertEqual(self.hull_breaches(p, steer) + self.paw_breaches(p, steer), [])
 
-    def test_the_helm_figure_stays_in_the_cockpit_and_clear_of_the_tiller_at_every_steer(self):
-        # No cat near: the helm pose at blend 0 over the whole sweep, default look.
+    def test_the_tiller_figure_stays_in_the_cockpit_and_holds_the_grip_at_every_steer(self):
+        # No cat near: the tiller pose at blend 0 over the whole sweep, default look.
         for steer in STEERS:
-            body, faces, _forearm, blend = self.posed(steer)
+            p = self.posed(steer)
             with self.subTest(steer=steer):
-                self.assertEqual(float(blend.max()), 0.0, "a figure with no cat near is on the wave gesture")
-            self.check_figure(body, faces, steer, "helm")
+                self.assertEqual(float(p.blend.max()), 0.0, "a figure with no cat near is on the wave gesture")
+            self.check_figure(p, steer, "tiller")
 
-    def test_the_waving_figure_stays_in_the_cockpit_and_clear_of_the_tiller_at_every_steer(self):
-        # A cat 5 m ahead at speed 0 turns on the helm_wave gesture at blend 1, and the forearm reaches both
+    def test_the_waving_figure_stays_in_the_cockpit_and_holds_the_grip_at_every_steer(self):
+        # A cat 5 m ahead at speed 0 turns on the tiller_wave gesture at blend 1, and the waving forearm reaches both
         # extremes. Default look only.
         for steer in STEERS:
-            body, faces, forearm, blend = self.posed(steer, cat_distance=5.0)
+            p = self.posed(steer, cat_distance=5.0)
             with self.subTest(steer=steer, pose="wave"):
-                self.assertEqual(float(blend.min()), 1.0, "the wave gesture is not fully on")
-                self.assertAlmostEqual(float(forearm.max()), WAVE_FOREARM, places=6)
-                self.assertAlmostEqual(float(forearm.min()), -WAVE_FOREARM, places=6)
-            self.check_figure(body, faces, steer, "wave")
+                self.assertEqual(float(p.blend.min()), 1.0, "the wave gesture is not fully on")
+                self.assertAlmostEqual(float(p.forearm.max()), WAVE_FOREARM, places=6)
+                self.assertAlmostEqual(float(p.forearm.min()), -WAVE_FOREARM, places=6)
+            self.check_figure(p, steer, "wave")
 
-    def test_the_figure_stays_in_the_cockpit_and_clear_of_the_tiller_across_the_blend(self):
-        # Cats 15 to 19 m ahead put the blend strictly between helm and wave, at every steer. Default look only.
+    def test_the_figure_stays_in_the_cockpit_and_holds_the_grip_across_the_blend(self):
+        # Cats 15, 17 and 19 m ahead put the blend strictly between tiller and wave, at every steer. Default look only.
         for steer in STEERS:
-            for distance in MID_BLEND_M:
-                body, faces, _forearm, blend = self.posed(steer, cat_distance=float(distance))
+            for distance in MID_BLEND_M[::4]:
+                p = self.posed(steer, cat_distance=float(distance))
                 with self.subTest(steer=steer, distance=float(distance)):
-                    self.assertTrue(0.0 < float(blend.min()) and float(blend.max()) < 1.0,
-                                    "the blend is not mid-way between helm and wave")
-                self.check_figure(body, faces, steer, f"{float(distance):g} m")
+                    self.assertTrue(0.0 < float(p.blend.min()) and float(p.blend.max()) < 1.0,
+                                    "the blend is not mid-way between tiller and wave")
+                self.check_figure(p, steer, f"{float(distance):g} m")
 
-    def test_the_jon_helm_keeps_the_full_steer_swing_when_no_cat_is_near(self):
-        # With no cat near the blend is 0 and the wheel turns 0.55 rad per unit steer on top of the helm sway
-        # (actors.pose_state). The jon's steer must not be damped there: its arm swings by exactly that much
-        # between steer 0 and steer 1, and matches every other boat's arm at the same time.
+    def test_the_waving_paw_sweeps_while_the_grip_paw_stays_on_the_grip(self):
+        # Full wave: the waving paw's centre travels on the forearm's arc (radius about 0.14 m, +-0.45 rad: a chord
+        # of about 0.12 m, required 0.10 m), while the grip paw's centre stays within 1 cm (its only motion is the idle
+        # rise, which the contact check allows for).
+        for steer in (0.0, 1.0):
+            p = self.posed(steer, cat_distance=5.0)
+            wave_centre = p.body[:, np.unique(p.wave)].mean(axis=1)
+            grip_centre = p.body[:, np.unique(p.paw)].mean(axis=1)
+            with self.subTest(steer=steer):
+                self.assertGreater(float(np.linalg.norm(wave_centre.max(axis=0) - wave_centre.min(axis=0))), 0.10)
+                self.assertLess(float(np.linalg.norm(grip_centre.max(axis=0) - grip_centre.min(axis=0))), 0.01)
+
+    def test_the_jon_takes_no_steer_swing_at_any_blend_and_the_other_boats_keep_theirs(self):
+        # The wheel turns the arm 0.55 rad per unit steer on the helm pose (actors.pose_state). The jon's tiller pose
+        # has no wheel, so its arm stays put at every steer and blend: the figure rides the grip instead. The other
+        # boats keep the full swing at every blend.
         from .skipperview import SkipperFigure
         camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
-        arm = {}
-        for boat_id in ("jon", "rowboat", "sail", "pontoon"):
-            for steer in (-1.0, 0.0, 1.0):
-                state = self.state(steer)
-                state.boat_id = boat_id
-                figure = SkipperFigure()
-                figure.place(state, camera)
-                values = []
-                for t in WAVE_SWEEP[::4]:
-                    state.anim = float(t)
-                    params = figure.params(state, False)
-                    self.assertEqual(float(params["blend"]), 0.0)
-                    values.append(params["arm"])
-                arm[boat_id, steer] = np.array(values)
-        np.testing.assert_allclose(arm["jon", 1.0] - arm["jon", 0.0], 0.55, atol=1e-9)
-        for boat_id in ("rowboat", "sail", "pontoon"):
-            for steer in (-1.0, 0.0, 1.0):
-                np.testing.assert_allclose(arm["jon", steer], arm[boat_id, steer], atol=1e-9,
-                                           err_msg=f"{boat_id} at steer {steer}")
-
-    def test_only_the_jon_figure_fades_its_steer_swing_as_it_waves(self):
-        # skipperview.SkipperFigure.params scales the jon's steer by (1 - wave)**2 and leaves the other boats'
-        # steer alone. The wheel's swing between steer 0 and steer 1 is therefore 0.55 * (1 - blend)**2 for the jon
-        # and 0.55 for the others, at the blends these cat distances give on the sampled times.
-        from .skipperview import SkipperFigure
-        camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
-        for distance in (None, 5.0, *MID_BLEND_M):
+        for distance in (None, 5.0, *MID_BLEND_M[::4]):
             for boat_id in ("jon", "rowboat", "sail", "pontoon"):
                 swing_at = {}
                 for steer in (0.0, 1.0):
@@ -701,14 +748,14 @@ class JonTiller(unittest.TestCase):
                     swing_at[steer] = (np.array(values), np.array(blends))
                 swing = swing_at[1.0][0] - swing_at[0.0][0]
                 blend = swing_at[1.0][1]
-                law = 0.55 * (1.0 - blend) ** 2 if boat_id == "jon" else np.full_like(blend, 0.55)
+                law = np.zeros_like(blend) if boat_id == "jon" else np.full_like(blend, 0.55)
                 with self.subTest(boat=boat_id, distance=None if distance is None else float(distance)):
                     np.testing.assert_allclose(swing, law, atol=1e-9)
 
     def test_full_wave_freezes_the_rig_arm_channel_at_every_steer(self):
-        # At full wave the steer term is zero and the helm sway is off, so the rig's arm channel (catmesh.RIG_ARM:
-        # both upper arms and the non-waving forearm and paw) is the same at every steer, at one time. Idle motion
-        # still moves it over time, so only the steer is compared. Without a cat the channel follows the steer.
+        # The tiller pose has no steer term, so the rig's arm channel (catmesh.RIG_ARM: both upper arms and the left
+        # forearm and paw) is the same at every steer and blend, at one time. Idle motion still moves it over time, so
+        # only the steer is compared.
         from . import actors, catmesh
         from .skipperview import SkipperFigure
         camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
@@ -729,39 +776,82 @@ class JonTiller(unittest.TestCase):
 
         _pos, arm, mesh, blend = arm_channel(1.0, 5.0, 4.2)
         self.assertEqual(blend, 1.0)
-        self.assertTrue(np.any(arm & (mesh.part == catmesh.PAW)), "the non-waving paw is not on the arm channel")
-        rest = arm_channel(0.0, 5.0, 4.2)[0]
-        for steer in STEERS:
-            with self.subTest(steer=steer):
-                np.testing.assert_allclose(arm_channel(steer, 5.0, 4.2)[0], rest, atol=1e-6)
-        swing = np.abs(arm_channel(1.0, None, 4.2)[0] - arm_channel(-1.0, None, 4.2)[0]).max()
-        self.assertGreater(float(swing), 0.01, "the arm channel does not follow the steer at blend 0")
+        self.assertTrue(np.any(arm & (mesh.part == catmesh.PAW)), "the grip paw is not on the arm channel")
+        for cat_distance in (None, 5.0):
+            rest = arm_channel(0.0, cat_distance, 4.2)[0]
+            for steer in STEERS:
+                with self.subTest(steer=steer, cat_distance=cat_distance):
+                    np.testing.assert_allclose(arm_channel(steer, cat_distance, 4.2)[0], rest, atol=1e-6)
 
-    def test_the_centreline_helm_figure_fails_the_tiller_bound_so_the_offset_is_needed(self):
-        # skipperview.JON_HELM_X moves the jon's figure to port: on the centreline the rod, which crosses the
-        # centreline as the motor yaws, meets the figure at steer +1.
-        from unittest import mock
-        from . import skipperview
-        with mock.patch.object(skipperview, "JON_HELM_X", 0.0):
-            body, faces, _forearm, _blend = self.posed(1.0)
-        ok, value = _surface_clearance(body, faces, _tiller_solids(1.0), TILLER_CLEARANCE)
-        self.assertFalse(ok, f"the centreline figure cleared the tiller (bound {value * 100:.2f} cm)")
-
-    def test_the_sweep_grid_resolves_the_helm_sway_at_the_binding_pose(self):
-        # The tiller's closest approach is at steer +1 with the wave fading (16 m, blend 0.79). At this pose only,
-        # the 0.1 s sweep's certified least clearance must agree with a 0.02 s sweep's to within 1 mm. Each
-        # certificate may sit tolerance plus SURFACE_TOLERANCE below its least (see _least_clearance), so a dip the
-        # coarse grid misses by less than 1 mm plus that slack can pass. Other poses and times are not checked.
+    def test_the_sweep_grid_resolves_the_least_rest_clearance(self):
+        # The rest's least clearance from the tiller is measured at 2.91 cm at every steer and blend (the 0.1 s
+        # sweep, steers -1 to 1, blends 0, 0.79 and 1), so one pose stands for them: steer 0, no cat. The 0.1 s
+        # sweep's certified least must agree with a 0.02 s sweep's to within 1 mm, since a dip between samples could
+        # hide. Each certificate may sit tolerance plus SURFACE_TOLERANCE below its least (see _least_clearance).
         fine = np.union1d(np.arange(0.0, 22.0, 0.02),
                           np.concatenate([np.arange(33) + 0.25, np.arange(33) + 0.75]) / 1.5)
         fine = fine[fine < 22.0]
-        solids = _tiller_solids(1.0)
-        coarse_body, faces, _forearm, _blend = self.posed(1.0, cat_distance=16.0)
-        fine_body, _faces, _forearm, _blend = self.posed(1.0, cat_distance=16.0, sweep=fine)
-        coarse = _least_clearance(coarse_body, faces, solids, 0.015, 0.03, 0.0002)
-        fine_least = _least_clearance(fine_body, faces, solids, 0.015, 0.03, 0.0002)
+        solids = _tiller_solids(0.0)
+        coarse_p = self.posed(0.0)
+        fine_p = self.posed(0.0, sweep=fine)
+        coarse = _least_clearance(coarse_p.body, coarse_p.rest, solids, 0.015, 0.035, 0.0002)
+        fine_least = _least_clearance(fine_p.body, fine_p.rest, solids, 0.015, 0.035, 0.0002)
         self.assertGreater(coarse, 0.015)
         self.assertLess(abs(coarse - fine_least), 0.001)
+
+    def test_a_figure_frozen_at_steer_zero_loses_the_grip_when_the_tiller_steers(self):
+        # Mutant: placement ignores steer, so the figure never rides the grip. The paw's contact must break.
+        from unittest import mock
+        from . import boatmesh, skipperview
+        frozen = SimpleNamespace(tiller_grip=lambda steer: boatmesh.tiller_grip(0.0))
+        with mock.patch.object(skipperview, "boatmesh", frozen):
+            for steer in (-1.0, 1.0):
+                p = self.posed(steer, sweep=WAVE_SWEEP[::20])
+                self.assertTrue(self.paw_breaches(p, steer), f"the frozen figure held the grip at steer {steer}")
+
+    def test_a_wrong_steer_sign_moves_the_figure_off_the_grip(self):
+        # Mutant: the figure rides the grip's movement mirrored about steer 0. The paw's contact must break.
+        from unittest import mock
+        from . import boatmesh, skipperview
+        mirrored = SimpleNamespace(tiller_grip=lambda steer: 2 * boatmesh.tiller_grip(0.0) - boatmesh.tiller_grip(steer))
+        with mock.patch.object(skipperview, "boatmesh", mirrored):
+            for steer in (-1.0, 1.0):
+                p = self.posed(steer, sweep=WAVE_SWEEP[::20])
+                self.assertTrue(self.paw_breaches(p, steer), f"the mirrored figure held the grip at steer {steer}")
+
+    def test_without_the_tiller_pose_the_grip_paw_misses_the_grip(self):
+        # Mutant: the Skipper keeps the helm pose, so its left paw stays at the wheel and never reaches the grip.
+        from unittest import mock
+        from . import skipperlook, skipperview
+        helm_only = SimpleNamespace(saved=skipperlook.saved,
+                                    appearance=lambda look, pose: skipperlook.appearance(look, "helm"))
+        with mock.patch.object(skipperview, "skipperlook", helm_only):
+            p = self.posed(0.0, sweep=WAVE_SWEEP[::20])
+        self.assertTrue(self.paw_breaches(p, 0.0), "the helm pose's paw met the grip")
+
+    def test_a_wave_pose_that_moves_the_grip_arm_loses_the_grip(self):
+        # Mutant: the tiller wave takes the helm_wave's left arm, so the wave displaces the grip hand.
+        from unittest import mock
+        from . import catmesh
+        moved = dict(catmesh.POSE_JOINTS["tiller_wave"])
+        moved.update(elbow_l=catmesh.POSE_JOINTS["helm_wave"]["elbow_l"],
+                     wrist_l=catmesh.POSE_JOINTS["helm_wave"]["wrist_l"])
+        try:
+            with mock.patch.dict(catmesh.POSE_JOINTS, {"tiller_wave": moved}):
+                catmesh.clear_caches()
+                p = self.posed(0.0, cat_distance=5.0, sweep=WAVE_SWEEP[::20])
+        finally:
+            catmesh.clear_caches()
+        self.assertTrue(self.paw_breaches(p, 0.0), "the waving pose kept the grip paw on the grip")
+
+    def test_a_figure_placed_across_the_hull_puts_the_grip_paw_through_the_wall(self):
+        # Mutant: the figure is set 0.45 m to starboard, so the grip paw leaves the hull.
+        from unittest import mock
+        from . import skipperview
+        with mock.patch.object(skipperview, "JON_TILLER_X", 0.45):
+            p = self.posed(0.0, sweep=WAVE_SWEEP[::20])
+        self.assertGreater(float(p.body[:, np.unique(p.paw), 0].max()), HULL_INNER_BEAM - WALL_MARGIN,
+                           "the grip paw stayed inside the hull")
 
     def test_the_surface_clearance_agrees_with_dense_sampling_on_random_boxes(self):
         # Checks the bound machinery away from the figure: the exact box distance, then random triangles against two

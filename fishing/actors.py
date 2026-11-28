@@ -233,7 +233,8 @@ def pose_state(actor: Actor, player_x: float | None, player_z: float | None, ani
             gesture blend, head turn and ear perk stay: they answer the player.
         gesture: Overrides the distance blend (0-1): the Skipper's wave-back and the
             creator's hello.
-        steer: -1..1 helm input; turns the wheel and leans the body (the Skipper).
+        steer: -1..1 helm input. Turns the wheel and leans the body (the Skipper at the helm);
+            the jon's tiller pose takes it in the figure's placement instead, not in its pose.
         attention: 0-1 scale on the head's turn toward the point: the Skipper lowers it
             when cats on opposite sides pull its look both ways, so the head eases to
             centre instead of snapping across. Cats always pass 1.
@@ -268,7 +269,7 @@ def pose_state(actor: Actor, player_x: float | None, player_z: float | None, ani
     breath, rise = catmotion.breath(t, seed, pose)
     sway, phase, curl = catmotion.tail(t, seed, pose)
     roll, pitch = catmotion.weight(t, seed, pose)
-    if gesture_pose in ("wave", "helm_wave"):
+    if gesture_pose in ("wave", "helm_wave", "tiller_wave"):
         waving = blend
     elif pose == "wave":
         waving = max(catmotion.wave_bursts(t, seed), near)
