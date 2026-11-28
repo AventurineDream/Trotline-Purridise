@@ -874,8 +874,8 @@ class JonTiller(unittest.TestCase):
                 if least > margin:
                     self.assertTrue(_surface_clearance(body, faces, solids, least - margin)[0],
                                     "a floor under the sampled least was refused")
-                # The sampled least is an upper bound on the true least, so a floor over it must be refused: the check
-                # is exact, with no margin.
+                # The sampled least is an upper bound on the true least; a floor above it must never be certified.
+                # The bounded search may also refuse a lower floor when it reaches SURFACE_TOLERANCE.
                 self.assertFalse(_surface_clearance(body, faces, solids, least + 1e-9)[0],
                                  "a floor over the sampled least was certified")
 

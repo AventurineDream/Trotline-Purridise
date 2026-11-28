@@ -75,8 +75,8 @@ class SkipperFigure:
         """The Skipper's actor at the helm of `state`'s boat as `boat_cam` (the eye camera) sees it.
 
         The jon's figure takes the tiller pose and rides the grip: its feet stand at JON_TILLER_X/Z at steer 0
-        and move with the grip as the tiller steers (clamped to -1..1, as pose_state clamps it). Other boats'
-        figures keep the helm pose on the centreline.
+        and move with the grip as the tiller steers (clamped to -1..1 in `place`). Other boats' figures keep
+        the helm pose on the centreline.
 
         Args:
             state: The live sim state (look, boat, steer).
@@ -108,10 +108,11 @@ class SkipperFigure:
         return actor
 
     def params(self, state, reduced_motion: bool) -> dict:
-        """This frame's pose_state for the placed figure: steering, a look at the cats, a wave back.
+        """This frame's pose_state for the placed figure: helm steering, a look at cats, and a wave back.
 
-        Steer reaches pose_state for the helm pose only (the wheel swings and the body leans). The jon's tiller pose
-        takes none: its figure rides the grip instead (see `place`), so its paw keeps the grip.
+        Steer reaches pose_state only for the helm pose (other boats' wheel swing and body lean). The jon's
+        tiller pose takes no steer parameter; its figure rides the grip instead (see `place`), so the left paw
+        holds contact while the right can wave.
 
         The look target is a softmin over the cats' directions rather than the nearest cat,
         so the head turns smoothly when two cats trade places instead of snapping between them.
@@ -155,9 +156,8 @@ class SkipperFigure:
         slow = 1.0 - catmotion.smoother((abs(float(getattr(state, "speed", 0.0))) - 0.5 * HAIL_SPEED_MPS)
                                         / (0.5 * HAIL_SPEED_MPS))
         wave = (1.0 - catmotion.smoother((distance - (WAVE_BACK_M - 6.0)) / 6.0)) * slow if target else 0.0
-        # The jon's tiller pose takes no steer swing (pose_state gives it none): the figure rides the grip
-        # instead (SkipperFigure.place), so the paw keeps its contact at every steer and blend. Other boats
-        # keep the full wheel swing and its body lean.
+        # The jon's tiller pose rides the grip in place(); contact is sampled for the default look at STEERS
+        # and MID_BLEND_M in test_jon_outboard. Other boats keep their helm pose's wheel swing and body lean.
         steer = float(getattr(state, "steer", 0.0))
         return actors.pose_state(actor, *(target or (None, None)), float(getattr(state, "anim", 0.0)), reduced_motion,
                                  gesture=wave, steer=steer, attention=attention)

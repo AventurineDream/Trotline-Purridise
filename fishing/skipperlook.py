@@ -231,13 +231,13 @@ def appearance(look: dict, pose: str = "helm") -> dict:
 
     Args:
         look: A normalized Skipper look (`normalize` / `saved`).
-        pose: An authored catmesh pose; the Skipper holds no prop, so "helm", "tiller", "wave" or
-            "nap_curl" (a pose whose prop may be "none"). "tiller" is the jon's figure only, and
-            content's `_CAT_POSE_PROPS` (the NPC table `cat_look` checks) has no entry for it.
+        pose: An authored catmesh pose. The Skipper holds no prop; `helm`, `wave`, `nap_curl` and the
+            Skipper-only `tiller` pose use "none". `tiller` is not in content's `_CAT_POSE_PROPS` table.
 
     Returns:
-        A new dict with fixed size, build, legs and whiskers. It passes `cat_look` for the poses in
-        that table; `tiller` is not in it, so the validator does not accept that pose.
+        A new dict with fixed size, build, legs and whiskers. With prop "none", `cat_look` accepts only
+        poses whose `_CAT_POSE_PROPS` entry includes "none" (`helm`, `wave`, `nap_curl`); `tiller` has no
+        entry, while `sit_fish` and `craft` require another prop.
     """
     return {"breed": "Skipper", "size": 1.0, "build": 1.0, "legs": 1.0, "coat": look["coat"],
             "ears": look["ears"], "tail": look["tail"], "pattern": look["pattern"],
