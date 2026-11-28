@@ -2084,23 +2084,23 @@ V1-38 (#66) gives each lake its own voice and every sound a caption (02 §18).
 | --- | --- |
 | SFX | bite, Bot's chime, sale, error, click, splash, the line's hum and the winch's hum (V1-37), **the hail horn**, **the Lake Day bell**, **the cookout triangle**, **a legendary's chord**, **the Star-Whale's song** |
 | Ambience | Briar and Cedar: loon, gull, frog. **Flathead:** larch wind, loon, ice tick. **Crater:** bubbling spring, raven. **The Lagoon:** twinkle, choir, whale song |
-| Music | one motif per lake, 8–13 s: Briar plucked in D, Cedar wooden in G, Flathead a flute in E minor, Crater a marimba in A minor, the Lagoon glass bells in C lydian |
+| Music | 27 composed pieces, five or six per lake, 60–150 s each (`songs.py`); each lake's timbres are in `songs.FAMILIES` |
 
-- **Captions.** Every sound has one (`CAPTIONS`), and Bot's shell chimes keep the shell's own. A sound's caption shows when Captions is on. Ambient calls are captioned only when no other caption is showing, so they never cover a bite.
-- **Buses.** Each sound plays on one of V1-06's mixer buses: music, ambience or SFX, all under master. Music plays one motif at a time; a new one replaces the last.
+- **Captions.** Every sound has one (`CAPTIONS`), and Bot's shell chimes keep the shell's own. A sound's caption shows when Captions is on. Ambient calls and song starts are captioned only when no other caption is showing, so neither covers a bite; a start that finds one showing plays without a caption.
+- **Buses.** Each sound plays on one of V1-06's mixer buses: music, ambience or SFX, all under master. Music plays one piece at a time; a lake change fades the piece out, dips, and the new lake's rotation takes over.
 - **Lake ambience** (`Audio._schedule`):
   - **Flathead:** wind gusts through the larches every 30–50 s, loons at the day's edges and by day, and ice ticking at the shore before 09:00 and after 20:00.
-  - **Crater:** a deep hush. Its water and wind beds play at 55% with no crickets; springs bubble every 6–11 s, and ravens call between 07:00 and 19:00.
+  - **Crater:** a deep hush. Its calls are bubbling springs every 6–11 s and ravens between 07:00 and 19:00 (not in heavy rain). Its beds are water and wind all day, birds at dawn, by day and at dusk, and crickets and frogs at night; the frog chorus sits at a 0.55 distance gain. Every nature bed plays at NATURE_TRIM, a quarter of its authored amplitude.
   - **The Lagoon:** star twinkles, a soft choir every 30–45 s, and on nights after the finale a low whale song every 70–100 s.
   - **Briar and Cedar** are unchanged.
-- **Music** (`Session._tick_soundscape`). Silence is the default. The lake's motif plays at dawn (06:00) and dusk (19:00) and when a staged story scene begins. The Star-Whale's scenes play its song instead.
+- **Music** (`music.Layer`, `Session._tick_soundscape`). Between pieces the layer rests 60–120 s, so music sounds about 57% of the time (measured over a simulated hour on each lake). Dawn (06:00), dusk (19:00) and a staged story scene start the next piece. The Star-Whale's scenes play its song instead.
 - **Cues.**
   - The hail horn sounds when the Skipper hails a cat.
   - The Lake Day bell rings once a day on a lake's special day, and the cookout triangle once during the Sunday cookout.
   - A legendary's chord rises as its name comes up (V1-37's scene, after the hum).
   - The whale song plays as the Star-Whale rises, in the finale or on its return.
 - **Mute.** M pauses the device and drops everything queued on every bus, so nothing plays when sound comes back.
-- **Memory.** Every sound, plus each lake's beds and queue, comes to about 6.7 MB, against the 150 MB audio budget (06 §7).
+- **Memory.** Sounds, each lake's beds and the cue bank come to about 56.5 MiB at 44.1 kHz. Music holds at most two pieces (48.6 MiB for two 144 s pieces), and one render adds a 34 MiB working set (measured with tracemalloc). `coverage_report` counts all three: 139 MiB, against the 150 MiB audio budget (06 §7).
 
 **Benchmark.** `--benchmark` runs `soundscape.coverage_report()`:
 - every sound synthesizes, is heard (non-zero peak), and has a caption and a bus;
@@ -2113,18 +2113,18 @@ An incomplete report fails the benchmark. The JSON gains an `audio` section: sou
 **Tests (`test_audio.py`).**
 - Every sound has a caption and a bus.
 - Every sound the game plays (scanned from `game.py` and `bot.py`) is known and captioned.
-- Every sound synthesizes once and is heard, and each lake has its own motif.
+- Every sound synthesizes once and is heard, and each lake has its own pieces.
 - Each lake calls with its own voice; ice only on cold hours, ravens by day, and the whale only after the finale and by night.
 - The Caldera is hushed.
 - The coverage report is complete and inside the budget.
 - M mutes everything, with nothing left to play after.
-- Music plays on its own bus, one motif at a time.
+- Music plays on its own bus, one piece at a time.
 - In the session:
-  - dawn and dusk bring the motif once each;
+  - dawn and dusk start the next piece once each;
   - a Lake Day and the cookout ring once;
   - the hail sounds the horn;
   - a legendary's chord comes after its hum;
-  - a staged story moment brings the motif.
+  - a staged story moment starts the next piece.
 
 ## Implemented verification (V1-39)
 

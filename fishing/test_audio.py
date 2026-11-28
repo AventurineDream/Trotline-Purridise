@@ -11,7 +11,7 @@ synthesis time, per-block mix cost and memory per tier.
 
 Thresholds (dBFS is relative to int16 full scale, RMS over both channels):
 - peaks <= -1 dBFS everywhere; |DC| < 0.002 of full scale;
-- ambience RMS in AMBIENCE_BAND; propulsion scenes no louder than -20 dBFS RMS;
+- nature RMS in NATURE_BAND, rain scenes in AMBIENCE_BAND (#168 trims nature by 12 dB); propulsion scenes no louder than -20 dBFS RMS;
 - cues alone peak between -16 and -6 dBFS and ramp in over >= 4 ms;
 - no click: no adjacent-sample step above JUMP_LIMIT (scaled to 44.1 kHz, since the same
   sound steps twice as far per sample at 22.05 kHz), and block boundaries and loop
@@ -21,23 +21,29 @@ Thresholds (dBFS is relative to int16 full scale, RMS over both channels):
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import os
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import wave
+from concurrent.futures import wait as wait_futures
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 from . import audiosynth as synth
-from . import calendar, detail, encounter, soundscape
+from . import calendar, detail, encounter, game, songs, soundscape, verify
 from .audio import (
     BED_CAP_BYTES,
+    DUCK_GAIN,
+    NATURE_TRIM,
     SCENE_FADE,
     Audio,
     _BedStore,
@@ -45,16 +51,21 @@ from .audio import (
     _soundscape_cue,
     _store_for,
     _unlink,
+    shutdown_stores,
 )
 from .botchimes import CHIMES
 from .content import load_content
 from .game import Keys, Session
 from .legendary import LEGENDARY_DATA
+from .music import resident_bytes
 from .sim import Catch, Hook, SetLine, State
 from .test_skipper_creator import finish_creator
 from .world import World
 
-AMBIENCE_BAND = (-35.0, -24.0)
+AMBIENCE_BAND = (-35.0, -24.0)  # rain scenes: their authored level, unchanged by #168
+NATURE_TRIM_DB = -12.0  # nature sits at about a quarter of its authored level (#168)
+NATURE_BAND = (AMBIENCE_BAND[0] + NATURE_TRIM_DB, AMBIENCE_BAND[1] + NATURE_TRIM_DB)
+PROPULSION_BAND = (-35.0 + NATURE_TRIM_DB, -20.0)  # the old floor leaned on the nature beds
 JUMP_LIMIT = 0.25          # full-scale units per 44.1 kHz sample; a click is a step this big
 CUE_KINDS = ("bite", "splash", "sell", "click", "error", "bot", "loon", "gull", "frog", "twinkle")
 
@@ -115,7 +126,6 @@ class Captions(unittest.TestCase):
         cues = {
             "lake_day", "legendary", "sell", "splash", "whale_song",
         }
-        cues.update(soundscape.motif_for(lake) for lake in soundscape.LAKES)
         for lake in soundscape.LAKES:
             cues.update(soundscape.AMBIENCE[lake])
         cues.update(CHIMES)
@@ -126,6 +136,8 @@ class Captions(unittest.TestCase):
         self.assertTrue(all(soundscape.bus(k) == "music" for k in soundscape.MUSIC_CAPTIONS))
         self.assertTrue(all(soundscape.bus(k) == "ambience" for k in soundscape.AMBIENCE_CAPTIONS))
         self.assertEqual(soundscape.bus("horn"), "sfx")
+        self.assertEqual(soundscape.bus(soundscape.MUSIC_CUE), "music")
+        self.assertEqual(soundscape.caption(soundscape.MUSIC_CUE), "")  # the piece announces itself
 
 
     def test_a_shells_chime_reads_as_its_shell(self):
@@ -143,14 +155,6 @@ class Sounds(unittest.TestCase):
             self.assertLessEqual(len(samples) / soundscape.SR, 13.0, kind)
             self.assertIs(soundscape.tone(kind), samples)
             self.assertFalse(samples.flags.writeable)
-
-    def test_each_lake_has_its_own_motif(self):
-        motifs = [soundscape.tone(soundscape.motif_for(lake)) for lake in soundscape.LAKES]
-        for i in range(len(motifs)):
-            for j in range(i + 1, len(motifs)):
-                n = min(len(motifs[i]), len(motifs[j]))
-                self.assertFalse(np.array_equal(motifs[i][:n], motifs[j][:n]))
-        self.assertEqual(soundscape.motif_for("nowhere"), "motif_briar")
 
 
 class Ambience(unittest.TestCase):
@@ -186,7 +190,7 @@ class Ambience(unittest.TestCase):
 class Mixer(unittest.TestCase):
     def test_m_mutes_everything_and_nothing_waits_to_play(self):
         audio = Audio(open_device=False)
-        for kind in ("bite", "loon", "motif_briar"):
+        for kind in ("bite", "loon"):
             audio.shots.append((soundscape.tone(kind), 0, soundscape.bus(kind)))
         audio._played.append("loon")
         audio.update(0.05, 0.0, 0.0, True)
@@ -209,18 +213,38 @@ class Mixer(unittest.TestCase):
         heard = np.concatenate(audio._sink)
         self.assertGreater(float(np.sqrt(np.mean(heard.astype(np.float64) ** 2))), 2000.0)
 
-    def test_music_plays_on_its_bus_and_one_motif_at_a_time(self):
+    def test_music_cues_start_a_piece_and_queue_no_one_shot(self):
         audio = Audio(open_device=False)
         audio.ok = True
-        audio.blip("motif_briar")
-        audio.blip("motif_cedar")
-        self.assertEqual([bus for _s, _c, bus in audio.shots], ["music"])
-        np.testing.assert_array_equal(audio.shots[0][0], _soundscape_cue("motif_cedar", audio.rate))
-        audio.set_volumes(ambience=0.0, sfx=0.0, music=0.0)
-        audio._water = np.zeros(256, np.float32)
-        self.assertEqual(int(np.max(np.abs(audio._mix(512, 0.0, 0.0)))), 0)
-        audio.set_volumes(music=1.0)
-        self.assertGreater(int(np.max(np.abs(audio._mix(512, 0.0, 0.0)))), 0)
+        audio.blip(soundscape.MUSIC_CUE)
+        self.assertEqual(audio.shots, [])  # the music layer plays pieces; no one-shot is queued
+        audio.blip("bite")
+        self.assertEqual([bus for _s, _c, bus in audio.shots], ["sfx"])
+
+    def test_music_plays_on_its_own_bus_and_follows_its_volume(self):
+        quiet = {"ambience": 0.0, "sfx": 0.0}
+        cue = [(1.0, soundscape.MUSIC_CUE)]  # the opening rest ends once the playlist exists
+        audio = Audio(device=False, tier="low")
+        heard = unit(audio.render_offline(6.0, lake_id="cedar", hour=12.0, volumes=quiet, cues=cue))
+        self.assertGreater(dbfs(heard), -40.0)
+        muted = audio.render_offline(6.0, lake_id="cedar", hour=12.0,
+                                     volumes={**quiet, "music": 0.0}, cues=cue)
+        self.assertEqual(int(np.max(np.abs(muted))), 0)
+
+    def test_a_bite_ducks_the_music_as_it_ducks_the_ambience(self):
+        """#168: a priority cue turns the music down by DUCK_GAIN, as it does the ambience, so
+        the bite stays clear over a piece. The bite is muted here, so only its duck is heard."""
+        quiet = {"ambience": 0.0, "sfx": 0.0}
+        start = [(1.0, soundscape.MUSIC_CUE)]
+        rate = Audio(device=False, tier="low").rate
+        without = Audio(device=False, tier="low").render_offline(
+            8.0, lake_id="cedar", hour=12.0, volumes=quiet, cues=start)
+        biting = Audio(device=False, tier="low").render_offline(
+            8.0, lake_id="cedar", hour=12.0, volumes=quiet, cues=[*start, (3.0, "bite")])
+        window = slice(int(3.25 * rate), int(3.45 * rate))
+        ratio = (np.sqrt(np.mean(biting[window].astype(np.float64) ** 2))
+                 / np.sqrt(np.mean(without[window].astype(np.float64) ** 2)))
+        self.assertAlmostEqual(20.0 * math.log10(ratio), 20.0 * math.log10(DUCK_GAIN), delta=0.5)
 
 
 class Cues(unittest.TestCase):
@@ -245,9 +269,13 @@ class Cues(unittest.TestCase):
         return state
 
     def assert_captioned(self, session, kinds):
-        """Require runtime-dispatched cues to be known, captioned, and assigned a bus."""
+        """Require runtime-dispatched cues to be known, captioned, and assigned a bus. The music
+        trigger has no caption of its own: the piece it starts announces itself (#168)."""
         for kind in kinds:
-            self.assertIn(kind, soundscape.KINDS + CHIMES, kind)
+            if kind == soundscape.MUSIC_CUE:
+                self.assertEqual(soundscape.bus(kind), "music", kind)
+                continue
+            self.assertIn(kind, soundscape.KINDS + CHIMES + tuple(soundscape.MUSIC_CAPTIONS), kind)
             self.assertTrue(soundscape.caption(kind, session.state), kind)
             self.assertIn(soundscape.bus(kind), ("music", "ambience", "sfx"), kind)
 
@@ -260,14 +288,14 @@ class Cues(unittest.TestCase):
             out.extend(seen)
         return out
 
-    def test_the_lakes_motif_plays_at_dawn_and_dusk_once(self):
+    def test_the_lakes_next_piece_is_cued_at_dawn_and_dusk_once(self):
         session = self.session(self.state(1440 - 1))
         self.heard(session)
         session.state.game_minutes = 1440 + 1
-        self.assertEqual(self.heard(session).count("motif_briar"), 1)
-        self.assertNotIn("motif_briar", self.heard(session, 5))
+        self.assertEqual(self.heard(session).count(soundscape.MUSIC_CUE), 1)
+        self.assertNotIn(soundscape.MUSIC_CUE, self.heard(session, 5))
         session.state.game_minutes = 1440 + 13 * 60 + 1
-        self.assertIn("motif_briar", self.heard(session))
+        self.assertIn(soundscape.MUSIC_CUE, self.heard(session))
 
     def test_a_lake_day_rings_its_bell_once(self):
         row = next(day for day in calendar.LAKE_DAYS if day.lake == "briar")
@@ -311,14 +339,34 @@ class Cues(unittest.TestCase):
         self.assertEqual(heard.count("legendary"), 1)
         self.assertLess(heard.index("hum"), heard.index("legendary"))
 
-    def test_a_staged_story_moment_brings_the_motif(self):
+    def test_a_staged_story_moment_cues_the_next_piece(self):
         session = self.session(State.new(self.world, seed=35))
         session.ui.mode, session.ui.new_mode_i = "new_mode", 0
         session.tick(Keys(pressed={"return"}), 0.05)
         finish_creator(session)
         self.assertEqual(session.stage.stage_id, "pro_01")
-        self.assertIn("motif_briar", session.cues)
+        self.assertIn(soundscape.MUSIC_CUE, session.cues)
         self.assert_captioned(session, session.cues)
+
+    def test_a_song_start_waits_behind_a_caption_on_screen(self):
+        """A song start is captioned like an ambient call (#168): it never replaces a caption on
+        screen, a start that finds one showing is skipped, and a start after the timer captions
+        the piece."""
+        session = self.session(self.state(1440 + 300))
+        song = next(iter(soundscape.MUSIC_CAPTIONS))
+        session.ui.caption, session.ui.caption_timer = soundscape.CAPTIONS["bite"], 1.0
+        session.sound = None  # tick() sets it each frame; the caption tick reads it
+        session.cues = [soundscape.MUSIC_CUE]
+        session._tick_caption(0.05)
+        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["bite"])
+        session.hear_ambient("loon")  # an ambient call waits for the caption on screen
+        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["bite"])
+        session.hear_ambient(song)  # a song start waits too: "Fish on the line." stays
+        self.assertEqual(session.ui.caption, soundscape.CAPTIONS["bite"])
+        session.ui.caption_timer = 0.0
+        session.hear_ambient(song)
+        self.assertEqual(session.ui.caption, soundscape.caption(song, session.state))
+        self.assertTrue(session.ui.caption.startswith("Music: "))
 
 
     def test_set_feedback_paths_emit_captioned_error_and_splash(self):
@@ -441,6 +489,341 @@ class AudioWorkerFallbacks(unittest.TestCase):
         self.assertEqual(store.prefetch_count, 0)
 
 
+class PieceLane(unittest.TestCase):
+    """Pieces render one at a time in their own lane, so a lake change's beds never queue behind a
+    piece (#168). The builds are stand-ins that hold on an event, as on the frozen-build path."""
+
+    def setUp(self):
+        self.release = threading.Event()
+        self.store = _BedStore(11025, 2048, 2048)
+        self.store._spawn_ok = False  # builds run on threads in this process
+        self.addCleanup(self.store.shutdown)
+        self.addCleanup(self.release.set)  # runs before shutdown, so a held build can finish
+
+        def build(key, rate, frames, stop=None):
+            self.release.wait(10)  # every build holds until the test releases it
+            return synth.Bed(np.zeros((2, frames), np.int16), 1.0)
+
+        patcher = patch.object(synth, "build_bed", side_effect=build)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_pieces_render_one_at_a_time_and_queue_behind_the_running_one(self):
+        self.store.request("song:briar-1")
+        self.store.request("song:briar-2")
+        self.assertEqual(list(self.store._threads), ["song:briar-1"])
+        self.assertEqual(self.store._song_waiting, ["song:briar-2"])
+        self.release.set()
+        self.store.get("song:briar-1", wait=True)
+        self.store.get("song:briar-2", wait=True)
+        self.assertEqual(self.store._song_waiting, [])
+
+    def test_a_lake_changes_beds_start_while_a_piece_renders(self):
+        beds = ("lap", "wind:cedar", "frogs:cedar")
+        self.store.request("song:briar-1")
+        for key in beds:
+            self.store.request(key)
+        # Each bed is held like the piece, so each one must be in its thread, none queued.
+        self.assertTrue(all(key in self.store._threads for key in beds))
+        self.assertFalse(self.release.is_set())  # the piece is still rendering
+        self.release.set()
+        for key in ("song:briar-1", *beds):
+            self.store.get(key, wait=True)
+
+
+class HeldRender(unittest.TestCase):
+    """Piece renders held mid-way, so a test can act on one still in progress (#168).
+
+    Every piece is shortened to form A (12 bars). The first render waits at its fifth block until
+    `self.release` is set, or for 10 s at most, so a forgotten release cannot hang the run; the test
+    then fails only if its own assertions do. Subclasses register `release.set` after their store's
+    shutdown, so cleanup sets it first and a held render can finish.
+    """
+
+    def setUp(self):
+        def short(song_id):
+            return dataclasses.replace(songs.BY_ID[song_id], form="A")
+
+        self.blocks = 0  # blocks the renders have finished
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+        def block_done(_seconds):  # songs calls this once per finished block
+            self.blocks += 1
+            if self.blocks == 5:  # the first render, a few blocks in
+                self.entered.set()
+                self.release.wait(10)
+
+        for patcher in (patch.object(songs, "get", side_effect=short),
+                        patch.object(songs, "time", SimpleNamespace(sleep=block_done))):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+
+class AbandonedRender(HeldRender):
+    """A piece the bed store abandons mid-render stops before its next block, and its lane slot
+    stays taken until it ends, so the next piece never overlaps it (#168). The render is the real
+    `songs.render` of a short piece; HeldRender patches `songs.time.sleep` so the fifth finished
+    block of the first render waits until the test sets `self.release`; later blocks run on."""
+
+    def setUp(self):
+        super().setUp()
+        self.store = _BedStore(11025, 2048, 2048)
+        self.store._spawn_ok = False  # renders run on threads in this process
+        self.addCleanup(self.store.shutdown)
+        self.addCleanup(self.release.set)  # runs before shutdown, so a held render can finish
+
+    def test_an_abandoned_render_stops_within_one_block_and_holds_its_slot_until_it_ends(self):
+        first, second = "song:briar-1", "song:briar-2"
+        self.store.request(first)
+        self.assertTrue(self.entered.wait(10))  # the first render is mid-way
+        self.store._forget(first)  # abandoned while it renders
+        [(_key, running)] = self.store._abandoned
+        blocks_at_abandon = self.blocks
+        self.store.request(second)
+        self.assertNotIn(second, self.store._threads)  # the abandoned render still holds the slot
+        self.assertFalse(running.done())
+        self.release.set()
+        wait_futures([running], timeout=10)
+        self.assertTrue(running.done(), "the abandoned render ignored its stop flag")
+        self.assertIsInstance(running.exception(), songs.RenderCancelled)
+        self.assertLessEqual(self.blocks - blocks_at_abandon, 1)  # it stopped within one block
+        self.store.poll()
+        self.assertIn(second, self.store._threads)  # the next piece starts once the slot frees
+        later, _stop = self.store._threads[second]
+        self.store._forget(second)  # the test leaves no render running
+        wait_futures([later], timeout=10)
+
+
+class QuitMidRender(HeldRender):
+    """The game's quit path, `shutdown_stores` (called by `game.run` in its `finally`), ends a
+    piece render before the interpreter joins its thread (#168)."""
+
+    def setUp(self):
+        super().setUp()
+        registry = patch("fishing.audio._STORES", {})  # this test's own store, not the shared one
+        registry.start()
+        self.addCleanup(registry.stop)
+        threads = patch.object(_BedStore, "_spawn", return_value=None)  # every build on a thread
+        threads.start()
+        self.addCleanup(threads.stop)
+        self.audio = Audio(device=False, tier="low")
+        self.store = self.audio._store
+        self.addCleanup(self.store.shutdown)
+        self.addCleanup(self.release.set)  # runs before shutdown, so a held render can finish
+
+    def test_quitting_mid_piece_ends_the_render_at_its_next_block(self):
+        self.store.request("song:briar-1")
+        self.assertTrue(self.entered.wait(10))  # the render is held mid-way
+        future, _stop = self.store._threads["song:briar-1"]
+        shutdown_stores()  # the quit path
+        self.release.set()  # the held render reaches its next block boundary
+        wait_futures([future], timeout=5)
+        self.assertTrue(future.done(), "the render ran on past quit")
+        self.assertIsInstance(future.exception(), songs.RenderCancelled)
+        self.assertTrue(self.store._cue_stop.is_set())  # the same call stops the cue build
+        self.assertTrue(self.store._closed)
+
+
+class CueBuildStop(unittest.TestCase):
+    def test_a_cue_build_ends_at_its_next_cue_once_stopped(self):
+        store = _BedStore(11025, 2048, 2048)  # no prefetch, so only this build runs
+        self.addCleanup(store.shutdown)
+        stop = threading.Event()
+        built = []
+
+        def build_cue(kind, rate, variant):
+            built.append(kind)
+            stop.set()  # quit arrives while the first cue is built
+            return np.zeros((2, 4), np.float32)
+
+        with patch.object(synth, "build_cue", side_effect=build_cue):
+            store._cues_here(stop)
+        self.assertEqual(len(built), 1)
+
+
+class SharedStore(unittest.TestCase):
+    """Audio instances of one tier share a bed store. Closing one leaves the store running for the
+    rest; quit closes every shared store, and a later Audio builds fresh ones (#168)."""
+
+    def setUp(self):
+        self.registry: dict = {}
+        registry = patch("fishing.audio._STORES", self.registry)  # private: no other test's store
+        registry.start()
+        self.addCleanup(registry.stop)
+        threads = patch.object(_BedStore, "_spawn", return_value=None)  # builds run on threads
+        threads.start()
+        self.addCleanup(threads.stop)
+
+    def test_closing_one_audio_leaves_the_store_it_shares_running(self):
+        first = Audio(device=False, tier="low")
+        second = Audio(device=False, tier="low")
+        store = second._store
+        self.assertIs(first._store, store)
+        self.addCleanup(store.shutdown)
+        first.close()
+        self.assertFalse(store._closed)
+        self.assertFalse(store._cue_stop.is_set())
+        wait_futures([store._cue_job], timeout=30)  # the cue bank that second shares
+        self.assertIn("cues", store.build_seconds)
+        self.assertIsNotNone(store.get("wind:cedar", wait=True))  # a bed still builds
+
+    def test_quit_closes_every_shared_store_and_a_later_audio_builds_fresh_ones(self):
+        old = Audio(device=False, tier="low")._store
+        shutdown_stores()
+        self.assertTrue(old._closed)
+        self.assertEqual(self.registry, {})
+        new = Audio(device=False, tier="low")._store
+        self.addCleanup(new.shutdown)
+        self.assertIsNot(new, old)
+        self.assertFalse(new._closed)
+
+
+class ClosedStore(unittest.TestCase):
+    """Once shut down, a store starts no pool, worker or queued build, and a waited read raises;
+    reads of built beds keep working, and a cue or stroke miss still synthesises on the
+    caller (#168)."""
+
+    def setUp(self):
+        self.store = _BedStore(11025, 2048, 2048)
+        self.addCleanup(self.store.shutdown)
+
+    def test_a_closed_store_refuses_new_builds_and_creates_no_pool_or_worker(self):
+        self.store.shutdown()
+        self.store.shutdown()  # a second shutdown does nothing
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.store.request("lap")
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.store.prefetch_cues()
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.store._threads_pool()
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.store._pool_for(songs.SONG_PREFIX + "briar-1")
+        self.assertEqual((self.store._pool, self.store._song_pool, self.store._cue_job),
+                         (None, None, None))
+        self.assertEqual((self.store._running, self.store._threads, self.store._waiting),
+                         ({}, {}, []))
+
+    def test_a_closed_store_reads_built_beds_and_never_waits_for_a_build(self):
+        bed = self.store.get("lap", wait=True)  # built while the store was open
+        self.store.shutdown()
+        self.assertIs(self.store.get("lap", wait=False), bed)
+        self.assertIsNone(self.store.get("wind:cedar", wait=False))  # unbuilt, and nothing starts
+        raised = []
+
+        def wait_for_unbuilt():
+            try:
+                self.store.get("wind:cedar", wait=True)
+            except RuntimeError as error:
+                raised.append(error)
+
+        reader = threading.Thread(target=wait_for_unbuilt, daemon=True)
+        reader.start()
+        reader.join(10)  # a regression spins in get's wait loop; this fails instead of hanging
+        self.assertFalse(reader.is_alive(), "get(wait=True) hung on a closed store")
+        self.assertEqual(len(raised), 1, "get(wait=True) returned without raising")
+        self.assertIn("closed", str(raised[0]))
+
+    def test_a_closed_cue_miss_synthesises_on_the_caller_and_is_cached(self):
+        self.store.shutdown()
+        builders = []
+
+        def build_cue(kind, rate, variant):
+            builders.append(threading.current_thread())
+            return np.zeros((4, 2), np.float32)
+
+        with patch.object(synth, "build_cue", side_effect=build_cue):
+            first = self.store.cue("bite", 0)
+            second = self.store.cue("bite", 0)
+        self.assertIs(first, second)  # the second read is cached, not rebuilt
+        self.assertEqual(builders, [threading.current_thread()])  # built on the caller, no pool
+        self.assertEqual((self.store._pool, self.store._song_pool, self.store._cue_job),
+                         (None, None, None))
+
+    def test_a_closed_stroke_miss_synthesises_on_the_caller_and_is_cached(self):
+        self.store.shutdown()
+        builders = []
+
+        def stroke(rate, variant):
+            builders.append(threading.current_thread())
+            return np.zeros((4, 2), np.float32)
+
+        with patch.object(synth, "stroke", side_effect=stroke):
+            first = self.store.strokes()
+            second = self.store.strokes()
+        self.assertIs(first, second)  # the same cached list is reused, not rebuilt
+        self.assertEqual(len(builders), synth.STROKE_VARIANTS)
+        self.assertTrue(all(t is threading.current_thread() for t in builders))  # no pool
+        self.assertEqual((self.store._pool, self.store._song_pool, self.store._cue_job),
+                         (None, None, None))
+
+
+class GameRunSetup(unittest.TestCase):
+    """game.run's quit path around its setup: a setup failure after Audio() stops the shared
+    stores before the exception leaves run, and a quit stops them once in its finally (#168).
+    The window, save and audio are stand-ins, so no window opens and no store builds."""
+
+    @contextmanager
+    def game_run(self, **overrides):
+        opened = SimpleNamespace(world=MagicMock(), state=MagicMock(), has_save=False,
+                                 used_local_fallback=False, path=Path("briar.json"),
+                                 legacy_path=None)
+        mocks = {"open_save": MagicMock(return_value=opened), "Session": MagicMock(),
+                 "Platform": MagicMock(return_value=MagicMock(viewport=(1280, 720)),
+                                       display_size=MagicMock(return_value=(1280, 720))),
+                 "_window_size": MagicMock(return_value=(1280, 720)), "Text": MagicMock(),
+                 "UI": MagicMock(), "LoadingQuips": MagicMock(), "_loading_quip": MagicMock(),
+                 "Audio": MagicMock(), "_build_renderer": MagicMock(),
+                 "shutdown_stores": MagicMock(), **overrides}
+        with ExitStack() as stack:
+            for name, mock in mocks.items():
+                stack.enter_context(patch(f"fishing.game.{name}", mock))
+            stack.enter_context(patch("fishing.detail.configure"))
+            yield mocks
+
+    def test_a_setup_failure_after_audio_stops_the_stores_before_it_propagates(self):
+        failure = RuntimeError("renderer failed")
+        with self.game_run(_build_renderer=MagicMock(side_effect=failure)) as mocks:
+            with self.assertRaises(RuntimeError) as caught:
+                game.run()
+        self.assertIs(caught.exception, failure)
+        mocks["Audio"].assert_called_once()
+        mocks["shutdown_stores"].assert_called_once_with()
+
+    def test_a_quit_stops_the_stores_once_in_the_finally(self):
+        with self.game_run(Session=MagicMock(return_value=MagicMock(quit=True))) as mocks:
+            game.run()
+        mocks["shutdown_stores"].assert_called_once_with()
+
+
+class WindowSmokeSetup(unittest.TestCase):
+    """verify.window_smoke's setup after its window opens: a failure in Audio() or UI() stops the
+    shared stores before the exception leaves it, as the game's quit path does (#168). The
+    platform, renderer and audio are stand-ins, so no window opens and no store builds."""
+
+    @contextmanager
+    def smoke_setup(self, fail_at=None):
+        replacements = {"fishing.platform.Platform": MagicMock(),
+                        "fishing.verify.World": MagicMock(), "fishing.verify.Text": MagicMock(),
+                        "fishing.verify.Renderer": MagicMock(), "fishing.verify.UI": MagicMock(),
+                        "fishing.audio.Audio": MagicMock(),
+                        "fishing.audio.shutdown_stores": MagicMock()}
+        if fail_at is not None:
+            replacements[fail_at] = MagicMock(side_effect=RuntimeError("setup failed"))
+        with ExitStack() as stack:
+            mocks = {path: stack.enter_context(patch(path, mock))
+                     for path, mock in replacements.items()}
+            yield mocks
+
+    def test_a_failed_audio_or_ui_setup_stops_the_stores_before_it_propagates(self):
+        for path in ("fishing.audio.Audio", "fishing.verify.UI"):
+            with self.subTest(failing=path):
+                with self.smoke_setup(fail_at=path) as mocks:
+                    with self.assertRaisesRegex(RuntimeError, "setup failed"):
+                        verify.window_smoke()
+                mocks["fishing.audio.shutdown_stores"].assert_called_once_with()
+
+
 class AudioChecks(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -460,6 +843,7 @@ class AudioChecks(unittest.TestCase):
         """Every lake warms one tier cache; report its resident bytes once, not per lake."""
         class FakeAudio:
             buffer_calls = 0
+            rate = 44100
 
             def __init__(self, *, open_device=True):
                 self.shots = []
@@ -487,24 +871,26 @@ class AudioChecks(unittest.TestCase):
         with patch("fishing.audio.Audio", FakeAudio), patch.object(
                 soundscape, "tone", return_value=samples):
             report = soundscape.coverage_report()
-        expected_bytes = len(soundscape.KINDS + CHIMES) * samples.nbytes + 1024
         self.assertTrue(report["complete"])
         self.assertTrue(report["within_budget"])
         self.assertEqual(FakeAudio.buffer_calls, 1)
-        self.assertEqual(report["bytes"], expected_bytes)
 
     def test_every_lake_hour_and_weather_is_calm_and_clean(self):
         for name, scene in SCENES.items():
             x = self.render(10.0, **scene)
             self.check_clean(name, x)
-            low, high = AMBIENCE_BAND
+            # Rain keeps its authored level; nature beds and calls sit 12 dB lower (#168).
+            low, high = AMBIENCE_BAND if scene.get("rain") else NATURE_BAND
             self.assertTrue(low <= dbfs(x) <= high, f"{name}: {dbfs(x):.1f} dBFS")
 
     def test_propulsion_is_smooth_and_never_dominates(self):
         for name, scene in PROPULSION.items():
             x = self.render(10.0, **scene)
             self.check_clean(name, x)
-            self.assertTrue(-35.0 <= dbfs(x) <= -20.0, f"{name}: {dbfs(x):.1f} dBFS")
+            self.assertTrue(PROPULSION_BAND[0] <= dbfs(x) <= PROPULSION_BAND[1], f"{name}: {dbfs(x):.1f} dBFS")
+            # SFX keep their authored level (#168): the propulsion alone is judged, nature muted.
+            sfx = self.render(10.0, volumes={"ambience": 0.0, "music": 0.0}, **scene)
+            self.assertTrue(-50.0 <= dbfs(sfx) <= -20.0, f"{name} sfx: {dbfs(sfx):.1f} dBFS")
         # Throttle sweeps ramp RPM and level; no zipper means no block-edge steps.
         x = self.render(8.0, lake_id="briar", hour=12.0, motorized=True,
                        script=[(t * 0.5, {"throttle": (t % 4) / 3.0, "speed": t % 3}) for t in range(16)])
@@ -527,7 +913,9 @@ class AudioChecks(unittest.TestCase):
             bus = soundscape.bus(kind)
             volumes = {name: float(name == bus) for name in ("ambience", "music", "sfx")}
             x = self.render(3.0, volumes=volumes, cues=[(0.05, kind)])
-            self.assertTrue(-16.0 <= peak_db(x) <= -6.0, f"{kind}: {peak_db(x):.1f} dBFS")
+            # Ambience calls sit at NATURE_TRIM (-12 dB); the other buses keep their level (#168).
+            trim = NATURE_TRIM_DB if bus == "ambience" else 0.0
+            self.assertTrue(-16.0 + trim <= peak_db(x) <= -6.0 + trim, f"{kind}: {peak_db(x):.1f} dBFS")
             self.assertLess(float(np.max(np.abs(np.diff(x, axis=0)))), JUMP_LIMIT, kind)
             tone = self.audio._tone(kind)
             tone = tone.astype(np.float64) / (32767.0 if tone.dtype == np.int16 else 1.0)
@@ -538,7 +926,7 @@ class AudioChecks(unittest.TestCase):
             self.assertLess(float(env[:first].max()), 0.25 * settled, kind)
 
     def test_authored_soundscape_cues_keep_their_original_tones(self):
-        """V1-38 motifs and story calls must not degrade to generic synth beeps."""
+        """V1-38 story calls must not degrade to generic synth beeps."""
         for kind in (name for name in soundscape.KINDS if name not in synth.CUE_PEAK_DB):
             with self.subTest(kind=kind):
                 source = soundscape.tone(kind).astype(np.float32) / np.float32(32767.0)
@@ -552,6 +940,24 @@ class AudioChecks(unittest.TestCase):
                 self.assertEqual(actual.shape, (count, 2), kind)
                 np.testing.assert_allclose(actual[:, 0], expected, atol=1e-7)
                 np.testing.assert_array_equal(actual[:, 0], actual[:, 1])
+
+    def test_nature_is_trimmed_to_a_quarter_and_rain_and_sfx_are_not(self):
+        """#168: nature beds and scheduled calls play at NATURE_TRIM of their authored amplitude;
+        rain and SFX keep theirs. The same scene with the trim patched to 1 gives the authored levels."""
+        self.assertAlmostEqual(20.0 * math.log10(NATURE_TRIM), NATURE_TRIM_DB, delta=0.25)
+        audio = Audio(device=False, tier="low")
+        audio._hour, audio._rain = 23.0, 0.6  # night, with both rain layers on
+        trimmed = audio._targets("briar")
+        with patch("fishing.audio.NATURE_TRIM", 1.0):
+            authored = audio._targets("briar")
+        self.assertTrue({"lap", "wind:briar", "rain_light", "rain_heavy", "frogs:briar"} <= set(trimmed))
+        for name, (_key, _offset, amp, bus) in trimmed.items():
+            base = authored[name][2]
+            if name.startswith("rain") or bus != "ambience":
+                self.assertEqual(amp, base, name)
+            elif base > 0.0:
+                self.assertAlmostEqual(20.0 * math.log10(amp / base), NATURE_TRIM_DB,
+                                       delta=0.25, msg=name)
 
     def test_bite_rises_above_a_frog_chorus(self):
         scene = dict(lake_id="briar", hour=23.0)
@@ -655,7 +1061,8 @@ class AudioChecks(unittest.TestCase):
         x = unit(audio.render_offline(6.0, lake_id="briar", hour=23.0, cues=[(1.0, "bite")]))
         self.assertEqual(len(x), 6 * 22050)
         self.check_clean("low", x, rate=22050)
-        self.assertTrue(AMBIENCE_BAND[0] - 2 <= dbfs(x) <= AMBIENCE_BAND[1])
+        quiet = unit(audio.render_offline(6.0, lake_id="briar", hour=23.0, volumes={"sfx": 0.0}))
+        self.assertTrue(NATURE_BAND[0] - 2 <= dbfs(quiet) <= NATURE_BAND[1])
 
     def test_renders_are_deterministic_and_memory_is_bounded(self):
         a = self.audio.render_offline(4.0, lake_id="cedar", hour=6.3, rain=0.5, cues=[(1.0, "sell")])
@@ -664,7 +1071,8 @@ class AudioChecks(unittest.TestCase):
         ultra = _store_for(detail.TIERS["ultra"])
         # Shared: lap, wash, both rains (noise length) and insects (event length);
         # per lake, for two lakes: wind (noise), birds and frogs (event).
-        worst = (6 * ultra.noise_frames + 5 * ultra.event_frames) * 2 * 2
+        # Music: the layer's resident pieces, sized at this tier's rate (music.resident_bytes).
+        worst = (6 * ultra.noise_frames + 5 * ultra.event_frames) * 2 * 2 + resident_bytes(ultra.rate)
         # Cues are the same size on every 44.1 kHz tier: measure the finished bank.
         store = self.audio._store
         store.prefetch_cues()

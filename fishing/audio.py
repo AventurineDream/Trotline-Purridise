@@ -4,6 +4,8 @@ How it fits: `game.run` builds one `Audio()`, calls `blip(kind)` for sound cues 
 `update(...)` once per frame with the scene (hour, lake, rain, propulsion, volumes). This
 module picks levels, crossfades and cue timing; `fishing.audiosynth` synthesises the
 beds and cues. Captions are produced elsewhere from the same cue kind names.
+On quit, `game.run` and `verify.window_smoke` call `shutdown_stores()` so shared builds stop
+before the interpreter joins threads (#168).
 
 Design:
 - Long, seamless stereo beds (water lapping on the hull, wash, lake wind, rain, insects,
@@ -16,8 +18,11 @@ Design:
   inside each block.
 - Propulsion (outboard harmonics, electric hum, oar strokes, sail flutter) is
   synthesised live from smoothed controls.
-- Four saved buses (master, music, ambience, sfx); a bite ducks the ambience; a soft
+- Four saved buses (master, music, ambience, sfx); a bite ducks the ambience and music; a soft
   limiter with a -1 dBFS ceiling means the queue never clips.
+- Music (`music.py`) plays one lake song at a time on the music bus and crosses over when
+  the lake changes. Nature ambience sits at `NATURE_TRIM`, a quarter of its authored level,
+  so the music and the fishing cues stay clearly above it.
 - `render_offline` drives the very same `update`/`_mix` path into memory, so tests and
   WAV dumps hear exactly what plays.
 
@@ -47,6 +52,8 @@ import numpy as np
 
 from . import audiosynth as synth
 from . import detail
+from . import music
+from . import songs
 from .botchimes import CHIMES, SAMPLE_RATE as CHIME_RATE, synthesize as synthesize_chime
 from .platform import SDL_AudioSpec, SDL_INIT_AUDIO, _load
 
@@ -61,10 +68,13 @@ EVENT_LOOP_SECONDS = 30.0     # birds/frogs/insects are never shorter than this
 CEILING = 10 ** (-1.0 / 20)   # limiter ceiling, -1 dBFS
 LIMIT_KNEE = 0.6
 LIMIT_TARGET = 10 ** (-4.0 / 20)
-DUCK_GAIN = 10 ** (-7.0 / 20)  # ambience under a bite
+DUCK_GAIN = 10 ** (-7.0 / 20)  # nature and music under a bite
 PRIORITY_CUES = ("bite",)
 EVENT_BEDS = ("insects", "birds", "frogs")
 WORKERS = 3                   # beds synthesised at once
+# Pieces render in their own lane, one at a time (#168): a piece is a long render, and on
+# frozen builds it runs on a game-process thread, so two would contend with the frame loop.
+SONG_WORKERS = 1
 PACKAGE_ROOT = str(Path(__file__).resolve().parents[1])
 # Child interpreter entry: put the package on sys.path, then run one synthesis job.
 WORKER_BOOT = ("import sys; sys.path.insert(0, sys.argv.pop(1)); "
@@ -86,6 +96,11 @@ BIRD_DAY = {"briar": 0.3, "cedar": 0.6, "flathead": 0.35, "crater": 0.2, "nebula
 RAIN_LIGHT_DB, RAIN_HEAVY_DB = -32.0, -28.5
 WASH_DB = -29.0
 PAD_DB = -42.0
+# Nature ambience (beds and scheduled calls) plays at this share of its authored level, about
+# -12 dB, so music and fishing cues sit clearly above it (#168). Rain is exempt: its onset and
+# heavy rain must stay clearly audible.
+NATURE_TRIM = 0.25
+RAIN_LAYERS = ("rain_light", "rain_heavy")
 # Seconds a layer takes to go from silence to full power (or back).
 SCENE_FADE = 2.5
 MOTION_FADE = 0.35
@@ -138,7 +153,13 @@ class _BedStore:
     Frozen builds or failed spawns use `_build_here`/`_cues_here` on executor threads.
     Lifecycle and polling stay on the game thread. A store per (rate, loop lengths) is
     shared by Audio instances, and lake-specific beds retain only the current and
-    fading lakes to bound memory at 5 shared + 6 lake beds.
+    fading lakes to bound memory at 5 shared + 6 lake beds. Music pieces (`song:` keys)
+    are retained only while sounding or queued (`keep_songs`), and render one at a time in
+    their own lane, so a lake's beds never queue behind a piece. A piece the store forgets stops
+    before its next block and keeps its lane's slot until it ends (#168).
+    `shutdown_stores` closes every store at quit. A closed store starts no pool, worker or queued
+    build: `request`, `prefetch_cues` and a waited `get` raise RuntimeError before they create one.
+    A `cue()` or `strokes()` miss still synthesises on the caller's thread and is cached (#168).
     """
 
     def __init__(self, rate: int, noise_frames: int, event_frames: int):
@@ -148,18 +169,28 @@ class _BedStore:
         self.build_seconds: dict[str, float] = {}
         self._beds: dict[str, synth.Bed] = {}
         self._running: dict[str, tuple[subprocess.Popen, str]] = {}
-        self._threads: dict[str, Future] = {}
+        self._threads: dict[str, tuple[Future, threading.Event]] = {}  # build and its stop flag
+        # Forgotten builds stay here until poll drops them after they finish.
+        self._abandoned: list[tuple[str, Future]] = []
         self._waiting: list[str] = []
+        self._song_waiting: list[str] = []  # pieces queued for their own lane (#168)
         self._lakes: list[str] = []
         self._cues: dict[tuple[str, int], np.ndarray] = {}
         self._strokes: list[np.ndarray] = []
         self._cue_job: tuple[subprocess.Popen, str] | Future | None = None
+        self._cue_stop = threading.Event()  # set by shutdown; a cue build ends at its next cue
+        self._closed = False  # set by shutdown: built beds stay readable, no build starts
         self._pool: ThreadPoolExecutor | None = None
+        self._song_pool: ThreadPoolExecutor | None = None
         self._spawn_ok = bool(sys.executable) and not getattr(sys, "frozen", False)
+        # Bound method: the atexit reference keeps this store and its beds alive
+        # until exit (#168).
         atexit.register(self.shutdown)
 
     def frames(self, key: str) -> int:
-        """Loop length in frames of bed `key`."""
+        """Length in frames of `key`: a music piece's own length, or a bed's loop length."""
+        if key.startswith(songs.SONG_PREFIX):
+            return songs.frames(key[len(songs.SONG_PREFIX):], self.rate)
         return self.event_frames if key.partition(":")[0] in EVENT_BEDS else self.noise_frames
 
     # ------------------------------------------------------------ jobs
@@ -181,16 +212,51 @@ class _BedStore:
             self._spawn_ok = False
             return None
 
+    def _require_open(self, action: str) -> None:
+        """Raise RuntimeError before `action` on a closed store (#168). A build started after
+        shutdown would create a pool or worker that nothing tracks or joins, or wait on one that
+        never runs."""
+        if self._closed:
+            raise RuntimeError(f"audio store is closed; cannot {action}")
+
     def _threads_pool(self) -> ThreadPoolExecutor:
+        self._require_open("start a thread build")
         if self._pool is None:
             self._pool = ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="trotline-audio")
         return self._pool
 
-    def _build_here(self, key: str) -> synth.Bed:
+    def _pool_for(self, key: str) -> ThreadPoolExecutor:
+        """The executor for a thread build of `key`. A piece has a pool of its own, so a render
+        never takes a bed worker (#168)."""
+        self._require_open(f"build {key}")
+        if key.startswith(songs.SONG_PREFIX):
+            if self._song_pool is None:
+                self._song_pool = ThreadPoolExecutor(max_workers=SONG_WORKERS,
+                                                     thread_name_prefix="trotline-song")
+            return self._song_pool
+        return self._threads_pool()
+
+    def _lane(self, key: str) -> list[str]:
+        """The queue `key` waits in: pieces have a lane of their own, beds share WORKERS."""
+        return self._song_waiting if key.startswith(songs.SONG_PREFIX) else self._waiting
+
+    def _jobs(self, song: bool) -> int:
+        """Jobs holding one lane's slots: running workers, live thread builds, and abandoned
+        builds still running. An abandoned build keeps its slot until it ends, so the next
+        piece never overlaps it (#168)."""
+        keys = (*self._running, *self._threads, *(key for key, _future in self._abandoned))
+        return sum(1 for key in keys if key.startswith(songs.SONG_PREFIX) == song)
+
+    def _build_here(self, key: str, stop: threading.Event) -> synth.Bed:
         start = _time.perf_counter()
-        bed = synth.build_bed(key, self.rate, self.frames(key))
+        bed = synth.build_bed(key, self.rate, self.frames(key), stop=stop)
         self.build_seconds[key] = _time.perf_counter() - start
         return bed
+
+    def _submit(self, key: str) -> None:
+        """Build `key` on its lane's pool, with the stop flag that `_forget` sets (#168)."""
+        stop = threading.Event()
+        self._threads[key] = (self._pool_for(key).submit(self._build_here, key, stop), stop)
 
     def _start(self, key: str) -> None:
         path = self._scratch(key)
@@ -198,7 +264,7 @@ class _BedStore:
         if proc is not None:
             self._running[key] = (proc, path)
         else:
-            self._threads[key] = self._threads_pool().submit(self._build_here, key)
+            self._submit(key)
 
     @staticmethod
     def _result(proc: subprocess.Popen) -> dict | None:
@@ -221,7 +287,7 @@ class _BedStore:
             self.build_seconds[key] = float(info["seconds"])
         except (OSError, ValueError, KeyError):
             _unlink(path)
-            self._threads[key] = self._threads_pool().submit(self._build_here, key)
+            self._submit(key)
 
     def poll(self) -> None:
         """Collect finished workers and start queued ones (never blocks)."""
@@ -229,17 +295,21 @@ class _BedStore:
             if proc.poll() is not None:
                 del self._running[key]
                 self._finish(key, proc, path)
-        for key, future in list(self._threads.items()):
+        for key, (future, _stop) in list(self._threads.items()):
             if future.done():
                 del self._threads[key]
                 self._beds[key] = future.result()
-        while self._waiting and len(self._running) + len(self._threads) < WORKERS:
-            self._start(self._waiting.pop(0))
+        self._abandoned = [(key, future) for key, future in self._abandoned if not future.done()]
+        lanes = ((self._waiting, False, WORKERS), (self._song_waiting, True, SONG_WORKERS))
+        for queue, song, limit in lanes:
+            while queue and self._jobs(song) < limit:
+                self._start(queue.pop(0))
 
     def _forget(self, key: str) -> None:
         self._beds.pop(key, None)
-        if key in self._waiting:
-            self._waiting.remove(key)
+        lane = self._lane(key)
+        if key in lane:
+            lane.remove(key)
         job = self._running.pop(key, None)
         if job:
             job[0].kill()
@@ -247,17 +317,24 @@ class _BedStore:
             if job[0].stdout:
                 job[0].stdout.close()
             _unlink(job[1])
-        future = self._threads.pop(key, None)
-        if future:
-            future.cancel()
+        thread = self._threads.pop(key, None)
+        if thread is not None:
+            future, stop = thread
+            stop.set()  # a piece render ends before its next block (songs._synthesize)
+            if not future.cancel():  # started: it runs on and keeps its lane slot until it ends
+                self._abandoned.append((key, future))
 
     # ------------------------------------------------------------ beds
 
     def request(self, key: str) -> None:
-        """Queue `key` for building unless it is built or on its way."""
-        if key in self._beds or key in self._running or key in self._threads or key in self._waiting:
+        """Queue `key` for building unless it is built or on its way. A closed store raises
+        RuntimeError and starts nothing (#168)."""
+        self._require_open(f"request {key}")
+        if (key in self._beds or key in self._running or key in self._threads
+                or key in self._lane(key)):
             return
-        lake = key.partition(":")[2]
+        # Music pieces have no lake to retain by; keep_songs releases them.
+        lake = "" if key.startswith(songs.SONG_PREFIX) else key.partition(":")[2]
         if lake:
             if lake in self._lakes:
                 self._lakes.remove(lake)
@@ -267,44 +344,74 @@ class _BedStore:
                              if k.endswith(":" + old)]:
                     self._forget(name)
             self._lakes = self._lakes[-2:]
-        self._waiting.append(key)
+        self._lane(key).append(key)
         self.poll()
 
+    def keep_songs(self, keys: set[str]) -> None:
+        """Forget every music piece not in `keys`, whatever its state. A piece is held only
+        while it sounds or is queued (`music.Layer._retain`), which bounds music memory."""
+        for name in [k for k in (*self._beds, *self._running, *self._threads, *self._song_waiting)
+                     if k.startswith(songs.SONG_PREFIX) and k not in keys]:
+            self._forget(name)
+
     def get(self, key: str, wait: bool) -> synth.Bed | None:
-        """The bed if ready, else None; with `wait`, build it first (blocking)."""
+        """The bed if ready, else None. With `wait` (offline only: the live mixer passes False),
+        build it first, blocking. A waited build starts at once, even beside a running piece.
+        A closed store (#168) reads built beds only: a waited read raises RuntimeError."""
         bed = self._beds.get(key)
         if bed is not None:
             return bed
+        if self._closed:
+            if wait:
+                self._require_open(f"wait for {key}")
+            return None
         self.request(key)
         self.poll()
         while wait and key not in self._beds:
-            if key in self._waiting:
-                self._waiting.remove(key)
+            lane = self._lane(key)
+            if key in lane:
+                lane.remove(key)
                 self._start(key)
             if key in self._running:
                 proc, path = self._running.pop(key)
                 proc.wait()
                 self._finish(key, proc, path)
             if key in self._threads:
-                self._beds[key] = self._threads.pop(key).result()
+                future, _stop = self._threads.pop(key)
+                self._beds[key] = future.result()
         return self._beds.get(key)
 
     # ------------------------------------------------------------ cues
 
     def prefetch_cues(self) -> None:
-        """Start building every cue and oar stroke so blip() never has to synthesise."""
+        """Start building every cue and oar stroke so blip() never has to synthesise. Raises
+        RuntimeError on a closed store (#168)."""
+        self._require_open("prefetch cues")
         if self._cue_job is not None or self._cues:
             return
         path = self._scratch("cues")
         proc = self._spawn(["cues", str(self.rate)], path)
-        self._cue_job = (proc, path) if proc else self._threads_pool().submit(self._cues_here)
+        if proc:
+            self._cue_job = (proc, path)
+        else:
+            self._cue_job = self._threads_pool().submit(self._cues_here, self._cue_stop)
 
-    def _cues_here(self) -> None:
+    def _cues_here(self, stop: threading.Event) -> None:
+        """Build the cue bank and oar strokes on a pool thread. Once `stop` is set (by `shutdown`
+        on quit), the build ends at its next cue or stroke instead of running the whole bank
+        (#168)."""
         start = _time.perf_counter()
         for kind in synth.CUE_PEAK_DB:
             for variant in range(synth.CUE_VARIANTS.get(kind, 1)):
+                if stop.is_set():
+                    return
                 self._cues.setdefault((kind, variant), synth.build_cue(kind, self.rate, variant))
-        self._strokes = [synth.stroke(self.rate, v) for v in range(synth.STROKE_VARIANTS)]
+        strokes = []
+        for variant in range(synth.STROKE_VARIANTS):
+            if stop.is_set():
+                return
+            strokes.append(synth.stroke(self.rate, variant))
+        self._strokes = strokes
         self.build_seconds["cues"] = _time.perf_counter() - start
 
     def _poll_cues(self) -> None:
@@ -329,7 +436,7 @@ class _BedStore:
             self.build_seconds["cues"] = float(info["seconds"])
         except (OSError, ValueError, KeyError):
             _unlink(path)
-            self._cue_job = self._threads_pool().submit(self._cues_here)
+            self._cue_job = self._threads_pool().submit(self._cues_here, self._cue_stop)
 
     def cue(self, kind: str, variant: int) -> np.ndarray:
         """Finished (n, 2) float32 cue; synthesised on the spot if the bank is not ready."""
@@ -339,7 +446,7 @@ class _BedStore:
             if kind in synth.CUE_PEAK_DB:
                 sound = synth.build_cue(kind, self.rate, variant)
             else:
-                # V1-38 motifs and story/ambient calls have authored waveforms, not generic cue presets.
+                # V1-38 story and ambient calls have authored waveforms, not generic cue presets.
                 sound = _soundscape_cue(kind, self.rate)
             self._cues[(kind, variant)] = sound
         return sound
@@ -353,7 +460,7 @@ class _BedStore:
 
     def tick(self) -> None:
         """Once per mixed block: collect finished workers and start queued ones."""
-        if self._running or self._threads or self._waiting:
+        if self._running or self._threads or self._waiting or self._song_waiting or self._abandoned:
             self.poll()
         if self._cue_job is not None:
             self._poll_cues()
@@ -364,8 +471,21 @@ class _BedStore:
                 + sum(c.nbytes for c in self._cues.values()) + sum(s.nbytes for s in self._strokes))
 
     def shutdown(self) -> None:
-        """Stop workers and delete their scratch files (registered with atexit)."""
-        for key in list(self._running):
+        """Close the store: stop builds, delete their scratch files, and drop it from the registry.
+
+        Queued builds are cancelled. A piece render ends at its next block and a cue build at its
+        next cue or stroke; a bed build has no stop point, so an in-flight bed finishes first. A
+        closed store (`_closed`) starts no pool, worker or queued build: `request`, `prefetch_cues`
+        and a waited `get` raise RuntimeError before they create one. A `cue()` or `strokes()` miss
+        still synthesises on the caller's thread and is cached. Dropping the registry entry frees
+        nothing: the atexit registration in `__init__` still references the store, so its built beds
+        stay resident until exit. A second call does nothing (#168).
+        """
+        self._closed = True
+        self._cue_stop.set()
+        self._waiting.clear()  # nothing queued starts after quit
+        self._song_waiting.clear()
+        for key in (*self._running, *self._threads):
             self._forget(key)
         if isinstance(self._cue_job, tuple):
             proc, path = self._cue_job
@@ -374,9 +494,16 @@ class _BedStore:
             if proc.stdout:
                 proc.stdout.close()
             _unlink(path)
-            self._cue_job = None
-        if self._pool is not None:
-            self._pool.shutdown(wait=False, cancel_futures=True)
+        elif self._cue_job is not None:
+            self._cue_job.cancel()  # a queued build never starts; a running one ends by its flag
+        self._cue_job = None
+        for pool in (self._pool, self._song_pool):
+            if pool is not None:
+                pool.shutdown(wait=False, cancel_futures=True)
+        with _STORES_LOCK:
+            for key, store in list(_STORES.items()):
+                if store is self:
+                    del _STORES[key]
 
 
 def _copy_worker_output(path: str, dtype, shape: tuple[int, ...] | None = None) -> np.ndarray:
@@ -420,6 +547,26 @@ def _store_for(tier: detail.Detail) -> _BedStore:
         if store is None:
             store = _STORES[key] = _BedStore(*key)
         return store
+
+
+def shutdown_stores() -> None:
+    """Stop every shared bed store at quit (#168).
+
+    `game.run` calls this first in the `finally` that ends its loop, and in the handler that runs
+    when its setup after `Audio()` raises; `verify.window_smoke` calls it before closing its
+    `Audio`. Frozen builds run on threads, and concurrent.futures joins those before atexit
+    callbacks run, so an atexit-only stop let a piece render finish first. Each store's `shutdown`
+    stops its builds and drops its registry entry; the next `Audio` builds fresh stores.
+
+    Store lifetime is process-scoped by design: the registry and the atexit registration in
+    `_BedStore.__init__` each hold a store, and no `Audio` owns one, so closing or dropping an
+    `Audio` does not release its store. A closed store keeps its built beds until the interpreter
+    exits, which is harmless at quit.
+    """
+    with _STORES_LOCK:
+        stores = list(_STORES.values())  # each shutdown removes its own entry, so copy first
+    for store in stores:
+        store.shutdown()
 
 
 def _soundscape_cue(kind: str, rate: int) -> np.ndarray:
@@ -519,6 +666,7 @@ class Audio:
         self._pad_gain = 0.0
         self._limit = 1.0
         self._variant: dict[str, int] = {}
+        self._music = music.Layer(self._store, self.rate)
 
     def _open_device(self) -> None:
         try:
@@ -572,17 +720,18 @@ class Audio:
             kind: Cue identifier understood by the audio synthesizer.
             bus: Optional explicit mixer bus; otherwise use the soundscape's mapping.
 
-        Side effects: priority cues duck ambience while they play.
+        Side effects: priority cues duck ambience and music while they play; MUSIC_CUE starts
+        the music layer's next piece instead of queueing a sound.
         """
         if not (self.ok or self._virtual):
             return
-        from .soundscape import bus as bus_of
+        from .soundscape import MUSIC_CUE, bus as bus_of
+        if kind == MUSIC_CUE:
+            self._music.cue()
+            return
         bus = bus or bus_of(kind)
-        if bus == "music":
-            # One motif at a time: a new one replaces any still playing (V1-38).
-            self.shots = [shot for shot in self.shots if shot[2] != "music"]
         sound = self._voice(kind)
-        self.shots.append((sound, 0, bus if bus in self._volumes else "sfx"))
+        self.shots.append((sound, 0, bus if bus in ("ambience", "sfx") else "sfx"))
         if kind in PRIORITY_CUES:
             self._duck_frames = max(self._duck_frames, len(sound))
 
@@ -731,6 +880,7 @@ class Audio:
             # Mute drops every bus and its pending captions; nothing waits to play after.
             self.shots.clear()
             self._played.clear()
+            self._music.stop()
             self._duck_frames = 0
             self._duck = 1.0
         if not (self.ok or self._virtual):
@@ -829,6 +979,8 @@ class Audio:
         return out
 
     def close(self):
+        """Close the SDL device. The bed store this mixer shares with other Audio instances keeps
+        running; `shutdown_stores` stops it at quit (#168)."""
         if self.ok and self.dev:
             self.sdl.SDL_CloseAudioDevice(self.dev)
             self.dev = 0
@@ -842,7 +994,8 @@ class Audio:
 
     def _targets(self, lake: str | None = None) -> dict[str, tuple[str, float, float, str]]:
         """Layer name → (bed key, loop offset 0..1, target amplitude, bus) for `lake`
-        (default: the lake the ambience is currently on)."""
+        (default: the lake the ambience is currently on). Nature layers come out at
+        NATURE_TRIM of their authored amplitude; rain keeps its own."""
         lake = lake or self._scene_lake or self._known(self._lake_id)
         hour = self._hour % 24.0
         rain = min(1.0, self._rain)
@@ -885,7 +1038,9 @@ class Audio:
             out["prop"] = ("wash", 0.5, _db(prop_db) * (0.3 + 0.7 * drive), "sfx")
         if self._sailing:
             out["flutter"] = ("wash", 0.25, _db(-39.0) * (0.6 + 0.4 * (1.0 - speed)), "sfx")
-        return out
+        return {name: (key, offset, amp if bus != "ambience" or name in RAIN_LAYERS
+                       else amp * NATURE_TRIM, bus)
+                for name, (key, offset, amp, bus) in out.items()}
 
     def _ready_lake(self, wait: bool) -> None:
         """Switch the ambience to the requested lake once its beds are built (or after
@@ -903,6 +1058,10 @@ class Audio:
             self._scene_lake = lake
             self._lake_wait = 0.0
 
+    def _pad_amp(self) -> float:
+        """Full level of the Nebula pad. It is an ambience layer, so it sits at NATURE_TRIM."""
+        return _db(PAD_DB) * NATURE_TRIM
+
     def _snap(self, wait: bool) -> None:
         self._ready_lake(wait)
         self._gains = {}
@@ -918,7 +1077,7 @@ class Audio:
         self._f0 = self._engine_f0(drive)
         self._engine_gain = self._engine_target(drive)
         self._hum_gain = self._hum_target(drive)
-        self._pad_gain = _db(PAD_DB) if self._scene_lake == "nebula" else 0.0
+        self._pad_gain = self._pad_amp() if self._scene_lake == "nebula" else 0.0
         self._primed = True
 
     # ------------------------------------------------------------ propulsion
@@ -1077,12 +1236,17 @@ class Audio:
             buses[bus] += chunk
         self._gains = gains
         pad0 = self._pad_gain
-        pad_target = _db(PAD_DB) if self._scene_lake == "nebula" else 0.0
-        step = _db(PAD_DB) ** 2 * dt / SCENE_FADE
+        pad_amp = self._pad_amp()
+        pad_target = pad_amp if self._scene_lake == "nebula" else 0.0
+        step = pad_amp ** 2 * dt / SCENE_FADE
         pad1 = math.sqrt(max(0.0, pad0 ** 2 + max(-step, min(step, pad_target ** 2 - pad0 ** 2))))
         self._pad_gain = pad1
         if pad0 > 0 or pad1 > 0:
             buses["ambience"] += self._pad(frames, pad0, pad1)
+        chunk, started = self._music.advance(frames, self._known(self._lake_id), wait)
+        if chunk is not None:
+            buses["music"] += chunk
+        self._played.extend(started)
         motor = self._engine(frames, dt) + self._hum(frames, dt)
         buses["sfx"] += motor[None, :]
         self._oars(frames)
@@ -1094,8 +1258,9 @@ class Audio:
             if take > 0:
                 seg = samples[src:src + take]
                 seg = seg.astype(F32) * F32(1 / 32767) if seg.dtype == np.int16 else seg
-                target = buses["music"] if bus == "music" else buses["ambience"] if bus == "ambience" \
-                    else buses["sfx"]
+                if bus == "ambience":  # scheduled nature calls sit at NATURE_TRIM, as the beds do
+                    seg = seg * F32(NATURE_TRIM)
+                target = buses["ambience"] if bus == "ambience" else buses["sfx"]
                 target[:, start:start + take] += seg.T if seg.ndim == 2 else seg[None, :]
             cursor += frames
             if cursor < len(samples):
@@ -1108,12 +1273,16 @@ class Audio:
         self._duck = duck1
         self._duck_frames = max(0, self._duck_frames - frames)
         vol = self._volumes
+        # A bite turns nature and the music down together (#168), so the cue the player must hear
+        # stays clear over a piece. One envelope serves both: they fall and recover as one.
+        ducking = np.linspace(duck0, duck1, frames, endpoint=False, dtype=F32)
         amb = buses["ambience"]
-        amb *= np.linspace(duck0 * vol["ambience"], duck1 * vol["ambience"], frames,
-                           endpoint=False, dtype=F32)
+        amb *= ducking * F32(vol["ambience"])
+        music_bus = buses["music"]
+        music_bus *= ducking * F32(vol["music"])
         mix = amb
         mix += buses["sfx"] * F32(vol["sfx"])
-        mix += buses["music"] * F32(vol["music"])
+        mix += music_bus
         mix *= F32(vol["master"])
         mix = self._limit_block(mix, dt)
         if self._start_ramp:

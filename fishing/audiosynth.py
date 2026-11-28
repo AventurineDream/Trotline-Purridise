@@ -12,6 +12,8 @@ Constraints:
 - Every bed is an exact loop: noise is synthesised in the frequency domain (periodic by
   construction), event trains wrap around the end, and every modulator has whole
   cycles per loop. The seam is therefore indistinguishable from any other sample.
+- Music pieces (`songs.py`, keys `song:<id>`) are one-shot renders, not loops. They come
+  through `build_bed` so the bed store's worker path serves them as it serves the beds.
 - Every grain and cue ramps in over at least `MIN_ATTACK` seconds; nothing starts on a
   step, so nothing clicks or startles.
 - Beds come back unit-RMS so the mixer sets their level in dBFS; cues come back
@@ -23,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
 import zlib
 from dataclasses import dataclass
@@ -768,14 +771,24 @@ def bed_birds(rate: int, n: int, lake: str) -> Bed:
     return encode(out)
 
 
-def build_bed(key: str, rate: int, n: int) -> Bed:
+def build_bed(key: str, rate: int, n: int, stop: threading.Event | None = None) -> Bed:
     """Build the bed named `key` ("lap", "wash", "rain_light", "rain_heavy", "insects",
-    "wind:<lake>", "birds:<lake>", "frogs:<lake>") as an n-frame loop at `rate` Hz.
+    "wind:<lake>", "birds:<lake>", "frogs:<lake>") as an n-frame loop at `rate` Hz, or the
+    music piece "song:<id>" (`songs.render`), whose length n the piece fixes.
+    `stop` goes to `songs.render`, which ends an abandoned piece within one block (#168); beds
+    are short and ignore it.
 
     Raises:
-        KeyError: unknown bed or lake.
+        KeyError: unknown bed, lake or song.
+        ValueError: `n` is not the piece's length at `rate`.
     """
     kind, _, lake = key.partition(":")
+    if kind == "song":
+        from . import songs  # songs imports this module, so it is imported only when needed
+        bed = songs.render(lake, rate, stop=stop)
+        if bed.data.shape[1] != n:
+            raise ValueError(f"{key}: {n} frames asked for, the piece has {bed.data.shape[1]}")
+        return bed
     if kind == "lap":
         return bed_lap(rate, n)
     if kind == "wash":

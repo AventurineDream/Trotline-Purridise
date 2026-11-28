@@ -1,7 +1,7 @@
 """V1-38: every sound the game makes, its caption and bus, and each lake's voice (02 §18).
 
-Everything is synthesized here and needs no audio device, so the tests and the benchmark can
-hear it too. `audio.Audio` only schedules, mixes and queues it.
+Everything except the lake songs (`songs.py`) is synthesized here and needs no audio device,
+so the tests and the benchmark can hear it too. `audio.Audio` only schedules, mixes and queues it.
 
 - **Captions.** Every sound has one (`CAPTIONS`), shown when Captions is on, so nothing is
   heard that can't be read. Bot's shell chimes keep the shell's own caption (`bot.json`).
@@ -9,11 +9,12 @@ hear it too. `audio.Audio` only schedules, mixes and queues it.
   all under master. M mutes them all.
 - **Lake ambience** (`AMBIENCE`). Briar and Cedar keep their loons, gulls and frogs.
   - Flathead: wind in the larches, loons, and ice ticking at the shore on cold hours.
-  - Crater: a deep hush (its water and wind are quieter, with no crickets), bubbling springs,
-    and ravens by day.
+  - Crater: a deep hush, with bubbling springs and ravens by day; crickets and frogs
+    sound at night.
   - The Lagoon: star twinkles, a soft choir, and a low whale song on nights after the finale.
-- **Music.** One sparse motif per lake (`MOTIFS`), for dawn, dusk and the story's staged
-  moments. Silence is the default between them.
+- **Music.** Each lake's pieces (`songs.py`, one caption per start) play one at a time on the
+  music bus in a seeded rotation, with silence between them (`music.py`). Dawn, dusk and the
+  story's staged moments (`MUSIC_CUE`) start the next piece; a lake change crosses over.
 - **Cues.** The hail horn, a Lake Day bell, the cookout triangle, a legendary's chord as its
   name comes up, and the whale song when the Star-Whale rises. The line's hum is V1-37's.
 """
@@ -24,8 +25,14 @@ from functools import lru_cache
 
 import numpy as np
 
+from . import songs
+from .music import resident_bytes
+
 SR = 22050
 AUDIO_BUDGET_BYTES = 150 * 1024 ** 2   # 06 §7: audio synthesis buffers + music
+# One render's working set above its int16 output: nebula-1, the longest piece, at 44.1 kHz,
+# measured with tracemalloc (#168). The budget counts it beside the resident pieces.
+RENDER_WORKING_BYTES = 34 * 1024 ** 2
 LAKES = ("briar", "cedar", "flathead", "crater", "nebula")
 
 SFX_CAPTIONS = {
@@ -54,15 +61,14 @@ AMBIENCE_CAPTIONS = {
     "raven": "A raven croaks.",
     "choir": "A soft choir hums in the stars.",
 }
-MUSIC_CAPTIONS = {
-    "motif_briar": "♪ Little Briar's tune plays softly.",
-    "motif_cedar": "♪ Cedar Creek's tune plays softly.",
-    "motif_flathead": "♪ Flathead's tune plays softly.",
-    "motif_crater": "♪ The Caldera's tune plays softly.",
-    "motif_nebula": "♪ The Lagoon's tune plays softly.",
-}
+# One caption per song start, generated from the catalogue so each title lives in one place.
+# `MUSIC_CUE` is the trigger that starts the next piece (dawn, dusk, staged story moments); it
+# has no caption of its own.
+MUSIC_CUE = "song_next"
+MUSIC_CAPTIONS = {songs.key(song): f"Music: {song.title}." for song in songs.CATALOGUE}
 CAPTIONS = {**SFX_CAPTIONS, **AMBIENCE_CAPTIONS, **MUSIC_CAPTIONS}
-KINDS = tuple(CAPTIONS)
+# The one-shot sounds `tone` synthesizes. The pieces are rendered by `songs`, not here.
+KINDS = tuple(kind for kind in CAPTIONS if kind not in MUSIC_CAPTIONS)
 
 # Which ambient calls each lake schedules (`audio.Audio._schedule`).
 AMBIENCE = {
@@ -72,22 +78,11 @@ AMBIENCE = {
     "crater": ("spring", "raven"),
     "nebula": ("twinkle", "choir", "whale_song"),
 }
-# How loud each lake's water and wind beds sit: Crater is hushed.
-BED_LEVEL = {"crater": 0.55}
-
-# One motif per lake: (root Hz, beat seconds, timbre, notes as (semitones, beats)).
-MOTIFS = {
-    "briar": (293.66, 0.62, "pluck", ((0, 1), (2, 1), (4, 1), (7, 2), (9, 1), (7, 1), (4, 2))),
-    "cedar": (196.00, 0.58, "wood", ((0, 1), (4, 1), (7, 1), (10, 2), (7, 1), (5, 1), (4, 1), (2, 2))),
-    "flathead": (329.63, 0.80, "flute", ((0, 2), (7, 1), (12, 2), (10, 1), (7, 1), (3, 2), (0, 3))),
-    "crater": (220.00, 0.90, "marimba", ((0, 1), (3, 1), (7, 2), (5, 1), (3, 1), (-2, 2), (0, 3))),
-    "nebula": (261.63, 0.85, "glass", ((0, 1), (4, 1), (6, 2), (11, 1), (7, 2), (4, 1), (2, 1), (0, 3))),
-}
 
 
 def bus(kind: str) -> str:
     """The mixer bus a sound plays on."""
-    if kind in MUSIC_CAPTIONS:
+    if kind == MUSIC_CUE or kind in MUSIC_CAPTIONS:
         return "music"
     if kind in AMBIENCE_CAPTIONS:
         return "ambience"
@@ -95,15 +90,14 @@ def bus(kind: str) -> str:
 
 
 def caption(kind: str, state=None) -> str:
-    """What the caption says for a sound. Bot's chimes say what his shell sounds like."""
+    """What the caption says for a sound. Bot's chimes say what his shell sounds like. The
+    music cue has none: the piece it starts is captioned."""
     if kind == "bot" or kind.startswith("bot_"):
         from .bot import chime_caption
         return chime_caption(state) if state is not None else CAPTIONS["bot"]
+    if kind == MUSIC_CUE:
+        return ""
     return CAPTIONS.get(kind, f"Sound cue: {kind.replace('_', ' ')}.")
-
-
-def motif_for(lake_id: str) -> str:
-    return f"motif_{lake_id}" if lake_id in MOTIFS else "motif_briar"
 
 
 def _t(seconds: float) -> np.ndarray:
@@ -119,45 +113,7 @@ def _lowpass(noise: np.ndarray, pole: float) -> np.ndarray:
     return out
 
 
-def _note(freq: float, seconds: float, timbre: str) -> np.ndarray:
-    t = _t(seconds)
-    if timbre == "pluck":
-        wave = np.sin(2 * np.pi * freq * t) + 0.35 * np.sin(4 * np.pi * freq * t)
-        env = np.exp(-t * 3.2)
-    elif timbre == "wood":
-        phase = 2 * np.pi * freq * t
-        wave = sum((-1) ** i * np.sin((2 * i + 1) * phase) / (2 * i + 1) ** 2 for i in range(3))
-        env = np.exp(-t * 4.5)
-    elif timbre == "flute":
-        wave = np.sin(2 * np.pi * freq * t + 0.04 * np.sin(2 * np.pi * 5.0 * t)) + 0.12 * np.sin(4 * np.pi * freq * t)
-        env = np.minimum(1.0, t / 0.12) * np.exp(-t * 1.1)
-    elif timbre == "marimba":
-        wave = np.sin(2 * np.pi * freq * t) + 0.25 * np.sin(2 * np.pi * freq * 3.9 * t) * np.exp(-t * 14)
-        env = np.exp(-t * 2.6)
-    else:  # glass: inharmonic, long tails
-        wave = np.sin(2 * np.pi * freq * t) + 0.4 * np.sin(2 * np.pi * freq * 2.76 * t) + 0.2 * np.sin(2 * np.pi * freq * 5.4 * t)
-        env = np.exp(-t * 1.4)
-    return (wave * env).astype(np.float32)
-
-
-def _motif(lake_id: str) -> tuple[np.ndarray, float]:
-    root, beat, timbre, notes = MOTIFS[lake_id]
-    length = sum(b for _s, b in notes) * beat + 2.5
-    out = np.zeros(int(SR * length), np.float32)
-    at = 0.0
-    for semis, beats in notes:
-        tone = _note(root * 2 ** (semis / 12), beats * beat + 1.6, timbre)
-        start = int(at * SR)
-        end = min(len(out), start + len(tone))
-        out[start:end] += tone[:end - start]
-        at += beats * beat
-    fade = np.minimum(1.0, (len(out) - np.arange(len(out))) / (SR * 0.8)).astype(np.float32)
-    return out * fade, 0.16
-
-
 def _synth(kind: str) -> tuple[np.ndarray, float]:
-    if kind.startswith("motif_"):
-        return _motif(kind[len("motif_"):])
     if kind == "bite":
         t = _t(0.32)
         rng = np.random.default_rng(7)
@@ -304,7 +260,8 @@ def tone(kind: str) -> np.ndarray:
 
 def coverage_report() -> dict:
     """What `--benchmark` checks of the audio (V1-38): every sound synthesizes, is heard,
-    has a caption and a bus; each lake's ambience mixes; all of it inside the audio budget."""
+    has a caption and a bus; each lake's ambience mixes; the music pieces are captioned and
+    the right length; all of it sits inside the audio budget."""
     from .audio import Audio
     from .botchimes import CHIMES
     kinds = {}
@@ -330,7 +287,20 @@ def coverage_report() -> dict:
                        "expected": sorted(AMBIENCE[lake])}
     # Audio objects for each lake share one tier-keyed store; count the warmed bank once.
     total += audio.buffer_bytes()
+    # Pieces render in workers and at most `RESIDENT_PIECES` are held at once, so the budget
+    # counts that bound rather than whichever pieces this check happened to build. A render's
+    # working set (RENDER_WORKING_BYTES) is counted beside them.
+    music_bytes = resident_bytes(audio.rate)
+    total += music_bytes + RENDER_WORKING_BYTES
+    pieces = {song.id: {"seconds": round(song.seconds, 1), "captioned": bool(caption(songs.key(song)))}
+              for song in songs.CATALOGUE}
+    music_ok = (all(len(songs.playlist(lake)) >= 5 for lake in LAKES)
+                and all(60.0 <= p["seconds"] <= 150.0 for p in pieces.values())
+                and all(p["captioned"] for p in pieces.values()))
     complete = (all(v["peak"] > 0 and v["captioned"] for v in kinds.values())
-                and all(set(v["ambience"]) == set(v["expected"]) and v["bed_peak"] > 0 for v in lakes.values()))
-    return {"kinds": kinds, "lakes": lakes, "bytes": total, "budget_bytes": AUDIO_BUDGET_BYTES,
+                and all(set(v["ambience"]) == set(v["expected"]) and v["bed_peak"] > 0
+                        for v in lakes.values())
+                and music_ok)
+    return {"kinds": kinds, "lakes": lakes, "music": {"pieces": pieces, "resident_bytes": music_bytes},
+            "bytes": total, "budget_bytes": AUDIO_BUDGET_BYTES,
             "within_budget": total <= AUDIO_BUDGET_BYTES, "complete": complete}
