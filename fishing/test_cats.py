@@ -45,7 +45,7 @@ def _lake(lake_id, seed=3):
 
 
 def _skipper_actor(ears: str = "pointed", pose: str = "helm"):
-    """Return a custom Skipper Actor with validated `ears` at `pose` (the jon's figure is "tiller"), from the creator's builder."""
+    """Return a custom Skipper Actor with `ears` set as given (not validated) at `pose` (the jon's figure is "tiller"), from the creator's builder."""
     from . import skipperview
     look = skipperlook.cycle(skipperlook.normalize({}), "pattern",
                              PATTERNS.index("tuxedo") - PATTERNS.index(skipperlook.DEFAULT["pattern"]))
@@ -516,7 +516,8 @@ void main() {
                                             (12.0, 5.1, {"gesture": 0.6, "steer": -0.4}),
                                             (8.0, 0.0, {"gesture": 1.0})))
                      for ears in ("pointed", "folded", "folded_left", "folded_right")]
-            # The Skipper at the tiller: the left paw holds the grip while the right waves, with steer and gesture.
+            # The Skipper at the tiller: the left paw holds the grip while the right waves. pose_state gives the tiller pose
+            # no steer, so its steer entries only check that steer is ignored; the grip contact is in test_jon_outboard.
             cast += [(_skipper_actor("pointed", "tiller"), ((60.0, 2.9, {"steer": 0.7}),
                                                             (12.0, 5.1, {"gesture": 0.6, "steer": -0.4}),
                                                             (8.0, 0.0, {"gesture": 1.0})))]

@@ -34,14 +34,14 @@ COCKPIT_FLOOR, RAIL_TOP = -0.96, -0.465
 STEERS = (-1.0, -0.5, 0.0, 0.5, 1.0)
 # The sweep: 0.1 s steps over 22 s, plus the wave forearm's exact peaks. The forearm swings at 1.5 Hz,
 # too fast for that grid: sin(2 pi 1.5 t) is +1 at t = (k + 1/4) / 1.5 and -1 at t = (k + 3/4) / 1.5.
-# The 22 s window spans several periods of catmotion._helm's 11 s and 4.3 s terms, sampled every 0.1 s.
+# The 22 s window spans several idle periods (glances every 3-6 s, tail flicks every 6-10 s), sampled every 0.1 s.
 # Every temporal check here holds at these sampled times only, not continuously. The 0.02 s comparison in
-# test_the_sweep_grid_resolves_the_helm_sway_at_the_binding_pose covers that one pose alone.
+# test_the_sweep_grid_resolves_the_least_rest_clearance is the one check of the grid's resolution.
 WAVE_SWEEP = np.union1d(np.arange(0.0, 22.0, 0.1),
                         np.concatenate([np.arange(33) + 0.25, np.arange(33) + 0.75]) / 1.5)
 WAVE_SWEEP = WAVE_SWEEP[WAVE_SWEEP < 22.0]
 WAVE_FOREARM = 0.45  # radians: catmotion.wave's amplitude
-# Cat distances across the blend from helm to wave: skipperview.SkipperFigure.params fades the wave from
+# Cat distances across the blend from tiller to wave: skipperview.SkipperFigure.params fades the wave from
 # 14 m (blend 1) to 20 m (blend 0), so these are mid-blend.
 MID_BLEND_M = np.arange(15.0, 19.01, 0.5)
 # Asserted limits, metres. WALL_MARGIN bounds the figure's distance inside the hull's walls and above the
@@ -383,10 +383,10 @@ def _least_clearance(body, faces, solids, low, high, tolerance):
         tolerance: the bracket width to stop at, metres.
 
     Returns:
-        The largest floor certified in the bisection, metres. The least clearance is at least this, and less than
-        this plus `tolerance` plus SURFACE_TOLERANCE. The first term is the bracket width; the second is the slack
-        of `_settle`, which refuses a floor it cannot decide once every open triangle's radius is at most
-        SURFACE_TOLERANCE.
+        The largest floor certified in the bisection, metres: a lower bound on the least clearance. When every failure
+        was a vertex under the floor, the least lies below this plus `tolerance`. A `_settle` refusal (a triangle it
+        could not decide once its open radii were at most SURFACE_TOLERANCE) counts as a failure without proving a
+        violation, so it can leave the bound further below the least.
     """
     while high - low > tolerance:
         mid = (low + high) / 2
@@ -400,10 +400,10 @@ def _least_clearance(body, faces, solids, low, high, tolerance):
 def _sampled_least(body, faces, solids, spacing):
     """The least clearance over a dense barycentric sampling of each triangle at `body[0]`, metres.
 
-    Each triangle is sampled on a grid of n = ceil(longest edge / spacing) divisions a side. Every surface point
-    lies within one grid step (longest edge / n, at most `spacing`) of a sample, so the sample minimum is an upper
-    bound on the least clearance and the least clearance is at least the sample minimum minus `spacing`. Used to
-    validate `_surface_clearance`.
+    Each triangle is sampled on a barycentric grid of n = ceil(longest edge / spacing) divisions a side. Its
+    sub-triangles have diameter longest edge / n, at most `spacing`, so every point of the triangle lies within that
+    step of a sample. The sample minimum is therefore an upper bound on the least clearance, and the least clearance
+    is at least the sample minimum minus `spacing`. Used to validate `_surface_clearance`.
     """
     best = np.inf
     for t in body[0][faces]:
@@ -656,8 +656,8 @@ class JonTiller(unittest.TestCase):
     def paw_breaches(self, p, steer):
         """The grip paw's breaches at `steer`: messages, none if it keeps them.
 
-        Its vertices come within PAW_CONTACT of the grip solid. A vertex distance bounds the surface's least distance
-        from above, so this holds for the surface too. Its surface stays PAW_FLOOR outside the grip (certified by
+        Its vertices come within PAW_CONTACT of the grip solid. Each vertex lies on the surface, so the surface reaches
+        within PAW_CONTACT of the grip too. Its surface stays PAW_FLOOR outside the grip (certified by
         `_surface_clearance`, so the mitt does not pass through the grip) and TILLER_CLEARANCE from the arm, knuckle
         and rod.
         """
@@ -752,10 +752,10 @@ class JonTiller(unittest.TestCase):
                 with self.subTest(boat=boat_id, distance=None if distance is None else float(distance)):
                     np.testing.assert_allclose(swing, law, atol=1e-9)
 
-    def test_full_wave_freezes_the_rig_arm_channel_at_every_steer(self):
+    def test_the_rig_arm_channel_ignores_steer_at_both_blends(self):
         # The tiller pose has no steer term, so the rig's arm channel (catmesh.RIG_ARM: both upper arms and the left
-        # forearm and paw) is the same at every steer and blend, at one time. Idle motion still moves it over time, so
-        # only the steer is compared.
+        # forearm and paw) is the same at every steer, at blend 0 (no cat) and at blend 1 (a cat 5 m ahead), at t = 4.2 s.
+        # Idle motion still moves it over time, so only the steer is compared. Default look only.
         from . import actors, catmesh
         from .skipperview import SkipperFigure
         camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
@@ -784,10 +784,10 @@ class JonTiller(unittest.TestCase):
                     np.testing.assert_allclose(arm_channel(steer, cat_distance, 4.2)[0], rest, atol=1e-6)
 
     def test_the_sweep_grid_resolves_the_least_rest_clearance(self):
-        # The rest's least clearance from the tiller is measured at 2.91 cm at every steer and blend (the 0.1 s
-        # sweep, steers -1 to 1, blends 0, 0.79 and 1), so one pose stands for them: steer 0, no cat. The 0.1 s
-        # sweep's certified least must agree with a 0.02 s sweep's to within 1 mm, since a dip between samples could
-        # hide. Each certificate may sit tolerance plus SURFACE_TOLERANCE below its least (see _least_clearance).
+        # The rest's least clearance from the tiller was measured once, at 2.91 cm: steer 0, no cat (blend 0). This test
+        # measures that pose only; no other steer or blend is asserted to that figure. The 0.1 s sweep's certified least
+        # must agree with a 0.02 s sweep's to within 1 mm, since a dip between samples could hide. Each certificate sits
+        # at most `tolerance` below its least when its failures were vertex violations (see _least_clearance).
         fine = np.union1d(np.arange(0.0, 22.0, 0.02),
                           np.concatenate([np.arange(33) + 0.25, np.arange(33) + 0.75]) / 1.5)
         fine = fine[fine < 22.0]
@@ -855,8 +855,8 @@ class JonTiller(unittest.TestCase):
 
     def test_the_surface_clearance_agrees_with_dense_sampling_on_random_boxes(self):
         # Checks the bound machinery away from the figure: the exact box distance, then random triangles against two
-        # random boxes. Sampling at SPACING bounds the least clearance to within SPACING, so a floor MARGIN either side
-        # of the sampled least must pass or fail respectively.
+        # random boxes. Sampling at SPACING bounds the least clearance to within SPACING, and MARGIN is well over
+        # SPACING, so a floor MARGIN under the sampled least must pass.
         spacing, margin = 0.0005, 0.002
         unit = [(np.zeros(3), np.eye(3), np.full(3, 0.01))]
         np.testing.assert_allclose(_distance_to_solids(np.array([[0.05, 0.0, 0.0], [0.03, 0.03, 0.0]]), unit),
@@ -874,8 +874,8 @@ class JonTiller(unittest.TestCase):
                 if least > margin:
                     self.assertTrue(_surface_clearance(body, faces, solids, least - margin)[0],
                                     "a floor under the sampled least was refused")
-                # The sampled least bounds the true least from above, so a floor over it must be refused. A margin
-                # here would let a bound that over-states its clearance by less than the margin pass.
+                # The sampled least is an upper bound on the true least, so a floor over it must be refused: the check
+                # is exact, with no margin.
                 self.assertFalse(_surface_clearance(body, faces, solids, least + 1e-9)[0],
                                  "a floor over the sampled least was certified")
 

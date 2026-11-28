@@ -444,7 +444,8 @@ current lake needs.
   colours, eyes, ears, tail, fur, attire from the shared kit, name) and saved in
   `v2.skipper`. In first person: paws in the saved coat on the tiller, oars and
   the line during the haul, and a reflection of the head silhouette in calm water
-  at idle (reflection pass only). Off the eye: the whole rig at the helm.
+  at idle (reflection pass only). Off the eye: the whole rig in the boat, at the helm (the jon's figure
+  stands at the tiller instead; see below).
 
 ### 6.3 Fish (156) — `fishmesh.py`
 
@@ -1219,7 +1220,8 @@ quest ids to these rows; see "Implemented roster and schedule (V1-30)".
 - The attire kit and props are built on the same frame.
 - Every pose shares one triangle list. The mesh carries two pose slots, the idle
   pose and its gesture (`catmesh.GESTURES`: sit_fish and craft wave, helm waves
-  from the wheel as `helm_wave`, nap_curl rouses as `nap_rouse`), the neutral coat
+  from the wheel as `helm_wave`, the Skipper's tiller pose waves as `tiller_wave`, nap_curl rouses as
+  `nap_rouse`), the neutral coat
   frame for the pattern, and per-vertex part, rig channel, attire tag and
   distance along the part.
 - The rig channel is the part's channel plus 16 × the cat's index in the actor,
@@ -1368,16 +1370,21 @@ water past the bow. The software renderer stamps the same mirrored shape onto it
 water pixels.
 
 Off the eye (the third-person chase camera and staged views), `skipperview.SkipperFigure`
-stands the whole rig at the helm in place of the paws and the head silhouette:
+stands the whole rig in the boat in place of the paws and the head silhouette:
 feet on the cockpit floor (the measured `skipperview.FLOOR` for the four hand-built
 hulls; generated hulls use their actual deck height from `boatfamilies`—`SPECS` for
-most, the top of the six logs for the raft), facing the bow,
-leaning with the steering, turning its head toward nearby cats and waving back when the
-boat idles within hailing range. It blends the cats' directions and fades head attention
-as opposing looks cancel, so neither head-turn nor wave snaps when two cats trade places.
-Every boat uses the helm pose; seated
-tiller and oar poses are not built. Both renderers draw it through the same
-`pose_state` and `cat.vert` path as the 52 cats, and it reflects in GL.
+most, the top of the six logs for the raft), facing the bow.
+Every boat but the jon uses the helm pose: it steers with the input, its wheel swings
+and its body leans with the steering. The jon's figure takes the tiller pose instead.
+It stands 3.8 cm to port and 92.1 cm forward of the eye at steer 0 and moves with the
+tiller's grip as the tiller steers, so the left paw stays on the grip. The tiller pose
+has no steer swing, no body lean and no body sway (`catmotion.weight`), which would move
+the paw off the grip. Its right paw waves in the gesture, as the helm's does.
+Every figure turns its head toward nearby cats and waves back when the boat idles within
+hailing range. It blends the cats' directions and fades head attention as opposing looks
+cancel, so neither head-turn nor wave snaps when two cats trade places. Seated tiller and
+oar poses are not built. Both renderers draw it through the same `pose_state` and
+`cat.vert` path as the 52 cats, and it reflects in GL.
 
 **Memory.** `actors.memory_report` adds up the resident meshes and boats, the
 mesh-cache bound, the portrait caches, the GPU slot reserves and software paint

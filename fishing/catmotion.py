@@ -204,7 +204,7 @@ def _helm(t: float, seed: int) -> tuple[float, float, float]:
 def work(t: float, seed: int, pose: str, prop: str) -> tuple[float, float, float]:
     """The pose's own work loop: (arm angle, right forearm angle, head pitch).
 
-    sit_fish casts and reels, craft works its prop, helm steers, wave and
+    sit_fish casts and reels, craft works its prop, helm steers; wave, tiller and
     nap_curl have none (the wave pose waves through `wave_bursts`).
     """
     if pose == "sit_fish":
