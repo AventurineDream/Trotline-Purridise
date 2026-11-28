@@ -772,7 +772,7 @@ class JonTiller(unittest.TestCase):
         np.testing.assert_allclose(_distance_to_solids(np.array([[0.05, 0.0, 0.0], [0.03, 0.03, 0.0]]), unit),
                                    [0.04, math.hypot(0.02, 0.02)], atol=1e-12)
         rng = np.random.default_rng(192)
-        for trial in range(8):
+        for trial in range(100):
             solids = []
             for _ in range(2):
                 q, _r = np.linalg.qr(rng.normal(size=(3, 3)))
@@ -784,7 +784,9 @@ class JonTiller(unittest.TestCase):
                 if least > margin:
                     self.assertTrue(_surface_clearance(body, faces, solids, least - margin)[0],
                                     "a floor under the sampled least was refused")
-                self.assertFalse(_surface_clearance(body, faces, solids, least + margin)[0],
+                # The sampled least bounds the true least from above, so a floor over it must be refused. A margin
+                # here would let a bound that over-states its clearance by less than the margin pass.
+                self.assertFalse(_surface_clearance(body, faces, solids, least + 1e-9)[0],
                                  "a floor over the sampled least was certified")
 
     def test_the_tiller_solids_are_the_built_bars_at_their_declared_sizes(self):
