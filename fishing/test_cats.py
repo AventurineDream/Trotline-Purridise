@@ -516,8 +516,8 @@ void main() {
                                             (12.0, 5.1, {"gesture": 0.6, "steer": -0.4}),
                                             (8.0, 0.0, {"gesture": 1.0})))
                      for ears in ("pointed", "folded", "folded_left", "folded_right")]
-            # The Skipper at the tiller: the left paw holds the grip while the right waves. pose_state gives the tiller pose
-            # no steer, so its steer entries only check that steer is ignored; the grip contact is in test_jon_outboard.
+            # pose_state gives the tiller pose no steer, so these steer entries exercise only GL/CPU parity;
+            # grip contact is covered by test_jon_outboard.
             cast += [(_skipper_actor("pointed", "tiller"), ((60.0, 2.9, {"steer": 0.7}),
                                                             (12.0, 5.1, {"gesture": 0.6, "steer": -0.4}),
                                                             (8.0, 0.0, {"gesture": 1.0})))]

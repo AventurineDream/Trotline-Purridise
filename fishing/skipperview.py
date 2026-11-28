@@ -156,8 +156,8 @@ class SkipperFigure:
         slow = 1.0 - catmotion.smoother((abs(float(getattr(state, "speed", 0.0))) - 0.5 * HAIL_SPEED_MPS)
                                         / (0.5 * HAIL_SPEED_MPS))
         wave = (1.0 - catmotion.smoother((distance - (WAVE_BACK_M - 6.0)) / 6.0)) * slow if target else 0.0
-        # The jon's tiller pose rides the grip in place(); contact is sampled for the default look at STEERS
-        # and MID_BLEND_M in test_jon_outboard. Other boats keep their helm pose's wheel swing and body lean.
+        # The jon's tiller pose rides the grip in place(); contact is checked at STEERS and the cat distances
+        # in MID_BLEND_M[::4] (15, 17, 19 m) in test_jon_outboard. Other boats keep their helm swing and lean.
         steer = float(getattr(state, "steer", 0.0))
         return actors.pose_state(actor, *(target or (None, None)), float(getattr(state, "anim", 0.0)), reduced_motion,
                                  gesture=wave, steer=steer, attention=attention)

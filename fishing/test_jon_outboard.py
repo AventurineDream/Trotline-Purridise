@@ -871,11 +871,11 @@ class JonTiller(unittest.TestCase):
             faces = np.arange(18).reshape(6, 3)
             least = _sampled_least(body, faces, solids, spacing)
             with self.subTest(trial=trial):
+                # _surface_clearance may refuse a lower floor when _settle reaches SURFACE_TOLERANCE.
                 if least > margin:
                     self.assertTrue(_surface_clearance(body, faces, solids, least - margin)[0],
                                     "a floor under the sampled least was refused")
-                # The sampled least is an upper bound on the true least; a floor above it must never be certified.
-                # The bounded search may also refuse a lower floor when it reaches SURFACE_TOLERANCE.
+                # The sampled least upper-bounds the true least, so a floor above it must never be certified.
                 self.assertFalse(_surface_clearance(body, faces, solids, least + 1e-9)[0],
                                  "a floor over the sampled least was certified")
 

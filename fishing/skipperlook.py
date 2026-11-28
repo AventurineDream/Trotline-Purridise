@@ -227,7 +227,7 @@ def name(state) -> str:
 
 
 def appearance(look: dict, pose: str = "helm") -> dict:
-    """A full npcs.json-style appearance for the cat rig from a Skipper look.
+    """An npcs.json-shaped appearance for the cat rig; Skipper-only "tiller" is not cat_look-valid (see Returns).
 
     Args:
         look: A normalized Skipper look (`normalize` / `saved`).
