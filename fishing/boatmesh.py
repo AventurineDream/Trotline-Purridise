@@ -205,21 +205,22 @@ def tiller_parts(steer, cowl_rgb):
 
     Returns:
         A dict of face lists. "arm" runs from its root inside the cowl to the knuckle, in the motor paint.
-        "knuckle" is a steel cube at the arm's tip. "extension" is the dark rod from the knuckle
-        to a black grip sleeve, which ends at the grip.
+        "knuckle" is a steel cube at the arm's tip. "rod" is the dark rod from the knuckle to the grip
+        sleeve; it has no end caps, its ends sitting inside the knuckle cube and under the sleeve's cap.
+        "grip" is that black sleeve, from the sleeve to the grip the Skipper's paw holds.
     """
     place, _turn, _cs = _outboard_frame(steer)
     root = np.asarray(place(0.0, TILLER_SWIVEL_Y, TILLER_ARM_ROOT_Z), np.float32)
     _, knuckle, grip = tiller_joints(steer)
     axis = (grip - knuckle) / np.linalg.norm(grip - knuckle)
     sleeve = grip - axis * TILLER_GRIP_LENGTH
-    arm, joint, extension = [], [], []
+    arm, joint, rod, grip_faces = [], [], [], []
     _bar(arm, root, knuckle, TILLER_ARM_HALF, np.asarray(cowl_rgb, np.float32), caps=True)
     offset = np.array((0.0, 0.0, TILLER_KNUCKLE_HALF), np.float64)
     _bar(joint, knuckle - offset, knuckle + offset, TILLER_KNUCKLE_HALF, _STEEL, caps=True)
-    _bar(extension, knuckle, sleeve, TILLER_ROD_HALF, _ROD)
-    _bar(extension, sleeve, grip, TILLER_GRIP_HALF, _GRIP, caps=True)
-    return {"arm": arm, "knuckle": joint, "extension": extension}
+    _bar(rod, knuckle, sleeve, TILLER_ROD_HALF, _ROD)
+    _bar(grip_faces, sleeve, grip, TILLER_GRIP_HALF, _GRIP, caps=True)
+    return {"arm": arm, "knuckle": joint, "rod": rod, "grip": grip_faces}
 
 
 def tiller_faces(steer, cowl_rgb):
