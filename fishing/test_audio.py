@@ -31,14 +31,15 @@ import time
 import unittest
 import wave
 from concurrent.futures import wait as wait_futures
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 from . import audiosynth as synth
-from . import calendar, detail, encounter, songs, soundscape
+from . import calendar, detail, encounter, game, songs, soundscape
 from .audio import (
     BED_CAP_BYTES,
     DUCK_GAIN,
@@ -533,10 +534,10 @@ class PieceLane(unittest.TestCase):
 class HeldRender(unittest.TestCase):
     """Piece renders held mid-way, so a test can act on one still in progress (#168).
 
-    Every piece is shortened to form A (12 bars). The first render stops at its fifth block until
-    `self.release` is set, or for 10 s at most, so a forgotten release fails the test instead of
-    hanging the run. Subclasses register `release.set` after their store's shutdown, so cleanup
-    sets it first and a held render can finish.
+    Every piece is shortened to form A (12 bars). The first render waits at its fifth block until
+    `self.release` is set, or for 10 s at most, so a forgotten release cannot hang the run; the test
+    then fails only if its own assertions do. Subclasses register `release.set` after their store's
+    shutdown, so cleanup sets it first and a held render can finish.
     """
 
     def setUp(self):
@@ -562,8 +563,8 @@ class HeldRender(unittest.TestCase):
 class AbandonedRender(HeldRender):
     """A piece the bed store abandons mid-render stops before its next block, and its lane slot
     stays taken until it ends, so the next piece never overlaps it (#168). The render is the real
-    `songs.render` of a short piece; HeldRender patches `songs.time.sleep` to hold it after each
-    block until the test sets `self.release`."""
+    `songs.render` of a short piece; HeldRender patches `songs.time.sleep` so the fifth finished
+    block of the first render waits until the test sets `self.release`; later blocks run on."""
 
     def setUp(self):
         super().setUp()
@@ -679,8 +680,8 @@ class SharedStore(unittest.TestCase):
 
 
 class ClosedStore(unittest.TestCase):
-    """Once shut down, a store starts no build and creates no pool or worker, but reads of built
-    beds keep working (#168)."""
+    """Once shut down, a store starts no pool, worker or queued build, and a waited read raises;
+    reads of built beds keep working, and a cue miss still synthesises on the caller (#168)."""
 
     def setUp(self):
         self.store = _BedStore(11025, 2048, 2048)
@@ -721,6 +722,60 @@ class ClosedStore(unittest.TestCase):
         self.assertFalse(reader.is_alive(), "get(wait=True) hung on a closed store")
         self.assertEqual(len(raised), 1, "get(wait=True) returned without raising")
         self.assertIn("closed", str(raised[0]))
+
+    def test_a_closed_cue_miss_synthesises_on_the_caller_and_is_cached(self):
+        self.store.shutdown()
+        builders = []
+
+        def build_cue(kind, rate, variant):
+            builders.append(threading.current_thread())
+            return np.zeros((4, 2), np.float32)
+
+        with patch.object(synth, "build_cue", side_effect=build_cue):
+            first = self.store.cue("bite", 0)
+            second = self.store.cue("bite", 0)
+        self.assertIs(first, second)  # the second read is cached, not rebuilt
+        self.assertEqual(builders, [threading.current_thread()])  # built on the caller, no pool
+        self.assertEqual((self.store._pool, self.store._song_pool, self.store._cue_job),
+                         (None, None, None))
+
+
+class GameRunSetup(unittest.TestCase):
+    """game.run's quit path around its setup: a setup failure after Audio() stops the shared
+    stores before the exception leaves run, and a quit stops them once in its finally (#168).
+    The window, save and audio are stand-ins, so no window opens and no store builds."""
+
+    @contextmanager
+    def game_run(self, **overrides):
+        opened = SimpleNamespace(world=MagicMock(), state=MagicMock(), has_save=False,
+                                 used_local_fallback=False, path=Path("briar.json"),
+                                 legacy_path=None)
+        mocks = {"open_save": MagicMock(return_value=opened), "Session": MagicMock(),
+                 "Platform": MagicMock(return_value=MagicMock(viewport=(1280, 720)),
+                                       display_size=MagicMock(return_value=(1280, 720))),
+                 "_window_size": MagicMock(return_value=(1280, 720)), "Text": MagicMock(),
+                 "UI": MagicMock(), "LoadingQuips": MagicMock(), "_loading_quip": MagicMock(),
+                 "Audio": MagicMock(), "_build_renderer": MagicMock(),
+                 "shutdown_stores": MagicMock(), **overrides}
+        with ExitStack() as stack:
+            for name, mock in mocks.items():
+                stack.enter_context(patch(f"fishing.game.{name}", mock))
+            stack.enter_context(patch("fishing.detail.configure"))
+            yield mocks
+
+    def test_a_setup_failure_after_audio_stops_the_stores_before_it_propagates(self):
+        failure = RuntimeError("renderer failed")
+        with self.game_run(_build_renderer=MagicMock(side_effect=failure)) as mocks:
+            with self.assertRaises(RuntimeError) as caught:
+                game.run()
+        self.assertIs(caught.exception, failure)
+        mocks["Audio"].assert_called_once()
+        mocks["shutdown_stores"].assert_called_once_with()
+
+    def test_a_quit_stops_the_stores_once_in_the_finally(self):
+        with self.game_run(Session=MagicMock(return_value=MagicMock(quit=True))) as mocks:
+            game.run()
+        mocks["shutdown_stores"].assert_called_once_with()
 
 
 class AudioChecks(unittest.TestCase):

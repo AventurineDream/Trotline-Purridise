@@ -2746,10 +2746,15 @@ def run(*, software=False, save_path: str | Path | None = None, dev=False,
                max(36,height//12),(238,233,216),"serif")
     _loading_quip(ui, loading, quips.pick(world.id), int(height*0.58))
     platform.present(loading)
-    audio = Audio(tier=detail_tiers.current().name)
-    renderer = _build_renderer(platform, session, world, (width, height),
-                               software_backend, software_tier)
-    ui.fish_card_renderer = getattr(renderer, "fish_card", None)
+    try:
+        audio = Audio(tier=detail_tiers.current().name)
+        renderer = _build_renderer(platform, session, world, (width, height),
+                                   software_backend, software_tier)
+        ui.fish_card_renderer = getattr(renderer, "fish_card", None)
+    except BaseException:
+        # Setup failed before the loop's finally exists: stop the stores first, as quit does (#168).
+        shutdown_stores()
+        raise
     last = platform.ticks()
     save_acc = 0.0
     blip = None

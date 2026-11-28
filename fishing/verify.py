@@ -815,7 +815,7 @@ def benchmark(frames=1200, dest="shots/benchmark.json", software=False):
 
 def window_smoke():
     """Exercise the actual window and game session with a temporary save."""
-    from .audio import Audio
+    from .audio import Audio, shutdown_stores
     from .game import Keys,Session
     from .platform import Platform
     from .pngsave import write_png
@@ -981,6 +981,8 @@ def window_smoke():
               f"{renderer.backend}; peak RAM {rss_bytes()/1024**2:.0f} MiB")
         return 0
     finally:
+        # Stop shared builds before the interpreter joins threads, as game.run does (#168).
+        shutdown_stores()
         audio.close()
         renderer.close()
         text.close()

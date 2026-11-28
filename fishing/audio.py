@@ -4,8 +4,8 @@ How it fits: `game.run` builds one `Audio()`, calls `blip(kind)` for sound cues 
 `update(...)` once per frame with the scene (hour, lake, rain, propulsion, volumes). This
 module picks levels, crossfades and cue timing; `fishing.audiosynth` synthesises the
 beds and cues. Captions are produced elsewhere from the same cue kind names.
-On quit, `game.run` calls `shutdown_stores()` so shared builds stop before the interpreter joins
-threads (#168).
+On quit, `game.run` and `verify.window_smoke` call `shutdown_stores()` so shared builds stop
+before the interpreter joins threads (#168).
 
 Design:
 - Long, seamless stereo beds (water lapping on the hull, wash, lake wind, rain, insects,
@@ -157,8 +157,9 @@ class _BedStore:
     are retained only while sounding or queued (`keep_songs`), and render one at a time in
     their own lane, so a lake's beds never queue behind a piece. A piece the store forgets stops
     before its next block and keeps its lane's slot until it ends (#168).
-    `shutdown_stores` closes every store at quit. A closed store serves built beds and starts no
-    build; a new request or a waited read raises RuntimeError (#168).
+    `shutdown_stores` closes every store at quit. A closed store starts no pool, worker or queued
+    build: `request`, `prefetch_cues` and a waited `get` raise RuntimeError before they create one.
+    A `cue()` or `strokes()` miss still synthesises on the caller's thread and is cached (#168).
     """
 
     def __init__(self, rate: int, noise_frames: int, event_frames: int):
@@ -181,7 +182,7 @@ class _BedStore:
         self._pool: ThreadPoolExecutor | None = None
         self._song_pool: ThreadPoolExecutor | None = None
         self._spawn_ok = bool(sys.executable) and not getattr(sys, "frozen", False)
-        atexit.register(self.shutdown)
+        atexit.register(self.shutdown)  # bound method: keeps the store and its beds alive until exit (#168)
 
     def frames(self, key: str) -> int:
         """Length in frames of `key`: a music piece's own length, or a bed's loop length."""
@@ -471,9 +472,11 @@ class _BedStore:
 
         Queued builds are cancelled. A piece render ends at its next block and a cue build at its
         next cue or stroke; a bed build has no stop point, so an in-flight bed finishes first. A
-        closed store (`_closed`) reads built beds, and every call that would start a build raises
-        RuntimeError before it creates a pool or worker. A second call does nothing; the atexit
-        registration in `__init__` is a backstop (#168).
+        closed store (`_closed`) starts no pool, worker or queued build: `request`, `prefetch_cues`
+        and a waited `get` raise RuntimeError before they create one. A `cue()` or `strokes()` miss
+        still synthesises on the caller's thread and is cached. Dropping the registry entry frees
+        nothing: the atexit registration in `__init__` still references the store, so its built beds
+        stay resident until exit. A second call does nothing (#168).
         """
         self._closed = True
         self._cue_stop.set()
@@ -546,13 +549,16 @@ def _store_for(tier: detail.Detail) -> _BedStore:
 def shutdown_stores() -> None:
     """Stop every shared bed store at quit (#168).
 
-    `game.run` calls this first in the `finally` that ends its loop. Frozen builds run on
-    threads, and concurrent.futures joins those before atexit callbacks run, so an atexit-only
-    stop let a piece render finish first. Each store's `shutdown` stops its builds and removes
-    itself from the registry; the atexit registrations stay as a backstop. A failure earlier in
-    startup, after `Audio()` is built, exits through atexit: by then `Audio()` has requested only
-    the lap and wash beds and the cue bank, and only thread builds make exit wait for them.
-    Only quit calls this; an `Audio` that still holds a store keeps it, closed.
+    `game.run` calls this first in the `finally` that ends its loop, and in the handler that runs
+    when its setup after `Audio()` raises; `verify.window_smoke` calls it before closing its
+    `Audio`. Frozen builds run on threads, and concurrent.futures joins those before atexit
+    callbacks run, so an atexit-only stop let a piece render finish first. Each store's `shutdown`
+    stops its builds and drops its registry entry; the next `Audio` builds fresh stores.
+
+    Store lifetime is process-scoped by design: the registry and the atexit registration in
+    `_BedStore.__init__` each hold a store, and no `Audio` owns one, so closing or dropping an
+    `Audio` does not release its store. A closed store keeps its built beds until the interpreter
+    exits, which is harmless at quit.
     """
     with _STORES_LOCK:
         stores = list(_STORES.values())  # each shutdown removes its own entry, so copy first
