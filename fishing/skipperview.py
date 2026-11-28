@@ -110,9 +110,9 @@ class SkipperFigure:
     def params(self, state, reduced_motion: bool) -> dict:
         """This frame's pose_state for the placed figure: helm steering, a look at cats, and a wave back.
 
-        Steer reaches pose_state only for the helm pose (other boats' wheel swing and body lean). The jon's
-        tiller pose takes no steer parameter; its figure rides the grip instead (see `place`), so the left paw
-        holds contact while the right can wave.
+        `params` passes steer to pose_state for every boat; pose_state applies it only to the helm pose (where
+        the wheel swings and body leans). The jon's tiller pose ignores it, so the figure rides the grip in
+        `place`; the left paw holds the grip while the right can wave.
 
         The look target is a softmin over the cats' directions rather than the nearest cat,
         so the head turns smoothly when two cats trade places instead of snapping between them.
