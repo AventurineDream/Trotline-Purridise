@@ -823,8 +823,13 @@ def window_smoke():
     platform = Platform(1280,720,f"{GAME_TITLE} — visual check",verify_pixels=True)
     text = Text()
     renderer = Renderer(world,1280,720,software=platform.context is None,context=platform.context)
-    audio = Audio()
-    ui = UI(text,world)
+    try:
+        audio = Audio()
+        ui = UI(text,world)
+    except BaseException:
+        # Setup failed before the main try exists: stop shared stores first, as quit does (#168).
+        shutdown_stores()
+        raise
     frames = 0
     try:
         with tempfile.TemporaryDirectory(prefix="briar-check-") as temp:

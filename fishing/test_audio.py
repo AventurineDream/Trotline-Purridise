@@ -39,7 +39,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from . import audiosynth as synth
-from . import calendar, detail, encounter, game, songs, soundscape
+from . import calendar, detail, encounter, game, songs, soundscape, verify
 from .audio import (
     BED_CAP_BYTES,
     DUCK_GAIN,
@@ -681,7 +681,8 @@ class SharedStore(unittest.TestCase):
 
 class ClosedStore(unittest.TestCase):
     """Once shut down, a store starts no pool, worker or queued build, and a waited read raises;
-    reads of built beds keep working, and a cue miss still synthesises on the caller (#168)."""
+    reads of built beds keep working, and a cue or stroke miss still synthesises on the
+    caller (#168)."""
 
     def setUp(self):
         self.store = _BedStore(11025, 2048, 2048)
@@ -739,6 +740,23 @@ class ClosedStore(unittest.TestCase):
         self.assertEqual((self.store._pool, self.store._song_pool, self.store._cue_job),
                          (None, None, None))
 
+    def test_a_closed_stroke_miss_synthesises_on_the_caller_and_is_cached(self):
+        self.store.shutdown()
+        builders = []
+
+        def stroke(rate, variant):
+            builders.append(threading.current_thread())
+            return np.zeros((4, 2), np.float32)
+
+        with patch.object(synth, "stroke", side_effect=stroke):
+            first = self.store.strokes()
+            second = self.store.strokes()
+        self.assertIs(first, second)  # the same cached list is reused, not rebuilt
+        self.assertEqual(len(builders), synth.STROKE_VARIANTS)
+        self.assertTrue(all(t is threading.current_thread() for t in builders))  # no pool
+        self.assertEqual((self.store._pool, self.store._song_pool, self.store._cue_job),
+                         (None, None, None))
+
 
 class GameRunSetup(unittest.TestCase):
     """game.run's quit path around its setup: a setup failure after Audio() stops the shared
@@ -776,6 +794,34 @@ class GameRunSetup(unittest.TestCase):
         with self.game_run(Session=MagicMock(return_value=MagicMock(quit=True))) as mocks:
             game.run()
         mocks["shutdown_stores"].assert_called_once_with()
+
+
+class WindowSmokeSetup(unittest.TestCase):
+    """verify.window_smoke's setup after its window opens: a failure in Audio() or UI() stops the
+    shared stores before the exception leaves it, as the game's quit path does (#168). The
+    platform, renderer and audio are stand-ins, so no window opens and no store builds."""
+
+    @contextmanager
+    def smoke_setup(self, fail_at=None):
+        replacements = {"fishing.platform.Platform": MagicMock(),
+                        "fishing.verify.World": MagicMock(), "fishing.verify.Text": MagicMock(),
+                        "fishing.verify.Renderer": MagicMock(), "fishing.verify.UI": MagicMock(),
+                        "fishing.audio.Audio": MagicMock(),
+                        "fishing.audio.shutdown_stores": MagicMock()}
+        if fail_at is not None:
+            replacements[fail_at] = MagicMock(side_effect=RuntimeError("setup failed"))
+        with ExitStack() as stack:
+            mocks = {path: stack.enter_context(patch(path, mock))
+                     for path, mock in replacements.items()}
+            yield mocks
+
+    def test_a_failed_audio_or_ui_setup_stops_the_stores_before_it_propagates(self):
+        for path in ("fishing.audio.Audio", "fishing.verify.UI"):
+            with self.subTest(failing=path):
+                with self.smoke_setup(fail_at=path) as mocks:
+                    with self.assertRaisesRegex(RuntimeError, "setup failed"):
+                        verify.window_smoke()
+                mocks["fishing.audio.shutdown_stores"].assert_called_once_with()
 
 
 class AudioChecks(unittest.TestCase):

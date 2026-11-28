@@ -182,7 +182,9 @@ class _BedStore:
         self._pool: ThreadPoolExecutor | None = None
         self._song_pool: ThreadPoolExecutor | None = None
         self._spawn_ok = bool(sys.executable) and not getattr(sys, "frozen", False)
-        atexit.register(self.shutdown)  # bound method: keeps the store and its beds alive until exit (#168)
+        # Bound method: the atexit reference keeps this store and its beds alive
+        # until exit (#168).
+        atexit.register(self.shutdown)
 
     def frames(self, key: str) -> int:
         """Length in frames of `key`: a music piece's own length, or a bed's loop length."""
