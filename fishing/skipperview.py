@@ -48,9 +48,9 @@ WAVE_BACK_M = HAIL_RANGE_M  # close enough to talk is close enough to wave
 SHARE_M = 3.0          # cats within a few metres of the nearest share the Skipper's attention
 # The jon's helm figure stands this far to port of the centreline, metres in the eye frame. The tiller's
 # rod sweeps across the centreline as the motor yaws: on the centreline the figure fails the tiller bound
-# at steer +1 (test_jon_outboard pins this). test_jon_outboard asserts WALL_MARGIN to the port wall and
-# TILLER_CLEARANCE from the tiller for the helm and waving poses at every steer. The other hulls keep the
-# centreline.
+# at steer +1 (test_jon_outboard pins this). test_jon_outboard asserts WALL_MARGIN to the hull's walls and
+# TILLER_CLEARANCE from the tiller for the helm, waving and mid-blend poses at every steer, for the default
+# look only (other looks change the silhouette and are not swept). The other hulls keep the centreline.
 JON_HELM_X = -0.35
 
 
@@ -141,9 +141,14 @@ class SkipperFigure:
         wave = (1.0 - catmotion.smoother((distance - (WAVE_BACK_M - 6.0)) / 6.0)) * slow if target else 0.0
         # The rig's arm channel also carries both upper arms, so the full steer swing would move the waving
         # shoulder toward the port wall. The swing therefore fades with the wave, squared: at blend b it is
-        # steer * (1 - b)**2, pinned by test_jon_outboard at every blend from 15 to 19 m. At full wave the arm
-        # channel is steer-independent (idle motion still moves it), so the steer swing never reaches the
-        # non-waving forearm and paw at full wave. That is intended: the wave runs only while the boat is slow.
+        # steer * (1 - b)**2, pinned by test_jon_outboard with no cat, a cat 5 m ahead, and each cat distance in
+        # MID_BLEND_M. At full wave the arm channel is steer-independent (idle motion still moves it), so the steer
+        # swing never reaches the non-waving forearm and paw at full wave. That is intended: the wave runs only
+        # while the boat is slow. The same fade damps the body roll's wheel term (0.12 * wheel), so the jon's lean
+        # damps with the wave too. The rig has no wheel mesh, so the wheel itself does not freeze; at partial blend
+        # the left arm and paw's steer swing is damped, not held. The first-person grip (skipper._tiller_pivot)
+        # follows the raw steer and is unaffected. Third person, the left paw does not reach the grip at any steer
+        # or blend, so only the first-person paw holds it. The tests cover the default look only.
         # Other boats keep the full swing.
         steer = float(getattr(state, "steer", 0.0))
         if getattr(state, "boat_id", "") == "jon":

@@ -1,6 +1,6 @@
 """The starter jon boat has a closed transom and a tiller outboard on it (issue #160).
 
-The tiller arm, knuckle and extension (issue #192) hang from the outboard's swivel and end at
+The tiller arm, knuckle, rod and grip (issue #192) hang from the outboard's swivel and end at
 the grip the Skipper's paw holds. Both renderers draw them from `boatmesh.tiller_faces`.
 
 The jon's cockpit faces come from `SoftwareRenderer._boat_faces`; the GL renderer draws
@@ -33,8 +33,9 @@ COCKPIT_FLOOR, RAIL_TOP = -0.96, -0.465
 STEERS = (-1.0, -0.5, 0.0, 0.5, 1.0)
 # The sweep: 0.1 s steps over 22 s, plus the wave forearm's exact peaks. The forearm swings at 1.5 Hz,
 # too fast for that grid: sin(2 pi 1.5 t) is +1 at t = (k + 1/4) / 1.5 and -1 at t = (k + 3/4) / 1.5.
-# catmotion._helm's 11 s and 4.3 s terms are sampled at 0.1 s; test_the_sweep_grid_resolves_the_helm_sway
-# checks that grid against a 0.02 s one at the binding pose.
+# The 22 s window spans several periods of catmotion._helm's 11 s and 4.3 s terms, sampled every 0.1 s.
+# Every temporal check here holds at these sampled times only, not continuously. The 0.02 s comparison in
+# test_the_sweep_grid_resolves_the_helm_sway_at_the_binding_pose covers that one pose alone.
 WAVE_SWEEP = np.union1d(np.arange(0.0, 22.0, 0.1),
                         np.concatenate([np.arange(33) + 0.25, np.arange(33) + 0.75]) / 1.5)
 WAVE_SWEEP = WAVE_SWEEP[WAVE_SWEEP < 22.0]
@@ -45,8 +46,8 @@ MID_BLEND_M = np.arange(15.0, 19.01, 0.5)
 # Asserted limits, metres. WALL_MARGIN bounds the figure's distance inside the hull's walls and above the
 # floor; those planar bounds are exact on the posed vertices, since a planar function's least over a
 # triangle is at a corner. TILLER_CLEARANCE bounds the least distance from the figure's surface to the
-# tiller's solids, certified by _surface_clearance. SURFACE_TOLERANCE is the bracket width that
-# certification may leave.
+# tiller's solids, certified by _surface_clearance. SURFACE_TOLERANCE is the triangle radius, metres (the
+# largest centroid-to-vertex distance), at which _settle gives up: a floor it cannot decide is refused.
 WALL_MARGIN = 0.03
 TILLER_CLEARANCE = 0.02
 SURFACE_TOLERANCE = 0.0005
@@ -88,7 +89,7 @@ class JonStern(unittest.TestCase):
     def test_no_back_to_back_skins_share_a_plane(self):
         # The GL pass draws both sides of every face, so two opposite-facing quads in one
         # plane depth-fight into speckle. Checked on every axis over the stern and outboard as
-        # drawn, and over every tiller part (arm, knuckle, extension) at every steer, because the
+        # drawn, and over every tiller part (arm, knuckle, rod, grip) at every steer, because the
         # outboard and the tiller both swing with it. The drawn arm is the tiller's own geometry,
         # so it is taken from the parts and not counted twice.
         for steer in STEERS:
@@ -297,11 +298,13 @@ def _settle(tris, solids, floor, upper):
     """Branch-and-bound over one time's triangles still under `floor`; returns (ok, value) as `_surface_clearance`.
 
     `upper` is the least vertex distance so far, an upper bound on the least clearance. An open triangle's
-    bound is its centroid's distance minus its circumradius. Splitting a triangle at its edge midpoints gives
-    four copies similar to it at half scale, so their circumradii halve and their bounds tighten; the new
-    vertices can lower `upper`. Stops when no bound is under `floor` (ok), when a vertex comes under `floor`
-    (fail, with that distance), or when every open radius is within SURFACE_TOLERANCE while a bound is still
-    under `floor` (fail, with the lowest such bound: the check cannot decide that within the tolerance).
+    radius is its largest centroid-to-vertex distance, and its bound is its centroid's distance minus that
+    radius: every point of a triangle is a convex combination of its vertices, so lies within the radius of the
+    centroid. (The circumradius would not do: it is measured from the circumcentre.) Splitting a triangle at its
+    edge midpoints gives four copies similar to it at half scale, so their radii halve and their bounds tighten;
+    the new vertices can lower `upper`. Stops when no bound is under `floor` (ok), when a vertex comes under
+    `floor` (fail, with that distance), or when every open radius is within SURFACE_TOLERANCE while a bound is
+    still under `floor` (fail, with the lowest such bound: the check cannot decide at that triangle size).
     """
     while True:
         centre = tris.mean(axis=1)
@@ -336,11 +339,11 @@ def _surface_clearance(body, faces, solids, floor):
         Otherwise value bounds the failure: the least vertex distance at the first failing time (vertices lie on
         the surface), or the bound `_settle` could not tighten.
 
-    Stage 1 bounds every triangle at once: its centroid's distance to the solids minus its circumradius, which
-    lower-bounds that triangle's clearance because distance is 1-Lipschitz and every point of a triangle lies
-    within its circumradius of the centroid. A time whose bounds all clear `floor` is done; the rest go to
-    `_settle`, which refines only the triangles still under `floor`. Times are processed in chunks to bound
-    the (k, m, 3, 3) corner array.
+    Stage 1 bounds every triangle at once: its centroid's distance to the solids minus its radius (the largest
+    centroid-to-vertex distance). That lower-bounds the triangle's clearance, since distance is 1-Lipschitz and
+    every point of a triangle lies within that radius of the centroid. A time whose bounds all clear `floor` is
+    done; the rest go to `_settle`, which refines only the triangles still under `floor`. Times are processed in
+    chunks to bound the (k, m, 3, 3) corner array.
     """
     for start in range(0, len(body), 64):
         chunk = body[start:start + 64]
@@ -369,7 +372,10 @@ def _least_clearance(body, faces, solids, low, high, tolerance):
         tolerance: the bracket width to stop at, metres.
 
     Returns:
-        The largest floor certified in the bisection, metres: within `tolerance` of the least clearance.
+        The largest floor certified in the bisection, metres. The least clearance is at least this, and less than
+        this plus `tolerance` plus SURFACE_TOLERANCE. The first term is the bracket width; the second is the slack
+        of `_settle`, which refuses a floor it cannot decide once every open triangle's radius is at most
+        SURFACE_TOLERANCE.
     """
     while high - low > tolerance:
         mid = (low + high) / 2
@@ -384,8 +390,9 @@ def _sampled_least(body, faces, solids, spacing):
     """The least clearance over a dense barycentric sampling of each triangle at `body[0]`, metres.
 
     Each triangle is sampled on a grid of n = ceil(longest edge / spacing) divisions a side. Every surface point
-    lies within one edge-length of a sample, so the sample minimum is an upper bound on the least clearance and
-    the least clearance is at least the sample minimum minus `spacing`. Used to validate `_surface_clearance`.
+    lies within one grid step (longest edge / n, at most `spacing`) of a sample, so the sample minimum is an upper
+    bound on the least clearance and the least clearance is at least the sample minimum minus `spacing`. Used to
+    validate `_surface_clearance`.
     """
     best = np.inf
     for t in body[0][faces]:
@@ -597,7 +604,8 @@ class JonTiller(unittest.TestCase):
     def check_figure(self, body, faces, steer, pose):
         """The posed figure, at every sweep time, stays WALL_MARGIN inside the hull's inner walls, clear of the
         transom and the bench, on or above the floor (vertex bounds, exact for planar limits), and TILLER_CLEARANCE
-        from the tiller's solids (`_surface_clearance`, which covers the surface between the vertices)."""
+        from the tiller's solids (`_surface_clearance`, which covers the surface between the vertices). Default look
+        only: `posed` sweeps no other look."""
         from .skipperview import _floor_offset
         floor = _floor_offset(self.state(steer))
         flat = body.reshape(-1, 3)
@@ -614,7 +622,7 @@ class JonTiller(unittest.TestCase):
                                 f"(bound {value * 100:.2f} cm)")
 
     def test_the_helm_figure_stays_in_the_cockpit_and_clear_of_the_tiller_at_every_steer(self):
-        # No cat near: the helm pose at blend 0 over the whole sweep.
+        # No cat near: the helm pose at blend 0 over the whole sweep, default look.
         for steer in STEERS:
             body, faces, _forearm, blend = self.posed(steer)
             with self.subTest(steer=steer):
@@ -622,7 +630,8 @@ class JonTiller(unittest.TestCase):
             self.check_figure(body, faces, steer, "helm")
 
     def test_the_waving_figure_stays_in_the_cockpit_and_clear_of_the_tiller_at_every_steer(self):
-        # A cat 5 m ahead at speed 0 turns on the helm_wave gesture at blend 1, and the forearm reaches both extremes.
+        # A cat 5 m ahead at speed 0 turns on the helm_wave gesture at blend 1, and the forearm reaches both
+        # extremes. Default look only.
         for steer in STEERS:
             body, faces, forearm, blend = self.posed(steer, cat_distance=5.0)
             with self.subTest(steer=steer, pose="wave"):
@@ -632,7 +641,7 @@ class JonTiller(unittest.TestCase):
             self.check_figure(body, faces, steer, "wave")
 
     def test_the_figure_stays_in_the_cockpit_and_clear_of_the_tiller_across_the_blend(self):
-        # Cats 15 to 19 m ahead put the blend strictly between helm and wave, at every steer.
+        # Cats 15 to 19 m ahead put the blend strictly between helm and wave, at every steer. Default look only.
         for steer in STEERS:
             for distance in MID_BLEND_M:
                 body, faces, _forearm, blend = self.posed(steer, cat_distance=float(distance))
@@ -670,7 +679,7 @@ class JonTiller(unittest.TestCase):
     def test_only_the_jon_figure_fades_its_steer_swing_as_it_waves(self):
         # skipperview.SkipperFigure.params scales the jon's steer by (1 - wave)**2 and leaves the other boats'
         # steer alone. The wheel's swing between steer 0 and steer 1 is therefore 0.55 * (1 - blend)**2 for the jon
-        # and 0.55 for the others, at every blend the sweep takes.
+        # and 0.55 for the others, at the blends these cat distances give on the sampled times.
         from .skipperview import SkipperFigure
         camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
         for distance in (None, 5.0, *MID_BLEND_M):
@@ -739,9 +748,10 @@ class JonTiller(unittest.TestCase):
         self.assertFalse(ok, f"the centreline figure cleared the tiller (bound {value * 100:.2f} cm)")
 
     def test_the_sweep_grid_resolves_the_helm_sway_at_the_binding_pose(self):
-        # The tiller's closest approach is at steer +1 with the wave fading (16 m, blend 0.79). The 0.1 s sweep's
-        # certified least clearance must agree with a 0.02 s sweep's to within 1 mm, so the coarse steps hide no
-        # dip of the sway.
+        # The tiller's closest approach is at steer +1 with the wave fading (16 m, blend 0.79). At this pose only,
+        # the 0.1 s sweep's certified least clearance must agree with a 0.02 s sweep's to within 1 mm. Each
+        # certificate may sit tolerance plus SURFACE_TOLERANCE below its least (see _least_clearance), so a dip the
+        # coarse grid misses by less than 1 mm plus that slack can pass. Other poses and times are not checked.
         fine = np.union1d(np.arange(0.0, 22.0, 0.02),
                           np.concatenate([np.arange(33) + 0.25, np.arange(33) + 0.75]) / 1.5)
         fine = fine[fine < 22.0]
