@@ -170,7 +170,8 @@ class _BedStore:
         self._beds: dict[str, synth.Bed] = {}
         self._running: dict[str, tuple[subprocess.Popen, str]] = {}
         self._threads: dict[str, tuple[Future, threading.Event]] = {}  # build and its stop flag
-        self._abandoned: list[tuple[str, Future]] = []  # forgotten builds, until poll drops them once they finish
+        # Forgotten builds stay here until poll drops them after they finish.
+        self._abandoned: list[tuple[str, Future]] = []
         self._waiting: list[str] = []
         self._song_waiting: list[str] = []  # pieces queued for their own lane (#168)
         self._lakes: list[str] = []
