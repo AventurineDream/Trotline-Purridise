@@ -26,6 +26,7 @@ def glow_hull(state, faces):
 OUTBOARD_PIVOT = (0.0, -0.84)  # (x, z) of the clamp's steering axis
 OUTBOARD_YAW = 0.45  # radians of motor yaw at full steer
 _PROP = (-1.45, -0.34, 0.11)  # hub y, hub local z, blade radius
+_STEEL = np.array((0.55, 0.58, 0.60), np.float32)  # the outboard's clamp, hub and the tiller's knuckle
 # (name, local centre, half size, paint): local -z is astern of the pivot. Stacked parts sink
 # into the part above rather than meeting face to face, so no two skins share a plane.
 _OUTBOARD_PARTS = (
@@ -74,7 +75,7 @@ def outboard_faces(steer, cowl_rgb):
     place, turn, _cs = _outboard_frame(steer)
     paints = {"cowl": np.asarray(cowl_rgb, np.float32),
               "leg": np.array([0.20, 0.21, 0.22], np.float32),
-              "steel": np.array([0.55, 0.58, 0.60], np.float32)}
+              "steel": _STEEL}
     faces = []
 
     def quad(points, normal, colour):
@@ -125,17 +126,20 @@ def outboard_boxes(steer):
 # at its tip, and a straight extension to the grip the Skipper's paw holds. The arm is built
 # in `_outboard_frame`, so it yaws with the motor. The extension is carried with the knuckle
 # rather than pivoting on it, so the grip moves with the arm's tip and the rod stays straight.
-# The swivel sits on the cowl's front face, above the transom rail (-0.465 m), so the arm clears
-# the transom. At 16:9 the frustum's lower edge falls 0.42 m per metre ahead, so the grip sits
-# on screen 1.2 m ahead at gunwale height.
+# The swivel sits on the steering axis, 16.5 cm above the rail top (-0.465 m). The arm's root starts
+# 3 cm astern of that axis, 1 cm inside the cowl's front face, which lies 2 cm astern of it, so the
+# arm meets the motor without a gap.
 TILLER_SWIVEL_Y = -0.30  # eye-frame height of the swivel, metres
-TILLER_ARM_LENGTH = 0.60  # swivel to knuckle at steer 0, metres; a real tiller arm is 0.55-0.65 m
+TILLER_ARM_ROOT_Z = -0.03  # the arm's root, metres astern of the steering axis, inside the cowl
+TILLER_ARM_LENGTH = 0.60  # swivel to knuckle at steer 0, metres
 TILLER_EXTENSION = (0.30, -0.12, 1.44)  # knuckle to grip at steer 0, eye frame metres
 TILLER_ARM_HALF = 0.02  # half the side of the arm's square section
+# The knuckle is 6 cm across, 1.5 times the arm's 4 cm side, so the joint reads as a joint at the tip.
 TILLER_KNUCKLE_HALF = 0.03
-TILLER_ROD_HALF = 0.012  # slim enough to read as a rod in first person
+TILLER_ROD_HALF = 0.012  # 2.4 cm across: a rod, thinner than the 4 cm arm
+# Sized to a paw's hold: the grip is 3.6 cm across, so the 7 cm thick mitt (skipper._paw) closes
+# round it, and 12 cm long, under the mitt's 13 cm length.
 TILLER_GRIP_HALF, TILLER_GRIP_LENGTH = 0.018, 0.12
-_STEEL = np.array((0.55, 0.58, 0.60), np.float32)  # the outboard's hub
 _ROD = np.array((0.16, 0.17, 0.18), np.float32)
 _GRIP = np.array((0.05, 0.05, 0.06), np.float32)
 
@@ -147,8 +151,9 @@ def tiller_joints(steer):
         steer: The boat's steer, -1..1, as for `outboard_faces`.
 
     Returns:
-        (swivel, knuckle, grip) as float32 (3,) arrays, metres. The swivel is the arm's root on
-        the outboard's steering axis, the knuckle is its tip, and the grip is the far end of the
+        (swivel, knuckle, grip) as float32 (3,) arrays, metres. The swivel is the joint on the
+        outboard's steering axis (the arm's root sits 3 cm astern of it, inside the cowl; see
+        `tiller_parts`), the knuckle is the arm's tip, and the grip is the far end of the
         extension, which the Skipper's paw holds.
     """
     place, _turn, _cs = _outboard_frame(steer)
@@ -198,15 +203,17 @@ def tiller_parts(steer, cowl_rgb):
         cowl_rgb: The `motor` paint, 0-1 RGB; the arm wears it.
 
     Returns:
-        A dict of face lists. "arm" runs from the swivel to the knuckle in the motor paint.
+        A dict of face lists. "arm" runs from its root inside the cowl to the knuckle, in the motor paint.
         "knuckle" is a steel cube at the arm's tip. "extension" is the dark rod from the knuckle
         to a black grip sleeve, which ends at the grip.
     """
-    swivel, knuckle, grip = tiller_joints(steer)
+    place, _turn, _cs = _outboard_frame(steer)
+    root = np.asarray(place(0.0, TILLER_SWIVEL_Y, TILLER_ARM_ROOT_Z), np.float32)
+    _, knuckle, grip = tiller_joints(steer)
     axis = (grip - knuckle) / np.linalg.norm(grip - knuckle)
     sleeve = grip - axis * TILLER_GRIP_LENGTH
     arm, joint, extension = [], [], []
-    _bar(arm, swivel, knuckle, TILLER_ARM_HALF, np.asarray(cowl_rgb, np.float32), caps=True)
+    _bar(arm, root, knuckle, TILLER_ARM_HALF, np.asarray(cowl_rgb, np.float32), caps=True)
     offset = np.array((0.0, 0.0, TILLER_KNUCKLE_HALF), np.float64)
     _bar(joint, knuckle - offset, knuckle + offset, TILLER_KNUCKLE_HALF, _STEEL, caps=True)
     _bar(extension, knuckle, sleeve, TILLER_ROD_HALF, _ROD)

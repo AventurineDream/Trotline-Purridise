@@ -46,6 +46,12 @@ def _floor_offset(state) -> float:
 SEED = 0.4242          # the Skipper's idle rhythm (actors seed range 0-1)
 WAVE_BACK_M = HAIL_RANGE_M  # close enough to talk is close enough to wave
 SHARE_M = 3.0          # cats within a few metres of the nearest share the Skipper's attention
+# The jon's helm figure stands this far to port of the centreline, metres in the eye frame. Its
+# tiller sweeps the centreline as the motor yaws, so on the centreline the rod passes through the
+# rig's neck at steer 0 to +0.5. At -0.35 the rig's animated port reach stays 4 cm inside the hull's
+# inner wall (HULL_INNER_BEAM, 0.64 m) and the rod clears it by at least 5 cm at every steer
+# (test_jon_outboard). At -0.40 the reach breaches the wall. The other hulls keep the centreline.
+JON_HELM_X = -0.35
 
 
 class SkipperFigure:
@@ -62,6 +68,8 @@ class SkipperFigure:
     def place(self, state, boat_cam) -> actors.Actor:
         """The Skipper's actor at the helm of `state`'s boat as `boat_cam` (the eye camera) sees it.
 
+        The jon's figure stands JON_HELM_X to port of the centreline; other boats' figures stay on it.
+
         Args:
             state: The live sim state (look, boat, steer).
             boat_cam: The ordinary boat camera (`cam.boat` of a chase or staged camera).
@@ -77,7 +85,9 @@ class SkipperFigure:
                                       appearance=appearance)
             self._key = key
         floor = _floor_offset(state)
-        foot = boat_cam.eye_to_world(np.array([0.0, floor, 0.0], np.float32))
+        # Only the jon's figure moves off the centreline, to clear its tiller (JON_HELM_X).
+        x = JON_HELM_X if getattr(state, "boat_id", "") == "jon" else 0.0
+        foot = boat_cam.eye_to_world(np.array([x, floor, 0.0], np.float32))
         forward = np.asarray(boat_cam.forward, np.float32)
         actor = self.actor
         actor.x, actor.y, actor.z = (float(v) for v in foot)

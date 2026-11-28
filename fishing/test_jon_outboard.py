@@ -19,7 +19,7 @@ from . import skipper
 from .boat import (BOATS, HULL_HALF_BEAM, HULL_INNER_BEAM, HULL_STERN, JON_OUTBOARD_AFT,
                    JON_OUTBOARD_HALF_WIDTH, hits_round_props, hull_samples)
 from .boatmesh import (OUTBOARD_PIVOT, OUTBOARD_YAW, outboard_faces, tiller_faces, tiller_joints,
-                       tiller_parts)
+                       tiller_parts, TILLER_GRIP_HALF, TILLER_GRIP_LENGTH, TILLER_ROD_HALF)
 from .camera import Camera
 from .data import paint_rgb
 from .sim import State
@@ -48,7 +48,8 @@ class JonStern(unittest.TestCase):
         return self.renderer._boat_faces(self.state(steer))
 
     def aft(self, steer=0.0):
-        """Vertices of every face that lies wholly astern of the transom: the outboard."""
+        """Vertices of every face wholly astern of the transom: the outboard, plus the tiller
+        arm's root cap, which sinks into the cowl and so lies astern too."""
         faces = [f for f in self.faces(steer) if f.pts[:, 2].max() < HULL_STERN - 0.02]
         return np.concatenate([f.pts for f in faces])
 
@@ -66,10 +67,15 @@ class JonStern(unittest.TestCase):
 
     def test_no_back_to_back_skins_share_a_plane(self):
         # The GL pass draws both sides of every face, so two opposite-facing quads in one
-        # plane depth-fight into speckle. Checked on every axis across the stern, outboard and
-        # tiller, at every steer, because the outboard and the tiller both swing with it.
+        # plane depth-fight into speckle. Checked on every axis over the stern and outboard as
+        # drawn, and over every tiller part (arm, knuckle, extension) at every steer, because the
+        # outboard and the tiller both swing with it. The drawn arm is the tiller's own geometry,
+        # so it is taken from the parts and not counted twice.
         for steer in STEERS:
-            faces = [f for f in self.faces(steer) if f.pts[:, 2].min() < HULL_STERN + 0.05]
+            tiller = [f for part in tiller_parts(steer, TILLER_PAINT).values() for f in part]
+            drawn = [f for f in self.faces(steer) if f.pts[:, 2].min() < HULL_STERN + 0.05
+                     and not any(np.allclose(f.pts, t.pts) for t in tiller)]
+            faces = drawn + tiller
             for axis in range(3):
                 others = [k for k in range(3) if k != axis]
                 flat = [(f, float(f.pts[0, axis])) for f in faces
@@ -217,7 +223,7 @@ class JonTiller(unittest.TestCase):
     def parts(self, steer):
         return tiller_parts(steer, TILLER_PAINT)
 
-    def test_the_arm_roots_on_the_swivel_and_turns_rigidly_with_the_motor(self):
+    def test_the_arm_hangs_from_the_swivel_and_turns_rigidly_with_the_motor(self):
         rest = _points(self.parts(0.0)["arm"])
         cowl_rest = _points(outboard_faces(0.0, TILLER_PAINT)[6:12])  # the cowl, second of the parts
         for steer in STEERS:
@@ -237,6 +243,19 @@ class JonTiller(unittest.TestCase):
         self.assertLess(float(tiller_joints(1.0)[1][0]), -0.2)
         self.assertGreater(float(tiller_joints(-1.0)[1][0]), 0.2)
 
+    def test_the_arm_root_sinks_into_the_cowl_so_it_meets_the_motor_without_a_gap(self):
+        # The root is the arm's points at the lowest z, astern of the steering axis. The cowl's
+        # front face lies at z -0.86, so the root must be inside the cowl box and at least 5 mm
+        # behind that face to be hidden where the arm joins the motor.
+        arm = _points(self.parts(0.0)["arm"])
+        root = arm[arm[:, 2] <= arm[:, 2].min() + 1e-6]
+        cowl = _points(outboard_faces(0.0, TILLER_PAINT)[6:12])
+        lo, hi = cowl.min(axis=0), cowl.max(axis=0)
+        self.assertTrue(np.all(root >= lo - 1e-5), "the arm root lies outside the cowl's box")
+        self.assertTrue(np.all(root[:, :2] <= hi[:2] + 1e-5), "the arm root shows past the cowl's top or starboard")
+        self.assertLessEqual(float(root[:, 2].max()), float(hi[2]) - 0.005,
+                             "the arm root is not 5 mm inside the cowl's front face")
+
     def test_the_extension_hinges_on_the_arm_tip_without_a_gap_and_stays_straight(self):
         for steer in STEERS:
             swivel, knuckle, grip = tiller_joints(steer)
@@ -250,8 +269,18 @@ class JonTiller(unittest.TestCase):
             with self.subTest(steer=steer):
                 gap = float(np.linalg.norm(tip.mean(axis=0) - root.mean(axis=0)))
                 self.assertLess(gap, 0.01, "the extension does not meet the arm's tip")
-                bend = np.linalg.norm(rod - knuckle - along[:, None] * axis, axis=1).max()
-                self.assertLess(float(bend), 0.03, "the extension is bent off its straight line")
+            with self.subTest(steer=steer, straight=True):
+                # Each bar is a square section whose corners lie h * sqrt(2) from its centre line.
+                # The rod is the bar from the knuckle to the sleeve, and the grip sleeve the bar from
+                # the sleeve to the grip. The joint ring belongs to both, so it gets the looser bound.
+                # Its own subtest: a tilted rod also shifts the root ring that the gap check selects.
+                sleeve_start = float(np.linalg.norm(grip - knuckle)) - TILLER_GRIP_LENGTH
+                off = np.linalg.norm(rod - knuckle - along[:, None] * axis, axis=1)
+                rod_only = along < sleeve_start - 1e-3
+                self.assertLess(float(off[rod_only].max()), TILLER_ROD_HALF * math.sqrt(2) + 1e-6,
+                                "the rod is bent off its straight line")
+                self.assertLess(float(off[~rod_only].max()), TILLER_GRIP_HALF * math.sqrt(2) + 1e-6,
+                                "the grip sleeve is bent off its straight line")
 
     def test_the_paw_holds_the_extensions_grip_at_every_steer(self):
         for steer in STEERS:
@@ -324,6 +353,63 @@ class JonTiller(unittest.TestCase):
                 for centre, half in _jon_boxes(self.state(steer))[:-2]:
                     inside = np.all(np.abs(pts - centre) <= half, axis=1)
                     self.assertFalse(inside.any(), f"the tiller passes through the occluder at {centre}")
+
+    def test_the_helm_figure_stands_to_port_for_the_jon_and_on_the_centreline_elsewhere(self):
+        # Only the jon's helm figure moves off the centreline (skipperview.JON_HELM_X); every other
+        # boat's stays on it. Offsets are measured in the boat camera's own axes.
+        from .skipperview import JON_HELM_X, SkipperFigure, _floor_offset
+        camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
+        for boat_id, expect in (("jon", JON_HELM_X), ("rowboat", 0.0), ("sail", 0.0), ("pontoon", 0.0)):
+            state = self.state(0.0)
+            state.boat_id = boat_id
+            actor = SkipperFigure().place(state, camera)
+            base = camera.eye_to_world(np.array([0.0, _floor_offset(state), 0.0], np.float32)).astype(np.float64)
+            offset = np.array([actor.x, actor.y, actor.z]) - base
+            with self.subTest(boat=boat_id):
+                self.assertAlmostEqual(float(offset @ camera.right), expect, places=5)
+                self.assertAlmostEqual(float(offset @ camera.forward), 0.0, places=5)
+                self.assertAlmostEqual(float(offset[1]), 0.0, places=5)
+
+    def test_the_helm_figure_stays_in_the_cockpit_and_clear_of_the_tiller_at_every_steer(self):
+        # The animated rig, placed as the game places it, stays inside the hull's inner walls, off
+        # the transom and the bench, above the floor, and clear of the rod's centre line.
+        from . import actors, catmesh
+        from .skipperview import SkipperFigure, _floor_offset
+        camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
+        figure = SkipperFigure()
+        for steer in STEERS:
+            state = self.state(steer)
+            actor = figure.place(state, camera)
+            floor = _floor_offset(state)
+            base = camera.eye_to_world(np.array([0.0, floor, 0.0], np.float32)).astype(np.float64)
+            ox = float((np.array([actor.x, actor.y, actor.z]) - base) @ camera.right)
+            mesh = actor.mesh(catmesh.LOD0)
+            body = []
+            for anim in np.linspace(0.0, 12.0, 7):
+                state.anim = float(anim)
+                pos, _normals = actors.animate(mesh, figure.params(state, False))
+                body.append(pos.astype(np.float64) + np.array([ox, floor, 0.0]))
+            body = np.concatenate(body)
+            _swivel, knuckle, grip = tiller_joints(steer)
+            sleeve = grip - _unit(grip - knuckle) * TILLER_GRIP_LENGTH
+            rod = knuckle + (sleeve - knuckle) * np.linspace(0.0, 1.0, 200)[:, None]
+            rod_clear = float(np.linalg.norm(rod[:, None] - body[None], axis=2).min()) - TILLER_ROD_HALF
+            with self.subTest(steer=steer):
+                self.assertGreaterEqual(float(body[:, 0].min()), -HULL_INNER_BEAM + 0.02,
+                                        "the figure's port side meets the hull wall")
+                self.assertLessEqual(float(body[:, 0].max()), HULL_INNER_BEAM - 0.02,
+                                     "the figure's starboard side meets the hull wall")
+                self.assertGreaterEqual(float(body[:, 2].min()), HULL_STERN + 0.2, "the figure reaches the transom")
+                self.assertLessEqual(float(body[:, 2].max()), SEAT[2][0] - 0.5, "the figure reaches the bench")
+                self.assertGreaterEqual(float(body[:, 1].min()), floor - 0.01, "the figure sinks into the floor")
+                self.assertGreaterEqual(rod_clear, 0.02, "the tiller's rod passes through the helm figure")
+
+    def test_the_outboard_clamp_and_the_tiller_knuckle_share_one_steel(self):
+        from .boatmesh import _STEEL
+        clamp = outboard_faces(0.0, TILLER_PAINT)[0]
+        knuckle = self.parts(0.0)["knuckle"][0]
+        np.testing.assert_allclose(clamp.color, _STEEL, atol=1e-6)
+        np.testing.assert_allclose(knuckle.color, _STEEL, atol=1e-6)
 
 
 if __name__ == "__main__":
