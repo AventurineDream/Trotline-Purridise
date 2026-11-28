@@ -18,8 +18,9 @@ import numpy as np
 from . import skipper
 from .boat import (BOATS, HULL_HALF_BEAM, HULL_INNER_BEAM, HULL_STERN, JON_OUTBOARD_AFT,
                    JON_OUTBOARD_HALF_WIDTH, hits_round_props, hull_samples)
-from .boatmesh import (OUTBOARD_PIVOT, OUTBOARD_YAW, outboard_faces, tiller_faces, tiller_joints,
-                       tiller_parts, TILLER_GRIP_HALF, TILLER_GRIP_LENGTH, TILLER_ROD_HALF)
+from .boatmesh import (OUTBOARD_PIVOT, OUTBOARD_YAW, TILLER_ARM_HALF, TILLER_GRIP_HALF, TILLER_GRIP_LENGTH,
+                       TILLER_KNUCKLE_HALF, TILLER_ROD_HALF, outboard_faces, tiller_faces, tiller_joints,
+                       tiller_parts)
 from .camera import Camera
 from .data import paint_rgb
 from .sim import State
@@ -30,6 +31,18 @@ from .world import World
 WATERLINE = -1.22  # the jon's eye height above the water, in its eye frame
 COCKPIT_FLOOR, RAIL_TOP = -0.96, -0.465
 STEERS = (-1.0, -0.5, 0.0, 0.5, 1.0)
+# The Skipper's figure is swept over 22 s, two periods of the helm sway (catmotion._helm: 11 s and 4.3 s),
+# at 0.1 s steps. The wave forearm swings at 1.5 Hz, too quick for that grid, so its exact peaks are added:
+# sin(2 pi 1.5 t) is +1 at t = (k + 1/4) / 1.5 and -1 at t = (k + 3/4) / 1.5.
+WAVE_SWEEP = np.union1d(np.arange(0.0, 22.0, 0.1),
+                        np.concatenate([np.arange(33) + 0.25, np.arange(33) + 0.75]) / 1.5)
+WAVE_SWEEP = WAVE_SWEEP[WAVE_SWEEP < 22.0]
+WAVE_FOREARM = 0.45  # radians: catmotion.wave's amplitude
+# Asserted limits, metres, vertex-based (see _clearances). WALL_MARGIN: the figure's least distance to an
+# inner wall, measured 3.4 cm at full wave (4.1 cm at the helm). TILLER_CLEARANCE: the tiller's least,
+# measured 2.4 cm, the extension at steer +1 mid-blend. The figure's lowest vertex is 3.5 mm above the floor.
+WALL_MARGIN = 0.03
+TILLER_CLEARANCE = 0.02
 
 
 class JonStern(unittest.TestCase):
@@ -206,6 +219,41 @@ def _same_face(a, b):
             and np.allclose(a.color, b.color))
 
 
+def _cat_ahead(actor, distance, state):
+    """A cat `distance` metres ahead of the Skipper's figure `actor`, in the lake `state` is on."""
+    anchor = SimpleNamespace(x=actor.x + math.sin(actor.yaw) * distance, z=actor.z + math.cos(actor.yaw) * distance,
+                             lake_id=getattr(state, "lake_id", None))
+    return SimpleNamespace(anchor=anchor)
+
+
+def _segment_distance(points, a, b):
+    """Distance from each row of `points` (n, 3) to the segment from `a` to `b`, metres."""
+    d = b - a
+    t = np.clip((points - a) @ d / (d @ d), 0.0, 1.0)
+    return np.linalg.norm(points - (a + t[:, None] * d), axis=1)
+
+
+def _clearances(body, steer):
+    """Each tiller part's clearance from the figure's vertices `body` (n, 3), metres, at `steer`.
+
+    Vertex-based: the figure's mesh vertices stand in for its skin, so this estimates the surface
+    clearance rather than measuring a face distance. Each part is measured from its centre line, less its
+    section's corner reach (half side * sqrt 2 for the square arm and extension, sqrt 3 for the knuckle box),
+    so it clears the solid rather than only its axis.
+
+    Returns:
+        {part: (n,) array} for the arm, knuckle, extension and grip sleeve.
+    """
+    swivel, knuckle, grip = (np.asarray(v, np.float64) for v in tiller_joints(steer))
+    sleeve = grip - _unit(grip - knuckle) * TILLER_GRIP_LENGTH
+    return {
+        "arm": _segment_distance(body, swivel, knuckle) - TILLER_ARM_HALF * math.sqrt(2),
+        "knuckle": np.linalg.norm(body - knuckle, axis=1) - TILLER_KNUCKLE_HALF * math.sqrt(3),
+        "extension": _segment_distance(body, knuckle, sleeve) - TILLER_ROD_HALF * math.sqrt(2),
+        "grip": _segment_distance(body, sleeve, grip) - TILLER_GRIP_HALF * math.sqrt(2),
+    }
+
+
 class JonTiller(unittest.TestCase):
     """Issue #192: the tiller arm swings from the outboard's swivel and ends in a grip the paw holds."""
 
@@ -370,39 +418,99 @@ class JonTiller(unittest.TestCase):
                 self.assertAlmostEqual(float(offset @ camera.forward), 0.0, places=5)
                 self.assertAlmostEqual(float(offset[1]), 0.0, places=5)
 
-    def test_the_helm_figure_stays_in_the_cockpit_and_clear_of_the_tiller_at_every_steer(self):
-        # The animated rig, placed as the game places it, stays inside the hull's inner walls, off
-        # the transom and the bench, above the floor, and clear of the rod's centre line.
+    def posed(self, steer, cat_distance=None):
+        """The Skipper's rig at the jon's helm over WAVE_SWEEP, placed as the game places it.
+
+        A cat `cat_distance` metres ahead, at speed 0, turns on the wave gesture (blend 1 within 14 m);
+        None leaves the figure on the helm pose with no cat near.
+
+        Returns:
+            (body, forearm, blend): the posed vertices in the eye frame, (n, 3) float64 metres, and the
+            forearm angle (radians) and gesture blend (0-1) at each sweep time.
+        """
         from . import actors, catmesh
         from .skipperview import SkipperFigure, _floor_offset
         camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
+        state = self.state(steer)
         figure = SkipperFigure()
+        actor = figure.place(state, camera)
+        if cat_distance is not None:
+            state.npcs = (_cat_ahead(actor, cat_distance, state),)
+        floor = _floor_offset(state)
+        base = camera.eye_to_world(np.array([0.0, floor, 0.0], np.float32)).astype(np.float64)
+        ox = float((np.array([actor.x, actor.y, actor.z]) - base) @ camera.right)
+        mesh = actor.mesh(catmesh.LOD0)
+        body, forearm, blend = [], [], []
+        for t in WAVE_SWEEP:
+            state.anim = float(t)
+            params = figure.params(state, False)
+            pos, _normals = actors.animate(mesh, params)
+            body.append(pos.astype(np.float64) + np.array([ox, floor, 0.0]))
+            forearm.append(params["forearm"])
+            blend.append(params["blend"])
+        return np.concatenate(body), np.array(forearm), np.array(blend)
+
+    def check_figure(self, body, steer, pose):
+        """The posed figure stays WALL_MARGIN inside the hull's inner walls, off the transom and the bench,
+        on or above the floor, and TILLER_CLEARANCE from every tiller part (see _clearances)."""
+        from .skipperview import _floor_offset
+        floor = _floor_offset(self.state(steer))
+        with self.subTest(steer=steer, pose=pose):
+            self.assertGreaterEqual(float(body[:, 0].min()), -HULL_INNER_BEAM + WALL_MARGIN,
+                                    "the figure's port side meets the hull wall")
+            self.assertLessEqual(float(body[:, 0].max()), HULL_INNER_BEAM - WALL_MARGIN,
+                                 "the figure's starboard side meets the hull wall")
+            self.assertGreaterEqual(float(body[:, 2].min()), HULL_STERN + 0.2, "the figure reaches the transom")
+            self.assertLessEqual(float(body[:, 2].max()), SEAT[2][0] - 0.5, "the figure reaches the bench")
+            self.assertGreaterEqual(float(body[:, 1].min()), floor, "the figure sinks below the floor")
+        for part, distance in _clearances(body, steer).items():
+            with self.subTest(steer=steer, pose=pose, part=part):
+                self.assertGreaterEqual(float(distance.min()), TILLER_CLEARANCE,
+                                        f"the figure comes within {TILLER_CLEARANCE} m of the tiller's {part}")
+
+    def test_the_helm_figure_stays_in_the_cockpit_and_clear_of_the_tiller_at_every_steer(self):
+        # No cat near: the helm pose. The figure keeps inside the hull, off the transom and the bench,
+        # on or above the floor, and clear of every tiller part, at every steer and sweep time.
         for steer in STEERS:
-            state = self.state(steer)
-            actor = figure.place(state, camera)
-            floor = _floor_offset(state)
-            base = camera.eye_to_world(np.array([0.0, floor, 0.0], np.float32)).astype(np.float64)
-            ox = float((np.array([actor.x, actor.y, actor.z]) - base) @ camera.right)
-            mesh = actor.mesh(catmesh.LOD0)
-            body = []
-            for anim in np.linspace(0.0, 12.0, 7):
-                state.anim = float(anim)
-                pos, _normals = actors.animate(mesh, figure.params(state, False))
-                body.append(pos.astype(np.float64) + np.array([ox, floor, 0.0]))
-            body = np.concatenate(body)
-            _swivel, knuckle, grip = tiller_joints(steer)
-            sleeve = grip - _unit(grip - knuckle) * TILLER_GRIP_LENGTH
-            rod = knuckle + (sleeve - knuckle) * np.linspace(0.0, 1.0, 200)[:, None]
-            rod_clear = float(np.linalg.norm(rod[:, None] - body[None], axis=2).min()) - TILLER_ROD_HALF
+            body, _forearm, blend = self.posed(steer)
             with self.subTest(steer=steer):
-                self.assertGreaterEqual(float(body[:, 0].min()), -HULL_INNER_BEAM + 0.02,
-                                        "the figure's port side meets the hull wall")
-                self.assertLessEqual(float(body[:, 0].max()), HULL_INNER_BEAM - 0.02,
-                                     "the figure's starboard side meets the hull wall")
-                self.assertGreaterEqual(float(body[:, 2].min()), HULL_STERN + 0.2, "the figure reaches the transom")
-                self.assertLessEqual(float(body[:, 2].max()), SEAT[2][0] - 0.5, "the figure reaches the bench")
-                self.assertGreaterEqual(float(body[:, 1].min()), floor - 0.01, "the figure sinks into the floor")
-                self.assertGreaterEqual(rod_clear, 0.02, "the tiller's rod passes through the helm figure")
+                self.assertEqual(float(blend.max()), 0.0, "a figure with no cat near is on the wave gesture")
+            self.check_figure(body, steer, "helm")
+
+    def test_the_waving_helm_figure_keeps_its_wrist_inside_the_port_wall_at_every_steer(self):
+        # A cat 5 m ahead at speed 0 activates the real helm_wave gesture (blend 1), and the forearm reaches
+        # both extremes. Cats at 16 m and 17 m give blends near 0.8 and 0.5, where the helm and wave poses
+        # are mid-blend and the steer swing is partly on.
+        for steer in STEERS:
+            body, forearm, blend = self.posed(steer, cat_distance=5.0)
+            with self.subTest(steer=steer, pose="wave"):
+                self.assertEqual(float(blend.min()), 1.0, "the wave gesture is not fully on")
+                self.assertAlmostEqual(float(forearm.max()), WAVE_FOREARM, places=6)
+                self.assertAlmostEqual(float(forearm.min()), -WAVE_FOREARM, places=6)
+            self.check_figure(body, steer, "wave")
+        for steer in (-1.0, 0.0, 1.0):
+            for distance in (16.0, 17.0):
+                body, _forearm, blend = self.posed(steer, cat_distance=distance)
+                with self.subTest(steer=steer, distance=distance):
+                    self.assertTrue(0.0 < float(blend.min()) and float(blend.max()) < 1.0,
+                                    "the blend is not mid-way between helm and wave")
+                self.check_figure(body, steer, f"blend {float(blend.mean()):.2f}")
+
+    def test_only_the_jon_figure_fades_its_steer_swing_as_it_waves(self):
+        # The steer swing fades with the wave for the jon alone (skipperview.SkipperFigure.params): its
+        # tiller turns the arm that waves. Other boats' figures keep the full 0.55 rad swing at steer 1.
+        from .skipperview import SkipperFigure
+        camera = Camera(0.0, 1.22, 0.0, yaw=0.0, pitch=0.0, roll=0.0, fov_x=FOV, w=1280, h=720, build_rays=False)
+        for boat_id, swing in (("jon", 0.0), ("rowboat", 0.55), ("sail", 0.55), ("pontoon", 0.55)):
+            state = self.state(1.0)
+            state.boat_id = boat_id
+            figure = SkipperFigure()
+            actor = figure.place(state, camera)
+            state.npcs = (_cat_ahead(actor, 5.0, state),)
+            params = figure.params(state, False)
+            with self.subTest(boat=boat_id):
+                self.assertEqual(float(params["blend"]), 1.0)
+                self.assertAlmostEqual(float(params["arm"]), swing, places=9)
 
     def test_the_outboard_clamp_and_the_tiller_knuckle_share_one_steel(self):
         from .boatmesh import _STEEL

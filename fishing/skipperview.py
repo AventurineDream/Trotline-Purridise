@@ -46,11 +46,12 @@ def _floor_offset(state) -> float:
 SEED = 0.4242          # the Skipper's idle rhythm (actors seed range 0-1)
 WAVE_BACK_M = HAIL_RANGE_M  # close enough to talk is close enough to wave
 SHARE_M = 3.0          # cats within a few metres of the nearest share the Skipper's attention
-# The jon's helm figure stands this far to port of the centreline, metres in the eye frame. Its
-# tiller sweeps the centreline as the motor yaws, so on the centreline the rod passes through the
-# rig's neck at steer 0 to +0.5. At -0.35 the rig's animated port reach stays 4 cm inside the hull's
-# inner wall (HULL_INNER_BEAM, 0.64 m) and the rod clears it by at least 5 cm at every steer
-# (test_jon_outboard). At -0.40 the reach breaches the wall. The other hulls keep the centreline.
+# The jon's helm figure stands this far to port of the centreline, metres in the eye frame. The tiller's
+# rod sweeps the centreline as the motor yaws: with the figure on it, the rod passes through the figure at
+# steers 0 to +1 (measured). At -0.30 the rod is 0.4 cm from the figure at steer +1. At -0.40 the figure's
+# port reach breaches the hull's inner wall (HULL_INNER_BEAM, 0.64 m) at steer +1, helm and wave alike. At
+# -0.35 test_jon_outboard asserts WALL_MARGIN to the wall and TILLER_CLEARANCE from the tiller, for the helm
+# and waving poses at every steer. The other hulls keep the centreline.
 JON_HELM_X = -0.35
 
 
@@ -139,8 +140,15 @@ class SkipperFigure:
         slow = 1.0 - catmotion.smoother((abs(float(getattr(state, "speed", 0.0))) - 0.5 * HAIL_SPEED_MPS)
                                         / (0.5 * HAIL_SPEED_MPS))
         wave = (1.0 - catmotion.smoother((distance - (WAVE_BACK_M - 6.0)) / 6.0)) * slow if target else 0.0
+        # The jon's rig swings both arms about one hub, so the steer swing would carry the waving wrist
+        # through the port wall (14 cm past it at full wave, measured). The swing fades with the wave,
+        # squared: a linear fade left under 2 cm to the wall at mid-blend, while a quarter swing at half
+        # wave keeps 3 cm (test_jon_outboard). Other boats keep the full swing.
+        steer = float(getattr(state, "steer", 0.0))
+        if getattr(state, "boat_id", "") == "jon":
+            steer *= (1.0 - wave) ** 2
         return actors.pose_state(actor, *(target or (None, None)), float(getattr(state, "anim", 0.0)), reduced_motion,
-                                 gesture=wave, steer=float(getattr(state, "steer", 0.0)), attention=attention)
+                                 gesture=wave, steer=steer, attention=attention)
 
 
 # --- The creator's preview card -------------------------------------------------

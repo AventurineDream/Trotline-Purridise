@@ -124,8 +124,9 @@ def outboard_boxes(steer):
 
 # The jon's tiller (issue #192): an arm from the outboard's swivel, a universal-joint knuckle
 # at its tip, and a straight extension to the grip the Skipper's paw holds. The arm is built
-# in `_outboard_frame`, so it yaws with the motor. The extension is carried with the knuckle
-# rather than pivoting on it, so the grip moves with the arm's tip and the rod stays straight.
+# in `_outboard_frame`, so it yaws with the motor. The extension keeps its eye-frame heading at
+# every steer (tiller_joints adds the unrotated TILLER_EXTENSION): the grip moves with the knuckle,
+# and the arm's yaw does not turn it. The rod's clearance from the helm figure depends on that heading.
 # The swivel sits on the steering axis, 16.5 cm above the rail top (-0.465 m). The arm's root starts
 # 3 cm astern of that axis, 1 cm inside the cowl's front face, which lies 2 cm astern of it, so the
 # arm meets the motor without a gap.
